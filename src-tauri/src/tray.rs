@@ -26,8 +26,9 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
                         return;
                     }
 
-                    position_panel_at_tray_icon(app_handle, rect.position, rect.size);
+                    // macOS quirk: must show window before positioning to another monitor
                     panel.show_and_make_key();
+                    position_panel_at_tray_icon(app_handle, rect.position, rect.size);
                 }
             }
         })

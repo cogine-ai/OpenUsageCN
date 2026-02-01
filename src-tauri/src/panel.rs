@@ -1,4 +1,4 @@
-use tauri::{LogicalPosition, Manager, Position, Size};
+use tauri::{Manager, Position, Size};
 use tauri_nspanel::{tauri_panel, CollectionBehavior, ManagerExt, PanelLevel, StyleMask, WebviewWindowExt};
 
 // Define our panel class and event handler together
@@ -55,34 +55,144 @@ pub fn position_panel_at_tray_icon(
 ) {
     let window = app_handle.get_webview_window("main").unwrap();
 
-    if let Some(monitor) = window.current_monitor().ok().flatten() {
-        let scale_factor = monitor.scale_factor();
+    // Extract icon position (tray events emit physical coords)
+    let (icon_phys_x, icon_phys_y) = match &icon_position {
+        Position::Physical(pos) => (pos.x, pos.y),
+        Position::Logical(pos) => (pos.x as i32, pos.y as i32),
+    };
 
-        let window_size = window.outer_size().unwrap();
-        let window_width = window_size.width as f64 / scale_factor;
+    eprintln!(
+        "[panel] position_panel_at_tray_icon: icon_position={:?}, icon_size={:?}",
+        icon_position,
+        icon_size
+    );
 
-        // Extract physical position values
-        let (icon_x, icon_width) = match (icon_position, icon_size) {
-            (Position::Physical(pos), Size::Physical(size)) => (pos.x as f64, size.width as f64),
-            (Position::Logical(pos), Size::Logical(size)) => {
-                (pos.x * scale_factor, size.width * scale_factor)
-            }
-            (Position::Physical(pos), Size::Logical(size)) => {
-                (pos.x as f64, size.width * scale_factor)
-            }
-            (Position::Logical(pos), Size::Physical(size)) => {
-                (pos.x * scale_factor, size.width as f64)
-            }
-        };
+    // Find the monitor containing this physical position
+    // Note: monitor_from_point expects logical coords but tray events give physical,
+    // so we manually check using physical coordinates
+    let monitors = window.available_monitors().expect("failed to get monitors");
+    let mut found_monitor = None;
 
-        let icon_center_x = icon_x + (icon_width / 2.0);
-        let panel_x = icon_center_x - (window_width / 2.0);
+    for m in monitors {
+        let pos = m.position();
+        let size = m.size();
+        let scale = m.scale_factor();
+        let pos_logical_x = pos.x as f64 / scale;
+        let pos_logical_y = pos.y as f64 / scale;
+        let size_logical_w = size.width as f64 / scale;
+        let size_logical_h = size.height as f64 / scale;
+        let x_in = icon_phys_x >= pos.x && icon_phys_x < pos.x + size.width as i32;
+        let y_in = icon_phys_y >= pos.y && icon_phys_y < pos.y + size.height as i32;
 
-        // macOS menubar is typically 24-37pt depending on notch
-        // Add extra padding to ensure panel appears below it
-        let menubar_height = 37.0;
-        let panel_y = menubar_height + 8.0;
+        eprintln!(
+            "[panel]   monitor {:?}: pos_phys=({}, {}), size_phys=({}, {}), pos_log=({:.2}, {:.2}), size_log=({:.2}, {:.2}), scale_factor={}, x_in={}, y_in={}",
+            m.name(),
+            pos.x,
+            pos.y,
+            size.width,
+            size.height,
+            pos_logical_x,
+            pos_logical_y,
+            size_logical_w,
+            size_logical_h,
+            scale,
+            x_in,
+            y_in
+        );
 
-        let _ = window.set_position(LogicalPosition::new(panel_x / scale_factor, panel_y));
+        if x_in && y_in {
+            found_monitor = Some(m);
+            break;
+        }
+    }
+
+    let monitor = found_monitor.expect("no monitor found containing tray icon position");
+
+    let scale_factor = monitor.scale_factor();
+    eprintln!(
+        "[panel] using monitor: name={:?}, scale_factor={}",
+        monitor.name(),
+        scale_factor
+    );
+
+    // Window size in physical pixels (outer_size is physical on macOS)
+    let window_size = window.outer_size().unwrap();
+    let window_width_phys = window_size.width as i32;
+    let window_height_phys = window_size.height as i32;
+    let window_width_logical = window_size.width as f64 / scale_factor;
+    let window_height_logical = window_size.height as f64 / scale_factor;
+    eprintln!(
+        "[panel] window_size: phys=({}, {}), logical=({:.2}, {:.2})",
+        window_width_phys,
+        window_height_phys,
+        window_width_logical,
+        window_height_logical
+    );
+
+    // Convert icon position/size to physical coordinates
+    let (icon_phys_x, icon_phys_y, icon_width_phys, icon_height_phys) = match (icon_position, icon_size) {
+        (Position::Physical(pos), Size::Physical(size)) => (pos.x, pos.y, size.width as i32, size.height as i32),
+        (Position::Logical(pos), Size::Logical(size)) => (
+            (pos.x * scale_factor) as i32,
+            (pos.y * scale_factor) as i32,
+            (size.width * scale_factor) as i32,
+            (size.height * scale_factor) as i32,
+        ),
+        (Position::Physical(pos), Size::Logical(size)) => (
+            pos.x,
+            pos.y,
+            (size.width * scale_factor) as i32,
+            (size.height * scale_factor) as i32,
+        ),
+        (Position::Logical(pos), Size::Physical(size)) => (
+            (pos.x * scale_factor) as i32,
+            (pos.y * scale_factor) as i32,
+            size.width as i32,
+            size.height as i32,
+        ),
+    };
+
+    let icon_center_x_phys = icon_phys_x + (icon_width_phys / 2);
+    let panel_x_phys = icon_center_x_phys - (window_width_phys / 2);
+    let padding_phys = (8.0 * scale_factor).round() as i32;
+    let panel_y_phys = icon_phys_y + icon_height_phys + padding_phys;
+
+    eprintln!(
+        "[panel] positioning (phys): icon_x={}, icon_y={}, icon_w={}, icon_h={}, window_w={}, window_h={}, panel_x={}, panel_y={}",
+        icon_phys_x,
+        icon_phys_y,
+        icon_width_phys,
+        icon_height_phys,
+        window_width_phys,
+        window_height_phys,
+        panel_x_phys,
+        panel_y_phys
+    );
+
+    let final_pos = tauri::PhysicalPosition::new(panel_x_phys, panel_y_phys);
+    eprintln!("[panel] set_position (physical): {:?}", final_pos);
+
+    let before_pos = window.outer_position().ok();
+    if let Some(pos) = before_pos {
+        eprintln!(
+            "[panel] before set_position: outer_pos_phys=({}, {}), outer_pos_log=({:.2}, {:.2})",
+            pos.x,
+            pos.y,
+            pos.x as f64 / scale_factor,
+            pos.y as f64 / scale_factor
+        );
+    }
+
+    let _ = window.set_position(final_pos);
+
+    let after_pos = window.outer_position().ok();
+    if let Some(pos) = after_pos {
+        eprintln!(
+            "[panel] after set_position: outer_pos_phys=({}, {}), outer_pos_log=({:.2}, {:.2})",
+            pos.x,
+            pos.y,
+            pos.x as f64 / scale_factor,
+            pos.y as f64 / scale_factor
+        );
     }
 }

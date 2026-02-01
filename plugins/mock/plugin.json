@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "mock",
+  "name": "Mock (Chaos)",
+  "version": "0.0.1",
+  "entry": "plugin.js"
+}
+

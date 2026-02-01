@@ -8,3 +8,8 @@ export type PluginOutput = {
   displayName: string
   lines: MetricLine[]
 }
+
+export type PluginMeta = {
+  id: string
+  name: string
+}
