@@ -213,6 +213,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_nspanel::init())
+        .plugin(tauri_plugin_log::Builder::new().level(log::LevelFilter::Info).build())
         .invoke_handler(tauri::generate_handler![
             init_panel,
             start_probe_batch,

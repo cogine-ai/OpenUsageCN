@@ -201,8 +201,6 @@
         lines.push(lineProgress("Credits", creditsHeader, 1000))
       } else if (creditsData !== null) {
         lines.push(lineProgress("Credits", creditsData, 1000))
-      } else if (creditsBalance || (data.credits && data.credits.balance !== undefined)) {
-        ctx.host.log.warn("invalid credits balance; skipping credits line")
       }
 
       if (data.plan_type) {

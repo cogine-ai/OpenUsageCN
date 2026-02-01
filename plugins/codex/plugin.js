@@ -24,29 +24,6 @@
     return line
   }
 
-  function safeString(value) {
-    try {
-      if (value === null) return "null"
-      if (value === undefined) return "undefined"
-      if (typeof value === "string") return value
-      return JSON.stringify(value)
-    } catch {
-      return String(value)
-    }
-  }
-
-  function logInfo(ctx, message) {
-    try {
-      ctx.host.log.info("[codex] " + message)
-    } catch {}
-  }
-
-  function logWarn(ctx, message) {
-    try {
-      ctx.host.log.warn("[codex] " + message)
-    } catch {}
-  }
-
   function formatPlanLabel(value) {
     const text = String(value || "").trim()
     if (!text) return ""
@@ -60,8 +37,7 @@
     try {
       const text = ctx.host.fs.readText(AUTH_PATH)
       return JSON.parse(text)
-    } catch (e) {
-      logWarn(ctx, "auth read failed: " + safeString(e))
+    } catch {
       return null
     }
   }
@@ -107,9 +83,7 @@
 
       try {
         ctx.host.fs.writeText(AUTH_PATH, JSON.stringify(auth, null, 2))
-      } catch (e) {
-        logWarn(ctx, "auth write failed: " + safeString(e))
-      }
+      } catch {}
 
       return newAccessToken
     } catch {
@@ -213,8 +187,6 @@
 
       let data
       try {
-        logInfo(ctx, "usage response headers: " + safeString(resp.headers))
-        logInfo(ctx, "usage response body: " + safeString(resp.bodyText))
         data = JSON.parse(resp.bodyText)
       } catch {
         return { lines: [lineBadge("Error", "cannot parse usage response", "#ef4444")] }
@@ -273,8 +245,6 @@
         lines.push(lineProgress("Credits", creditsHeader, 1000))
       } else if (creditsData !== null) {
         lines.push(lineProgress("Credits", creditsData, 1000))
-      } else if (creditsBalance || (data.credits && data.credits.balance !== undefined)) {
-        ctx.host.log.warn("invalid credits balance; skipping credits line")
       }
 
       if (data.plan_type) {

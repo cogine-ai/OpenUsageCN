@@ -36,25 +36,12 @@
     }
   }
 
-  function logInfo(ctx, message) {
-    try {
-      ctx.host.log.info("[mock] " + message)
-    } catch {}
-  }
-
-  function logWarn(ctx, message) {
-    try {
-      ctx.host.log.warn("[mock] " + message)
-    } catch {}
-  }
-
   function readJson(ctx, path) {
     try {
       if (!ctx.host.fs.exists(path)) return null
       const text = ctx.host.fs.readText(path)
       return JSON.parse(text)
-    } catch (e) {
-      logWarn(ctx, "readJson failed for " + path + ": " + safeString(e))
+    } catch {
       return null
     }
   }
@@ -62,9 +49,7 @@
   function writeJson(ctx, path, value) {
     try {
       ctx.host.fs.writeText(path, JSON.stringify(value, null, 2))
-    } catch (e) {
-      logWarn(ctx, "writeJson failed for " + path + ": " + safeString(e))
-    }
+    } catch {}
   }
 
   function readConfig(ctx, configPath) {
@@ -73,7 +58,6 @@
     // Initialize config on first run.
     if (!parsed || typeof parsed !== "object") {
       writeJson(ctx, configPath, DEFAULT_CONFIG)
-      logInfo(ctx, "config initialized at " + configPath)
       return DEFAULT_CONFIG
     }
 
@@ -83,7 +67,6 @@
     // Auto-migrate legacy configs that were auto-created as { mode: "ok" }.
     if (!pinned && mode === "ok") {
       writeJson(ctx, configPath, DEFAULT_CONFIG)
-      logInfo(ctx, "legacy config migrated at " + configPath)
       return DEFAULT_CONFIG
     }
 
@@ -122,7 +105,6 @@
     const picked = cases[idx]
 
     writeJson(ctx, statePath, { counter, picked, nowIso: ctx.nowIso })
-    logInfo(ctx, "chaos case picked: " + picked + " (counter=" + String(counter) + ")")
     return { counter, picked }
   }
 
@@ -136,10 +118,6 @@
     const pinned = !!config.pinned
     const requestedMode = String(config.mode || DEFAULT_CONFIG.mode)
     const effectiveMode = pinned ? requestedMode : "chaos"
-    logInfo(
-      ctx,
-      "probe start (pinned=" + String(pinned) + ", requested=" + requestedMode + ", effective=" + effectiveMode + ")"
-    )
 
     let mode = effectiveMode
     if (effectiveMode === "chaos") {
@@ -147,7 +125,6 @@
       writeLastCase(ctx, ctx.app.pluginDataDir, picked)
       mode = picked
     }
-    logInfo(ctx, "mode selected: " + String(mode))
 
     // Non-throwing modes should always include a “where to change this” hint.
     const hintLines = [
@@ -156,7 +133,6 @@
     ]
 
     if (mode === "ok") {
-      logInfo(ctx, "mode ok")
       return {
         lines: [
           ...hintLines,
@@ -169,34 +145,28 @@
     }
 
     if (mode === "throw") {
-      logWarn(ctx, "mode throw: about to throw")
       throw new Error("mock plugin: thrown error")
     }
 
     if (mode === "reject") {
-      logWarn(ctx, "mode reject: returning rejected promise")
       return Promise.reject(new Error("mock plugin: rejected promise"))
     }
 
     if (mode === "unresolved_promise") {
-      logWarn(ctx, "mode unresolved_promise: returning never-resolving promise")
       return new Promise(function () {
         // Intentionally never resolves/rejects.
       })
     }
 
     if (mode === "non_object") {
-      logWarn(ctx, "mode non_object: returning non-object")
       return "not an object"
     }
 
     if (mode === "missing_lines") {
-      logWarn(ctx, "mode missing_lines: returning empty object")
       return {}
     }
 
     if (mode === "unknown_line_type") {
-      logWarn(ctx, "mode unknown_line_type: returning invalid line")
       return {
         lines: [
           ...hintLines,
@@ -206,7 +176,6 @@
     }
 
     if (mode === "lines_not_array") {
-      logWarn(ctx, "mode lines_not_array: returning lines as string")
       // Host expects `lines` to be an Array. This becomes "missing lines".
       return {
         lines: "nope",
@@ -214,7 +183,6 @@
     }
 
     if (mode === "line_not_object") {
-      logWarn(ctx, "mode line_not_object: returning non-object line")
       // Host expects each line to be an object. This becomes "invalid line at index N".
       return {
         lines: [
@@ -225,7 +193,6 @@
     }
 
     if (mode === "progress_max_na") {
-      logWarn(ctx, "mode progress_max_na: max is not numeric")
       // Common plugin bug: max is not a number (e.g. "N/A"). Host coerces to 0.0.
       // UI will show "42%" but bar stays empty because max <= 0.
       return {
@@ -238,7 +205,6 @@
     }
 
     if (mode === "progress_value_string") {
-      logWarn(ctx, "mode progress_value_string: value is string")
       // Common plugin bug: value is a string. Host coerces to 0.0.
       // UI will show 0% even though the plugin tried to say "42".
       return {
@@ -251,7 +217,6 @@
     }
 
     if (mode === "progress_value_nan") {
-      logWarn(ctx, "mode progress_value_nan: value is NaN")
       // Common plugin bug: value is NaN. Host detects non-finite -> value=-1, max=0.
       // UI shows N/A.
       return {
@@ -264,7 +229,6 @@
     }
 
     if (mode === "badge_text_number") {
-      logWarn(ctx, "mode badge_text_number: badge.text is number")
       // Common plugin bug: badge.text isn't a string. Host reads empty string.
       return {
         lines: [
@@ -276,14 +240,12 @@
     }
 
     if (mode === "fs_throw") {
-      logWarn(ctx, "mode fs_throw: about to throw from fs")
       // Uncaught host FS exception -> host should report "probe() failed".
       ctx.host.fs.readText("/definitely/not/a/real/path-" + String(Date.now()))
       return { lines: hintLines }
     }
 
     if (mode === "http_throw") {
-      logWarn(ctx, "mode http_throw: about to throw from http")
       // Invalid HTTP method -> host throws -> host should report "probe() failed".
       ctx.host.http.request({
         method: "NOPE_METHOD",
@@ -294,14 +256,12 @@
     }
 
     if (mode === "sqlite_throw") {
-      logWarn(ctx, "mode sqlite_throw: about to throw from sqlite")
       // Dot-commands are blocked by host -> uncaught -> host should report "probe() failed".
       ctx.host.sqlite.query(ctx.app.appDataDir + "/does-not-matter.db", ".schema")
       return { lines: hintLines }
     }
 
     // Unknown mode: don’t throw; make it obvious.
-    logWarn(ctx, "mode unknown: " + safeString(mode))
     return {
       lines: [
         ...hintLines,

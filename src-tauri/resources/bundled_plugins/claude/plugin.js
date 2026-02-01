@@ -38,7 +38,6 @@
         const oauth = parsed.claudeAiOauth
         if (oauth && oauth.accessToken) return oauth
       } catch (e) {
-        ctx.host.log.warn("failed to parse credentials file: " + String(e))
       }
     }
 
@@ -50,7 +49,6 @@
         if (oauth && oauth.accessToken) return oauth
       }
     } catch (e) {
-      ctx.host.log.warn("keychain read failed: " + String(e))
     }
 
     return null
@@ -61,10 +59,32 @@
     return Math.round(d * 100) / 100
   }
 
+  function formatResetIn(secondsUntil) {
+    if (!Number.isFinite(secondsUntil) || secondsUntil < 0) return null
+    const totalMinutes = Math.floor(secondsUntil / 60)
+    const totalHours = Math.floor(totalMinutes / 60)
+    const days = Math.floor(totalHours / 24)
+    const hours = totalHours % 24
+    const minutes = totalMinutes % 60
+
+    if (days > 0) return `${days}d ${hours}h`
+    if (totalHours > 0) return `${totalHours}h ${minutes}m`
+    if (totalMinutes > 0) return `${totalMinutes}m`
+    return "<1m"
+  }
+
+  function getResetInFromIso(isoString) {
+    if (!isoString) return null
+    const ts = Date.parse(isoString)
+    if (!Number.isFinite(ts)) return null
+    const diffSeconds = Math.floor((ts - Date.now()) / 1000)
+    return formatResetIn(diffSeconds)
+  }
+
   function probe(ctx) {
     const oauth = loadCredentials(ctx)
     if (!oauth || !oauth.accessToken || !oauth.accessToken.trim()) {
-      return { lines: [lineBadge("Status", "Login required", "#f59e0b")] }
+      return { lines: [lineBadge("Error", "Login required", "#ef4444")] }
     }
 
     let resp
@@ -86,7 +106,7 @@
     }
 
     if (resp.status === 401 || resp.status === 403) {
-      return { lines: [lineBadge("Status", "Token expired", "#f59e0b")] }
+      return { lines: [lineBadge("Error", "Token expired", "#ef4444")] }
     }
     if (resp.status < 200 || resp.status >= 300) {
       return { lines: [lineBadge("Error", "HTTP " + String(resp.status), "#ef4444")] }
@@ -109,12 +129,18 @@
 
     if (data.five_hour && typeof data.five_hour.utilization === "number") {
       lines.push(lineProgress("Session (5h)", data.five_hour.utilization, 100, "percent"))
+      const resetIn = getResetInFromIso(data.five_hour.resets_at)
+      if (resetIn) lines.push(lineText("Resets in", resetIn))
     }
     if (data.seven_day && typeof data.seven_day.utilization === "number") {
       lines.push(lineProgress("Weekly (7d)", data.seven_day.utilization, 100, "percent"))
+      const resetIn = getResetInFromIso(data.seven_day.resets_at)
+      if (resetIn) lines.push(lineText("Resets in", resetIn))
     }
-    if (data.seven_day_opus && typeof data.seven_day_opus.utilization === "number") {
-      lines.push(lineProgress("Opus (7d)", data.seven_day_opus.utilization, 100, "percent"))
+    if (data.seven_day_sonnet && typeof data.seven_day_sonnet.utilization === "number") {
+      lines.push(lineProgress("Sonnet (7d)", data.seven_day_sonnet.utilization, 100, "percent"))
+      const resetIn = getResetInFromIso(data.seven_day_sonnet.resets_at)
+      if (resetIn) lines.push(lineText("Resets in", resetIn))
     }
 
     if (data.extra_usage && data.extra_usage.is_enabled) {
@@ -130,7 +156,7 @@
     }
 
     if (lines.length === 0) {
-      lines.push(lineBadge("Status", "Connected", "#22c55e"))
+      lines.push(lineBadge("Error", "No usage data", "#ef4444"))
     }
 
     return { lines }

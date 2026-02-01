@@ -31,4 +31,5 @@ rquickjs = { version = "0.10", features = ["bindgen"] }
 tauri-plugin-store = "2.4.2"
 base64 = "0.22"
 uuid = { version = "1", features = ["v4"] }
+tauri-plugin-log = "2"
 

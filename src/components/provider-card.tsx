@@ -86,7 +86,7 @@ export function ProviderCard({
 function MetricLineRenderer({ line }: { line: MetricLine }) {
   if (line.type === "text") {
     return (
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center h-[22px]">
         <span className="text-sm text-muted-foreground">{line.label}</span>
         <span
           className="text-sm text-muted-foreground"
@@ -100,7 +100,7 @@ function MetricLineRenderer({ line }: { line: MetricLine }) {
 
   if (line.type === "badge") {
     return (
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center h-[22px]">
         <span className="text-sm text-muted-foreground">{line.label}</span>
         <Badge
           variant="outline"
@@ -119,7 +119,7 @@ function MetricLineRenderer({ line }: { line: MetricLine }) {
   if (line.type === "progress") {
     const percent = getProgressPercent(line.value, line.max)
     return (
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center h-[22px]">
         <span className="text-sm text-muted-foreground">{line.label}</span>
         <div className="flex items-center gap-2">
           <span className="text-sm tabular-nums text-muted-foreground">

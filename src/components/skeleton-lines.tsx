@@ -3,7 +3,7 @@ import type { ManifestLine } from "@/lib/plugin-types"
 
 function SkeletonText({ label }: { label: string }) {
   return (
-    <div className="flex justify-between items-center">
+    <div className="flex justify-between items-center h-[22px]">
       <span className="text-sm text-muted-foreground">{label}</span>
       <Skeleton className="h-4 w-16" />
     </div>
@@ -12,7 +12,7 @@ function SkeletonText({ label }: { label: string }) {
 
 function SkeletonBadge({ label }: { label: string }) {
   return (
-    <div className="flex justify-between items-center">
+    <div className="flex justify-between items-center h-[22px]">
       <span className="text-sm text-muted-foreground">{label}</span>
       <Skeleton className="h-5 w-16 rounded-full" />
     </div>
@@ -21,7 +21,7 @@ function SkeletonBadge({ label }: { label: string }) {
 
 function SkeletonProgress({ label }: { label: string }) {
   return (
-    <div className="flex justify-between items-center">
+    <div className="flex justify-between items-center h-[22px]">
       <span className="text-sm text-muted-foreground">{label}</span>
       <div className="flex items-center gap-2">
         <Skeleton className="h-4 w-12" />
