@@ -5,8 +5,9 @@ import { PanelHeader, type Tab } from "@/components/panel-header"
 import { PanelFooter } from "@/components/panel-footer"
 import { OverviewPage } from "@/pages/overview"
 import { SettingsPage } from "@/pages/settings"
-import { APP_VERSION } from "@/lib/mock-data"
 import type { PluginOutput } from "@/lib/plugin-types"
+
+const APP_VERSION = "0.0.1 (dev)"
 
 const PANEL_WIDTH = 350;
 const MAX_HEIGHT = 600;
