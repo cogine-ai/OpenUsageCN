@@ -201,6 +201,7 @@
         data.code_review_rate_limit && data.code_review_rate_limit.primary_window
           ? data.code_review_rate_limit.primary_window
           : null
+
       const headerPrimary = readPercent(resp.headers["x-codex-primary-used-percent"])
       const headerSecondary = readPercent(resp.headers["x-codex-secondary-used-percent"])
 

@@ -87,4 +87,4 @@ Work style: Be radically precise. No fluff. Pure information only (drop grammar;
 ## User Notes
 Use below list to store and recall user notes when asked to do so.
 
-- (Replace this one when asked for first note)
+- Tauri IPC: JS must use camelCase (`{ batchId, pluginIds }`), Tauri auto-converts to Rust's snake_case. Never send snake_case from JS—params silently won't match.

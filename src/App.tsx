@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { invoke } from "@tauri-apps/api/core"
-import { getCurrentWindow, PhysicalSize } from "@tauri-apps/api/window"
+import { getCurrentWindow, PhysicalSize, currentMonitor } from "@tauri-apps/api/window"
 import { PanelHeader, type Tab } from "@/components/panel-header"
 import { PanelFooter } from "@/components/panel-footer"
 import { OverviewPage } from "@/pages/overview"
@@ -105,8 +105,7 @@ function App() {
       let maxHeightPhysical: number | null = null;
       let maxHeightLogical: number | null = null;
       try {
-        const currentWindow = getCurrentWindow();
-        const monitor = await currentWindow.currentMonitor();
+        const monitor = await currentMonitor();
         if (monitor) {
           maxHeightPhysical = Math.floor(monitor.size.height * MAX_HEIGHT_FRACTION_OF_MONITOR);
           maxHeightLogical = Math.floor(maxHeightPhysical / factor);

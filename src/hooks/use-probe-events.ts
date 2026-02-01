@@ -93,8 +93,8 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
 
     activeBatchIds.current.add(batchId)
     const args = pluginIds
-      ? { batch_id: batchId, plugin_ids: pluginIds }
-      : { batch_id: batchId }
+      ? { batchId, pluginIds }
+      : { batchId }
     try {
       const result = await invoke<ProbeBatchStarted>("start_probe_batch", args)
       return result.pluginIds
