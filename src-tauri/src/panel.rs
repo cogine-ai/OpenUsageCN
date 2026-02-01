@@ -61,12 +61,6 @@ pub fn position_panel_at_tray_icon(
         Position::Logical(pos) => (pos.x as i32, pos.y as i32),
     };
 
-    eprintln!(
-        "[panel] position_panel_at_tray_icon: icon_position={:?}, icon_size={:?}",
-        icon_position,
-        icon_size
-    );
-
     // Find the monitor containing this physical position
     // Note: monitor_from_point expects logical coords but tray events give physical,
     // so we manually check using physical coordinates
@@ -76,29 +70,8 @@ pub fn position_panel_at_tray_icon(
     for m in monitors {
         let pos = m.position();
         let size = m.size();
-        let scale = m.scale_factor();
-        let pos_logical_x = pos.x as f64 / scale;
-        let pos_logical_y = pos.y as f64 / scale;
-        let size_logical_w = size.width as f64 / scale;
-        let size_logical_h = size.height as f64 / scale;
         let x_in = icon_phys_x >= pos.x && icon_phys_x < pos.x + size.width as i32;
         let y_in = icon_phys_y >= pos.y && icon_phys_y < pos.y + size.height as i32;
-
-        eprintln!(
-            "[panel]   monitor {:?}: pos_phys=({}, {}), size_phys=({}, {}), pos_log=({:.2}, {:.2}), size_log=({:.2}, {:.2}), scale_factor={}, x_in={}, y_in={}",
-            m.name(),
-            pos.x,
-            pos.y,
-            size.width,
-            size.height,
-            pos_logical_x,
-            pos_logical_y,
-            size_logical_w,
-            size_logical_h,
-            scale,
-            x_in,
-            y_in
-        );
 
         if x_in && y_in {
             found_monitor = Some(m);
@@ -109,25 +82,9 @@ pub fn position_panel_at_tray_icon(
     let monitor = found_monitor.expect("no monitor found containing tray icon position");
 
     let scale_factor = monitor.scale_factor();
-    eprintln!(
-        "[panel] using monitor: name={:?}, scale_factor={}",
-        monitor.name(),
-        scale_factor
-    );
-
     // Window size in physical pixels (outer_size is physical on macOS)
     let window_size = window.outer_size().unwrap();
     let window_width_phys = window_size.width as i32;
-    let window_height_phys = window_size.height as i32;
-    let window_width_logical = window_size.width as f64 / scale_factor;
-    let window_height_logical = window_size.height as f64 / scale_factor;
-    eprintln!(
-        "[panel] window_size: phys=({}, {}), logical=({:.2}, {:.2})",
-        window_width_phys,
-        window_height_phys,
-        window_width_logical,
-        window_height_logical
-    );
 
     // Convert icon position/size to physical coordinates
     let (icon_phys_x, icon_phys_y, icon_width_phys, icon_height_phys) = match (icon_position, icon_size) {
@@ -157,42 +114,7 @@ pub fn position_panel_at_tray_icon(
     let padding_phys = (8.0 * scale_factor).round() as i32;
     let panel_y_phys = icon_phys_y + icon_height_phys + padding_phys;
 
-    eprintln!(
-        "[panel] positioning (phys): icon_x={}, icon_y={}, icon_w={}, icon_h={}, window_w={}, window_h={}, panel_x={}, panel_y={}",
-        icon_phys_x,
-        icon_phys_y,
-        icon_width_phys,
-        icon_height_phys,
-        window_width_phys,
-        window_height_phys,
-        panel_x_phys,
-        panel_y_phys
-    );
-
     let final_pos = tauri::PhysicalPosition::new(panel_x_phys, panel_y_phys);
-    eprintln!("[panel] set_position (physical): {:?}", final_pos);
-
-    let before_pos = window.outer_position().ok();
-    if let Some(pos) = before_pos {
-        eprintln!(
-            "[panel] before set_position: outer_pos_phys=({}, {}), outer_pos_log=({:.2}, {:.2})",
-            pos.x,
-            pos.y,
-            pos.x as f64 / scale_factor,
-            pos.y as f64 / scale_factor
-        );
-    }
 
     let _ = window.set_position(final_pos);
-
-    let after_pos = window.outer_position().ok();
-    if let Some(pos) = after_pos {
-        eprintln!(
-            "[panel] after set_position: outer_pos_phys=({}, {}), outer_pos_log=({:.2}, {:.2})",
-            pos.x,
-            pos.y,
-            pos.x as f64 / scale_factor,
-            pos.y as f64 / scale_factor
-        );
-    }
 }
