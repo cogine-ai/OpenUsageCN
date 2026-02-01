@@ -49,7 +49,7 @@ ChatGPT-Account-Id: <account_id>
   "credits": {                             // extra credits (if purchased)
     "has_credits": true,
     "unlimited": false,
-    "balance": 5.39                        // dollar amount remaining
+    "balance": 5.39                        // credits balance remaining
   }
 }
 ```
@@ -77,7 +77,7 @@ Optional object for purchased credit balance. Fields:
 |---|---|---|
 | `has_credits` | boolean | Whether user has any credits |
 | `unlimited` | boolean | Unlimited credits flag |
-| `balance` | number | Remaining dollar balance |
+| `balance` | number | Remaining credits balance |
 
 ### x-codex Headers (Other Endpoints Only)
 

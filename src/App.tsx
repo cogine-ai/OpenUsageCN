@@ -1,11 +1,12 @@
-import { useEffect, useState, useRef } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { getCurrentWindow, PhysicalSize } from "@tauri-apps/api/window";
-import { PanelHeader, type Tab } from "@/components/panel-header";
-import { PanelFooter } from "@/components/panel-footer";
-import { OverviewPage } from "@/pages/overview";
-import { SettingsPage } from "@/pages/settings";
-import { APP_VERSION } from "@/lib/mock-data";
+import { useCallback, useEffect, useRef, useState } from "react"
+import { invoke } from "@tauri-apps/api/core"
+import { getCurrentWindow, PhysicalSize } from "@tauri-apps/api/window"
+import { PanelHeader, type Tab } from "@/components/panel-header"
+import { PanelFooter } from "@/components/panel-footer"
+import { OverviewPage } from "@/pages/overview"
+import { SettingsPage } from "@/pages/settings"
+import { APP_VERSION } from "@/lib/mock-data"
+import type { PluginOutput } from "@/lib/plugin-types"
 
 const PANEL_WIDTH = 350;
 const MAX_HEIGHT = 600;
@@ -13,6 +14,7 @@ const MAX_HEIGHT = 600;
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const containerRef = useRef<HTMLDivElement>(null);
+  const [providers, setProviders] = useState<PluginOutput[]>([])
 
   // Initialize panel on mount
   useEffect(() => {
@@ -49,11 +51,24 @@ function App() {
     observer.observe(container);
 
     return () => observer.disconnect();
-  }, [activeTab]);
+  }, [activeTab, providers]);
+
+  const loadProviders = useCallback(async () => {
+    try {
+      const results = await invoke<PluginOutput[]>("run_plugin_probes")
+      setProviders(results)
+    } catch (e) {
+      console.error("Failed to load plugins:", e)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadProviders()
+  }, [loadProviders])
 
   const handleRefresh = () => {
-    console.log("Refresh triggered");
-  };
+    loadProviders()
+  }
 
   return (
     <div
@@ -64,10 +79,17 @@ function App() {
         <PanelHeader activeTab={activeTab} onTabChange={setActiveTab} />
 
         <div className="mt-3">
-          {activeTab === "overview" ? <OverviewPage /> : <SettingsPage />}
+          {activeTab === "overview" ? (
+            <OverviewPage providers={providers} />
+          ) : (
+            <SettingsPage />
+          )}
         </div>
 
-        <PanelFooter version={APP_VERSION} onRefresh={handleRefresh} />
+        <PanelFooter
+          version={APP_VERSION}
+          onRefresh={handleRefresh}
+        />
       </div>
     </div>
   );

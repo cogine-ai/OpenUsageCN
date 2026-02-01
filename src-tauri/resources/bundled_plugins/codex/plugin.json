@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "id": "codex",
+  "name": "Codex",
+  "version": "0.0.1",
+  "entry": "plugin.js"
+}

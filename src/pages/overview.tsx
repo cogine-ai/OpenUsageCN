@@ -1,17 +1,21 @@
-import { ProviderCard } from "@/components/provider-card";
-import { mockProviders } from "@/lib/mock-data";
+import { ProviderCard } from "@/components/provider-card"
+import type { PluginOutput } from "@/lib/plugin-types"
 
-export function OverviewPage() {
+interface OverviewPageProps {
+  providers: PluginOutput[]
+}
+
+export function OverviewPage({ providers }: OverviewPageProps) {
   return (
     <div>
-      {mockProviders.map((provider, index) => (
+      {providers.map((provider, index) => (
         <ProviderCard
-          key={provider.id}
-          name={provider.name}
-          metrics={provider.metrics}
-          showSeparator={index < mockProviders.length - 1}
+          key={provider.providerId}
+          name={provider.displayName}
+          lines={provider.lines}
+          showSeparator={index < providers.length - 1}
         />
       ))}
     </div>
-  );
+  )
 }
