@@ -7,10 +7,8 @@ import { Separator } from "@/components/ui/separator"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { SkeletonLines } from "@/components/skeleton-lines"
 import { PluginError } from "@/components/plugin-error"
-import { cn } from "@/lib/utils"
+import { REFRESH_COOLDOWN_MS } from "@/lib/settings"
 import type { ManifestLine, MetricLine } from "@/lib/plugin-types"
-
-const REFRESH_COOLDOWN_MS = 300_000 // 5 minutes
 
 interface ProviderCardProps {
   name: string
@@ -71,11 +69,16 @@ export function ProviderCard({
     // Immediately sync "now" when entering cooldown
     setNow(Date.now())
     const interval = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(interval)
+    // Auto-clear after cooldown expires
+    const timeout = setTimeout(() => clearInterval(interval), remaining)
+
+    return () => {
+      clearInterval(interval)
+      clearTimeout(timeout)
+    }
   }, [lastManualRefreshAt])
 
   const inCooldown = lastManualRefreshAt ? now - lastManualRefreshAt < REFRESH_COOLDOWN_MS : false
-  const isDisabled = loading || inCooldown
 
   // Format remaining cooldown time as "Xm Ys"
   const formatRemainingTime = () => {
@@ -91,47 +94,54 @@ export function ProviderCard({
     return `Available in ${seconds}s`
   }
 
-  const tooltipText = loading
-    ? "Refreshing..."
-    : inCooldown
-      ? formatRemainingTime()
-      : "Refresh now"
-
   return (
     <div>
       <div className="py-3">
-        <div className="flex items-center justify-between mb-2 group/header">
+        <div className="flex items-center justify-between mb-2">
           <div className="relative flex items-center">
-            <h2 className="text-lg font-semibold">{name}</h2>
+            <h2 className="text-lg font-semibold" style={{ transform: "translateZ(0)" }}>{name}</h2>
             {onRetry && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    onClick={(e) => {
-                      e.currentTarget.blur()
-                      onRetry()
-                    }}
-                    className={cn(
-                      "ml-1 opacity-40 group-hover/header:opacity-100 focus-visible:opacity-100",
-                      isDisabled && "opacity-100"
-                    )}
-                    disabled={isDisabled}
-                  >
-                    {loading ? (
-                      <RefreshCw className="h-3 w-3 animate-spin" />
-                    ) : inCooldown ? (
+              loading ? (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="ml-1 pointer-events-none opacity-50"
+                  style={{ transform: "translateZ(0)", backfaceVisibility: "hidden" }}
+                  tabIndex={-1}
+                >
+                  <RefreshCw className="h-3 w-3 animate-spin" />
+                </Button>
+              ) : inCooldown ? (
+                <Tooltip>
+                  <TooltipTrigger className="ml-1">
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      className="pointer-events-none opacity-50"
+                      style={{ transform: "translateZ(0)", backfaceVisibility: "hidden" }}
+                      tabIndex={-1}
+                    >
                       <Hourglass className="h-3 w-3" />
-                    ) : (
-                      <RefreshCw className="h-3 w-3" />
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="right">
-                  {tooltipText}
-                </TooltipContent>
-              </Tooltip>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    {formatRemainingTime()}
+                  </TooltipContent>
+                </Tooltip>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={(e) => {
+                    e.currentTarget.blur()
+                    onRetry()
+                  }}
+                  className="ml-1 opacity-0 hover:opacity-100 focus-visible:opacity-100"
+                  style={{ transform: "translateZ(0)", backfaceVisibility: "hidden" }}
+                >
+                  <RefreshCw className="h-3 w-3" />
+                </Button>
+              )
             )}
           </div>
           <img

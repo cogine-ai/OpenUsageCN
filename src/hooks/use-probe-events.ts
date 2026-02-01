@@ -25,9 +25,16 @@ type UseProbeEventsOptions = {
 export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOptions) {
   const activeBatchIds = useRef<Set<string>>(new Set())
   const unlisteners = useRef<UnlistenFn[]>([])
+  const listenersReadyRef = useRef<Promise<void> | null>(null)
+  const listenersReadyResolveRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     let cancelled = false
+
+    // Create the promise that will resolve when listeners are ready
+    listenersReadyRef.current = new Promise<void>((resolve) => {
+      listenersReadyResolveRef.current = resolve
+    })
 
     const setup = async () => {
       const resultUnlisten = await listen<ProbeResult>("probe:result", (event) => {
@@ -57,6 +64,9 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
       }
 
       unlisteners.current.push(resultUnlisten, completeUnlisten)
+
+      // Signal that listeners are ready
+      listenersReadyResolveRef.current?.()
     }
 
     void setup()
@@ -65,10 +75,17 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
       cancelled = true
       unlisteners.current.forEach((unlisten) => unlisten())
       unlisteners.current = []
+      listenersReadyRef.current = null
+      listenersReadyResolveRef.current = null
     }
   }, [onBatchComplete, onResult])
 
   const startBatch = useCallback(async (pluginIds?: string[]) => {
+    // Wait for listeners to be ready before starting the batch
+    if (listenersReadyRef.current) {
+      await listenersReadyRef.current
+    }
+
     const batchId =
       typeof crypto !== "undefined" && "randomUUID" in crypto
         ? crypto.randomUUID()

@@ -123,17 +123,6 @@ pub fn run_probe(
     })
 }
 
-pub fn run_all_probes(
-    plugins: &[LoadedPlugin],
-    app_data_dir: &PathBuf,
-    app_version: &str,
-) -> Vec<PluginOutput> {
-    plugins
-        .iter()
-        .map(|p| run_probe(p, app_data_dir, app_version))
-        .collect()
-}
-
 fn parse_lines(result: &Object) -> Result<Vec<MetricLine>, String> {
     let lines: Array = result
         .get("lines")

@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface PanelFooterProps {
   version: string;
@@ -10,15 +11,32 @@ export function PanelFooter({ version, onRefresh, refreshDisabled }: PanelFooter
   return (
     <div className="flex justify-between items-center pt-3 border-t">
       <span className="text-sm text-muted-foreground">OpenUsage {version}</span>
-      <Button
-        variant="link"
-        size="sm"
-        onClick={onRefresh}
-        disabled={refreshDisabled}
-        className="px-0"
-      >
-        Refresh all
-      </Button>
+      {refreshDisabled ? (
+        <Tooltip>
+          <TooltipTrigger>
+            <Button
+              variant="link"
+              size="sm"
+              className="px-0 pointer-events-none opacity-50"
+              tabIndex={-1}
+            >
+              Refresh all
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            All plugins recently refreshed
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        <Button
+          variant="link"
+          size="sm"
+          onClick={onRefresh}
+          className="px-0"
+        >
+          Refresh all
+        </Button>
+      )}
     </div>
   );
 }

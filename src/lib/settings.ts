@@ -1,6 +1,9 @@
 import { LazyStore } from "@tauri-apps/plugin-store";
 import type { PluginMeta } from "@/lib/plugin-types";
 
+// Refresh cooldown duration in milliseconds (5 minutes)
+export const REFRESH_COOLDOWN_MS = 300_000;
+
 // Spec: persist plugin order + disabled list; new plugins append, default enabled.
 export type PluginSettings = {
   order: string[];

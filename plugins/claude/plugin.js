@@ -142,6 +142,11 @@
       const resetIn = getResetInFromIso(data.seven_day_sonnet.resets_at)
       if (resetIn) lines.push(lineText("Resets in", resetIn))
     }
+    if (data.seven_day_opus && typeof data.seven_day_opus.utilization === "number") {
+      lines.push(lineProgress("Opus (7d)", data.seven_day_opus.utilization, 100, "percent"))
+      const resetIn = getResetInFromIso(data.seven_day_opus.resets_at)
+      if (resetIn) lines.push(lineText("Resets in", resetIn))
+    }
 
     if (data.extra_usage && data.extra_usage.is_enabled) {
       const used = data.extra_usage.used_credits
@@ -156,7 +161,7 @@
     }
 
     if (lines.length === 0) {
-      lines.push(lineBadge("Error", "No usage data", "#ef4444"))
+      lines.push(lineBadge("Status", "No usage data", "#a3a3a3"))
     }
 
     return { lines }

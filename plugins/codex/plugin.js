@@ -255,7 +255,7 @@
       }
 
       if (lines.length === 0) {
-        lines.push(lineBadge("Error", "No usage data", "#ef4444"))
+        lines.push(lineBadge("Status", "No usage data", "#a3a3a3"))
       }
 
       return { lines }

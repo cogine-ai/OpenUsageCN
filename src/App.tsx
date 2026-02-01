@@ -12,6 +12,7 @@ import {
   getEnabledPluginIds,
   loadPluginSettings,
   normalizePluginSettings,
+  REFRESH_COOLDOWN_MS,
   savePluginSettings,
   type PluginSettings,
 } from "@/lib/settings"
@@ -21,7 +22,6 @@ const APP_VERSION = "0.0.1 (dev)"
 const PANEL_WIDTH = 350;
 const MAX_HEIGHT_FALLBACK_PX = 600;
 const MAX_HEIGHT_FRACTION_OF_MONITOR = 0.8;
-const REFRESH_COOLDOWN_MS = 300_000; // 5 minutes
 
 type PluginState = {
   data: PluginOutput | null
@@ -169,6 +169,17 @@ function App() {
     })
   }, [])
 
+  const setErrorForPlugins = useCallback((ids: string[], error: string) => {
+    setPluginStates((prev) => {
+      const next = { ...prev }
+      for (const id of ids) {
+        const existing = prev[id]
+        next[id] = { data: null, loading: false, error, lastManualRefreshAt: existing?.lastManualRefreshAt ?? null }
+      }
+      return next
+    })
+  }, [])
+
   // Track which plugin IDs are being manually refreshed (vs initial load / enable toggle)
   const manualRefreshIdsRef = useRef<Set<string>>(new Set())
 
@@ -225,7 +236,14 @@ function App() {
           setPluginSettings(normalized)
           const enabledIds = getEnabledPluginIds(normalized)
           setLoadingForPlugins(enabledIds)
-          await startBatch(enabledIds)
+          try {
+            await startBatch(enabledIds)
+          } catch (error) {
+            console.error("Failed to start probe batch:", error)
+            if (isMounted) {
+              setErrorForPlugins(enabledIds, "Failed to start probe")
+            }
+          }
         }
       } catch (e) {
         console.error("Failed to load plugin settings:", e)
@@ -237,7 +255,7 @@ function App() {
     return () => {
       isMounted = false
     }
-  }, [setLoadingForPlugins, startBatch])
+  }, [setLoadingForPlugins, setErrorForPlugins, startBatch])
 
   const handleRefresh = useCallback(() => {
     if (!pluginSettings) return
@@ -254,17 +272,23 @@ function App() {
       manualRefreshIdsRef.current.add(id)
     }
     setLoadingForPlugins(refreshableIds)
-    void startBatch(refreshableIds)
-  }, [pluginSettings, pluginStates, setLoadingForPlugins, startBatch])
+    startBatch(refreshableIds).catch((error) => {
+      console.error("Failed to refresh plugins:", error)
+      setErrorForPlugins(refreshableIds, "Failed to start probe")
+    })
+  }, [pluginSettings, pluginStates, setLoadingForPlugins, setErrorForPlugins, startBatch])
 
   const handleRetryPlugin = useCallback(
     (id: string) => {
       // Mark as manual refresh
       manualRefreshIdsRef.current.add(id)
       setLoadingForPlugins([id])
-      void startBatch([id])
+      startBatch([id]).catch((error) => {
+        console.error("Failed to retry plugin:", error)
+        setErrorForPlugins([id], "Failed to start probe")
+      })
     },
-    [setLoadingForPlugins, startBatch]
+    [setLoadingForPlugins, setErrorForPlugins, startBatch]
   )
 
   const settingsPlugins = useMemo(() => {
@@ -309,7 +333,10 @@ function App() {
       if (wasDisabled) {
         disabled.delete(id)
         setLoadingForPlugins([id])
-        void startBatch([id])
+        startBatch([id]).catch((error) => {
+          console.error("Failed to start probe for enabled plugin:", error)
+          setErrorForPlugins([id], "Failed to start probe")
+        })
       } else {
         disabled.add(id)
         // No probe needed for disable
@@ -324,7 +351,7 @@ function App() {
         console.error("Failed to save plugin toggle:", error)
       })
     },
-    [pluginSettings, setLoadingForPlugins, startBatch]
+    [pluginSettings, setLoadingForPlugins, setErrorForPlugins, startBatch]
   )
 
   return (

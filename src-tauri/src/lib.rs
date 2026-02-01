@@ -134,8 +134,19 @@ async fn start_probe_batch(
         let counter = Arc::clone(&remaining);
 
         tauri::async_runtime::spawn_blocking(move || {
-            let output = plugin_engine::runtime::run_probe(&plugin, &data_dir, &version);
-            let _ = handle.emit("probe:result", ProbeResult { batch_id: bid, output });
+            let plugin_id = plugin.manifest.id.clone();
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                plugin_engine::runtime::run_probe(&plugin, &data_dir, &version)
+            }));
+
+            match result {
+                Ok(output) => {
+                    let _ = handle.emit("probe:result", ProbeResult { batch_id: bid, output });
+                }
+                Err(_) => {
+                    log::error!("Probe panicked for plugin {}", plugin_id);
+                }
+            }
 
             if counter.fetch_sub(1, Ordering::SeqCst) == 1 {
                 let _ = completion_handle.emit(
@@ -152,43 +163,6 @@ async fn start_probe_batch(
         batch_id,
         plugin_ids: response_plugin_ids,
     })
-}
-
-#[tauri::command]
-fn run_plugin_probes(
-    state: tauri::State<'_, Mutex<AppState>>,
-    plugin_ids: Option<Vec<String>>,
-) -> Vec<plugin_engine::runtime::PluginOutput> {
-    let (plugins, app_data_dir, app_version) = {
-        let locked = state.lock().expect("plugin state poisoned");
-        (
-            locked.plugins.clone(),
-            locked.app_data_dir.clone(),
-            locked.app_version.clone(),
-        )
-    };
-
-    let selected_plugins = match plugin_ids {
-        Some(ids) => {
-            let mut by_id: HashMap<String, plugin_engine::manifest::LoadedPlugin> =
-                plugins
-                    .into_iter()
-                    .map(|plugin| (plugin.manifest.id.clone(), plugin))
-                    .collect();
-            let mut seen = HashSet::new();
-            ids.into_iter()
-                .filter_map(|id| {
-                    if !seen.insert(id.clone()) {
-                        return None;
-                    }
-                    by_id.remove(&id)
-                })
-                .collect()
-        }
-        None => plugins,
-    };
-
-    plugin_engine::runtime::run_all_probes(&selected_plugins, &app_data_dir, &app_version)
 }
 
 #[tauri::command]
@@ -227,7 +201,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             init_panel,
             start_probe_batch,
-            run_plugin_probes,
             list_plugins
         ])
         .setup(|app| {
