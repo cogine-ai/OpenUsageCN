@@ -1,3 +1,4 @@
+use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
@@ -9,6 +10,7 @@ pub struct PluginManifest {
     pub name: String,
     pub version: String,
     pub entry: String,
+    pub icon: String,
 }
 
 #[derive(Debug, Clone)]
@@ -16,6 +18,7 @@ pub struct LoadedPlugin {
     pub manifest: PluginManifest,
     pub plugin_dir: PathBuf,
     pub entry_script: String,
+    pub icon_data_url: String,
 }
 
 pub fn load_plugins_from_dir(plugins_dir: &std::path::Path) -> Vec<LoadedPlugin> {
@@ -69,9 +72,14 @@ fn load_single_plugin(
 
     let entry_script = std::fs::read_to_string(&canonical_entry_path)?;
 
+    let icon_file = plugin_dir.join(&manifest.icon);
+    let icon_bytes = std::fs::read(&icon_file)?;
+    let icon_data_url = format!("data:image/svg+xml;base64,{}", STANDARD.encode(&icon_bytes));
+
     Ok(LoadedPlugin {
         manifest,
         plugin_dir: plugin_dir.to_path_buf(),
         entry_script,
+        icon_data_url,
     })
 }

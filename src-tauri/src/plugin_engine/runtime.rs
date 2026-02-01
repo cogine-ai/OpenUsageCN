@@ -32,6 +32,7 @@ pub struct PluginOutput {
     pub provider_id: String,
     pub display_name: String,
     pub lines: Vec<MetricLine>,
+    pub icon_url: String,
 }
 
 pub fn run_probe(
@@ -54,6 +55,7 @@ pub fn run_probe(
     let plugin_id = plugin.manifest.id.clone();
     let display_name = plugin.manifest.name.clone();
     let entry_script = plugin.entry_script.clone();
+    let icon_url = plugin.icon_data_url.clone();
     let app_data = app_data_dir.clone();
 
     ctx.with(|ctx| {
@@ -116,6 +118,7 @@ pub fn run_probe(
             provider_id: plugin_id,
             display_name,
             lines,
+            icon_url,
         }
     })
 }
@@ -192,6 +195,7 @@ fn error_output(plugin: &LoadedPlugin, message: String) -> PluginOutput {
         provider_id: plugin.manifest.id.clone(),
         display_name: plugin.manifest.name.clone(),
         lines: vec![error_line(message)],
+        icon_url: plugin.icon_data_url.clone(),
     }
 }
 

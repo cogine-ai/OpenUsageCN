@@ -75,6 +75,7 @@ function SortablePluginItem({
       </span>
 
       <Checkbox
+        key={`${plugin.id}-${plugin.enabled}`}
         checked={plugin.enabled}
         onCheckedChange={() => onToggle(plugin.id)}
       />

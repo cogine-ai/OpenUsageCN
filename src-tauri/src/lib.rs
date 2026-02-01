@@ -15,9 +15,11 @@ pub struct AppState {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PluginMeta {
     pub id: String,
     pub name: String,
+    pub icon_url: String,
 }
 
 #[tauri::command]
@@ -74,6 +76,7 @@ fn list_plugins(state: tauri::State<'_, Mutex<AppState>>) -> Vec<PluginMeta> {
         .map(|plugin| PluginMeta {
             id: plugin.manifest.id,
             name: plugin.manifest.name,
+            icon_url: plugin.icon_data_url,
         })
         .collect()
 }

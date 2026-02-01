@@ -7,9 +7,11 @@ export type PluginOutput = {
   providerId: string
   displayName: string
   lines: MetricLine[]
+  iconUrl: string
 }
 
 export type PluginMeta = {
   id: string
   name: string
+  iconUrl: string
 }

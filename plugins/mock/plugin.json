@@ -3,6 +3,7 @@
   "id": "mock",
   "name": "Mock (Chaos)",
   "version": "0.0.1",
-  "entry": "plugin.js"
+  "entry": "plugin.js",
+  "icon": "icon.svg"
 }
 

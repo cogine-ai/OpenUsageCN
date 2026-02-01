@@ -11,9 +11,9 @@ export function OverviewPage({ providers }: OverviewPageProps) {
       {providers.map((provider, index) => (
         <ProviderCard
           key={provider.providerId}
-          providerId={provider.providerId}
           name={provider.displayName}
           lines={provider.lines}
+          iconUrl={provider.iconUrl}
           showSeparator={index < providers.length - 1}
         />
       ))}
