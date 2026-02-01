@@ -1,11 +1,16 @@
+use tauri::image::Image;
+use tauri::path::BaseDirectory;
 use tauri::tray::{MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 use tauri_nspanel::ManagerExt;
 
 use crate::panel::position_panel_at_tray_icon;
 
 pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
-    let icon = app_handle.default_window_icon().unwrap().clone();
+    let tray_icon_path = app_handle
+        .path()
+        .resolve("icons/tray-icon.png", BaseDirectory::Resource)?;
+    let icon = Image::from_path(tray_icon_path)?;
 
     TrayIconBuilder::with_id("tray")
         .icon(icon)

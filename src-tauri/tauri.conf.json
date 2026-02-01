@@ -38,7 +38,8 @@
       "icons/icon.ico"
     ],
     "resources": [
-      "resources/bundled_plugins/**/*"
+      "resources/bundled_plugins/**/*",
+      "icons/tray-icon.png"
     ]
   }
 }
