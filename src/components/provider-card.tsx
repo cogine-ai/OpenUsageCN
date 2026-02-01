@@ -3,7 +3,14 @@ import { Progress } from "@/components/ui/progress"
 import { Separator } from "@/components/ui/separator"
 import type { MetricLine } from "@/lib/plugin-types"
 
+const PROVIDER_ICONS: Record<string, string> = {
+  claude: "/icons/provider-claude.svg",
+  codex: "/icons/provider-codex.svg",
+  cursor: "/icons/provider-cursor.svg",
+}
+
 interface ProviderCardProps {
+  providerId: string
   name: string
   lines: MetricLine[]
   showSeparator?: boolean
@@ -34,11 +41,22 @@ function getProgressPercent(value: number, max: number) {
   return Math.min(100, Math.max(0, (value / max) * 100))
 }
 
-export function ProviderCard({ name, lines, showSeparator = true }: ProviderCardProps) {
+export function ProviderCard({ providerId, name, lines, showSeparator = true }: ProviderCardProps) {
+  const iconPath = PROVIDER_ICONS[providerId]
+
   return (
     <div>
       <div className="py-3">
-        <h2 className="text-lg font-semibold mb-2">{name}</h2>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-lg font-semibold">{name}</h2>
+          {iconPath && (
+            <img
+              src={iconPath}
+              alt=""
+              className="w-5 h-5 opacity-60"
+            />
+          )}
+        </div>
         <div className="space-y-1">
           {lines.map((line, index) => {
             if (line.type === "text") {

@@ -24,11 +24,20 @@ const MAX_HEIGHT_FRACTION_OF_MONITOR = 0.8;
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const containerRef = useRef<HTMLDivElement>(null);
-  const [providers, setProviders] = useState<PluginOutput[]>([])
+  const [probeCache, setProbeCache] = useState<Record<string, PluginOutput>>({})
   const [pluginsMeta, setPluginsMeta] = useState<PluginMeta[]>([])
   const [pluginSettings, setPluginSettings] = useState<PluginSettings | null>(null)
   const [maxPanelHeightPx, setMaxPanelHeightPx] = useState<number | null>(null)
   const maxPanelHeightPxRef = useRef<number | null>(null)
+
+  // Derive display providers from cache + settings
+  const providers = useMemo(() => {
+    if (!pluginSettings) return []
+    const disabledSet = new Set(pluginSettings.disabled)
+    return pluginSettings.order
+      .filter(id => !disabledSet.has(id) && probeCache[id])
+      .map(id => probeCache[id])
+  }, [pluginSettings, probeCache])
 
   // Initialize panel on mount
   useEffect(() => {
@@ -97,7 +106,11 @@ function App() {
     try {
       const args = pluginIds === undefined ? undefined : { pluginIds }
       const results = await invoke<PluginOutput[]>("run_plugin_probes", args)
-      setProviders(results)
+      setProbeCache(prev => {
+        const next = { ...prev }
+        for (const r of results) next[r.providerId] = r
+        return next
+      })
     } catch (e) {
       console.error("Failed to load plugins:", e)
     }
@@ -124,6 +137,12 @@ function App() {
 
         if (isMounted) {
           setPluginSettings(normalized)
+          // Initial probe for all enabled plugins
+          const enabledIds = getEnabledPluginIds(normalized)
+          const results = await invoke<PluginOutput[]>("run_plugin_probes", { pluginIds: enabledIds })
+          if (isMounted) {
+            setProbeCache(Object.fromEntries(results.map(r => [r.providerId, r])))
+          }
         }
       } catch (e) {
         console.error("Failed to load plugin settings:", e)
@@ -136,12 +155,6 @@ function App() {
       isMounted = false
     }
   }, [])
-
-  useEffect(() => {
-    if (!pluginSettings) return
-    const enabledIds = getEnabledPluginIds(pluginSettings)
-    loadProviders(enabledIds)
-  }, [loadProviders, pluginSettings])
 
   const handleRefresh = () => {
     if (!pluginSettings) return
@@ -185,12 +198,18 @@ function App() {
   const handleToggle = useCallback(
     (id: string) => {
       if (!pluginSettings) return
+      const wasDisabled = pluginSettings.disabled.includes(id)
       const disabled = new Set(pluginSettings.disabled)
-      if (disabled.has(id)) {
+
+      if (wasDisabled) {
         disabled.delete(id)
+        // Probe only this newly-enabled plugin
+        loadProviders([id])
       } else {
         disabled.add(id)
+        // No probe needed for disable
       }
+
       const nextSettings: PluginSettings = {
         ...pluginSettings,
         disabled: Array.from(disabled),
@@ -200,7 +219,7 @@ function App() {
         console.error("Failed to save plugin toggle:", error)
       })
     },
-    [pluginSettings]
+    [pluginSettings, loadProviders]
   )
 
   return (
