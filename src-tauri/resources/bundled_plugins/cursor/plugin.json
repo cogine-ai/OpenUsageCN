@@ -4,5 +4,11 @@
   "name": "Cursor",
   "version": "0.0.1",
   "entry": "plugin.js",
-  "icon": "icon.svg"
+  "icon": "icon.svg",
+  "lines": [
+    { "type": "badge", "label": "Plan" },
+    { "type": "progress", "label": "Plan usage" },
+    { "type": "progress", "label": "On-demand" },
+    { "type": "text", "label": "Resets" }
+  ]
 }

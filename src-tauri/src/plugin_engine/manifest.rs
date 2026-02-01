@@ -4,6 +4,14 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ManifestLine {
+    #[serde(rename = "type")]
+    pub line_type: String,
+    pub label: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PluginManifest {
     pub schema_version: u32,
     pub id: String,
@@ -11,6 +19,7 @@ pub struct PluginManifest {
     pub version: String,
     pub entry: String,
     pub icon: String,
+    pub lines: Vec<ManifestLine>,
 }
 
 #[derive(Debug, Clone)]

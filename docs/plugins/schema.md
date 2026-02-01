@@ -47,7 +47,11 @@ Bundled plugins live under `src-tauri/resources/bundled_plugins/<id>/`.
   "name": "My Provider",
   "version": "0.0.1",
   "entry": "plugin.js",
-  "icon": "icon.svg"
+  "icon": "icon.svg",
+  "lines": [
+    { "type": "badge", "label": "Plan" },
+    { "type": "progress", "label": "Usage" }
+  ]
 }
 ```
 
@@ -59,6 +63,7 @@ Bundled plugins live under `src-tauri/resources/bundled_plugins/<id>/`.
 | `version`       | string | Yes      | Semver version                             |
 | `entry`         | string | Yes      | Relative path to JS entry file             |
 | `icon`          | string | Yes      | Relative path to SVG icon file             |
+| `lines`         | array  | Yes      | Output shape used for loading skeletons    |
 
 Validation rules:
 
@@ -66,6 +71,30 @@ Validation rules:
 - `entry` must exist within the plugin directory
 - `id` must match `globalThis.__openusage_plugin.id`
 - `icon` must be relative and point to an SVG file (use `fill="currentColor"` for theme compatibility)
+
+## Output Shape Declaration
+
+Plugins must declare their output shape in `plugin.json`. This enables the UI to render
+loading skeletons instantly while probes execute asynchronously.
+
+### Lines Array
+
+| Field   | Type   | Required | Description                                  |
+|---------|--------|----------|----------------------------------------------|
+| `type`  | string | Yes      | One of: `text`, `progress`, `badge`          |
+| `label` | string | Yes      | Static label shown in the UI for this line   |
+
+Example:
+
+```json
+{
+  "lines": [
+    { "type": "badge", "label": "Plan" },
+    { "type": "progress", "label": "Plan usage" },
+    { "type": "text", "label": "Resets" }
+  ]
+}
+```
 
 ## Entry Point Structure
 

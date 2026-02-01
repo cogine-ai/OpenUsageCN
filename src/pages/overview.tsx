@@ -1,20 +1,42 @@
 import { ProviderCard } from "@/components/provider-card"
-import type { PluginOutput } from "@/lib/plugin-types"
+import type { PluginMeta, PluginOutput } from "@/lib/plugin-types"
 
-interface OverviewPageProps {
-  providers: PluginOutput[]
+type PluginDisplayState = {
+  meta: PluginMeta
+  data: PluginOutput | null
+  loading: boolean
+  error: string | null
+  lastManualRefreshAt: number | null
 }
 
-export function OverviewPage({ providers }: OverviewPageProps) {
+interface OverviewPageProps {
+  plugins: PluginDisplayState[]
+  onRetryPlugin?: (pluginId: string) => void
+}
+
+export function OverviewPage({ plugins, onRetryPlugin }: OverviewPageProps) {
+  if (plugins.length === 0) {
+    return (
+      <div className="text-center text-muted-foreground py-8">
+        No providers enabled
+      </div>
+    )
+  }
+
   return (
     <div>
-      {providers.map((provider, index) => (
+      {plugins.map((plugin, index) => (
         <ProviderCard
-          key={provider.providerId}
-          name={provider.displayName}
-          lines={provider.lines}
-          iconUrl={provider.iconUrl}
-          showSeparator={index < providers.length - 1}
+          key={plugin.meta.id}
+          name={plugin.meta.name}
+          iconUrl={plugin.meta.iconUrl}
+          showSeparator={index < plugins.length - 1}
+          loading={plugin.loading}
+          error={plugin.error}
+          lines={plugin.data?.lines ?? []}
+          skeletonLines={plugin.meta.lines}
+          lastManualRefreshAt={plugin.lastManualRefreshAt}
+          onRetry={onRetryPlugin ? () => onRetryPlugin(plugin.meta.id) : undefined}
         />
       ))}
     </div>

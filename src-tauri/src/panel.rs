@@ -16,6 +16,10 @@ tauri_panel! {
 }
 
 pub fn init(app_handle: &tauri::AppHandle) -> tauri::Result<()> {
+    if app_handle.get_webview_panel("main").is_ok() {
+        return Ok(());
+    }
+
     let window = app_handle.get_webview_window("main").unwrap();
 
     let panel = window.to_panel::<OpenUsagePanel>()?;

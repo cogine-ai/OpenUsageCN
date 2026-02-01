@@ -49,9 +49,7 @@
   function writeJson(ctx, path, value) {
     try {
       ctx.host.fs.writeText(path, JSON.stringify(value, null, 2))
-    } catch {
-      // best-effort
-    }
+    } catch {}
   }
 
   function readConfig(ctx, configPath) {

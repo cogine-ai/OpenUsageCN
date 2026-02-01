@@ -118,10 +118,35 @@
     return Number.isFinite(n) ? n : null
   }
 
+  function formatResetIn(secondsUntil) {
+    if (!Number.isFinite(secondsUntil) || secondsUntil < 0) return null
+    const totalMinutes = Math.floor(secondsUntil / 60)
+    const totalHours = Math.floor(totalMinutes / 60)
+    const days = Math.floor(totalHours / 24)
+    const hours = totalHours % 24
+    const minutes = totalMinutes % 60
+
+    if (days > 0) return `${days}d ${hours}h`
+    if (totalHours > 0) return `${totalHours}h ${minutes}m`
+    if (totalMinutes > 0) return `${totalMinutes}m`
+    return "<1m"
+  }
+
+  function getResetIn(nowSec, window) {
+    if (!window) return null
+    if (typeof window.reset_at === "number") {
+      return formatResetIn(window.reset_at - nowSec)
+    }
+    if (typeof window.reset_after_seconds === "number") {
+      return formatResetIn(window.reset_after_seconds)
+    }
+    return null
+  }
+
   function probe(ctx) {
     const auth = loadAuth(ctx)
     if (!auth) {
-      return { lines: [lineBadge("Status", "Login required", "#f59e0b")] }
+      return { lines: [lineBadge("Error", "Login required", "#ef4444")] }
     }
 
     if (auth.tokens && auth.tokens.access_token) {
@@ -144,7 +169,7 @@
       if (resp.status === 401 || resp.status === 403) {
         const refreshed = refreshToken(ctx, auth)
         if (!refreshed) {
-          return { lines: [lineBadge("Status", "Token expired", "#f59e0b")] }
+          return { lines: [lineBadge("Error", "Token expired", "#ef4444")] }
         }
         try {
           resp = fetchUsage(ctx, refreshed, accountId)
@@ -152,7 +177,7 @@
           return { lines: [lineBadge("Error", "usage request after refresh failed", "#ef4444")] }
         }
         if (resp.status === 401 || resp.status === 403) {
-          return { lines: [lineBadge("Status", "Token expired", "#f59e0b")] }
+          return { lines: [lineBadge("Error", "Token expired", "#ef4444")] }
         }
       }
 
@@ -168,29 +193,48 @@
       }
 
       const lines = []
+      const nowSec = Math.floor(Date.now() / 1000)
+      const rateLimit = data.rate_limit || null
+      const primaryWindow = rateLimit && rateLimit.primary_window ? rateLimit.primary_window : null
+      const secondaryWindow = rateLimit && rateLimit.secondary_window ? rateLimit.secondary_window : null
+      const reviewWindow =
+        data.code_review_rate_limit && data.code_review_rate_limit.primary_window
+          ? data.code_review_rate_limit.primary_window
+          : null
+
       const headerPrimary = readPercent(resp.headers["x-codex-primary-used-percent"])
       const headerSecondary = readPercent(resp.headers["x-codex-secondary-used-percent"])
 
       if (headerPrimary !== null) {
         lines.push(lineProgress("Session (5h)", headerPrimary, 100, "percent"))
+        const resetIn = getResetIn(nowSec, primaryWindow)
+        if (resetIn) lines.push(lineText("Resets in", resetIn))
       }
       if (headerSecondary !== null) {
         lines.push(lineProgress("Weekly (7d)", headerSecondary, 100, "percent"))
+        const resetIn = getResetIn(nowSec, secondaryWindow)
+        if (resetIn) lines.push(lineText("Resets in", resetIn))
       }
 
       if (lines.length === 0 && data.rate_limit) {
         if (data.rate_limit.primary_window && typeof data.rate_limit.primary_window.used_percent === "number") {
           lines.push(lineProgress("Session (5h)", data.rate_limit.primary_window.used_percent, 100, "percent"))
+          const resetIn = getResetIn(nowSec, primaryWindow)
+          if (resetIn) lines.push(lineText("Resets in", resetIn))
         }
         if (data.rate_limit.secondary_window && typeof data.rate_limit.secondary_window.used_percent === "number") {
           lines.push(lineProgress("Weekly (7d)", data.rate_limit.secondary_window.used_percent, 100, "percent"))
+          const resetIn = getResetIn(nowSec, secondaryWindow)
+          if (resetIn) lines.push(lineText("Resets in", resetIn))
         }
       }
 
-      if (data.code_review_rate_limit && data.code_review_rate_limit.primary_window) {
-        const used = data.code_review_rate_limit.primary_window.used_percent
+      if (reviewWindow) {
+        const used = reviewWindow.used_percent
         if (typeof used === "number") {
           lines.push(lineProgress("Reviews (7d)", used, 100, "percent"))
+          const resetIn = getResetIn(nowSec, reviewWindow)
+          if (resetIn) lines.push(lineText("Resets in", resetIn))
         }
       }
 
@@ -201,8 +245,6 @@
         lines.push(lineProgress("Credits", creditsHeader, 1000))
       } else if (creditsData !== null) {
         lines.push(lineProgress("Credits", creditsData, 1000))
-      } else if (creditsBalance || (data.credits && data.credits.balance !== undefined)) {
-        ctx.host.log.warn("invalid credits balance; skipping credits line")
       }
 
       if (data.plan_type) {
@@ -213,17 +255,17 @@
       }
 
       if (lines.length === 0) {
-        lines.push(lineBadge("Status", "Connected", "#22c55e"))
+        lines.push(lineBadge("Status", "No usage data", "#a3a3a3"))
       }
 
       return { lines }
     }
 
     if (auth.OPENAI_API_KEY) {
-      return { lines: [lineText("Auth", "API key (no usage)")] }
+      return { lines: [lineBadge("Error", "Usage not available for API key", "#ef4444")] }
     }
 
-    return { lines: [lineBadge("Status", "Login required", "#f59e0b")] }
+    return { lines: [lineBadge("Error", "Login required", "#ef4444")] }
   }
 
   globalThis.__openusage_plugin = { id: "codex", probe }
