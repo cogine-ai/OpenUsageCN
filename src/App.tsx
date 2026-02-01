@@ -6,6 +6,7 @@ import { PanelFooter } from "@/components/panel-footer"
 import { OverviewPage } from "@/pages/overview"
 import { SettingsPage } from "@/pages/settings"
 import type { PluginMeta, PluginOutput } from "@/lib/plugin-types"
+import { useProbeEvents } from "@/hooks/use-probe-events"
 import {
   arePluginSettingsEqual,
   getEnabledPluginIds,
@@ -21,23 +22,35 @@ const PANEL_WIDTH = 350;
 const MAX_HEIGHT_FALLBACK_PX = 600;
 const MAX_HEIGHT_FRACTION_OF_MONITOR = 0.8;
 
+type PluginState = {
+  data: PluginOutput | null
+  loading: boolean
+  error: string | null
+}
+
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const containerRef = useRef<HTMLDivElement>(null);
-  const [probeCache, setProbeCache] = useState<Record<string, PluginOutput>>({})
+  const [pluginStates, setPluginStates] = useState<Record<string, PluginState>>({})
   const [pluginsMeta, setPluginsMeta] = useState<PluginMeta[]>([])
   const [pluginSettings, setPluginSettings] = useState<PluginSettings | null>(null)
   const [maxPanelHeightPx, setMaxPanelHeightPx] = useState<number | null>(null)
   const maxPanelHeightPxRef = useRef<number | null>(null)
 
-  // Derive display providers from cache + settings
-  const providers = useMemo(() => {
+  const displayPlugins = useMemo(() => {
     if (!pluginSettings) return []
     const disabledSet = new Set(pluginSettings.disabled)
+    const metaById = new Map(pluginsMeta.map((plugin) => [plugin.id, plugin]))
     return pluginSettings.order
-      .filter(id => !disabledSet.has(id) && probeCache[id])
-      .map(id => probeCache[id])
-  }, [pluginSettings, probeCache])
+      .filter((id) => !disabledSet.has(id))
+      .map((id) => {
+        const meta = metaById.get(id)
+        if (!meta) return null
+        const state = pluginStates[id] ?? { data: null, loading: false, error: null }
+        return { meta, ...state }
+      })
+      .filter((plugin): plugin is { meta: PluginMeta } & PluginState => Boolean(plugin))
+  }, [pluginSettings, pluginStates, pluginsMeta])
 
   // Initialize panel on mount
   useEffect(() => {
@@ -100,21 +113,48 @@ function App() {
     observer.observe(container);
 
     return () => observer.disconnect();
-  }, [activeTab, providers]);
+  }, [activeTab, displayPlugins]);
 
-  const loadProviders = useCallback(async (pluginIds?: string[]) => {
-    try {
-      const args = pluginIds === undefined ? undefined : { pluginIds }
-      const results = await invoke<PluginOutput[]>("run_plugin_probes", args)
-      setProbeCache(prev => {
-        const next = { ...prev }
-        for (const r of results) next[r.providerId] = r
-        return next
-      })
-    } catch (e) {
-      console.error("Failed to load plugins:", e)
+  const getErrorMessage = useCallback((output: PluginOutput) => {
+    if (output.lines.length !== 1) return null
+    const line = output.lines[0]
+    if (line.type === "badge" && line.label === "Error") {
+      return line.text || "Couldn't update data. Try again?"
     }
+    return null
   }, [])
+
+  const setLoadingForPlugins = useCallback((ids: string[]) => {
+    setPluginStates((prev) => {
+      const next = { ...prev }
+      for (const id of ids) {
+        next[id] = { data: null, loading: true, error: null }
+      }
+      return next
+    })
+  }, [])
+
+  const handleProbeResult = useCallback(
+    (output: PluginOutput) => {
+      const errorMessage = getErrorMessage(output)
+      setPluginStates((prev) => ({
+        ...prev,
+        [output.providerId]: {
+          data: errorMessage ? null : output,
+          loading: false,
+          error: errorMessage,
+        },
+      }))
+    },
+    [getErrorMessage]
+  )
+
+  const handleBatchComplete = useCallback(() => {}, [])
+
+  const { startBatch } = useProbeEvents({
+    onResult: handleProbeResult,
+    onBatchComplete: handleBatchComplete,
+  })
 
   useEffect(() => {
     let isMounted = true
@@ -137,12 +177,9 @@ function App() {
 
         if (isMounted) {
           setPluginSettings(normalized)
-          // Initial probe for all enabled plugins
           const enabledIds = getEnabledPluginIds(normalized)
-          const results = await invoke<PluginOutput[]>("run_plugin_probes", { pluginIds: enabledIds })
-          if (isMounted) {
-            setProbeCache(Object.fromEntries(results.map(r => [r.providerId, r])))
-          }
+          setLoadingForPlugins(enabledIds)
+          await startBatch(enabledIds)
         }
       } catch (e) {
         console.error("Failed to load plugin settings:", e)
@@ -154,13 +191,22 @@ function App() {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [setLoadingForPlugins, startBatch])
 
   const handleRefresh = () => {
     if (!pluginSettings) return
     const enabledIds = getEnabledPluginIds(pluginSettings)
-    loadProviders(enabledIds)
+    setLoadingForPlugins(enabledIds)
+    void startBatch(enabledIds)
   }
+
+  const handleRetryPlugin = useCallback(
+    (id: string) => {
+      setLoadingForPlugins([id])
+      void startBatch([id])
+    },
+    [setLoadingForPlugins, startBatch]
+  )
 
   const settingsPlugins = useMemo(() => {
     if (!pluginSettings) return []
@@ -203,8 +249,8 @@ function App() {
 
       if (wasDisabled) {
         disabled.delete(id)
-        // Probe only this newly-enabled plugin
-        loadProviders([id])
+        setLoadingForPlugins([id])
+        void startBatch([id])
       } else {
         disabled.add(id)
         // No probe needed for disable
@@ -219,7 +265,7 @@ function App() {
         console.error("Failed to save plugin toggle:", error)
       })
     },
-    [pluginSettings, loadProviders]
+    [pluginSettings, setLoadingForPlugins, startBatch]
   )
 
   return (
@@ -233,7 +279,10 @@ function App() {
 
         <div className="mt-3 flex-1 min-h-0 overflow-y-auto">
           {activeTab === "overview" ? (
-            <OverviewPage providers={providers} />
+            <OverviewPage
+              plugins={displayPlugins}
+              onRetryPlugin={handleRetryPlugin}
+            />
           ) : (
             <SettingsPage
               plugins={settingsPlugins}

@@ -4,6 +4,15 @@
   "name": "Mock (Chaos)",
   "version": "0.0.1",
   "entry": "plugin.js",
-  "icon": "icon.svg"
+  "icon": "icon.svg",
+  "lines": [
+    { "type": "badge", "label": "Mode" },
+    { "type": "text", "label": "Config" },
+    { "type": "badge", "label": "Case" },
+    { "type": "progress", "label": "Percent" },
+    { "type": "progress", "label": "Dollars" },
+    { "type": "text", "label": "Now" },
+    { "type": "badge", "label": "Warning" }
+  ]
 }
 

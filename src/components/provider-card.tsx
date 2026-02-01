@@ -1,13 +1,19 @@
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Separator } from "@/components/ui/separator"
-import type { MetricLine } from "@/lib/plugin-types"
+import { SkeletonLines } from "@/components/skeleton-lines"
+import { PluginError } from "@/components/plugin-error"
+import type { ManifestLine, MetricLine } from "@/lib/plugin-types"
 
 interface ProviderCardProps {
   name: string
-  lines: MetricLine[]
   iconUrl: string
   showSeparator?: boolean
+  loading?: boolean
+  error?: string | null
+  lines?: MetricLine[]
+  skeletonLines?: ManifestLine[]
+  onRetry?: () => void
 }
 
 function formatNumber(value: number) {
@@ -35,7 +41,16 @@ function getProgressPercent(value: number, max: number) {
   return Math.min(100, Math.max(0, (value / max) * 100))
 }
 
-export function ProviderCard({ name, lines, iconUrl, showSeparator = true }: ProviderCardProps) {
+export function ProviderCard({
+  name,
+  iconUrl,
+  showSeparator = true,
+  loading = false,
+  error = null,
+  lines = [],
+  skeletonLines = [],
+  onRetry,
+}: ProviderCardProps) {
   return (
     <div>
       <div className="py-3">
@@ -47,64 +62,78 @@ export function ProviderCard({ name, lines, iconUrl, showSeparator = true }: Pro
             className="w-5 h-5 opacity-60"
           />
         </div>
-        <div className="space-y-1">
-          {lines.map((line, index) => {
-            if (line.type === "text") {
-              return (
-                <div key={`${line.label}-${index}`} className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">{line.label}</span>
-                  <span
-                    className="text-sm text-muted-foreground"
-                    style={line.color ? { color: line.color } : undefined}
-                  >
-                    {line.value}
-                  </span>
-                </div>
-              )
-            }
+        {error && (
+          <PluginError message={error} onRetry={onRetry} />
+        )}
 
-            if (line.type === "badge") {
-              return (
-                <div key={`${line.label}-${index}`} className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">{line.label}</span>
-                  <Badge
-                    variant="outline"
-                    style={
-                      line.color
-                        ? { color: line.color, borderColor: line.color }
-                        : undefined
-                    }
-                  >
-                    {line.text}
-                  </Badge>
-                </div>
-              )
-            }
+        {loading && !error && (
+          <SkeletonLines lines={skeletonLines} />
+        )}
 
-            if (line.type === "progress") {
-              const percent = getProgressPercent(line.value, line.max)
-              return (
-                <div key={`${line.label}-${index}`} className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">{line.label}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm tabular-nums text-muted-foreground">
-                      {formatProgressValue(line.value, line.unit)}
-                    </span>
-                    <Progress
-                      className="w-24"
-                      value={percent}
-                      indicatorColor={line.color}
-                    />
-                  </div>
-                </div>
-              )
-            }
-
-            return null
-          })}
-        </div>
+        {!loading && !error && (
+          <div className="space-y-1">
+            {lines.map((line, index) => (
+              <MetricLineRenderer key={`${line.label}-${index}`} line={line} />
+            ))}
+          </div>
+        )}
       </div>
       {showSeparator && <Separator />}
     </div>
   )
+}
+
+function MetricLineRenderer({ line }: { line: MetricLine }) {
+  if (line.type === "text") {
+    return (
+      <div className="flex justify-between items-center">
+        <span className="text-sm text-muted-foreground">{line.label}</span>
+        <span
+          className="text-sm text-muted-foreground"
+          style={line.color ? { color: line.color } : undefined}
+        >
+          {line.value}
+        </span>
+      </div>
+    )
+  }
+
+  if (line.type === "badge") {
+    return (
+      <div className="flex justify-between items-center">
+        <span className="text-sm text-muted-foreground">{line.label}</span>
+        <Badge
+          variant="outline"
+          style={
+            line.color
+              ? { color: line.color, borderColor: line.color }
+              : undefined
+          }
+        >
+          {line.text}
+        </Badge>
+      </div>
+    )
+  }
+
+  if (line.type === "progress") {
+    const percent = getProgressPercent(line.value, line.max)
+    return (
+      <div className="flex justify-between items-center">
+        <span className="text-sm text-muted-foreground">{line.label}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm tabular-nums text-muted-foreground">
+            {formatProgressValue(line.value, line.unit)}
+          </span>
+          <Progress
+            className="w-24"
+            value={percent}
+            indicatorColor={line.color}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  return null
 }

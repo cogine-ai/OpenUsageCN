@@ -19,7 +19,22 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
             } = event
             {
                 if button_state == MouseButtonState::Up {
-                    let panel = app_handle.get_webview_panel("main").unwrap();
+                    let panel = match app_handle.get_webview_panel("main") {
+                        Ok(panel) => panel,
+                        Err(_) => {
+                            if let Err(err) = crate::panel::init(app_handle) {
+                                log::error!("Failed to init panel: {}", err);
+                                return;
+                            }
+                            match app_handle.get_webview_panel("main") {
+                                Ok(panel) => panel,
+                                Err(err) => {
+                                    log::error!("Panel missing after init: {:?}", err);
+                                    return;
+                                }
+                            }
+                        }
+                    };
 
                     if panel.is_visible() {
                         panel.hide();

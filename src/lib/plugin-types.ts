@@ -3,6 +3,11 @@ export type MetricLine =
   | { type: "progress"; label: string; value: number; max: number; unit?: "percent" | "dollars"; color?: string }
   | { type: "badge"; label: string; text: string; color?: string }
 
+export type ManifestLine = {
+  type: "text" | "progress" | "badge"
+  label: string
+}
+
 export type PluginOutput = {
   providerId: string
   displayName: string
@@ -14,4 +19,5 @@ export type PluginMeta = {
   id: string
   name: string
   iconUrl: string
+  lines: ManifestLine[]
 }
