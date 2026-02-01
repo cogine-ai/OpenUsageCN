@@ -6,6 +6,7 @@ type PluginDisplayState = {
   data: PluginOutput | null
   loading: boolean
   error: string | null
+  lastManualRefreshAt: number | null
 }
 
 interface OverviewPageProps {
@@ -34,6 +35,7 @@ export function OverviewPage({ plugins, onRetryPlugin }: OverviewPageProps) {
           error={plugin.error}
           lines={plugin.data?.lines ?? []}
           skeletonLines={plugin.meta.lines}
+          lastManualRefreshAt={plugin.lastManualRefreshAt}
           onRetry={onRetryPlugin ? () => onRetryPlugin(plugin.meta.id) : undefined}
         />
       ))}

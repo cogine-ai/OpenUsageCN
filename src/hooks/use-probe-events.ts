@@ -27,12 +27,19 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
   const unlisteners = useRef<UnlistenFn[]>([])
 
   useEffect(() => {
+    let cancelled = false
+
     const setup = async () => {
       const resultUnlisten = await listen<ProbeResult>("probe:result", (event) => {
         if (activeBatchIds.current.has(event.payload.batchId)) {
           onResult(event.payload.output)
         }
       })
+
+      if (cancelled) {
+        resultUnlisten()
+        return
+      }
 
       const completeUnlisten = await listen<ProbeBatchComplete>(
         "probe:batch-complete",
@@ -43,12 +50,19 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
         }
       )
 
+      if (cancelled) {
+        resultUnlisten()
+        completeUnlisten()
+        return
+      }
+
       unlisteners.current.push(resultUnlisten, completeUnlisten)
     }
 
-    setup()
+    void setup()
 
     return () => {
+      cancelled = true
       unlisteners.current.forEach((unlisten) => unlisten())
       unlisteners.current = []
     }

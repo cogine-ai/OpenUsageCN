@@ -21,11 +21,13 @@ const APP_VERSION = "0.0.1 (dev)"
 const PANEL_WIDTH = 350;
 const MAX_HEIGHT_FALLBACK_PX = 600;
 const MAX_HEIGHT_FRACTION_OF_MONITOR = 0.8;
+const REFRESH_COOLDOWN_MS = 300_000; // 5 minutes
 
 type PluginState = {
   data: PluginOutput | null
   loading: boolean
   error: string | null
+  lastManualRefreshAt: number | null
 }
 
 function App() {
@@ -37,6 +39,9 @@ function App() {
   const [maxPanelHeightPx, setMaxPanelHeightPx] = useState<number | null>(null)
   const maxPanelHeightPxRef = useRef<number | null>(null)
 
+  // Tick state to force re-evaluation of cooldown status
+  const [cooldownTick, setCooldownTick] = useState(0)
+
   const displayPlugins = useMemo(() => {
     if (!pluginSettings) return []
     const disabledSet = new Set(pluginSettings.disabled)
@@ -46,11 +51,40 @@ function App() {
       .map((id) => {
         const meta = metaById.get(id)
         if (!meta) return null
-        const state = pluginStates[id] ?? { data: null, loading: false, error: null }
+        const state = pluginStates[id] ?? { data: null, loading: false, error: null, lastManualRefreshAt: null }
         return { meta, ...state }
       })
       .filter((plugin): plugin is { meta: PluginMeta } & PluginState => Boolean(plugin))
   }, [pluginSettings, pluginStates, pluginsMeta])
+
+  // Check if Refresh All should be enabled (at least one enabled plugin not on cooldown)
+  const canRefreshAll = useMemo(() => {
+    // Include cooldownTick to re-evaluate when timer ticks
+    void cooldownTick
+    if (!pluginSettings) return false
+    const enabledIds = getEnabledPluginIds(pluginSettings)
+    if (enabledIds.length === 0) return false
+    const now = Date.now()
+    return enabledIds.some((id) => {
+      const lastManual = pluginStates[id]?.lastManualRefreshAt
+      return !lastManual || now - lastManual >= REFRESH_COOLDOWN_MS
+    })
+  }, [pluginSettings, pluginStates, cooldownTick])
+
+  // Timer to update cooldown status - tick every second while any plugin is on cooldown
+  useEffect(() => {
+    if (!pluginSettings) return
+    const enabledIds = getEnabledPluginIds(pluginSettings)
+    const now = Date.now()
+    const hasActiveCooldown = enabledIds.some((id) => {
+      const lastManual = pluginStates[id]?.lastManualRefreshAt
+      return lastManual && now - lastManual < REFRESH_COOLDOWN_MS
+    })
+    if (!hasActiveCooldown) return
+
+    const interval = setInterval(() => setCooldownTick((t) => t + 1), 1000)
+    return () => clearInterval(interval)
+  }, [pluginSettings, pluginStates])
 
   // Initialize panel on mount
   useEffect(() => {
@@ -128,21 +162,33 @@ function App() {
     setPluginStates((prev) => {
       const next = { ...prev }
       for (const id of ids) {
-        next[id] = { data: null, loading: true, error: null }
+        const existing = prev[id]
+        next[id] = { data: null, loading: true, error: null, lastManualRefreshAt: existing?.lastManualRefreshAt ?? null }
       }
       return next
     })
   }, [])
 
+  // Track which plugin IDs are being manually refreshed (vs initial load / enable toggle)
+  const manualRefreshIdsRef = useRef<Set<string>>(new Set())
+
   const handleProbeResult = useCallback(
     (output: PluginOutput) => {
       const errorMessage = getErrorMessage(output)
+      const isManual = manualRefreshIdsRef.current.has(output.providerId)
+      if (isManual) {
+        manualRefreshIdsRef.current.delete(output.providerId)
+      }
       setPluginStates((prev) => ({
         ...prev,
         [output.providerId]: {
           data: errorMessage ? null : output,
           loading: false,
           error: errorMessage,
+          // Only set cooldown timestamp for successful manual refreshes
+          lastManualRefreshAt: (!errorMessage && isManual)
+            ? Date.now()
+            : (prev[output.providerId]?.lastManualRefreshAt ?? null),
         },
       }))
     },
@@ -193,15 +239,28 @@ function App() {
     }
   }, [setLoadingForPlugins, startBatch])
 
-  const handleRefresh = () => {
+  const handleRefresh = useCallback(() => {
     if (!pluginSettings) return
     const enabledIds = getEnabledPluginIds(pluginSettings)
-    setLoadingForPlugins(enabledIds)
-    void startBatch(enabledIds)
-  }
+    // Filter out plugins that are on cooldown
+    const now = Date.now()
+    const refreshableIds = enabledIds.filter((id) => {
+      const lastManual = pluginStates[id]?.lastManualRefreshAt
+      return !lastManual || now - lastManual >= REFRESH_COOLDOWN_MS
+    })
+    if (refreshableIds.length === 0) return
+    // Mark as manual refresh
+    for (const id of refreshableIds) {
+      manualRefreshIdsRef.current.add(id)
+    }
+    setLoadingForPlugins(refreshableIds)
+    void startBatch(refreshableIds)
+  }, [pluginSettings, pluginStates, setLoadingForPlugins, startBatch])
 
   const handleRetryPlugin = useCallback(
     (id: string) => {
+      // Mark as manual refresh
+      manualRefreshIdsRef.current.add(id)
       setLoadingForPlugins([id])
       void startBatch([id])
     },
@@ -295,6 +354,7 @@ function App() {
         <PanelFooter
           version={APP_VERSION}
           onRefresh={handleRefresh}
+          refreshDisabled={!canRefreshAll}
         />
       </div>
     </div>
