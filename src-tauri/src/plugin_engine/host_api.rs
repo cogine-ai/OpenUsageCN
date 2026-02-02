@@ -296,6 +296,86 @@ fn inject_keychain<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<
         )?,
     )?;
 
+    keychain_obj.set(
+        "writeGenericPassword",
+        Function::new(
+            ctx.clone(),
+            move |ctx_inner: Ctx<'_>, service: String, value: String| -> rquickjs::Result<()> {
+                if !cfg!(target_os = "macos") {
+                    return Err(Exception::throw_message(
+                        &ctx_inner,
+                        "keychain API is only supported on macOS",
+                    ));
+                }
+
+                // First, try to find existing entry and extract its account
+                let mut account_arg: Option<String> = None;
+                let find_output = std::process::Command::new("security")
+                    .args(["find-generic-password", "-s", &service])
+                    .output();
+
+                if let Ok(output) = find_output {
+                    if output.status.success() {
+                        // Parse account from output: "acct"<blob>="value"
+                        let stdout = String::from_utf8_lossy(&output.stdout);
+                        for line in stdout.lines() {
+                            if let Some(start) = line.find("\"acct\"<blob>=\"") {
+                                let rest = &line[start + 14..];
+                                if let Some(end) = rest.find('"') {
+                                    account_arg = Some(rest[..end].to_string());
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Build command with account if found
+                let output = if let Some(ref acct) = account_arg {
+                    std::process::Command::new("security")
+                        .args([
+                            "add-generic-password",
+                            "-s",
+                            &service,
+                            "-a",
+                            acct,
+                            "-w",
+                            &value,
+                            "-U",
+                        ])
+                        .output()
+                } else {
+                    std::process::Command::new("security")
+                        .args([
+                            "add-generic-password",
+                            "-s",
+                            &service,
+                            "-w",
+                            &value,
+                            "-U",
+                        ])
+                        .output()
+                }
+                .map_err(|e| {
+                    Exception::throw_message(
+                        &ctx_inner,
+                        &format!("keychain write failed: {}", e),
+                    )
+                })?;
+
+                if !output.status.success() {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    return Err(Exception::throw_message(
+                        &ctx_inner,
+                        &format!("keychain write failed: {}", stderr.trim()),
+                    ));
+                }
+
+                Ok(())
+            },
+        )?,
+    )?;
+
     host.set("keychain", keychain_obj)?;
     Ok(())
 }
@@ -308,7 +388,7 @@ fn inject_sqlite<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()
         Function::new(
             ctx.clone(),
             move |ctx_inner: Ctx<'_>, db_path: String, sql: String| -> rquickjs::Result<String> {
-                if sql.trim_start().starts_with('.') {
+                if sql.lines().any(|line| line.trim_start().starts_with('.')) {
                     return Err(Exception::throw_message(
                         &ctx_inner,
                         "sqlite3 dot-commands are not allowed",
@@ -338,6 +418,41 @@ fn inject_sqlite<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()
         )?,
     )?;
 
+    sqlite_obj.set(
+        "exec",
+        Function::new(
+            ctx.clone(),
+            move |ctx_inner: Ctx<'_>, db_path: String, sql: String| -> rquickjs::Result<()> {
+                if sql.lines().any(|line| line.trim_start().starts_with('.')) {
+                    return Err(Exception::throw_message(
+                        &ctx_inner,
+                        "sqlite3 dot-commands are not allowed",
+                    ));
+                }
+                let expanded = expand_path(&db_path);
+                let output = std::process::Command::new("sqlite3")
+                    .args([&expanded, &sql])
+                    .output()
+                    .map_err(|e| {
+                        Exception::throw_message(
+                            &ctx_inner,
+                            &format!("sqlite3 exec failed: {}", e),
+                        )
+                    })?;
+
+                if !output.status.success() {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    return Err(Exception::throw_message(
+                        &ctx_inner,
+                        &format!("sqlite3 error: {}", stderr.trim()),
+                    ));
+                }
+
+                Ok(())
+            },
+        )?,
+    )?;
+
     host.set("sqlite", sqlite_obj)?;
     Ok(())
 }
@@ -363,4 +478,30 @@ fn expand_path(path: &str) -> String {
         }
     }
     path.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rquickjs::{Context, Function, Object, Runtime};
+
+    #[test]
+    fn keychain_api_exposes_write() {
+        let rt = Runtime::new().expect("runtime");
+        let ctx = Context::full(&rt).expect("context");
+        ctx.with(|ctx| {
+            let app_data = std::env::temp_dir();
+            inject_host_api(&ctx, "test", &app_data, "0.0.0").expect("inject host api");
+            let globals = ctx.globals();
+            let probe_ctx: Object = globals.get("__openusage_ctx").expect("probe ctx");
+            let host: Object = probe_ctx.get("host").expect("host");
+            let keychain: Object = host.get("keychain").expect("keychain");
+            let _read: Function = keychain
+                .get("readGenericPassword")
+                .expect("readGenericPassword");
+            let _write: Function = keychain
+                .get("writeGenericPassword")
+                .expect("writeGenericPassword");
+        });
+    }
 }

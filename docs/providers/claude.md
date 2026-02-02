@@ -102,7 +102,43 @@ The keychain entry contains the same JSON structure as the credentials file.
 
 ### Token Refresh
 
-Access tokens are short-lived JWTs. The `expiresAt` field indicates when the token expires (unix milliseconds). If expired, Claude Code will automatically refresh using the `refreshToken`.
+Access tokens are short-lived JWTs. The `expiresAt` field indicates when the token expires (unix milliseconds). If expired, the plugin will automatically refresh using the `refreshToken`.
+
+**Refresh endpoint:**
+
+```
+POST https://platform.claude.com/v1/oauth/token
+Content-Type: application/json
+```
+
+**Request body:**
+
+```json
+{
+  "grant_type": "refresh_token",
+  "refresh_token": "<refresh_token>",
+  "client_id": "9d1c250a-e61b-44d9-88ed-5944d1962f5e",
+  "scope": "user:profile user:inference user:sessions:claude_code user:mcp_servers"
+}
+```
+
+**Response:**
+
+```json
+{
+  "access_token": "<new_jwt>",
+  "refresh_token": "<new_refresh_token>",
+  "expires_in": 3600
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `access_token` | string | New OAuth access token |
+| `refresh_token` | string | New refresh token (may be same as previous) |
+| `expires_in` | number | Token lifetime in seconds |
+
+The plugin refreshes proactively when the token is within 5 minutes of expiration, or reactively on 401/403 responses. Updated credentials are persisted back to the original source (file or keychain).
 
 ## Usage Example (curl)
 
@@ -176,17 +212,20 @@ async function getClaudeUsage(): Promise<UsageResponse> {
 ## Technical Details
 
 - **Protocol:** REST (plain JSON)
-- **HTTP method:** GET
-- **Base domain:** `api.anthropic.com`
-- **Beta header:** `anthropic-beta: oauth-2025-04-20` (required)
+- **HTTP method:** GET (usage), POST (token refresh)
+- **Usage domain:** `api.anthropic.com`
+- **OAuth domain:** `platform.claude.com`
+- **Beta header:** `anthropic-beta: oauth-2025-04-20` (required for usage endpoint)
+- **Client ID:** `9d1c250a-e61b-44d9-88ed-5944d1962f5e`
 - **Utilization is a percentage** (0-100)
 - **Credits are in cents** (divide by 100 for dollars)
 - **Timestamps are ISO 8601** (not unix)
 - **Expiration times are unix milliseconds** (in credentials file)
+- **Token refresh:** JSON body (not form-encoded)
 
 ## Open Questions
 
-- [ ] What OAuth refresh endpoint does Claude Code use?
+- [x] What OAuth refresh endpoint does Claude Code use? → `https://platform.claude.com/v1/oauth/token`
 - [ ] Is `seven_day_opus` always present, or only for certain plans?
 - [ ] Are there additional rate limit windows for different plan tiers (e.g. Max)?
-- [ ] What scopes are required for the usage endpoint?
+- [x] What scopes are required for the usage endpoint? → `user:inference` (minimum), full set: `user:profile user:inference user:sessions:claude_code user:mcp_servers`

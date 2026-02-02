@@ -1,6 +1,6 @@
 use crate::plugin_engine::host_api;
 use crate::plugin_engine::manifest::LoadedPlugin;
-use rquickjs::{Array, Context, Error, Object, Promise, Runtime, Value};
+use rquickjs::{Array, Context, Ctx, Error, Object, Promise, Runtime, Value};
 use serde::Serialize;
 use std::path::PathBuf;
 
@@ -87,7 +87,7 @@ pub fn run_probe(
 
         let result_value: Value = match probe_fn.call((probe_ctx,)) {
             Ok(r) => r,
-            Err(_) => return error_output(plugin, "probe() failed".to_string()),
+            Err(_) => return error_output(plugin, extract_error_string(&ctx)),
         };
         let result: Object = if result_value.is_promise() {
             let promise: Promise = match result_value.into_promise() {
@@ -99,7 +99,7 @@ pub fn run_probe(
                 Err(Error::WouldBlock) => {
                     return error_output(plugin, "probe() returned unresolved promise".to_string())
                 }
-                Err(_) => return error_output(plugin, "probe() promise rejected".to_string()),
+                Err(_) => return error_output(plugin, extract_error_string(&ctx)),
             }
         } else {
             match result_value.into_object() {
@@ -188,10 +188,95 @@ fn error_output(plugin: &LoadedPlugin, message: String) -> PluginOutput {
     }
 }
 
+fn extract_error_string(ctx: &Ctx<'_>) -> String {
+    let exc = ctx.catch();
+    if exc.is_null() || exc.is_undefined() {
+        return "The plugin failed, try again or contact plugin author.".to_string();
+    }
+    if let Some(str_val) = exc.as_string() {
+        let message: String = str_val.to_string().unwrap_or_default();
+        let trimmed = message.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+    "The plugin failed, try again or contact plugin author.".to_string()
+}
+
 fn error_line(message: String) -> MetricLine {
     MetricLine::Badge {
         label: "Error".to_string(),
         text: message,
         color: Some("#ef4444".to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::plugin_engine::manifest::{LoadedPlugin, PluginManifest};
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn test_plugin(entry_script: &str) -> LoadedPlugin {
+        LoadedPlugin {
+            manifest: PluginManifest {
+                schema_version: 1,
+                id: "test".to_string(),
+                name: "Test".to_string(),
+                version: "0.0.0".to_string(),
+                entry: "plugin.js".to_string(),
+                icon: "icon.svg".to_string(),
+                lines: vec![],
+            },
+            plugin_dir: PathBuf::from("."),
+            entry_script: entry_script.to_string(),
+            icon_data_url: "data:image/svg+xml;base64,".to_string(),
+        }
+    }
+
+    fn temp_app_dir(label: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        std::env::temp_dir().join(format!("openusage-test-{}-{}", label, nanos))
+    }
+
+    fn error_text(output: PluginOutput) -> String {
+        match output.lines.first() {
+            Some(MetricLine::Badge { text, .. }) => text.clone(),
+            other => panic!("expected error badge, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn run_probe_returns_thrown_string_from_sync_error() {
+        let plugin = test_plugin(
+            r#"
+            globalThis.__openusage_plugin = {
+                probe() {
+                    throw "boom";
+                }
+            };
+            "#,
+        );
+        let output = run_probe(&plugin, &temp_app_dir("sync"), "0.0.0");
+        assert_eq!(error_text(output), "boom");
+    }
+
+    #[test]
+    fn run_probe_returns_thrown_string_from_async_error() {
+        let plugin = test_plugin(
+            r#"
+            globalThis.__openusage_plugin = {
+                probe: async function () {
+                    throw "boom";
+                }
+            };
+            "#,
+        );
+        let output = run_probe(&plugin, &temp_app_dir("async"), "0.0.0");
+        assert_eq!(error_text(output), "boom");
     }
 }

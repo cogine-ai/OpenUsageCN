@@ -93,9 +93,14 @@
       "lines_not_array",
       "line_not_object",
 
-      // Explicit runtime failures
-      "throw",
-      "reject",
+      // Explicit runtime failures (realistic errors)
+      "auth_required_cli",
+      "token_expired_cli",
+      "refresh_revoked",
+      "network_error",
+      "rate_limited",
+
+      // Promise behavior
       "unresolved_promise",
       "http_throw",
       "sqlite_throw",
@@ -144,12 +149,24 @@
       }
     }
 
-    if (mode === "throw") {
-      throw new Error("mock plugin: thrown error")
+    if (mode === "auth_required_cli") {
+      throw "Not logged in. Run mockctl to authenticate."
     }
 
-    if (mode === "reject") {
-      return Promise.reject(new Error("mock plugin: rejected promise"))
+    if (mode === "token_expired_cli") {
+      return Promise.reject("Token expired. Run mockctl to refresh.")
+    }
+
+    if (mode === "refresh_revoked") {
+      throw "Token revoked. Run mockctl to log in again."
+    }
+
+    if (mode === "network_error") {
+      throw "Network error. Check your connection."
+    }
+
+    if (mode === "rate_limited") {
+      throw "Rate limited. Wait a few minutes."
     }
 
     if (mode === "unresolved_promise") {

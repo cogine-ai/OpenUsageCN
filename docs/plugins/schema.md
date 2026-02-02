@@ -159,12 +159,15 @@ Status indicator with colored background.
 
 | Condition                  | Result                                        |
 | -------------------------- | --------------------------------------------- |
-| Plugin throws              | Error badge returned                          |
+| Plugin throws a string     | Error badge with that string                  |
+| Plugin throws non-string   | Error badge with a generic fallback message   |
 | Promise rejects            | Error badge                                   |
 | Promise never resolves     | Error badge (timeout)                         |
 | Invalid line type          | Error badge                                   |
 | Missing `lines` array      | Error badge                                   |
 | Non-finite progress values | Coerced to `value: -1, max: 0` (UI shows N/A) |
+
+Prefer throwing short, actionable strings (not `Error` objects).
 
 ## Minimal Example
 
@@ -198,18 +201,18 @@ A complete, working plugin that fetches data and displays all three line types.
           timeoutMs: 5000,
         })
       } catch (e) {
-        return { lines: [{ type: "badge", label: "Error", text: "Request failed", color: "#ef4444" }] }
+        throw "Request failed. Check your connection."
       }
 
       if (resp.status !== 200) {
-        return { lines: [{ type: "badge", label: "Error", text: "HTTP " + resp.status, color: "#ef4444" }] }
+        throw "Request failed (HTTP " + resp.status + "). Try again later."
       }
 
       let data
       try {
         data = JSON.parse(resp.bodyText)
       } catch {
-        return { lines: [{ type: "badge", label: "Error", text: "Invalid JSON", color: "#ef4444" }] }
+        throw "Invalid JSON. Try again later."
       }
 
       return {
@@ -227,7 +230,7 @@ A complete, working plugin that fetches data and displays all three line types.
 ## Best Practices
 
 - Wrap all host API calls in try/catch
-- Return user-friendly error badges (not raw exception messages)
+- Throw short, user-friendly strings (not raw exception objects)
 - Use `ctx.app.pluginDataDir` for plugin-specific state/config
 - Keep probes fast (users wait on refresh)
 - Validate API responses before accessing nested fields

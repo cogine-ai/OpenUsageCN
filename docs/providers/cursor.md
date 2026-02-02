@@ -159,7 +159,57 @@ Other useful keys in the same table:
 
 ### Token Refresh
 
-Cursor's token is a short-lived JWT. If the token is expired, use the `refreshToken` to obtain a new one via Cursor's Auth0 endpoint. The app checks `willAccessTokenExpireSoon()` before each request and triggers a refresh if needed.
+Cursor's token is a short-lived JWT. If the token is expired, use the `refreshToken` to obtain a new one via Cursor's OAuth endpoint. The app checks token expiration before each request and triggers a refresh if needed.
+
+**Refresh Endpoint:**
+
+```
+POST https://api2.cursor.sh/oauth/token
+```
+
+**Request:**
+
+```json
+{
+  "grant_type": "refresh_token",
+  "client_id": "KbZUR41cY7W6zRSdpSUJ7I7mLYBKOCmB",
+  "refresh_token": "<refresh_token>"
+}
+```
+
+**Headers:**
+
+```
+Content-Type: application/json
+```
+
+**Response (success):**
+
+```json
+{
+  "access_token": "<new_jwt>",
+  "id_token": "<id_token>",
+  "shouldLogout": false
+}
+```
+
+**Response (invalid/expired):**
+
+```json
+{
+  "access_token": "",
+  "id_token": "",
+  "shouldLogout": true
+}
+```
+
+When `shouldLogout` is `true`, the refresh token is invalid and the user must re-authenticate via the Cursor app.
+
+**Token Expiration:**
+
+- Access tokens are JWTs with an `exp` claim (Unix timestamp in seconds)
+- Cursor refreshes tokens ~53 days before expiration (1272 hours)
+- The OpenUsage plugin refreshes 5 minutes before expiration
 
 ## Usage Example (TypeScript)
 
