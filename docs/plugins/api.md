@@ -74,7 +74,8 @@ try {
   const content = ctx.host.fs.readText("~/.config/myapp/settings.json")
   const settings = JSON.parse(content)
 } catch (e) {
-  ctx.host.log.error("Failed to read settings: " + e.message)
+  ctx.host.log.error("Failed to read settings: " + String(e))
+  throw "Failed to read settings. Check your config."
 }
 ```
 
@@ -135,11 +136,11 @@ try {
     timeoutMs: 5000,
   })
 } catch (e) {
-  return { lines: [{ type: "badge", label: "Error", text: "Network error", color: "#ef4444" }] }
+  throw "Network error. Check your connection."
 }
 
 if (resp.status !== 200) {
-  return { lines: [{ type: "badge", label: "Error", text: "HTTP " + resp.status, color: "#ef4444" }] }
+  throw "Request failed (HTTP " + resp.status + "). Try again later."
 }
 
 const data = JSON.parse(resp.bodyText)
@@ -185,7 +186,7 @@ if (ctx.host.fs.exists("~/.myapp/credentials.json")) {
     const keychainValue = ctx.host.keychain.readGenericPassword("MyApp-credentials")
     credentials = JSON.parse(keychainValue)
   } catch {
-    return { lines: [{ type: "badge", label: "Status", text: "Login required", color: "#f59e0b" }] }
+    throw "Login required. Sign in to continue."
   }
 }
 ```
@@ -216,12 +217,12 @@ try {
   const json = ctx.host.sqlite.query(dbPath, sql)
   rows = JSON.parse(json)
 } catch (e) {
-  ctx.host.log.error("SQLite query failed: " + e.message)
-  return { lines: [{ type: "badge", label: "Error", text: "DB error", color: "#ef4444" }] }
+  ctx.host.log.error("SQLite query failed: " + String(e))
+  throw "DB error. Check your data source."
 }
 
 if (rows.length === 0) {
-  return { lines: [{ type: "badge", label: "Status", text: "Not configured", color: "#f59e0b" }] }
+  throw "Not configured. Update your settings."
 }
 
 const token = rows[0].value

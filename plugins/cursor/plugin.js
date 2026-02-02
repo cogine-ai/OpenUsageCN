@@ -78,33 +78,33 @@
   function probe(ctx) {
     const accessToken = readStateValue(ctx, "cursorAuth/accessToken")
     if (!accessToken) {
-      return { lines: [lineBadge("Status", "Login required", "#f59e0b")] }
+      throw "Not logged in. Sign in via Cursor app."
     }
 
     let usageResp
     try {
       usageResp = connectPost(ctx, USAGE_URL, accessToken)
     } catch (e) {
-      return { lines: [lineBadge("Error", "usage request failed", "#ef4444")] }
+      throw "Usage request failed. Check your connection."
     }
 
     if (usageResp.status === 401 || usageResp.status === 403) {
-      return { lines: [lineBadge("Status", "Token expired", "#f59e0b")] }
+      throw "Token expired. Re-authenticate in Cursor."
     }
 
     if (usageResp.status < 200 || usageResp.status >= 300) {
-      return { lines: [lineBadge("Error", "HTTP " + String(usageResp.status), "#ef4444")] }
+      throw "Usage request failed (HTTP " + String(usageResp.status) + "). Try again later."
     }
 
     let usage
     try {
       usage = JSON.parse(usageResp.bodyText)
     } catch {
-      return { lines: [lineBadge("Error", "cannot parse usage response", "#ef4444")] }
+      throw "Usage response invalid. Try again later."
     }
 
     if (!usage.enabled || !usage.planUsage) {
-      return { lines: [lineBadge("Status", "Usage tracking disabled", "#f59e0b")] }
+      throw "Usage tracking disabled for this account."
     }
 
     let planName = ""

@@ -150,9 +150,7 @@ export function ProviderCard({
             className="w-5 h-5 opacity-60"
           />
         </div>
-        {error && (
-          <PluginError message={error} onRetry={onRetry} />
-        )}
+        {error && <PluginError message={error} />}
 
         {loading && !error && (
           <SkeletonLines lines={skeletonLines} />

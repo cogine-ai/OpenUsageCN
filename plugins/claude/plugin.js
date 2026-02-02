@@ -2,6 +2,10 @@
   const CRED_FILE = "~/.claude/.credentials.json"
   const KEYCHAIN_SERVICE = "Claude Code-credentials"
   const USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
+  const REFRESH_URL = "https://platform.claude.com/v1/oauth/token"
+  const CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
+  const SCOPES = "user:profile user:inference user:sessions:claude_code user:mcp_servers"
+  const REFRESH_BUFFER_MS = 5 * 60 * 1000 // refresh 5 minutes before expiration
 
   function lineText(label, value, color) {
     const line = { type: "text", label, value }
@@ -31,27 +35,123 @@
   }
 
   function loadCredentials(ctx) {
+    // Try file first
     if (ctx.host.fs.exists(CRED_FILE)) {
       try {
         const text = ctx.host.fs.readText(CRED_FILE)
         const parsed = JSON.parse(text)
         const oauth = parsed.claudeAiOauth
-        if (oauth && oauth.accessToken) return oauth
+        if (oauth && oauth.accessToken) {
+          return { oauth, source: "file", fullData: parsed }
+        }
       } catch (e) {
       }
     }
 
+    // Try keychain fallback
     try {
       const keychainValue = ctx.host.keychain.readGenericPassword(KEYCHAIN_SERVICE)
       if (keychainValue) {
         const parsed = JSON.parse(keychainValue)
         const oauth = parsed.claudeAiOauth
-        if (oauth && oauth.accessToken) return oauth
+        if (oauth && oauth.accessToken) {
+          return { oauth, source: "keychain", fullData: parsed }
+        }
       }
     } catch (e) {
     }
 
     return null
+  }
+
+  function saveCredentials(ctx, source, fullData) {
+    const text = JSON.stringify(fullData, null, 2)
+    if (source === "file") {
+      try {
+        ctx.host.fs.writeText(CRED_FILE, text)
+      } catch (e) {
+      }
+    } else if (source === "keychain") {
+      try {
+        ctx.host.keychain.writeGenericPassword(KEYCHAIN_SERVICE, text)
+      } catch (e) {
+      }
+    }
+  }
+
+  function needsRefresh(oauth, nowMs) {
+    if (!oauth.expiresAt) return true
+    const expiresAt = Number(oauth.expiresAt)
+    if (!Number.isFinite(expiresAt)) return true
+    return nowMs + REFRESH_BUFFER_MS >= expiresAt
+  }
+
+  function refreshToken(ctx, creds) {
+    const { oauth, source, fullData } = creds
+    if (!oauth.refreshToken) return null
+
+    try {
+      const resp = ctx.host.http.request({
+        method: "POST",
+        url: REFRESH_URL,
+        headers: { "Content-Type": "application/json" },
+        bodyText: JSON.stringify({
+          grant_type: "refresh_token",
+          refresh_token: oauth.refreshToken,
+          client_id: CLIENT_ID,
+          scope: SCOPES,
+        }),
+        timeoutMs: 15000,
+      })
+
+      if (resp.status === 400 || resp.status === 401) {
+        let errorCode = null
+        try {
+          const body = JSON.parse(resp.bodyText)
+          errorCode = body.error || body.error_description
+        } catch {}
+        if (errorCode === "invalid_grant") {
+          throw "Session expired. Run `claude` to log in again."
+        }
+        throw "Token expired. Run `claude` to log in again."
+      }
+      if (resp.status < 200 || resp.status >= 300) return null
+
+      const body = JSON.parse(resp.bodyText)
+      const newAccessToken = body.access_token
+      if (!newAccessToken) return null
+
+      // Update oauth credentials
+      oauth.accessToken = newAccessToken
+      if (body.refresh_token) oauth.refreshToken = body.refresh_token
+      if (typeof body.expires_in === "number") {
+        oauth.expiresAt = Date.now() + body.expires_in * 1000
+      }
+
+      // Persist updated credentials
+      fullData.claudeAiOauth = oauth
+      saveCredentials(ctx, source, fullData)
+
+      return newAccessToken
+    } catch (e) {
+      if (typeof e === "string") throw e
+      return null
+    }
+  }
+
+  function fetchUsage(ctx, accessToken) {
+    return ctx.host.http.request({
+      method: "GET",
+      url: USAGE_URL,
+      headers: {
+        Authorization: "Bearer " + accessToken.trim(),
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "anthropic-beta": "oauth-2025-04-20",
+        "User-Agent": "OpenUsage",
+      },
+      timeoutMs: 10000,
+    })
   }
 
   function dollarsFromCents(cents) {
@@ -82,46 +182,57 @@
   }
 
   function probe(ctx) {
-    const oauth = loadCredentials(ctx)
-    if (!oauth || !oauth.accessToken || !oauth.accessToken.trim()) {
-      return { lines: [lineBadge("Error", "Login required", "#ef4444")] }
+    const creds = loadCredentials(ctx)
+    if (!creds || !creds.oauth || !creds.oauth.accessToken || !creds.oauth.accessToken.trim()) {
+      throw "Not logged in. Run `claude` to authenticate."
+    }
+
+    const nowMs = Date.now()
+    let accessToken = creds.oauth.accessToken
+
+    // Proactively refresh if token is expired or about to expire
+    if (needsRefresh(creds.oauth, nowMs)) {
+      const refreshed = refreshToken(ctx, creds)
+      if (refreshed) accessToken = refreshed
     }
 
     let resp
     try {
-      resp = ctx.host.http.request({
-        method: "GET",
-        url: USAGE_URL,
-        headers: {
-          Authorization: "Bearer " + oauth.accessToken.trim(),
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          "anthropic-beta": "oauth-2025-04-20",
-          "User-Agent": "OpenUsage",
-        },
-        timeoutMs: 10000,
-      })
+      resp = fetchUsage(ctx, accessToken)
     } catch (e) {
-      return { lines: [lineBadge("Error", "usage request failed", "#ef4444")] }
+      throw "Usage request failed. Check your connection."
     }
 
+    // On 401/403, try refreshing once and retry
     if (resp.status === 401 || resp.status === 403) {
-      return { lines: [lineBadge("Error", "Token expired", "#ef4444")] }
+      const refreshed = refreshToken(ctx, creds)
+      if (!refreshed) {
+        throw "Token expired. Run `claude` to log in again."
+      }
+      try {
+        resp = fetchUsage(ctx, refreshed)
+      } catch (e) {
+        throw "Usage request failed after refresh. Try again."
+      }
+      if (resp.status === 401 || resp.status === 403) {
+        throw "Token expired. Run `claude` to log in again."
+      }
     }
+
     if (resp.status < 200 || resp.status >= 300) {
-      return { lines: [lineBadge("Error", "HTTP " + String(resp.status), "#ef4444")] }
+      throw "Usage request failed (HTTP " + String(resp.status) + "). Try again later."
     }
 
     let data
     try {
       data = JSON.parse(resp.bodyText)
     } catch {
-      return { lines: [lineBadge("Error", "cannot parse usage response", "#ef4444")] }
+      throw "Usage response invalid. Try again later."
     }
 
     const lines = []
-    if (oauth.subscriptionType) {
-      const planLabel = formatPlanLabel(oauth.subscriptionType)
+    if (creds.oauth.subscriptionType) {
+      const planLabel = formatPlanLabel(creds.oauth.subscriptionType)
       if (planLabel) {
         lines.push(lineBadge("Plan", planLabel, "#000000"))
       }

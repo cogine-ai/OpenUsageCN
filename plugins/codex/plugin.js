@@ -68,9 +68,24 @@
         timeoutMs: 15000,
       })
 
-      if (resp.status < 200 || resp.status >= 300) {
-        return null
+      if (resp.status === 401) {
+        let code = null
+        try {
+          const body = JSON.parse(resp.bodyText)
+          code = body.error?.code || body.error || body.code
+        } catch {}
+        if (code === "refresh_token_expired") {
+          throw "Session expired. Run `codex` to log in again."
+        }
+        if (code === "refresh_token_reused") {
+          throw "Token conflict. Run `codex` to log in again."
+        }
+        if (code === "refresh_token_invalidated") {
+          throw "Token revoked. Run `codex` to log in again."
+        }
+        throw "Token expired. Run `codex` to log in again."
       }
+      if (resp.status < 200 || resp.status >= 300) return null
 
       const body = JSON.parse(resp.bodyText)
       const newAccessToken = body.access_token
@@ -86,7 +101,8 @@
       } catch {}
 
       return newAccessToken
-    } catch {
+    } catch (e) {
+      if (typeof e === "string") throw e
       return null
     }
   }
@@ -146,7 +162,7 @@
   function probe(ctx) {
     const auth = loadAuth(ctx)
     if (!auth) {
-      return { lines: [lineBadge("Error", "Login required", "#ef4444")] }
+      throw "Not logged in. Run `codex` to authenticate."
     }
 
     if (auth.tokens && auth.tokens.access_token) {
@@ -163,33 +179,33 @@
       try {
         resp = fetchUsage(ctx, accessToken, accountId)
       } catch {
-        return { lines: [lineBadge("Error", "usage request failed", "#ef4444")] }
+        throw "Usage request failed. Check your connection."
       }
 
       if (resp.status === 401 || resp.status === 403) {
         const refreshed = refreshToken(ctx, auth)
         if (!refreshed) {
-          return { lines: [lineBadge("Error", "Token expired", "#ef4444")] }
+          throw "Token expired. Run `codex` to log in again."
         }
         try {
           resp = fetchUsage(ctx, refreshed, accountId)
         } catch {
-          return { lines: [lineBadge("Error", "usage request after refresh failed", "#ef4444")] }
+          throw "Usage request failed after refresh. Try again."
         }
         if (resp.status === 401 || resp.status === 403) {
-          return { lines: [lineBadge("Error", "Token expired", "#ef4444")] }
+          throw "Token expired. Run `codex` to log in again."
         }
       }
 
       if (resp.status < 200 || resp.status >= 300) {
-        return { lines: [lineBadge("Error", "HTTP " + String(resp.status), "#ef4444")] }
+        throw "Usage request failed (HTTP " + String(resp.status) + "). Try again later."
       }
 
       let data
       try {
         data = JSON.parse(resp.bodyText)
       } catch {
-        return { lines: [lineBadge("Error", "cannot parse usage response", "#ef4444")] }
+        throw "Usage response invalid. Try again later."
       }
 
       const lines = []
@@ -262,10 +278,10 @@
     }
 
     if (auth.OPENAI_API_KEY) {
-      return { lines: [lineBadge("Error", "Usage not available for API key", "#ef4444")] }
+      throw "Usage not available for API key."
     }
 
-    return { lines: [lineBadge("Error", "Login required", "#ef4444")] }
+    throw "Not logged in. Run `codex` to authenticate."
   }
 
   globalThis.__openusage_plugin = { id: "codex", probe }
