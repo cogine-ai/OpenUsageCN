@@ -59,6 +59,7 @@ vi.mock("@dnd-kit/utilities", () => ({
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: state.invokeMock,
+  isTauri: () => false,
 }))
 
 vi.mock("@tauri-apps/api/window", () => ({

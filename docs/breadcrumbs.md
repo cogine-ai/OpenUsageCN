@@ -5,9 +5,12 @@
 - Adjusted mock/cursor plugin helpers/config handling to raise branch coverage; coverage run passes.
 - Committing coverage output per explicit user request.
 - Removed generated coverage output and added `coverage/` to `.gitignore`.
+- Reviewed Tauri v2 updater + GitHub Releases publish flow; added publish-time validation (tag/version sync) + post-upload check for `latest.json` + `.sig` assets.
 - Added spec + auto-update interval setting flow (store/load, app interval effect, settings UI/tests).
 - Added auto-update header helper text + live countdown display in settings.
 - Updated auto-update header label, helper text, and countdown format.
 - Aligned Auto Update header size with other section headers; helper text now standard size + foreground color.
 - Manual refresh now resets auto-update schedule; added test coverage.
 - Ran `bun run test:coverage`; 8 failed files, 25 failed tests; coverage not met.
+- Fixed publish workflow updater asset verification (robust matching + correct `.sig` regex).
+- Added app-updater in-flight guards + explicit installing/error UI states.
