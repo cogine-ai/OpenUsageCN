@@ -68,7 +68,7 @@
         timeoutMs: 15000,
       })
 
-      if (resp.status === 401) {
+      if (resp.status === 400 || resp.status === 401) {
         let code = null
         try {
           const body = JSON.parse(resp.bodyText)

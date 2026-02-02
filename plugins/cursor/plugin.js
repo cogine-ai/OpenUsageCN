@@ -224,7 +224,13 @@
 
     // Proactively refresh if token is expired or about to expire
     if (needsRefresh(accessToken, nowMs)) {
-      const refreshed = refreshToken(ctx, refreshTokenValue)
+      let refreshed = null
+      try {
+        refreshed = refreshToken(ctx, refreshTokenValue)
+      } catch (e) {
+        // If refresh fails but we have an access token, try it anyway
+        if (!accessToken) throw e
+      }
       if (refreshed) {
         accessToken = refreshed
       } else if (!accessToken) {

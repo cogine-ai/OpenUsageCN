@@ -307,22 +307,61 @@ fn inject_keychain<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<
                         "keychain API is only supported on macOS",
                     ));
                 }
-                let output = std::process::Command::new("security")
-                    .args([
-                        "add-generic-password",
-                        "-s",
-                        &service,
-                        "-w",
-                        &value,
-                        "-U",
-                    ])
-                    .output()
-                    .map_err(|e| {
-                        Exception::throw_message(
-                            &ctx_inner,
-                            &format!("keychain write failed: {}", e),
-                        )
-                    })?;
+
+                // First, try to find existing entry and extract its account
+                let mut account_arg: Option<String> = None;
+                let find_output = std::process::Command::new("security")
+                    .args(["find-generic-password", "-s", &service])
+                    .output();
+
+                if let Ok(output) = find_output {
+                    if output.status.success() {
+                        // Parse account from output: "acct"<blob>="value"
+                        let stdout = String::from_utf8_lossy(&output.stdout);
+                        for line in stdout.lines() {
+                            if let Some(start) = line.find("\"acct\"<blob>=\"") {
+                                let rest = &line[start + 14..];
+                                if let Some(end) = rest.find('"') {
+                                    account_arg = Some(rest[..end].to_string());
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Build command with account if found
+                let output = if let Some(ref acct) = account_arg {
+                    std::process::Command::new("security")
+                        .args([
+                            "add-generic-password",
+                            "-s",
+                            &service,
+                            "-a",
+                            acct,
+                            "-w",
+                            &value,
+                            "-U",
+                        ])
+                        .output()
+                } else {
+                    std::process::Command::new("security")
+                        .args([
+                            "add-generic-password",
+                            "-s",
+                            &service,
+                            "-w",
+                            &value,
+                            "-U",
+                        ])
+                        .output()
+                }
+                .map_err(|e| {
+                    Exception::throw_message(
+                        &ctx_inner,
+                        &format!("keychain write failed: {}", e),
+                    )
+                })?;
 
                 if !output.status.success() {
                     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -349,7 +388,7 @@ fn inject_sqlite<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()
         Function::new(
             ctx.clone(),
             move |ctx_inner: Ctx<'_>, db_path: String, sql: String| -> rquickjs::Result<String> {
-                if sql.trim_start().starts_with('.') {
+                if sql.lines().any(|line| line.trim_start().starts_with('.')) {
                     return Err(Exception::throw_message(
                         &ctx_inner,
                         "sqlite3 dot-commands are not allowed",
@@ -384,7 +423,7 @@ fn inject_sqlite<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()
         Function::new(
             ctx.clone(),
             move |ctx_inner: Ctx<'_>, db_path: String, sql: String| -> rquickjs::Result<()> {
-                if sql.trim_start().starts_with('.') {
+                if sql.lines().any(|line| line.trim_start().starts_with('.')) {
                     return Err(Exception::throw_message(
                         &ctx_inner,
                         "sqlite3 dot-commands are not allowed",
@@ -452,7 +491,7 @@ mod tests {
         let ctx = Context::full(&rt).expect("context");
         ctx.with(|ctx| {
             let app_data = std::env::temp_dir();
-            inject_host_api(ctx, "test", &app_data, "0.0.0").expect("inject host api");
+            inject_host_api(&ctx, "test", &app_data, "0.0.0").expect("inject host api");
             let globals = ctx.globals();
             let probe_ctx: Object = globals.get("__openusage_ctx").expect("probe ctx");
             let host: Object = probe_ctx.get("host").expect("host");
