@@ -55,7 +55,7 @@ function App() {
   const [maxPanelHeightPx, setMaxPanelHeightPx] = useState<number | null>(null)
   const maxPanelHeightPxRef = useRef<number | null>(null)
 
-  const { updateStatus, triggerDownload, triggerInstall } = useAppUpdate()
+  const { updateStatus, triggerInstall } = useAppUpdate()
 
   // Tick state to force re-evaluation of cooldown status
   const [cooldownTick, setCooldownTick] = useState(0)
@@ -565,7 +565,6 @@ function App() {
             onRefresh={handleRefresh}
             refreshDisabled={!canRefreshAll}
             updateStatus={updateStatus}
-            onUpdateDownload={triggerDownload}
             onUpdateInstall={triggerInstall}
           />
         </div>

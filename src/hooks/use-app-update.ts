@@ -5,7 +5,6 @@ import { relaunch } from "@tauri-apps/plugin-process"
 
 export type UpdateStatus =
   | { status: "idle" }
-  | { status: "available"; version: string }
   | { status: "downloading"; progress: number } // 0-100, or -1 if indeterminate
   | { status: "installing" }
   | { status: "ready" }
@@ -13,7 +12,6 @@ export type UpdateStatus =
 
 interface UseAppUpdateReturn {
   updateStatus: UpdateStatus
-  triggerDownload: () => void
   triggerInstall: () => void
 }
 
@@ -34,14 +32,47 @@ export function useAppUpdate(): UseAppUpdateReturn {
     let cancelled = false
     mountedRef.current = true
 
-    const checkForUpdate = async () => {
+    const checkAndDownload = async () => {
       if (!isTauri()) return
       try {
         const update = await check()
         if (cancelled) return
         if (update) {
           updateRef.current = update
-          setStatus({ status: "available", version: update.version })
+          // Immediately start downloading (no "available" state)
+          inFlightRef.current.downloading = true
+          setStatus({ status: "downloading", progress: -1 })
+
+          let totalBytes: number | null = null
+          let downloadedBytes = 0
+
+          try {
+            await update.download((event) => {
+              if (!mountedRef.current) return
+              if (event.event === "Started") {
+                totalBytes = event.data.contentLength ?? null
+                downloadedBytes = 0
+                setStatus({
+                  status: "downloading",
+                  progress: totalBytes ? 0 : -1,
+                })
+              } else if (event.event === "Progress") {
+                downloadedBytes += event.data.chunkLength
+                if (totalBytes && totalBytes > 0) {
+                  const pct = Math.min(100, Math.round((downloadedBytes / totalBytes) * 100))
+                  setStatus({ status: "downloading", progress: pct })
+                }
+              } else if (event.event === "Finished") {
+                setStatus({ status: "ready" })
+              }
+            })
+            setStatus({ status: "ready" })
+          } catch (err) {
+            console.error("Update download failed:", err)
+            setStatus({ status: "error", message: "Download failed" })
+          } finally {
+            inFlightRef.current.downloading = false
+          }
         }
       } catch (err) {
         if (cancelled) return
@@ -49,52 +80,11 @@ export function useAppUpdate(): UseAppUpdateReturn {
       }
     }
 
-    void checkForUpdate()
+    void checkAndDownload()
 
     return () => {
       cancelled = true
       mountedRef.current = false
-    }
-  }, [setStatus])
-
-  const triggerDownload = useCallback(async () => {
-    const update = updateRef.current
-    if (!update) return
-    if (statusRef.current.status !== "available") return
-    if (inFlightRef.current.downloading || inFlightRef.current.installing) return
-
-    inFlightRef.current.downloading = true
-    setStatus({ status: "downloading", progress: -1 })
-
-    let totalBytes: number | null = null
-    let downloadedBytes = 0
-
-    try {
-      await update.download((event) => {
-        if (!mountedRef.current) return
-        if (event.event === "Started") {
-          totalBytes = event.data.contentLength ?? null
-          downloadedBytes = 0
-          setStatus({
-            status: "downloading",
-            progress: totalBytes ? 0 : -1,
-          })
-        } else if (event.event === "Progress") {
-          downloadedBytes += event.data.chunkLength
-          if (totalBytes && totalBytes > 0) {
-            const pct = Math.min(100, Math.round((downloadedBytes / totalBytes) * 100))
-            setStatus({ status: "downloading", progress: pct })
-          }
-        } else if (event.event === "Finished") {
-          setStatus({ status: "ready" })
-        }
-      })
-      setStatus({ status: "ready" })
-    } catch (err) {
-      console.error("Update download failed:", err)
-      setStatus({ status: "error", message: "Download failed" })
-    } finally {
-      inFlightRef.current.downloading = false
     }
   }, [setStatus])
 
@@ -118,5 +108,5 @@ export function useAppUpdate(): UseAppUpdateReturn {
     }
   }, [setStatus])
 
-  return { updateStatus, triggerDownload, triggerInstall }
+  return { updateStatus, triggerInstall }
 }

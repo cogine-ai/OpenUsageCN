@@ -7,49 +7,36 @@ interface PanelFooterProps {
   onRefresh: () => void;
   refreshDisabled?: boolean;
   updateStatus: UpdateStatus;
-  onUpdateDownload: () => void;
   onUpdateInstall: () => void;
 }
 
 function VersionDisplay({
   version,
   updateStatus,
-  onUpdateDownload,
   onUpdateInstall,
 }: {
   version: string;
   updateStatus: UpdateStatus;
-  onUpdateDownload: () => void;
   onUpdateInstall: () => void;
 }) {
   switch (updateStatus.status) {
-    case "available":
-      return (
-        <button
-          type="button"
-          onClick={onUpdateDownload}
-          className="text-xs text-primary hover:underline underline-offset-4 bg-transparent border-none p-0 cursor-pointer"
-        >
-          v{updateStatus.version} available
-        </button>
-      );
     case "downloading":
       return (
         <span className="text-xs text-muted-foreground">
           {updateStatus.progress >= 0
-            ? `Downloading... ${updateStatus.progress}%`
-            : "Downloading..."}
+            ? `Downloading update ${updateStatus.progress}%`
+            : "Downloading update..."}
         </span>
       );
     case "ready":
       return (
-        <button
-          type="button"
+        <Button
+          variant="destructive"
+          size="xs"
           onClick={onUpdateInstall}
-          className="text-xs text-primary hover:underline underline-offset-4 bg-transparent border-none p-0 cursor-pointer"
         >
           Restart to update
-        </button>
+        </Button>
       );
     case "installing":
       return (
@@ -75,7 +62,6 @@ export function PanelFooter({
   onRefresh,
   refreshDisabled,
   updateStatus,
-  onUpdateDownload,
   onUpdateInstall,
 }: PanelFooterProps) {
   return (
@@ -83,7 +69,6 @@ export function PanelFooter({
       <VersionDisplay
         version={version}
         updateStatus={updateStatus}
-        onUpdateDownload={onUpdateDownload}
         onUpdateInstall={onUpdateInstall}
       />
       {refreshDisabled ? (
