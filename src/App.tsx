@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { invoke } from "@tauri-apps/api/core"
 import { getCurrentWindow, PhysicalSize, currentMonitor } from "@tauri-apps/api/window"
-import { PanelHeader, type Tab } from "@/components/panel-header"
+import { SideNav, type ActiveView } from "@/components/side-nav"
 import { PanelFooter } from "@/components/panel-footer"
 import { OverviewPage } from "@/pages/overview"
+import { ProviderDetailPage } from "@/pages/provider-detail"
 import { SettingsPage } from "@/pages/settings"
 import type { PluginMeta, PluginOutput } from "@/lib/plugin-types"
 import { useProbeEvents } from "@/hooks/use-probe-events"
@@ -31,7 +32,7 @@ type PluginState = {
 }
 
 function App() {
-  const [activeTab, setActiveTab] = useState<Tab>("overview");
+  const [activeView, setActiveView] = useState<ActiveView>("home");
   const containerRef = useRef<HTMLDivElement>(null);
   const [pluginStates, setPluginStates] = useState<Record<string, PluginState>>({})
   const [pluginsMeta, setPluginsMeta] = useState<PluginMeta[]>([])
@@ -56,6 +57,33 @@ function App() {
       })
       .filter((plugin): plugin is { meta: PluginMeta } & PluginState => Boolean(plugin))
   }, [pluginSettings, pluginStates, pluginsMeta])
+
+  // Derive enabled plugin list for nav icons
+  const navPlugins = useMemo(() => {
+    if (!pluginSettings) return []
+    const disabledSet = new Set(pluginSettings.disabled)
+    const metaById = new Map(pluginsMeta.map((p) => [p.id, p]))
+    return pluginSettings.order
+      .filter((id) => !disabledSet.has(id))
+      .map((id) => metaById.get(id))
+      .filter((p): p is PluginMeta => Boolean(p))
+      .map((p) => ({ id: p.id, name: p.name, iconUrl: p.iconUrl }))
+  }, [pluginSettings, pluginsMeta])
+
+  // If active view is a plugin that got disabled, switch to home
+  useEffect(() => {
+    if (activeView === "home" || activeView === "settings") return
+    const isStillEnabled = navPlugins.some((p) => p.id === activeView)
+    if (!isStillEnabled) {
+      setActiveView("home")
+    }
+  }, [activeView, navPlugins])
+
+  // Get the selected plugin for detail view
+  const selectedPlugin = useMemo(() => {
+    if (activeView === "home" || activeView === "settings") return null
+    return displayPlugins.find((p) => p.meta.id === activeView) ?? null
+  }, [activeView, displayPlugins])
 
   // Check if Refresh All should be enabled (at least one enabled plugin not on cooldown)
   const canRefreshAll = useMemo(() => {
@@ -146,7 +174,7 @@ function App() {
     observer.observe(container);
 
     return () => observer.disconnect();
-  }, [activeTab, displayPlugins]);
+  }, [activeView, displayPlugins]);
 
   const getErrorMessage = useCallback((output: PluginOutput) => {
     if (output.lines.length !== 1) return null
@@ -353,35 +381,56 @@ function App() {
     [pluginSettings, setLoadingForPlugins, setErrorForPlugins, startBatch]
   )
 
+  // Render content based on active view
+  const renderContent = () => {
+    if (activeView === "home") {
+      return (
+        <OverviewPage
+          plugins={displayPlugins}
+          onRetryPlugin={handleRetryPlugin}
+        />
+      )
+    }
+    if (activeView === "settings") {
+      return (
+        <SettingsPage
+          plugins={settingsPlugins}
+          onReorder={handleReorder}
+          onToggle={handleToggle}
+        />
+      )
+    }
+    // Provider detail view
+    return (
+      <ProviderDetailPage
+        plugin={selectedPlugin}
+        onRetry={selectedPlugin ? () => handleRetryPlugin(selectedPlugin.meta.id) : undefined}
+      />
+    )
+  }
+
   return (
     <div
       ref={containerRef}
       className="bg-card rounded-lg border shadow-lg overflow-hidden select-none"
       style={maxPanelHeightPx ? { maxHeight: `${maxPanelHeightPx}px` } : undefined}
     >
-      <div className="p-4 flex h-full min-h-0 flex-col">
-        <PanelHeader activeTab={activeTab} onTabChange={setActiveTab} />
-
-        <div className="mt-3 flex-1 min-h-0 overflow-y-auto">
-          {activeTab === "overview" ? (
-            <OverviewPage
-              plugins={displayPlugins}
-              onRetryPlugin={handleRetryPlugin}
-            />
-          ) : (
-            <SettingsPage
-              plugins={settingsPlugins}
-              onReorder={handleReorder}
-              onToggle={handleToggle}
-            />
-          )}
-        </div>
-
-        <PanelFooter
-          version={APP_VERSION}
-          onRefresh={handleRefresh}
-          refreshDisabled={!canRefreshAll}
+      <div className="flex h-full min-h-0 flex-row">
+        <SideNav
+          activeView={activeView}
+          onViewChange={setActiveView}
+          plugins={navPlugins}
         />
+        <div className="flex-1 flex flex-col px-3 pt-2 pb-1.5 min-w-0">
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            {renderContent()}
+          </div>
+          <PanelFooter
+            version={APP_VERSION}
+            onRefresh={handleRefresh}
+            refreshDisabled={!canRefreshAll}
+          />
+        </div>
       </div>
     </div>
   );

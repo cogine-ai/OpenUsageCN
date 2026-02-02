@@ -29,7 +29,6 @@ export function OverviewPage({ plugins, onRetryPlugin }: OverviewPageProps) {
         <ProviderCard
           key={plugin.meta.id}
           name={plugin.meta.name}
-          iconUrl={plugin.meta.iconUrl}
           showSeparator={index < plugins.length - 1}
           loading={plugin.loading}
           error={plugin.error}

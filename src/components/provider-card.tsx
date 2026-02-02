@@ -12,7 +12,6 @@ import type { ManifestLine, MetricLine } from "@/lib/plugin-types"
 
 interface ProviderCardProps {
   name: string
-  iconUrl: string
   showSeparator?: boolean
   loading?: boolean
   error?: string | null
@@ -49,7 +48,6 @@ export function getProgressPercent(value: number, max: number) {
 
 export function ProviderCard({
   name,
-  iconUrl,
   showSeparator = true,
   loading = false,
   error = null,
@@ -149,11 +147,6 @@ export function ProviderCard({
               )
             )}
           </div>
-          <img
-            src={iconUrl}
-            alt=""
-            className="w-5 h-5 opacity-60"
-          />
         </div>
         {error && <PluginError message={error} />}
 
@@ -162,7 +155,7 @@ export function ProviderCard({
         )}
 
         {!loading && !error && (
-          <div className="space-y-1">
+          <div className="space-y-4">
             {lines.map((line, index) => (
               <MetricLineRenderer key={`${line.label}-${index}`} line={line} />
             ))}
@@ -224,22 +217,19 @@ function MetricLineRenderer({ line }: { line: MetricLine }) {
     const percent = getProgressPercent(line.value, line.max)
     return (
       <div>
-        <div className="flex justify-between items-center h-[22px]">
-          <span className="text-sm text-muted-foreground">{line.label}</span>
-          <div className="flex items-center gap-2">
-            <span className="text-sm tabular-nums text-muted-foreground">
-              {formatProgressValue(line.value, line.unit)}
-            </span>
-            <Progress
-              className="w-24"
-              value={percent}
-              indicatorColor={line.color}
-            />
-          </div>
+        <div className="text-sm font-medium mb-1.5">{line.label}</div>
+        <Progress
+          value={percent}
+          indicatorColor={line.color}
+        />
+        <div className="flex justify-between items-center mt-1.5">
+          <span className="text-xs text-muted-foreground tabular-nums">
+            {formatProgressValue(line.value, line.unit)}
+          </span>
+          {line.subtitle && (
+            <span className="text-xs text-muted-foreground">{line.subtitle}</span>
+          )}
         </div>
-        {line.subtitle && (
-          <div className="text-xs text-muted-foreground text-right -mt-0.5">{line.subtitle}</div>
-        )}
       </div>
     )
   }

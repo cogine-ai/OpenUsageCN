@@ -21,11 +21,12 @@ function SkeletonBadge({ label }: { label: string }) {
 
 function SkeletonProgress({ label }: { label: string }) {
   return (
-    <div className="flex justify-between items-center h-[22px]">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <div className="flex items-center gap-2">
-        <Skeleton className="h-4 w-12" />
-        <Skeleton className="h-2 w-24 rounded-full" />
+    <div>
+      <div className="text-sm font-medium mb-1.5">{label}</div>
+      <Skeleton className="h-3 w-full rounded-full" />
+      <div className="flex justify-between items-center mt-1.5">
+        <Skeleton className="h-3 w-8" />
+        <Skeleton className="h-3 w-20" />
       </div>
     </div>
   )

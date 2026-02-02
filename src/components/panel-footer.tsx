@@ -9,8 +9,8 @@ interface PanelFooterProps {
 
 export function PanelFooter({ version, onRefresh, refreshDisabled }: PanelFooterProps) {
   return (
-    <div className="flex justify-between items-center pt-3 border-t">
-      <span className="text-sm text-muted-foreground">OpenUsage {version}</span>
+    <div className="flex justify-between items-center pt-1.5 border-t">
+      <span className="text-xs text-muted-foreground">OpenUsage {version}</span>
       {refreshDisabled ? (
         <Tooltip>
           <TooltipTrigger
@@ -19,7 +19,7 @@ export function PanelFooter({ version, onRefresh, refreshDisabled }: PanelFooter
                 <Button
                   variant="link"
                   size="sm"
-                  className="px-0 pointer-events-none opacity-50"
+                  className="px-0 text-xs pointer-events-none opacity-50"
                   tabIndex={-1}
                 >
                   Refresh all
@@ -36,7 +36,7 @@ export function PanelFooter({ version, onRefresh, refreshDisabled }: PanelFooter
           variant="link"
           size="sm"
           onClick={onRefresh}
-          className="px-0"
+          className="px-0 text-xs"
         >
           Refresh all
         </Button>
