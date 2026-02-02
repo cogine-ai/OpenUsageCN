@@ -95,24 +95,26 @@
     const chars =
       "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
     let result = ""
-    let i = 0
 
     // Remove padding
     str = str.replace(/=+$/, "")
 
-    while (i < str.length) {
+    const len = str.length
+    let i = 0
+
+    while (i < len) {
+      const remaining = len - i
+
       const a = chars.indexOf(str.charAt(i++))
       const b = chars.indexOf(str.charAt(i++))
-      const c = chars.indexOf(str.charAt(i++))
-      const d = chars.indexOf(str.charAt(i++))
+      const c = remaining > 2 ? chars.indexOf(str.charAt(i++)) : 0
+      const d = remaining > 3 ? chars.indexOf(str.charAt(i++)) : 0
 
       const n = (a << 18) | (b << 12) | (c << 6) | d
 
       result += String.fromCharCode((n >> 16) & 0xff)
-      if (c !== -1 && str.charAt(i - 2) !== "=")
-        result += String.fromCharCode((n >> 8) & 0xff)
-      if (d !== -1 && str.charAt(i - 1) !== "=")
-        result += String.fromCharCode(n & 0xff)
+      if (remaining > 2) result += String.fromCharCode((n >> 8) & 0xff)
+      if (remaining > 3) result += String.fromCharCode(n & 0xff)
     }
 
     return result
