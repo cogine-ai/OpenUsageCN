@@ -193,20 +193,22 @@ if (ctx.host.fs.exists("~/.myapp/credentials.json")) {
 
 ## SQLite
 
+### Query (Read-Only)
+
 ```typescript
 host.sqlite.query(dbPath: string, sql: string): string
 ```
 
 Executes a read-only SQL query against a SQLite database.
 
-### Behavior
+**Behavior:**
 
 - **Read-only**: Database is opened with `-readonly` flag
 - **Returns JSON string**: Result is a JSON array of row objects (must `JSON.parse()`)
 - **Dot-commands blocked**: Commands like `.schema`, `.tables` are rejected
 - **Throws on errors**: Invalid SQL, missing database, etc.
 
-### Example
+**Example:**
 
 ```javascript
 const dbPath = "~/Library/Application Support/MyApp/state.db"
@@ -227,6 +229,40 @@ if (rows.length === 0) {
 
 const token = rows[0].value
 ```
+
+### Exec (Read-Write)
+
+```typescript
+host.sqlite.exec(dbPath: string, sql: string): void
+```
+
+Executes a write SQL statement against a SQLite database.
+
+**Behavior:**
+
+- **Read-write**: Database is opened with full write access
+- **Returns nothing**: Use for INSERT, UPDATE, DELETE, or other write operations
+- **Dot-commands blocked**: Commands like `.schema`, `.tables` are rejected
+- **Throws on errors**: Invalid SQL, missing database, permission denied, etc.
+
+**Example:**
+
+```javascript
+const dbPath = "~/Library/Application Support/MyApp/state.db"
+
+// Escape single quotes in value for SQL safety
+const escaped = newToken.replace(/'/g, "''")
+const sql = "INSERT OR REPLACE INTO settings (key, value) VALUES ('token', '" + escaped + "')"
+
+try {
+  ctx.host.sqlite.exec(dbPath, sql)
+} catch (e) {
+  ctx.host.log.error("SQLite write failed: " + String(e))
+  throw "Failed to save token."
+}
+```
+
+**Warning:** Be careful with SQL injection. Always escape user-provided values.
 
 ## Execution Timing
 

@@ -4,6 +4,9 @@
   const BASE_URL = "https://api2.cursor.sh"
   const USAGE_URL = BASE_URL + "/aiserver.v1.DashboardService/GetCurrentPeriodUsage"
   const PLAN_URL = BASE_URL + "/aiserver.v1.DashboardService/GetPlanInfo"
+  const REFRESH_URL = BASE_URL + "/oauth/token"
+  const CLIENT_ID = "KbZUR41cY7W6zRSdpSUJ7I7mLYBKOCmB"
+  const REFRESH_BUFFER_MS = 5 * 60 * 1000 // refresh 5 minutes before expiration
 
   function lineText(label, value, color) {
     const line = { type: "text", label, value }
@@ -47,6 +50,138 @@
     return null
   }
 
+  function writeStateValue(ctx, key, value) {
+    try {
+      // Escape single quotes in value for SQL
+      const escaped = String(value).replace(/'/g, "''")
+      const sql =
+        "INSERT OR REPLACE INTO ItemTable (key, value) VALUES ('" +
+        key +
+        "', '" +
+        escaped +
+        "');"
+      ctx.host.sqlite.exec(STATE_DB, sql)
+      return true
+    } catch (e) {
+      ctx.host.log.warn("sqlite write failed for " + key + ": " + String(e))
+      return false
+    }
+  }
+
+  function decodeJwtPayload(token) {
+    // JWT format: header.payload.signature
+    // We need the payload (base64url encoded)
+    try {
+      const parts = token.split(".")
+      if (parts.length !== 3) return null
+
+      // Base64url decode the payload
+      let payload = parts[1]
+      // Replace base64url chars with base64 chars
+      payload = payload.replace(/-/g, "+").replace(/_/g, "/")
+      // Add padding if needed
+      while (payload.length % 4) payload += "="
+
+      // Decode base64 to string (works in QuickJS)
+      const decoded = decodeBase64(payload)
+      return JSON.parse(decoded)
+    } catch (e) {
+      return null
+    }
+  }
+
+  function decodeBase64(str) {
+    // Simple base64 decoder for QuickJS environment
+    const chars =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+    let result = ""
+    let i = 0
+
+    // Remove padding
+    str = str.replace(/=+$/, "")
+
+    while (i < str.length) {
+      const a = chars.indexOf(str.charAt(i++))
+      const b = chars.indexOf(str.charAt(i++))
+      const c = chars.indexOf(str.charAt(i++))
+      const d = chars.indexOf(str.charAt(i++))
+
+      const n = (a << 18) | (b << 12) | (c << 6) | d
+
+      result += String.fromCharCode((n >> 16) & 0xff)
+      if (c !== -1 && str.charAt(i - 2) !== "=")
+        result += String.fromCharCode((n >> 8) & 0xff)
+      if (d !== -1 && str.charAt(i - 1) !== "=")
+        result += String.fromCharCode(n & 0xff)
+    }
+
+    return result
+  }
+
+  function getTokenExpiration(token) {
+    const payload = decodeJwtPayload(token)
+    if (!payload || typeof payload.exp !== "number") return null
+    return payload.exp * 1000 // Convert to milliseconds
+  }
+
+  function needsRefresh(accessToken, nowMs) {
+    if (!accessToken) return true
+    const expiresAt = getTokenExpiration(accessToken)
+    if (!expiresAt) return true
+    return nowMs + REFRESH_BUFFER_MS >= expiresAt
+  }
+
+  function refreshToken(ctx, refreshTokenValue) {
+    if (!refreshTokenValue) return null
+
+    try {
+      const resp = ctx.host.http.request({
+        method: "POST",
+        url: REFRESH_URL,
+        headers: { "Content-Type": "application/json" },
+        bodyText: JSON.stringify({
+          grant_type: "refresh_token",
+          client_id: CLIENT_ID,
+          refresh_token: refreshTokenValue,
+        }),
+        timeoutMs: 15000,
+      })
+
+      if (resp.status === 400 || resp.status === 401) {
+        let errorInfo = null
+        try {
+          errorInfo = JSON.parse(resp.bodyText)
+        } catch {}
+        if (errorInfo && errorInfo.shouldLogout === true) {
+          throw "Session expired. Sign in via Cursor app."
+        }
+        throw "Token expired. Sign in via Cursor app."
+      }
+
+      if (resp.status < 200 || resp.status >= 300) return null
+
+      const body = JSON.parse(resp.bodyText)
+
+      // Check if server wants us to logout
+      if (body.shouldLogout === true) {
+        throw "Session expired. Sign in via Cursor app."
+      }
+
+      const newAccessToken = body.access_token
+      if (!newAccessToken) return null
+
+      // Persist updated access token to SQLite
+      writeStateValue(ctx, "cursorAuth/accessToken", newAccessToken)
+
+      // Note: Cursor refresh returns access_token which is used as both
+      // access and refresh token in some flows
+      return newAccessToken
+    } catch (e) {
+      if (typeof e === "string") throw e
+      return null
+    }
+  }
+
   function connectPost(ctx, url, token) {
     return ctx.host.http.request({
       method: "POST",
@@ -76,9 +211,23 @@
   }
 
   function probe(ctx) {
-    const accessToken = readStateValue(ctx, "cursorAuth/accessToken")
-    if (!accessToken) {
+    let accessToken = readStateValue(ctx, "cursorAuth/accessToken")
+    const refreshTokenValue = readStateValue(ctx, "cursorAuth/refreshToken")
+
+    if (!accessToken && !refreshTokenValue) {
       throw "Not logged in. Sign in via Cursor app."
+    }
+
+    const nowMs = Date.now()
+
+    // Proactively refresh if token is expired or about to expire
+    if (needsRefresh(accessToken, nowMs)) {
+      const refreshed = refreshToken(ctx, refreshTokenValue)
+      if (refreshed) {
+        accessToken = refreshed
+      } else if (!accessToken) {
+        throw "Not logged in. Sign in via Cursor app."
+      }
     }
 
     let usageResp
@@ -88,8 +237,21 @@
       throw "Usage request failed. Check your connection."
     }
 
+    // On 401/403, try refreshing once and retry
     if (usageResp.status === 401 || usageResp.status === 403) {
-      throw "Token expired. Re-authenticate in Cursor."
+      const refreshed = refreshToken(ctx, refreshTokenValue)
+      if (!refreshed) {
+        throw "Token expired. Sign in via Cursor app."
+      }
+      accessToken = refreshed
+      try {
+        usageResp = connectPost(ctx, USAGE_URL, accessToken)
+      } catch (e) {
+        throw "Usage request failed after refresh. Try again."
+      }
+      if (usageResp.status === 401 || usageResp.status === 403) {
+        throw "Token expired. Sign in via Cursor app."
+      }
     }
 
     if (usageResp.status < 200 || usageResp.status >= 300) {

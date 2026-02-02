@@ -379,6 +379,41 @@ fn inject_sqlite<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()
         )?,
     )?;
 
+    sqlite_obj.set(
+        "exec",
+        Function::new(
+            ctx.clone(),
+            move |ctx_inner: Ctx<'_>, db_path: String, sql: String| -> rquickjs::Result<()> {
+                if sql.trim_start().starts_with('.') {
+                    return Err(Exception::throw_message(
+                        &ctx_inner,
+                        "sqlite3 dot-commands are not allowed",
+                    ));
+                }
+                let expanded = expand_path(&db_path);
+                let output = std::process::Command::new("sqlite3")
+                    .args([&expanded, &sql])
+                    .output()
+                    .map_err(|e| {
+                        Exception::throw_message(
+                            &ctx_inner,
+                            &format!("sqlite3 exec failed: {}", e),
+                        )
+                    })?;
+
+                if !output.status.success() {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    return Err(Exception::throw_message(
+                        &ctx_inner,
+                        &format!("sqlite3 error: {}", stderr.trim()),
+                    ));
+                }
+
+                Ok(())
+            },
+        )?,
+    )?;
+
     host.set("sqlite", sqlite_obj)?;
     Ok(())
 }
