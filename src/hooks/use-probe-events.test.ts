@@ -166,15 +166,15 @@ describe("useProbeEvents", () => {
 
   it("cancels before listeners are ready", async () => {
     const unlisten = vi.fn()
-    let resolveFirst: (() => void) | null = null
+    const ref: { resolve: ((val: () => void) => void) | null } = { resolve: null }
     listenMock.mockImplementationOnce(() => new Promise((resolve) => {
-      resolveFirst = () => resolve(unlisten)
+      ref.resolve = resolve
     }))
     const { unmount } = renderHook(() =>
       useProbeEvents({ onResult: vi.fn(), onBatchComplete: vi.fn() })
     )
     unmount()
-    resolveFirst?.()
+    ref.resolve?.(unlisten)
     await Promise.resolve()
     expect(unlisten).toHaveBeenCalled()
   })
@@ -182,18 +182,18 @@ describe("useProbeEvents", () => {
   it("cancels after first listener is ready", async () => {
     const unlistenFirst = vi.fn()
     const unlistenSecond = vi.fn()
-    let resolveSecond: (() => void) | null = null
+    const ref: { resolve: ((val: () => void) => void) | null } = { resolve: null }
     listenMock
       .mockImplementationOnce(async () => unlistenFirst)
       .mockImplementationOnce(() => new Promise((resolve) => {
-        resolveSecond = () => resolve(unlistenSecond)
+        ref.resolve = resolve
       }))
     const { unmount } = renderHook(() =>
       useProbeEvents({ onResult: vi.fn(), onBatchComplete: vi.fn() })
     )
     await Promise.resolve()
     unmount()
-    resolveSecond?.()
+    ref.resolve?.(unlistenSecond)
     await Promise.resolve()
     expect(unlistenFirst).toHaveBeenCalled()
     expect(unlistenSecond).toHaveBeenCalled()

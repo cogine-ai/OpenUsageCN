@@ -16,6 +16,11 @@ vi.mock("@tauri-apps/plugin-process", () => ({
 
 import { useAppUpdate } from "@/hooks/use-app-update"
 
+declare global {
+  // eslint-disable-next-line no-var
+  var isTauri: boolean | undefined
+}
+
 describe("useAppUpdate", () => {
   const originalIsTauri = globalThis.isTauri
 
@@ -28,7 +33,6 @@ describe("useAppUpdate", () => {
 
   afterAll(() => {
     if (originalIsTauri === undefined) {
-      // @ts-expect-error cleanup undefined flag
       delete globalThis.isTauri
     } else {
       globalThis.isTauri = originalIsTauri

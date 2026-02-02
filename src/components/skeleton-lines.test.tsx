@@ -17,7 +17,7 @@ describe("SkeletonLines", () => {
   })
 
   it("falls back on unknown type", () => {
-    const line = { type: "nope", label: "Fallback" } as ManifestLine
+    const line = { type: "nope", label: "Fallback" } as unknown as ManifestLine
     render(<SkeletonLine line={line} />)
     expect(screen.getByText("Fallback")).toBeInTheDocument()
   })

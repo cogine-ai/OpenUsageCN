@@ -34,7 +34,6 @@ describe("ProviderCard", () => {
     render(
       <ProviderCard
         name="Test"
-        iconUrl="icon"
         error="Nope"
         onRetry={onRetry}
       />
@@ -48,7 +47,6 @@ describe("ProviderCard", () => {
     render(
       <ProviderCard
         name="Test"
-        iconUrl="icon"
         loading
         skeletonLines={[
           { type: "text", label: "One" },
@@ -64,7 +62,6 @@ describe("ProviderCard", () => {
     const { container } = render(
       <ProviderCard
         name="Loading"
-        iconUrl="icon"
         loading
         onRetry={() => {}}
       />
@@ -76,7 +73,6 @@ describe("ProviderCard", () => {
     render(
       <ProviderCard
         name="Metrics"
-        iconUrl="icon"
         lines={[
           { type: "text", label: "Label", value: "Value" },
           { type: "badge", label: "Plan", text: "Pro" },
@@ -100,7 +96,6 @@ describe("ProviderCard", () => {
     render(
       <ProviderCard
         name="Cooldown"
-        iconUrl="icon"
         lastManualRefreshAt={lastManualRefreshAt}
         onRetry={() => {}}
       />
@@ -116,7 +111,6 @@ describe("ProviderCard", () => {
     render(
       <ProviderCard
         name="Cooldown"
-        iconUrl="icon"
         lastManualRefreshAt={lastManualRefreshAt}
         onRetry={() => {}}
       />
@@ -130,7 +124,6 @@ describe("ProviderCard", () => {
     render(
       <ProviderCard
         name="Invalid"
-        iconUrl="icon"
         lines={[
           { type: "progress", label: "Bad", value: -1, max: 100 },
         ]}
@@ -158,7 +151,6 @@ describe("ProviderCard", () => {
     const { container } = render(
       <ProviderCard
         name="Retry"
-        iconUrl="icon"
         onRetry={onRetry}
         lines={[{ type: "text", label: "Label", value: "Value" }]}
       />
@@ -182,7 +174,6 @@ describe("ProviderCard", () => {
     const { container } = render(
       <ProviderCard
         name="Retry"
-        iconUrl="icon"
         onRetry={onRetry}
         lastManualRefreshAt={lastManualRefreshAt}
         lines={[{ type: "text", label: "Label", value: "Value" }]}
@@ -206,7 +197,6 @@ describe("ProviderCard", () => {
     const { unmount } = render(
       <ProviderCard
         name="Cooldown"
-        iconUrl="icon"
         lastManualRefreshAt={lastManualRefreshAt}
         onRetry={() => {}}
       />
@@ -223,7 +213,6 @@ describe("ProviderCard", () => {
     const { container } = render(
       <ProviderCard
         name="NoSep"
-        iconUrl="icon"
         showSeparator={false}
         lines={[{ type: "text", label: "Label", value: "Value" }]}
       />
