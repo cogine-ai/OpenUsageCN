@@ -60,9 +60,9 @@ jobs:
         run: |
           TAG_VERSION="${RELEASE_TAG#v}"
 
-          TAURI_CONF_VERSION="$(node -p \"require('./src-tauri/tauri.conf.json').version\")"
-          CARGO_VERSION="$(awk -F\\\" '/^version =/ { print $2; exit }' ./src-tauri/Cargo.toml)"
-          PKG_VERSION="$(node -p \"require('./package.json').version\")"
+          TAURI_CONF_VERSION=$(node -p 'require("./src-tauri/tauri.conf.json").version')
+          CARGO_VERSION=$(awk -F'"' '/^version =/ { print $2; exit }' ./src-tauri/Cargo.toml)
+          PKG_VERSION=$(node -p 'require("./package.json").version')
 
           if [[ "$TAURI_CONF_VERSION" != "$TAG_VERSION" ]]; then
             echo "src-tauri/tauri.conf.json version ($TAURI_CONF_VERSION) != tag version ($TAG_VERSION)"
