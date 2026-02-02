@@ -21,11 +21,9 @@ pub fn initialize_plugins(
         log::warn!("failed to create install dir {}: {}", install_dir.display(), err);
     }
 
-    if is_dir_empty(&install_dir) {
-        let bundled_dir = resolve_bundled_dir(resource_dir);
-        if bundled_dir.exists() {
-            copy_dir_recursive(&bundled_dir, &install_dir);
-        }
+    let bundled_dir = resolve_bundled_dir(resource_dir);
+    if bundled_dir.exists() {
+        copy_dir_recursive(&bundled_dir, &install_dir);
     }
 
     let plugins = manifest::load_plugins_from_dir(&install_dir);

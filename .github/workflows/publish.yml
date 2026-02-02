@@ -43,6 +43,15 @@ jobs:
         with:
           bun-version: "latest"
       - run: bun install
+      - name: Bundle plugins
+        run: bun run bundle:plugins
+      - name: Verify bundled plugins
+        run: |
+          COUNT=$(find src-tauri/resources/bundled_plugins -maxdepth 2 -name plugin.json | wc -l | tr -d ' ')
+          if [[ "$COUNT" -lt 1 ]]; then
+            echo "No bundled plugins found under src-tauri/resources/bundled_plugins."
+            exit 1
+          fi
 
       - name: Validate release tag
         run: |
