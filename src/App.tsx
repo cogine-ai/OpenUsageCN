@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { invoke } from "@tauri-apps/api/core"
 import { getCurrentWindow, PhysicalSize, currentMonitor } from "@tauri-apps/api/window"
+import { getVersion } from "@tauri-apps/api/app"
 import { SideNav, type ActiveView } from "@/components/side-nav"
 import { PanelFooter } from "@/components/panel-footer"
 import { OverviewPage } from "@/pages/overview"
@@ -27,8 +28,6 @@ import {
   type ThemeMode,
 } from "@/lib/settings"
 
-const APP_VERSION = "0.0.1 (dev)"
-
 const PANEL_WIDTH = 350;
 const MAX_HEIGHT_FALLBACK_PX = 600;
 const MAX_HEIGHT_FRACTION_OF_MONITOR = 0.8;
@@ -54,8 +53,14 @@ function App() {
   const [themeMode, setThemeMode] = useState<ThemeMode>(DEFAULT_THEME_MODE)
   const [maxPanelHeightPx, setMaxPanelHeightPx] = useState<number | null>(null)
   const maxPanelHeightPxRef = useRef<number | null>(null)
+  const [appVersion, setAppVersion] = useState("...")
 
   const { updateStatus, triggerInstall } = useAppUpdate()
+
+  // Fetch app version on mount
+  useEffect(() => {
+    getVersion().then(setAppVersion)
+  }, [])
 
   // Tick state to force re-evaluation of cooldown status
   const [cooldownTick, setCooldownTick] = useState(0)
@@ -561,7 +566,7 @@ function App() {
             {renderContent()}
           </div>
           <PanelFooter
-            version={APP_VERSION}
+            version={appVersion}
             onRefresh={handleRefresh}
             refreshDisabled={!canRefreshAll}
             updateStatus={updateStatus}
