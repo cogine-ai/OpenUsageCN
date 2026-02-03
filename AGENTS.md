@@ -88,3 +88,4 @@ Work style: Be radically precise. No fluff. Pure information only (drop grammar;
 Use below list to store and recall user notes when asked to do so.
 
 - Tauri IPC: JS must use camelCase (`{ batchId, pluginIds }`), Tauri auto-converts to Rust's snake_case. Never send snake_case from JS—params silently won't match.
+- tauri-action `latest.json`: Parallel matrix builds are safe—action fetches existing `latest.json`, merges platform entries, re-uploads. No `max-parallel: 1` needed.
