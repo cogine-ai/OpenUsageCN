@@ -82,6 +82,10 @@ export function AboutDialog({ version, onClose }: AboutDialogProps) {
             <ExternalLink href="https://itsbyrob.in/x">Robin Ebers</ExternalLink>
           </p>
           <p>
+            Tray icon can show up to 4 usage bars. Plugins may declare one
+            primary progress metric.
+          </p>
+          <p>
             Open source on{" "}
             <ExternalLink href="https://github.com/robinebers/openusage">
               GitHub

@@ -4,6 +4,10 @@ import { describe, expect, it, vi } from "vitest"
 import { PanelFooter } from "@/components/panel-footer"
 import type { UpdateStatus } from "@/hooks/use-app-update"
 
+vi.mock("@tauri-apps/plugin-opener", () => ({
+  openUrl: vi.fn(() => Promise.resolve()),
+}))
+
 const idle: UpdateStatus = { status: "idle" }
 const noop = () => {}
 const aboutProps = { showAbout: false, onShowAbout: noop, onCloseAbout: noop }
@@ -63,6 +67,18 @@ describe("PanelFooter", () => {
     expect(screen.getByText("Downloading update 42%")).toBeTruthy()
   })
 
+  it("shows downloading state without percentage when progress is unknown", () => {
+    render(
+      <PanelFooter
+        version="0.0.0"
+        autoUpdateNextAt={null}
+        updateStatus={{ status: "downloading", progress: -1 }}
+        onUpdateInstall={noop}
+      />
+    )
+    expect(screen.getByText("Downloading update...")).toBeTruthy()
+  })
+
   it("shows restart button when ready", async () => {
     const onInstall = vi.fn()
     render(
@@ -104,5 +120,22 @@ describe("PanelFooter", () => {
       />
     )
     expect(screen.getByText("Installing...")).toBeTruthy()
+  })
+
+  it("opens About dialog when clicking version in idle state", async () => {
+    render(
+      <PanelFooter
+        version="0.0.0"
+        autoUpdateNextAt={null}
+        updateStatus={idle}
+        onUpdateInstall={noop}
+      />
+    )
+    await userEvent.click(screen.getByRole("button", { name: /OpenUsage/ }))
+    expect(screen.getByText("Open source on")).toBeInTheDocument()
+
+    // Close via Escape to exercise AboutDialog onClose path.
+    await userEvent.keyboard("{Escape}")
+    expect(screen.queryByText("Open source on")).not.toBeInTheDocument()
   })
 })

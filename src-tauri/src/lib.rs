@@ -26,6 +26,7 @@ pub struct PluginMeta {
     pub icon_url: String,
     pub brand_color: Option<String>,
     pub lines: Vec<ManifestLineDto>,
+    pub primary_progress_label: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -177,21 +178,31 @@ fn list_plugins(state: tauri::State<'_, Mutex<AppState>>) -> Vec<PluginMeta> {
 
     plugins
         .into_iter()
-        .map(|plugin| PluginMeta {
-            id: plugin.manifest.id,
-            name: plugin.manifest.name,
-            icon_url: plugin.icon_data_url,
-            brand_color: plugin.manifest.brand_color,
-            lines: plugin
+        .map(|plugin| {
+            let primary_progress_label = plugin
                 .manifest
                 .lines
                 .iter()
-                .map(|line| ManifestLineDto {
-                    line_type: line.line_type.clone(),
-                    label: line.label.clone(),
-                    scope: line.scope.clone(),
-                })
-                .collect(),
+                .find(|line| line.primary && line.line_type == "progress")
+                .map(|line| line.label.clone());
+
+            PluginMeta {
+                id: plugin.manifest.id,
+                name: plugin.manifest.name,
+                icon_url: plugin.icon_data_url,
+                brand_color: plugin.manifest.brand_color,
+                lines: plugin
+                    .manifest
+                    .lines
+                    .iter()
+                    .map(|line| ManifestLineDto {
+                        line_type: line.line_type.clone(),
+                        label: line.label.clone(),
+                        scope: line.scope.clone(),
+                    })
+                    .collect(),
+                primary_progress_label,
+            }
         })
         .collect()
 }

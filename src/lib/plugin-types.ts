@@ -23,4 +23,5 @@ export type PluginMeta = {
   iconUrl: string
   brandColor?: string
   lines: ManifestLine[]
+  primaryProgressLabel?: string | null
 }

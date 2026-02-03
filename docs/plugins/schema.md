@@ -50,7 +50,7 @@ Bundled plugins live under `src-tauri/resources/bundled_plugins/<id>/`.
   "icon": "icon.svg",
   "lines": [
     { "type": "badge", "label": "Plan", "scope": "overview" },
-    { "type": "progress", "label": "Usage", "scope": "overview" },
+    { "type": "progress", "label": "Usage", "scope": "overview", "primary": true },
     { "type": "text", "label": "Details", "scope": "detail" }
   ]
 }
@@ -80,14 +80,25 @@ loading skeletons instantly while probes execute asynchronously.
 
 ### Lines Array
 
-| Field   | Type   | Required | Description                                  |
-|---------|--------|----------|----------------------------------------------|
-| `type`  | string | Yes      | One of: `text`, `progress`, `badge`          |
-| `label` | string | Yes      | Static label shown in the UI for this line   |
-| `scope` | string | Yes      | `"overview"` or `"detail"` - where line appears |
+| Field     | Type    | Required | Description                                       |
+|-----------|---------|----------|---------------------------------------------------|
+| `type`    | string  | Yes      | One of: `text`, `progress`, `badge`               |
+| `label`   | string  | Yes      | Static label shown in the UI for this line        |
+| `scope`   | string  | Yes      | `"overview"` or `"detail"` - where line appears   |
+| `primary` | boolean | No       | If `true`, this progress line appears in tray icon |
 
 - `"overview"` - shown on both Overview tab and plugin detail pages
 - `"detail"` - shown only on plugin detail pages
+
+### Primary Progress (Tray Icon)
+
+Plugins can optionally mark one progress line as `primary: true`. This progress metric will be displayed as a horizontal bar in the system tray icon, allowing users to see usage at a glance without opening the app.
+
+Rules:
+- Only `type: "progress"` lines can be primary (the flag is ignored on other types)
+- Only the **first** `primary: true` line is used (subsequent ones are ignored)
+- Up to 4 enabled plugins with primary progress are shown in the tray (in plugin order)
+- If no data is available yet, the bar shows as a track without fill
 
 Example:
 
@@ -95,7 +106,7 @@ Example:
 {
   "lines": [
     { "type": "badge", "label": "Plan", "scope": "overview" },
-    { "type": "progress", "label": "Plan usage", "scope": "overview" },
+    { "type": "progress", "label": "Plan usage", "scope": "overview", "primary": true },
     { "type": "progress", "label": "Extra", "scope": "detail" },
     { "type": "text", "label": "Resets", "scope": "detail" }
   ]
@@ -198,7 +209,7 @@ A complete, working plugin that fetches data and displays all three line types.
   "icon": "icon.svg",
   "lines": [
     { "type": "badge", "label": "Status", "scope": "overview" },
-    { "type": "progress", "label": "Usage", "scope": "overview" },
+    { "type": "progress", "label": "Usage", "scope": "overview", "primary": true },
     { "type": "text", "label": "Fetched at", "scope": "detail" }
   ]
 }

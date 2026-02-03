@@ -270,4 +270,98 @@ describe("cursor plugin", () => {
     const result = plugin.probe(ctx)
     expect(result.lines.find((line) => line.label === "Plan usage")).toBeTruthy()
   })
+
+  it("refreshes token when expired and persists new access token", async () => {
+    const ctx = makeCtx()
+
+    const expiredPayload = Buffer.from(JSON.stringify({ exp: 1 }), "utf8")
+      .toString("base64")
+      .replace(/=+$/g, "")
+    const accessToken = `a.${expiredPayload}.c`
+
+    ctx.host.sqlite.query.mockImplementation((db, sql) => {
+      if (String(sql).includes("cursorAuth/accessToken")) {
+        return JSON.stringify([{ value: accessToken }])
+      }
+      if (String(sql).includes("cursorAuth/refreshToken")) {
+        return JSON.stringify([{ value: "refresh" }])
+      }
+      return JSON.stringify([])
+    })
+
+    const newPayload = Buffer.from(JSON.stringify({ exp: 9999999999 }), "utf8")
+      .toString("base64")
+      .replace(/=+$/g, "")
+    const newToken = `a.${newPayload}.c`
+
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("/oauth/token")) {
+        return { status: 200, bodyText: JSON.stringify({ access_token: newToken }) }
+      }
+      return {
+        status: 200,
+        bodyText: JSON.stringify({ enabled: true, planUsage: { totalSpend: 0, limit: 100 } }),
+      }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    expect(result.lines.find((line) => line.label === "Plan usage")).toBeTruthy()
+    expect(ctx.host.sqlite.exec).toHaveBeenCalled()
+  })
+
+  it("throws session expired when refresh requires logout and no access token exists", async () => {
+    const ctx = makeCtx()
+    ctx.host.sqlite.query.mockImplementation((db, sql) => {
+      if (String(sql).includes("cursorAuth/accessToken")) {
+        return JSON.stringify([])
+      }
+      if (String(sql).includes("cursorAuth/refreshToken")) {
+        return JSON.stringify([{ value: "refresh" }])
+      }
+      return JSON.stringify([])
+    })
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("/oauth/token")) {
+        return { status: 200, bodyText: JSON.stringify({ shouldLogout: true }) }
+      }
+      return { status: 500, bodyText: "" }
+    })
+
+    const plugin = await loadPlugin()
+    expect(() => plugin.probe(ctx)).toThrow("Session expired")
+  })
+
+  it("continues with existing access token when refresh fails", async () => {
+    const ctx = makeCtx()
+
+    const payload = Buffer.from(JSON.stringify({ exp: 1 }), "utf8")
+      .toString("base64")
+      .replace(/=+$/g, "")
+    const accessToken = `a.${payload}.c`
+
+    ctx.host.sqlite.query.mockImplementation((db, sql) => {
+      if (String(sql).includes("cursorAuth/accessToken")) {
+        return JSON.stringify([{ value: accessToken }])
+      }
+      if (String(sql).includes("cursorAuth/refreshToken")) {
+        return JSON.stringify([{ value: "refresh" }])
+      }
+      return JSON.stringify([])
+    })
+
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("/oauth/token")) {
+        // Force refresh to throw string error.
+        return { status: 401, bodyText: JSON.stringify({ shouldLogout: true }) }
+      }
+      return {
+        status: 200,
+        bodyText: JSON.stringify({ enabled: true, planUsage: { totalSpend: 0, limit: 100 } }),
+      }
+    })
+
+    const plugin = await loadPlugin()
+    expect(() => plugin.probe(ctx)).not.toThrow()
+  })
 })

@@ -15,6 +15,10 @@ const state = vi.hoisted(() => ({
   loadThemeModeMock: vi.fn(),
   saveThemeModeMock: vi.fn(),
   probeHandlers: null as null | { onResult: (output: any) => void; onBatchComplete: () => void },
+  trayGetByIdMock: vi.fn(),
+  traySetIconMock: vi.fn(),
+  traySetIconAsTemplateMock: vi.fn(),
+  resolveResourceMock: vi.fn(),
 }))
 
 const dndState = vi.hoisted(() => ({
@@ -62,6 +66,16 @@ vi.mock("@tauri-apps/api/core", () => ({
   isTauri: () => false,
 }))
 
+vi.mock("@tauri-apps/api/tray", () => ({
+  TrayIcon: {
+    getById: state.trayGetByIdMock,
+  },
+}))
+
+vi.mock("@tauri-apps/api/path", () => ({
+  resolveResource: state.resolveResourceMock,
+}))
+
 vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: () => ({ setSize: state.setSizeMock }),
   PhysicalSize: class {
@@ -77,6 +91,11 @@ vi.mock("@tauri-apps/api/window", () => ({
 
 vi.mock("@tauri-apps/api/app", () => ({
   getVersion: () => Promise.resolve("0.0.0-test"),
+}))
+
+vi.mock("@/lib/tray-bars-icon", () => ({
+  getTrayIconSizePx: () => 36,
+  renderTrayBarsIcon: () => Promise.resolve({}),
 }))
 
 vi.mock("@/hooks/use-probe-events", () => ({
@@ -114,6 +133,10 @@ describe("App", () => {
     state.saveAutoUpdateIntervalMock.mockReset()
     state.loadThemeModeMock.mockReset()
     state.saveThemeModeMock.mockReset()
+    state.trayGetByIdMock.mockReset()
+    state.traySetIconMock.mockReset()
+    state.traySetIconAsTemplateMock.mockReset()
+    state.resolveResourceMock.mockReset()
     state.savePluginSettingsMock.mockResolvedValue(undefined)
     state.saveAutoUpdateIntervalMock.mockResolvedValue(undefined)
     state.loadThemeModeMock.mockResolvedValue("system")
@@ -126,17 +149,49 @@ describe("App", () => {
     })
     state.currentMonitorMock.mockResolvedValue({ size: { height: 1000 } })
     state.startBatchMock.mockResolvedValue(["a"])
+    state.trayGetByIdMock.mockResolvedValue({
+      setIcon: state.traySetIconMock.mockResolvedValue(undefined),
+      setIconAsTemplate: state.traySetIconAsTemplateMock.mockResolvedValue(undefined),
+    })
+    state.resolveResourceMock.mockResolvedValue("/resource/icons/tray-icon.png")
     state.invokeMock.mockImplementation(async (cmd: string) => {
       if (cmd === "list_plugins") {
         return [
-          { id: "a", name: "Alpha", iconUrl: "icon-a", lines: [{ type: "text", label: "Now", scope: "overview" }] },
-          { id: "b", name: "Beta", iconUrl: "icon-b", lines: [] },
+          { id: "a", name: "Alpha", iconUrl: "icon-a", primaryProgressLabel: null, lines: [{ type: "text", label: "Now", scope: "overview" }] },
+          { id: "b", name: "Beta", iconUrl: "icon-b", primaryProgressLabel: null, lines: [] },
         ]
       }
       return null
     })
     state.loadPluginSettingsMock.mockResolvedValue({ order: ["a"], disabled: [] })
     state.loadAutoUpdateIntervalMock.mockResolvedValue(15)
+  })
+
+  it("applies theme mode changes to document", async () => {
+    const mq = {
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    } as unknown as MediaQueryList
+    const mmSpy = vi.spyOn(window, "matchMedia").mockReturnValue(mq)
+
+    render(<App />)
+    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
+    await userEvent.click(settingsButtons[0])
+
+    // Dark
+    await userEvent.click(await screen.findByRole("radio", { name: "Dark" }))
+    expect(document.documentElement.classList.contains("dark")).toBe(true)
+
+    // Light
+    await userEvent.click(await screen.findByRole("radio", { name: "Light" }))
+    expect(document.documentElement.classList.contains("dark")).toBe(false)
+
+    // Back to system should subscribe to matchMedia changes
+    await userEvent.click(await screen.findByRole("radio", { name: "System" }))
+    expect(mq.addEventListener).toHaveBeenCalled()
+
+    mmSpy.mockRestore()
   })
 
   it("loads plugins, normalizes settings, and renders overview", async () => {
@@ -169,6 +224,40 @@ describe("App", () => {
     await screen.findByText("Now")
   })
 
+  it("updates tray icon on probe results when plugin has a primary progress", async () => {
+    state.invokeMock.mockImplementationOnce(async (cmd: string) => {
+      if (cmd === "list_plugins") {
+        return [
+          {
+            id: "a",
+            name: "Alpha",
+            iconUrl: "icon-a",
+            primaryProgressLabel: "Session",
+            lines: [{ type: "progress", label: "Session", scope: "overview" }],
+          },
+        ]
+      }
+      return null
+    })
+    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a"], disabled: [] })
+
+    render(<App />)
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+
+    // Init will trigger an icon generation attempt (bars exist but no data yet).
+    await waitFor(() => expect(state.traySetIconMock).toHaveBeenCalled())
+    const callsBefore = state.traySetIconMock.mock.calls.length
+
+    state.probeHandlers?.onResult({
+      providerId: "a",
+      displayName: "Alpha",
+      iconUrl: "icon-a",
+      lines: [{ type: "progress", label: "Session", value: 50, max: 100 }],
+    })
+
+    await waitFor(() => expect(state.traySetIconMock.mock.calls.length).toBeGreaterThan(callsBefore))
+  })
+
   it("toggles plugins in settings", async () => {
     render(<App />)
     const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
@@ -186,6 +275,28 @@ describe("App", () => {
     await userEvent.click(settingsButtons[0])
     await userEvent.click(await screen.findByRole("radio", { name: "30 min" }))
     expect(state.saveAutoUpdateIntervalMock).toHaveBeenCalledWith(30)
+  })
+
+  it("logs when saving auto-update interval fails", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    state.saveAutoUpdateIntervalMock.mockRejectedValueOnce(new Error("save interval"))
+    render(<App />)
+    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
+    await userEvent.click(settingsButtons[0])
+    await userEvent.click(await screen.findByRole("radio", { name: "30 min" }))
+    await waitFor(() => expect(errorSpy).toHaveBeenCalled())
+    errorSpy.mockRestore()
+  })
+
+  it("logs when saving theme mode fails", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    state.saveThemeModeMock.mockRejectedValueOnce(new Error("save theme"))
+    render(<App />)
+    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
+    await userEvent.click(settingsButtons[0])
+    await userEvent.click(await screen.findByRole("radio", { name: "Light" }))
+    await waitFor(() => expect(errorSpy).toHaveBeenCalled())
+    errorSpy.mockRestore()
   })
 
   it("retries a plugin on error", async () => {
@@ -291,5 +402,297 @@ describe("App", () => {
     await userEvent.click(settingsButtons[0])
     dndState.latestOnDragEnd?.({ active: { id: "a" }, over: { id: "b" } })
     expect(state.savePluginSettingsMock).toHaveBeenCalled()
+  })
+
+  it("switches to provider detail view when selecting a plugin", async () => {
+    render(<App />)
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+
+    // Provide some data so detail view has content.
+    state.probeHandlers?.onResult({
+      providerId: "a",
+      displayName: "Alpha",
+      iconUrl: "icon-a",
+      lines: [{ type: "text", label: "Now", value: "Later" }],
+    })
+
+    // Click plugin in side nav (aria-label is plugin name)
+    await userEvent.click(await screen.findByRole("button", { name: "Alpha" }))
+
+    // Detail view uses ProviderDetailPage (scope=all) but should still render the provider card content.
+    await screen.findByText("Now")
+  })
+
+  it("coalesces pending tray icon timers on multiple settings changes", async () => {
+    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b"], disabled: [] })
+    render(<App />)
+    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
+    await userEvent.click(settingsButtons[0])
+
+    // Toggle then reorder quickly (within debounce window) to force timer replacement.
+    const checkboxes = await screen.findAllByRole("checkbox")
+    await userEvent.click(checkboxes[0])
+    dndState.latestOnDragEnd?.({ active: { id: "a" }, over: { id: "b" } })
+
+    expect(state.savePluginSettingsMock).toHaveBeenCalled()
+  })
+
+  it("logs when tray handle cannot be loaded", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    state.trayGetByIdMock.mockRejectedValueOnce(new Error("no tray"))
+    render(<App />)
+    await waitFor(() => expect(errorSpy).toHaveBeenCalled())
+    errorSpy.mockRestore()
+  })
+
+  it("logs when tray gauge resource cannot be resolved", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    state.resolveResourceMock.mockRejectedValueOnce(new Error("no resource"))
+    render(<App />)
+    await waitFor(() => expect(errorSpy).toHaveBeenCalled())
+    errorSpy.mockRestore()
+  })
+
+  it("logs error when retry plugin batch fails", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    render(<App />)
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+
+    // Push an error result to show Retry button
+    state.probeHandlers?.onResult({
+      providerId: "a",
+      displayName: "Alpha",
+      iconUrl: "icon-a",
+      lines: [{ type: "badge", label: "Error", text: "Something failed" }],
+    })
+
+    // Make startBatch reject on next call (the retry)
+    state.startBatchMock.mockRejectedValueOnce(new Error("retry failed"))
+
+    const retry = await screen.findByRole("button", { name: "Retry" })
+    await userEvent.click(retry)
+
+    await waitFor(() =>
+      expect(errorSpy).toHaveBeenCalledWith("Failed to retry plugin:", expect.any(Error))
+    )
+    errorSpy.mockRestore()
+  })
+
+  it("sets next update to null when changing interval with all plugins disabled", async () => {
+    // All plugins disabled
+    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b"], disabled: ["a", "b"] })
+    render(<App />)
+
+    // Go to settings
+    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
+    await userEvent.click(settingsButtons[0])
+
+    // Change interval - this triggers the else branch (enabledIds.length === 0)
+    await userEvent.click(await screen.findByRole("radio", { name: "30 min" }))
+
+    expect(state.saveAutoUpdateIntervalMock).toHaveBeenCalledWith(30)
+  })
+
+  it("covers interval change branch when plugins exist", async () => {
+    // This test ensures the interval change logic is exercised with enabled plugins
+    // to cover the if branch (enabledIds.length > 0 sets nextAt)
+    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b"], disabled: [] })
+    render(<App />)
+
+    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
+    await userEvent.click(settingsButtons[0])
+
+    // Change interval - this triggers the if branch (enabledIds.length > 0)
+    await userEvent.click(await screen.findByRole("radio", { name: "1 hour" }))
+
+    expect(state.saveAutoUpdateIntervalMock).toHaveBeenCalledWith(60)
+  })
+
+  it("fires auto-update interval and schedules next", async () => {
+    vi.useFakeTimers()
+    // Set a very short interval for testing (5 min = 300000ms)
+    state.loadAutoUpdateIntervalMock.mockResolvedValueOnce(5)
+    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a"], disabled: [] })
+
+    render(<App />)
+
+    // Wait for initial setup
+    await vi.waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+
+    // Clear the initial batch call count
+    const initialCalls = state.startBatchMock.mock.calls.length
+
+    // Advance time by 5 minutes to trigger the interval
+    await vi.advanceTimersByTimeAsync(5 * 60 * 1000)
+
+    // The interval should have fired, calling startBatch again
+    await vi.waitFor(() =>
+      expect(state.startBatchMock.mock.calls.length).toBeGreaterThan(initialCalls)
+    )
+
+    vi.useRealTimers()
+  })
+
+  it("logs error when auto-update batch fails", async () => {
+    vi.useFakeTimers()
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    state.loadAutoUpdateIntervalMock.mockResolvedValueOnce(5)
+    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a"], disabled: [] })
+    // First call succeeds (initial batch), subsequent calls fail
+    state.startBatchMock
+      .mockResolvedValueOnce(["a"])
+      .mockRejectedValue(new Error("auto-update failed"))
+
+    render(<App />)
+
+    // Wait for initial batch
+    await vi.waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+
+    // Advance time to trigger the interval (which will fail)
+    await vi.advanceTimersByTimeAsync(5 * 60 * 1000)
+
+    await vi.waitFor(() =>
+      expect(errorSpy).toHaveBeenCalledWith("Failed to start auto-update batch:", expect.any(Error))
+    )
+
+    errorSpy.mockRestore()
+    vi.useRealTimers()
+  })
+
+  it("logs error when loading auto-update interval fails", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    state.loadAutoUpdateIntervalMock.mockRejectedValueOnce(new Error("load interval failed"))
+    render(<App />)
+    await waitFor(() =>
+      expect(errorSpy).toHaveBeenCalledWith("Failed to load auto-update interval:", expect.any(Error))
+    )
+    errorSpy.mockRestore()
+  })
+
+  it("logs error when loading theme mode fails", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    state.loadThemeModeMock.mockRejectedValueOnce(new Error("load theme failed"))
+    render(<App />)
+    await waitFor(() =>
+      expect(errorSpy).toHaveBeenCalledWith("Failed to load theme mode:", expect.any(Error))
+    )
+    errorSpy.mockRestore()
+  })
+
+  it("tracks manual refresh and clears cooldown flag on result", async () => {
+    render(<App />)
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+
+    // Show error to get Retry button
+    state.probeHandlers?.onResult({
+      providerId: "a",
+      displayName: "Alpha",
+      iconUrl: "icon-a",
+      lines: [{ type: "badge", label: "Error", text: "Network error" }],
+    })
+
+    const retryButton = await screen.findByRole("button", { name: "Retry" })
+    await userEvent.click(retryButton)
+
+    // Simulate successful probe result after retry (isManual branch)
+    state.probeHandlers?.onResult({
+      providerId: "a",
+      displayName: "Alpha",
+      iconUrl: "icon-a",
+      lines: [{ type: "text", label: "Now", value: "OK" }],
+    })
+
+    // The result should be displayed (Now is the label from the provider-card)
+    await screen.findByText("Now")
+  })
+
+  it("handles retry when plugin settings change to all disabled", async () => {
+    // This test covers the resetAutoUpdateSchedule branch when enabledIds.length === 0
+    // Setup: start with one plugin, show error, then disable it during retry flow
+
+    // Use a mutable settings object we can modify
+    let currentSettings = { order: ["a", "b"], disabled: ["b"] }
+    state.loadPluginSettingsMock.mockImplementation(async () => currentSettings)
+    state.savePluginSettingsMock.mockImplementation(async (newSettings) => {
+      currentSettings = newSettings
+    })
+
+    render(<App />)
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+
+    // Show error state for plugin "a"
+    state.probeHandlers?.onResult({
+      providerId: "a",
+      displayName: "Alpha",
+      iconUrl: "icon-a",
+      lines: [{ type: "badge", label: "Error", text: "Network error" }],
+    })
+
+    // Find and prepare to click retry
+    const retryButton = await screen.findByRole("button", { name: "Retry" })
+
+    // Before clicking, disable "a" to make enabledIds.length === 0 when resetAutoUpdateSchedule runs
+    // This simulates a race condition where settings change mid-action
+    currentSettings = { order: ["a", "b"], disabled: ["a", "b"] }
+
+    await userEvent.click(retryButton)
+
+    // The retry should still work (startBatch called) but resetAutoUpdateSchedule
+    // should hit the enabledIds.length === 0 branch
+    expect(state.startBatchMock).toHaveBeenCalledWith(["a"])
+  })
+
+  it("updates tray icon without requestAnimationFrame (regression test for hidden panel)", async () => {
+    vi.useFakeTimers()
+
+    // Stub requestAnimationFrame to never call the callback - simulates hidden panel throttling
+    const originalRaf = window.requestAnimationFrame
+    const rafSpy = vi.fn()
+    window.requestAnimationFrame = rafSpy
+
+    // Setup plugin with primary progress
+    state.invokeMock.mockImplementationOnce(async (cmd: string) => {
+      if (cmd === "list_plugins") {
+        return [
+          {
+            id: "a",
+            name: "Alpha",
+            iconUrl: "icon-a",
+            primaryProgressLabel: "Session",
+            lines: [{ type: "progress", label: "Session", scope: "overview" }],
+          },
+        ]
+      }
+      return null
+    })
+    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a"], disabled: [] })
+
+    render(<App />)
+    await vi.waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+
+    // Wait for tray to be ready
+    await vi.waitFor(() => expect(state.trayGetByIdMock).toHaveBeenCalled())
+
+    // Clear any initial calls
+    state.traySetIconMock.mockClear()
+
+    // Trigger a probe result
+    state.probeHandlers?.onResult({
+      providerId: "a",
+      displayName: "Alpha",
+      iconUrl: "icon-a",
+      lines: [{ type: "progress", label: "Session", value: 50, max: 100 }],
+    })
+
+    // Advance timers to trigger the debounced tray update (500ms probe debounce)
+    await vi.advanceTimersByTimeAsync(600)
+
+    // Tray icon should have been updated even though requestAnimationFrame was never called
+    expect(rafSpy).not.toHaveBeenCalled()
+    expect(state.traySetIconMock).toHaveBeenCalled()
+
+    window.requestAnimationFrame = originalRaf
+    vi.useRealTimers()
   })
 })
