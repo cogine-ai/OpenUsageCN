@@ -7,15 +7,133 @@
   const SCOPES = "user:profile user:inference user:sessions:claude_code user:mcp_servers"
   const REFRESH_BUFFER_MS = 5 * 60 * 1000 // refresh 5 minutes before expiration
 
+  function utf8DecodeBytes(bytes) {
+    // Prefer native TextDecoder when available (QuickJS may not expose it).
+    if (typeof TextDecoder !== "undefined") {
+      try {
+        return new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(bytes))
+      } catch {}
+    }
+
+    // Minimal UTF-8 decoder (replacement char on invalid sequences).
+    let out = ""
+    for (let i = 0; i < bytes.length; ) {
+      const b0 = bytes[i] & 0xff
+      if (b0 < 0x80) {
+        out += String.fromCharCode(b0)
+        i += 1
+        continue
+      }
+
+      // 2-byte
+      if (b0 >= 0xc2 && b0 <= 0xdf) {
+        if (i + 1 >= bytes.length) {
+          out += "\ufffd"
+          break
+        }
+        const b1 = bytes[i + 1] & 0xff
+        if ((b1 & 0xc0) !== 0x80) {
+          out += "\ufffd"
+          i += 1
+          continue
+        }
+        const cp = ((b0 & 0x1f) << 6) | (b1 & 0x3f)
+        out += String.fromCharCode(cp)
+        i += 2
+        continue
+      }
+
+      // 3-byte
+      if (b0 >= 0xe0 && b0 <= 0xef) {
+        if (i + 2 >= bytes.length) {
+          out += "\ufffd"
+          break
+        }
+        const b1 = bytes[i + 1] & 0xff
+        const b2 = bytes[i + 2] & 0xff
+        const validCont = (b1 & 0xc0) === 0x80 && (b2 & 0xc0) === 0x80
+        const notOverlong = !(b0 === 0xe0 && b1 < 0xa0)
+        const notSurrogate = !(b0 === 0xed && b1 >= 0xa0)
+        if (!validCont || !notOverlong || !notSurrogate) {
+          out += "\ufffd"
+          i += 1
+          continue
+        }
+        const cp = ((b0 & 0x0f) << 12) | ((b1 & 0x3f) << 6) | (b2 & 0x3f)
+        out += String.fromCharCode(cp)
+        i += 3
+        continue
+      }
+
+      // 4-byte
+      if (b0 >= 0xf0 && b0 <= 0xf4) {
+        if (i + 3 >= bytes.length) {
+          out += "\ufffd"
+          break
+        }
+        const b1 = bytes[i + 1] & 0xff
+        const b2 = bytes[i + 2] & 0xff
+        const b3 = bytes[i + 3] & 0xff
+        const validCont = (b1 & 0xc0) === 0x80 && (b2 & 0xc0) === 0x80 && (b3 & 0xc0) === 0x80
+        const notOverlong = !(b0 === 0xf0 && b1 < 0x90)
+        const notTooHigh = !(b0 === 0xf4 && b1 > 0x8f)
+        if (!validCont || !notOverlong || !notTooHigh) {
+          out += "\ufffd"
+          i += 1
+          continue
+        }
+        const cp =
+          ((b0 & 0x07) << 18) | ((b1 & 0x3f) << 12) | ((b2 & 0x3f) << 6) | (b3 & 0x3f)
+        const n = cp - 0x10000
+        out += String.fromCharCode(0xd800 + ((n >> 10) & 0x3ff), 0xdc00 + (n & 0x3ff))
+        i += 4
+        continue
+      }
+
+      out += "\ufffd"
+      i += 1
+    }
+    return out
+  }
+
+  function tryParseCredentialJSON(text) {
+    if (!text) return null
+    const trimmed = String(text).trim()
+    if (!trimmed) return null
+    try {
+      return JSON.parse(trimmed)
+    } catch {}
+
+    // Some macOS keychain items are returned by `security ... -w` as hex-encoded UTF-8 bytes.
+    // Example prefix: "7b0a" ( "{\\n" ).
+    // Support both plain hex and "0x..." forms.
+    let hex = trimmed
+    if (hex.startsWith("0x") || hex.startsWith("0X")) hex = hex.slice(2)
+    if (!hex || hex.length % 2 !== 0) return null
+    if (!/^[0-9a-fA-F]+$/.test(hex)) return null
+    try {
+      const bytes = []
+      for (let i = 0; i < hex.length; i += 2) {
+        bytes.push(parseInt(hex.slice(i, i + 2), 16))
+      }
+      const decoded = utf8DecodeBytes(bytes)
+      return JSON.parse(decoded)
+    } catch {}
+
+    return null
+  }
+
   function loadCredentials(ctx) {
     // Try file first
     if (ctx.host.fs.exists(CRED_FILE)) {
       try {
         const text = ctx.host.fs.readText(CRED_FILE)
-        const parsed = JSON.parse(text)
-        const oauth = parsed.claudeAiOauth
-        if (oauth && oauth.accessToken) {
-          return { oauth, source: "file", fullData: parsed }
+        const parsed = tryParseCredentialJSON(text)
+        if (parsed) {
+          const oauth = parsed.claudeAiOauth
+          if (oauth && oauth.accessToken) {
+            return { oauth, source: "file", fullData: parsed }
+          }
         }
       } catch (e) {
       }
@@ -25,10 +143,12 @@
     try {
       const keychainValue = ctx.host.keychain.readGenericPassword(KEYCHAIN_SERVICE)
       if (keychainValue) {
-        const parsed = JSON.parse(keychainValue)
-        const oauth = parsed.claudeAiOauth
-        if (oauth && oauth.accessToken) {
-          return { oauth, source: "keychain", fullData: parsed }
+        const parsed = tryParseCredentialJSON(keychainValue)
+        if (parsed) {
+          const oauth = parsed.claudeAiOauth
+          if (oauth && oauth.accessToken) {
+            return { oauth, source: "keychain", fullData: parsed }
+          }
         }
       }
     } catch (e) {
