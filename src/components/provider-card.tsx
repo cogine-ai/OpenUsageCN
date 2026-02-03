@@ -174,7 +174,11 @@ export function ProviderCard({
             )}
           </div>
           {plan && (
-            <Badge variant="outline" className="truncate min-w-0 max-w-[40%]" title={plan}>
+            <Badge
+              variant="outline"
+              className="truncate min-w-0 max-w-[40%]"
+              title={plan}
+            >
               {plan}
             </Badge>
           )}
