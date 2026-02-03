@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { invoke } from "@tauri-apps/api/core"
+import { invoke, isTauri } from "@tauri-apps/api/core"
+import { listen } from "@tauri-apps/api/event"
 import { getCurrentWindow, PhysicalSize, currentMonitor } from "@tauri-apps/api/window"
 import { getVersion } from "@tauri-apps/api/app"
 import { SideNav, type ActiveView } from "@/components/side-nav"
@@ -55,7 +56,8 @@ function App() {
   const maxPanelHeightPxRef = useRef<number | null>(null)
   const [appVersion, setAppVersion] = useState("...")
 
-  const { updateStatus, triggerInstall } = useAppUpdate()
+  const { updateStatus, triggerInstall, checkForUpdates } = useAppUpdate()
+  const [showAbout, setShowAbout] = useState(false)
 
   // Fetch app version on mount
   useEffect(() => {
@@ -110,6 +112,33 @@ function App() {
   useEffect(() => {
     invoke("init_panel").catch(console.error);
   }, []);
+
+  // Listen for tray menu events
+  useEffect(() => {
+    if (!isTauri()) return
+    let cancelled = false
+    const unlisteners: (() => void)[] = []
+
+    async function setup() {
+      const u1 = await listen<string>("tray:navigate", (event) => {
+        setActiveView(event.payload as ActiveView)
+      })
+      if (cancelled) { u1(); return }
+      unlisteners.push(u1)
+
+      const u2 = await listen("tray:show-about", () => {
+        setShowAbout(true)
+      })
+      if (cancelled) { u2(); return }
+      unlisteners.push(u2)
+    }
+    void setup()
+
+    return () => {
+      cancelled = true
+      for (const fn of unlisteners) fn()
+    }
+  }, [])
 
   // Auto-resize window to fit content using ResizeObserver
   useEffect(() => {
@@ -477,6 +506,8 @@ function App() {
           onAutoUpdateIntervalChange={handleAutoUpdateIntervalChange}
           themeMode={themeMode}
           onThemeModeChange={handleThemeModeChange}
+          updateStatus={updateStatus}
+          onCheckForUpdates={checkForUpdates}
         />
       )
     }
@@ -511,6 +542,9 @@ function App() {
               autoUpdateNextAt={autoUpdateNextAt}
               updateStatus={updateStatus}
               onUpdateInstall={triggerInstall}
+              showAbout={showAbout}
+              onShowAbout={() => setShowAbout(true)}
+              onCloseAbout={() => setShowAbout(false)}
             />
           </div>
         </div>
