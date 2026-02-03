@@ -229,6 +229,20 @@ function App() {
     invoke("init_panel").catch(console.error);
   }, []);
 
+  // Hide panel on Escape key (unless about dialog is open - it handles its own Escape)
+  useEffect(() => {
+    if (!isTauri()) return
+    if (showAbout) return // Let dialog handle its own Escape
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        invoke("hide_panel")
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown)
+    return () => document.removeEventListener("keydown", handleKeyDown)
+  }, [showAbout])
+
   // Listen for tray menu events
   useEffect(() => {
     if (!isTauri()) return

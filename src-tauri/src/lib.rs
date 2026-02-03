@@ -64,6 +64,14 @@ fn init_panel(app_handle: tauri::AppHandle) {
 }
 
 #[tauri::command]
+fn hide_panel(app_handle: tauri::AppHandle) {
+    use tauri_nspanel::ManagerExt;
+    if let Ok(panel) = app_handle.get_webview_panel("main") {
+        panel.hide();
+    }
+}
+
+#[tauri::command]
 async fn start_probe_batch(
     app_handle: tauri::AppHandle,
     state: tauri::State<'_, Mutex<AppState>>,
@@ -221,6 +229,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
             init_panel,
+            hide_panel,
             start_probe_batch,
             list_plugins
         ])
