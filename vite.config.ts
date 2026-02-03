@@ -20,6 +20,7 @@ export default defineConfig(async () => ({
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.test.{ts,tsx}", "plugins/**/*.test.js"],
+    exclude: ["**/node_modules/**", "**/src-tauri/target/**"],
     clearMocks: true,
     mockReset: true,
     restoreMocks: true,
@@ -36,6 +37,10 @@ export default defineConfig(async () => ({
         "src-tauri/icons/**",
         // Test-only helpers (not production code)
         "plugins/test-helpers.js",
+        // Entry point bootstrap (side-effect heavy, hard to unit test)
+        "src/main.tsx",
+        // SSR guard branch untestable in jsdom
+        "src/hooks/use-dark-mode.ts",
       ],
       reporter: ["text", "html", "lcov"],
       thresholds: {
