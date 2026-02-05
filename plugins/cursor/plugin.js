@@ -5,6 +5,7 @@
   const USAGE_URL = BASE_URL + "/aiserver.v1.DashboardService/GetCurrentPeriodUsage"
   const PLAN_URL = BASE_URL + "/aiserver.v1.DashboardService/GetPlanInfo"
   const REFRESH_URL = BASE_URL + "/oauth/token"
+  const CREDITS_URL = BASE_URL + "/aiserver.v1.DashboardService/GetCreditGrantsBalance"
   const CLIENT_ID = "KbZUR41cY7W6zRSdpSUJ7I7mLYBKOCmB"
   const REFRESH_BUFFER_MS = 5 * 60 * 1000 // refresh 5 minutes before expiration
 
@@ -237,6 +238,16 @@
       ctx.host.log.warn("plan info fetch failed: " + String(e))
     }
 
+    let creditGrants = null
+    try {
+      const creditsResp = connectPost(ctx, CREDITS_URL, accessToken)
+      if (creditsResp.status >= 200 && creditsResp.status < 300) {
+        creditGrants = ctx.util.tryParseJson(creditsResp.bodyText)
+      }
+    } catch (e) {
+      ctx.host.log.warn("credit grants fetch failed: " + String(e))
+    }
+
     let plan = null
     if (planName) {
       const planLabel = ctx.fmt.planLabel(planName)
@@ -247,9 +258,32 @@
 
     const lines = []
     const pu = usage.planUsage
+
+    // Credits first (if available) - highest priority primary metric
+    if (creditGrants && creditGrants.hasCreditGrants === true) {
+      const total = parseInt(creditGrants.totalCents, 10)
+      const used = parseInt(creditGrants.usedCents, 10)
+      if (total > 0 && !isNaN(total) && !isNaN(used)) {
+        lines.push(ctx.line.progress({
+          label: "Credits",
+          used: ctx.fmt.dollars(used),
+          limit: ctx.fmt.dollars(total),
+          format: { kind: "dollars" },
+        }))
+      }
+    }
+
+    // Plan usage (always present) - fallback primary metric
+    // API may return totalSpend directly, or we calculate from limit - remaining
+    if (typeof pu.limit !== "number") {
+      throw "Plan usage limit missing from API response."
+    }
+    const planUsed = typeof pu.totalSpend === "number"
+      ? pu.totalSpend
+      : pu.limit - (pu.remaining ?? 0)
     lines.push(ctx.line.progress({
       label: "Plan usage",
-      used: ctx.fmt.dollars(pu.totalSpend),
+      used: ctx.fmt.dollars(planUsed),
       limit: ctx.fmt.dollars(pu.limit),
       format: { kind: "dollars" },
       resetsAt: ctx.util.toIso(usage.billingCycleEnd),
@@ -259,6 +293,7 @@
       lines.push(ctx.line.text({ label: "Bonus spend", value: "$" + String(ctx.fmt.dollars(pu.bonusSpend)) }))
     }
 
+    // On-demand (if available) - not a primary candidate
     const su = usage.spendLimitUsage
     if (su) {
       const limit = su.individualLimit ?? su.pooledLimit ?? 0
