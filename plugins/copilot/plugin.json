@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "copilot",
+  "name": "Copilot",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "brandColor": "#A855F7",
+  "lines": [
+    {
+      "type": "progress",
+      "label": "Premium",
+      "scope": "overview",
+      "primary": true
+    },
+    { "type": "progress", "label": "Chat", "scope": "overview" },
+    { "type": "progress", "label": "Completions", "scope": "overview" }
+  ]
+}
