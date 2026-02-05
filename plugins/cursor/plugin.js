@@ -281,12 +281,23 @@
     const planUsed = typeof pu.totalSpend === "number"
       ? pu.totalSpend
       : pu.limit - (pu.remaining ?? 0)
+
+    // Calculate billing cycle period duration
+    // API returns timestamps as strings in milliseconds
+    var billingPeriodMs = 30 * 24 * 60 * 60 * 1000 // 30 days default
+    var cycleStart = Number(usage.billingCycleStart)
+    var cycleEnd = Number(usage.billingCycleEnd)
+    if (Number.isFinite(cycleStart) && Number.isFinite(cycleEnd) && cycleEnd > cycleStart) {
+      billingPeriodMs = cycleEnd - cycleStart // already in ms
+    }
+
     lines.push(ctx.line.progress({
       label: "Plan usage",
       used: ctx.fmt.dollars(planUsed),
       limit: ctx.fmt.dollars(pu.limit),
       format: { kind: "dollars" },
       resetsAt: ctx.util.toIso(usage.billingCycleEnd),
+      periodDurationMs: billingPeriodMs
     }))
 
     if (typeof pu.bonusSpend === "number" && pu.bonusSpend > 0) {
