@@ -63,6 +63,10 @@ afterEach(() => {
   cleanup()
 })
 
+function getTrayShowPercentageCheckbox() {
+  return screen.getAllByRole("checkbox")[0]
+}
+
 describe("SettingsPage", () => {
   it("toggles plugins", async () => {
     const onToggle = vi.fn()
@@ -77,7 +81,7 @@ describe("SettingsPage", () => {
       />
     )
     const checkboxes = screen.getAllByRole("checkbox")
-    await userEvent.click(checkboxes[0])
+    await userEvent.click(checkboxes[checkboxes.length - 1])
     expect(onToggle).toHaveBeenCalledWith("b")
   })
 
@@ -124,13 +128,13 @@ describe("SettingsPage", () => {
 
   it("shows auto-update helper text", () => {
     render(<SettingsPage {...defaultProps} />)
-    expect(screen.getByText("How often we update your usage")).toBeInTheDocument()
+    expect(screen.getByText("How obsessive are you")).toBeInTheDocument()
   })
 
-  it("renders appearance section with theme options", () => {
+  it("renders app theme section with theme options", () => {
     render(<SettingsPage {...defaultProps} />)
-    expect(screen.getByText("Appearance")).toBeInTheDocument()
-    expect(screen.getByText("Choose your color theme")).toBeInTheDocument()
+    expect(screen.getByText("App Theme")).toBeInTheDocument()
+    expect(screen.getByText("How it looks around here")).toBeInTheDocument()
     expect(screen.getByText("System")).toBeInTheDocument()
     expect(screen.getByText("Light")).toBeInTheDocument()
     expect(screen.getByText("Dark")).toBeInTheDocument()
@@ -162,16 +166,17 @@ describe("SettingsPage", () => {
 
   it("renders tray icon style section", () => {
     render(<SettingsPage {...defaultProps} />)
-    expect(screen.getByText("Menu Bar Icon")).toBeInTheDocument()
-    expect(screen.getByText("Choose how usage appears in the menu bar icon.")).toBeInTheDocument()
+    expect(screen.getByText("Bar Icon")).toBeInTheDocument()
+    expect(screen.getByText("The little guy up top")).toBeInTheDocument()
     expect(screen.getByRole("radio", { name: "Bars" })).toBeInTheDocument()
     expect(screen.getByRole("radio", { name: "Circle" })).toBeInTheDocument()
-    expect(screen.getByRole("radio", { name: "83%" })).toBeInTheDocument()
+    expect(screen.getByRole("radio", { name: "Provider" })).toBeInTheDocument()
+    expect(screen.getByRole("radio", { name: "%" })).toBeInTheDocument()
   })
 
   it("renders renamed usage section heading", () => {
     render(<SettingsPage {...defaultProps} />)
-    expect(screen.getByText("Show Usage As")).toBeInTheDocument()
+    expect(screen.getByText("Usage Mode")).toBeInTheDocument()
   })
 
   it("updates tray icon style", async () => {
@@ -194,11 +199,23 @@ describe("SettingsPage", () => {
         onTrayIconStyleChange={onTrayIconStyleChange}
       />
     )
-    await userEvent.click(screen.getByRole("radio", { name: "83%" }))
+    await userEvent.click(screen.getByRole("radio", { name: "%" }))
     expect(onTrayIconStyleChange).toHaveBeenCalledWith("textOnly")
   })
 
-  it("shows percentage checkbox only for icon styles", () => {
+  it("updates provider tray icon style", async () => {
+    const onTrayIconStyleChange = vi.fn()
+    render(
+      <SettingsPage
+        {...defaultProps}
+        onTrayIconStyleChange={onTrayIconStyleChange}
+      />
+    )
+    await userEvent.click(screen.getByRole("radio", { name: "Provider" }))
+    expect(onTrayIconStyleChange).toHaveBeenCalledWith("provider")
+  })
+
+  it("always shows percentage checkbox and enforces mandatory styles", () => {
     const { rerender } = render(
       <SettingsPage
         {...defaultProps}
@@ -206,6 +223,7 @@ describe("SettingsPage", () => {
       />
     )
     expect(screen.getByText("Show percentage")).toBeInTheDocument()
+    expect(getTrayShowPercentageCheckbox().getAttribute("aria-disabled")).not.toBe("true")
 
     rerender(
       <SettingsPage
@@ -213,7 +231,16 @@ describe("SettingsPage", () => {
         trayIconStyle="circle"
       />
     )
-    expect(screen.getByText("Show percentage")).toBeInTheDocument()
+    expect(getTrayShowPercentageCheckbox().getAttribute("aria-disabled")).not.toBe("true")
+
+    rerender(
+      <SettingsPage
+        {...defaultProps}
+        trayIconStyle="provider"
+      />
+    )
+    expect(getTrayShowPercentageCheckbox()).toHaveAttribute("aria-disabled", "true")
+    expect(getTrayShowPercentageCheckbox()).toBeChecked()
 
     rerender(
       <SettingsPage
@@ -221,7 +248,8 @@ describe("SettingsPage", () => {
         trayIconStyle="textOnly"
       />
     )
-    expect(screen.queryByText("Show percentage")).not.toBeInTheDocument()
+    expect(getTrayShowPercentageCheckbox()).toHaveAttribute("aria-disabled", "true")
+    expect(getTrayShowPercentageCheckbox()).toBeChecked()
   })
 
   it("toggles show percentage checkbox", async () => {

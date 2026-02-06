@@ -355,6 +355,54 @@ describe("App", () => {
     expect(firstCall.bars).toHaveLength(1)
   })
 
+  it("uses provider tray style and passes first provider icon", async () => {
+    state.loadTrayIconStyleMock.mockResolvedValueOnce("provider")
+    state.invokeMock.mockImplementation(async (cmd: string) => {
+      if (cmd === "list_plugins") {
+        return [
+          {
+            id: "a",
+            name: "Alpha",
+            iconUrl: "icon-a",
+            primaryCandidates: ["Session"],
+            lines: [{ type: "progress", label: "Session", scope: "overview" }],
+          },
+          {
+            id: "b",
+            name: "Beta",
+            iconUrl: "icon-b",
+            primaryCandidates: ["Session"],
+            lines: [{ type: "progress", label: "Session", scope: "overview" }],
+          },
+        ]
+      }
+      return null
+    })
+    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b"], disabled: [] })
+
+    render(<App />)
+    await waitFor(() => expect(state.renderTrayBarsIconMock).toHaveBeenCalled())
+
+    const firstCall = state.renderTrayBarsIconMock.mock.calls[0]?.[0]
+    expect(firstCall.style).toBe("provider")
+    expect(firstCall.bars).toHaveLength(1)
+    expect(firstCall.providerIconUrl).toBe("icon-a")
+    expect(firstCall.percentText).toBeUndefined()
+
+    state.probeHandlers?.onResult({
+      providerId: "a",
+      displayName: "Alpha",
+      iconUrl: "icon-a",
+      lines: [{ type: "progress", label: "Session", used: 50, limit: 100, format: { kind: "percent" } }],
+    })
+
+    await waitFor(() => expect(state.renderTrayBarsIconMock.mock.calls.length).toBeGreaterThan(1))
+    const latestCall = state.renderTrayBarsIconMock.mock.calls.at(-1)?.[0]
+    expect(latestCall.style).toBe("provider")
+    expect(latestCall.providerIconUrl).toBe("icon-a")
+    expect(latestCall.percentText).toBe("50%")
+  })
+
   it("uses text-only tray style", async () => {
     state.loadTrayIconStyleMock.mockResolvedValueOnce("textOnly")
     state.invokeMock.mockImplementation(async (cmd: string) => {
@@ -474,8 +522,19 @@ describe("App", () => {
     const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
     await userEvent.click(settingsButtons[0])
 
-    await userEvent.click(await screen.findByRole("radio", { name: "83%" }))
+    await userEvent.click(await screen.findByRole("radio", { name: "%" }))
     expect(state.saveTrayIconStyleMock).toHaveBeenCalledWith("textOnly")
+    expect(state.saveTrayShowPercentageMock).toHaveBeenCalledWith(true)
+  })
+
+  it("updates provider tray icon style in settings", async () => {
+    render(<App />)
+    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
+    await userEvent.click(settingsButtons[0])
+
+    await userEvent.click(await screen.findByRole("radio", { name: "Provider" }))
+    expect(state.saveTrayIconStyleMock).toHaveBeenCalledWith("provider")
+    expect(state.saveTrayShowPercentageMock).toHaveBeenCalledWith(true)
   })
 
   it("updates tray show percentage in settings", async () => {
@@ -487,15 +546,33 @@ describe("App", () => {
     expect(state.saveTrayShowPercentageMock).toHaveBeenCalledWith(true)
   })
 
-  it("hides tray show percentage checkbox for text-only style", async () => {
+  it("keeps tray show percentage checkbox visible and disabled for mandatory styles", async () => {
+    const getTrayCheckbox = () => screen.getAllByRole("checkbox")[0]
+
     render(<App />)
     const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
     await userEvent.click(settingsButtons[0])
 
-    await userEvent.click(await screen.findByRole("radio", { name: "83%" }))
-    await waitFor(() =>
-      expect(screen.queryByText("Show percentage")).not.toBeInTheDocument()
-    )
+    await userEvent.click(await screen.findByRole("radio", { name: "%" }))
+    const textOnlyCheckbox = getTrayCheckbox()
+    expect(textOnlyCheckbox).toBeVisible()
+    expect(textOnlyCheckbox).toHaveAttribute("aria-disabled", "true")
+    expect(textOnlyCheckbox).toBeChecked()
+
+    await userEvent.click(await screen.findByRole("radio", { name: "Provider" }))
+    const providerCheckbox = getTrayCheckbox()
+    expect(providerCheckbox).toBeVisible()
+    expect(providerCheckbox).toHaveAttribute("aria-disabled", "true")
+    expect(providerCheckbox).toBeChecked()
+  })
+
+  it("auto-corrects tray show percentage when loading mandatory tray style", async () => {
+    state.loadTrayIconStyleMock.mockResolvedValueOnce("provider")
+    state.loadTrayShowPercentageMock.mockResolvedValueOnce(false)
+
+    render(<App />)
+
+    await waitFor(() => expect(state.saveTrayShowPercentageMock).toHaveBeenCalledWith(true))
   })
 
   it("logs when saving tray icon style fails", async () => {

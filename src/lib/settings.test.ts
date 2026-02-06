@@ -146,9 +146,19 @@ describe("settings", () => {
     await expect(loadTrayIconStyle()).resolves.toBe("circle")
   })
 
+  it("loads stored provider tray icon style", async () => {
+    storeState.set("trayIconStyle", "provider")
+    await expect(loadTrayIconStyle()).resolves.toBe("provider")
+  })
+
   it("saves tray icon style", async () => {
     await saveTrayIconStyle("textOnly")
     await expect(loadTrayIconStyle()).resolves.toBe("textOnly")
+  })
+
+  it("saves provider tray icon style", async () => {
+    await saveTrayIconStyle("provider")
+    await expect(loadTrayIconStyle()).resolves.toBe("provider")
   })
 
   it("falls back to default for invalid tray icon style", async () => {

@@ -52,7 +52,7 @@ function normalizePercentText(style: TrayIconStyle, percentText: string | undefi
 }
 
 function getBarsForStyle(style: TrayIconStyle, bars: TrayPrimaryBar[]): TrayPrimaryBar[] {
-  if (style === "circle" || style === "textOnly") return bars.slice(0, 1)
+  if (style === "circle" || style === "provider" || style === "textOnly") return bars.slice(0, 1)
   return bars
 }
 
@@ -182,8 +182,9 @@ export function makeTrayBarsSvg(args: {
   sizePx: number
   style?: TrayIconStyle
   percentText?: string
+  providerIconUrl?: string
 }): string {
-  const { bars, sizePx, style = "bars", percentText } = args
+  const { bars, sizePx, style = "bars", percentText, providerIconUrl } = args
   const barsForStyle = getBarsForStyle(style, bars)
   const n = Math.max(1, Math.min(4, barsForStyle.length || 1))
   const text = normalizePercentText(style, percentText)
@@ -240,6 +241,25 @@ export function makeTrayBarsSvg(args: {
           `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="black" stroke-width="${strokeW}" stroke-linecap="butt" stroke-dasharray="${dash} ${circumference}" transform="rotate(-90 ${cx} ${cy})" opacity="${fillOpacity}" shape-rendering="geometricPrecision" />`
         )
       }
+    }
+  } else if (style === "provider") {
+    const iconSize = Math.max(6, Math.round(sizePx - 2 * layout.pad * 0.5))
+    const x = layout.barsX
+    const y = Math.round((height - iconSize) / 2) + 1
+    const href = typeof providerIconUrl === "string" ? providerIconUrl.trim() : ""
+
+    if (href.length > 0) {
+      parts.push(
+        `<image x="${x}" y="${y}" width="${iconSize}" height="${iconSize}" href="${escapeXmlText(href)}" preserveAspectRatio="xMidYMid meet" />`
+      )
+    } else {
+      const cx = x + iconSize / 2
+      const cy = y + iconSize / 2
+      const radius = Math.max(2, iconSize / 2 - 1.5)
+      const strokeW = Math.max(1.5, Math.round(iconSize * 0.14))
+      parts.push(
+        `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="black" stroke-width="${strokeW}" opacity="${fillOpacity}" shape-rendering="geometricPrecision" />`
+      )
     }
   } else if (style !== "textOnly") {
     for (let i = 0; i < n; i += 1) {
@@ -338,10 +358,17 @@ export async function renderTrayBarsIcon(args: {
   sizePx: number
   style?: TrayIconStyle
   percentText?: string
+  providerIconUrl?: string
 }): Promise<Image> {
-  const { bars, sizePx, style = "bars", percentText } = args
+  const { bars, sizePx, style = "bars", percentText, providerIconUrl } = args
   const text = normalizePercentText(style, percentText)
-  const svg = makeTrayBarsSvg({ bars, sizePx, style, percentText: text })
+  const svg = makeTrayBarsSvg({
+    bars,
+    sizePx,
+    style,
+    percentText: text,
+    providerIconUrl,
+  })
   const layout = getSvgLayout({
     sizePx,
     style,

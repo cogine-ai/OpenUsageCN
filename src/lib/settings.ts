@@ -16,7 +16,7 @@ export type ThemeMode = "system" | "light" | "dark";
 
 export type DisplayMode = "used" | "left";
 
-export type TrayIconStyle = "bars" | "circle" | "textOnly";
+export type TrayIconStyle = "bars" | "circle" | "provider" | "textOnly";
 
 const SETTINGS_STORE_PATH = "settings.json";
 const PLUGIN_SETTINGS_KEY = "plugins";
@@ -35,7 +35,7 @@ export const DEFAULT_TRAY_SHOW_PERCENTAGE = false;
 const AUTO_UPDATE_INTERVALS: AutoUpdateIntervalMinutes[] = [5, 15, 30, 60];
 const THEME_MODES: ThemeMode[] = ["system", "light", "dark"];
 const DISPLAY_MODES: DisplayMode[] = ["used", "left"];
-const TRAY_ICON_STYLES: TrayIconStyle[] = ["bars", "circle", "textOnly"];
+const TRAY_ICON_STYLES: TrayIconStyle[] = ["bars", "circle", "provider", "textOnly"];
 
 export const AUTO_UPDATE_OPTIONS: { value: AutoUpdateIntervalMinutes; label: string }[] =
   AUTO_UPDATE_INTERVALS.map((value) => ({
@@ -57,8 +57,13 @@ export const DISPLAY_MODE_OPTIONS: { value: DisplayMode; label: string }[] = [
 export const TRAY_ICON_STYLE_OPTIONS: { value: TrayIconStyle; label: string }[] = [
   { value: "bars", label: "Bars" },
   { value: "circle", label: "Circle" },
-  { value: "textOnly", label: "83%" },
+  { value: "provider", label: "Provider" },
+  { value: "textOnly", label: "%" },
 ];
+
+export function isTrayPercentageMandatory(style: TrayIconStyle): boolean {
+  return style === "provider" || style === "textOnly";
+}
 
 const store = new LazyStore(SETTINGS_STORE_PATH);
 

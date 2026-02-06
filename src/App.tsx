@@ -23,6 +23,7 @@ import {
   DEFAULT_TRAY_SHOW_PERCENTAGE,
   DEFAULT_THEME_MODE,
   getEnabledPluginIds,
+  isTrayPercentageMandatory,
   loadAutoUpdateInterval,
   loadDisplayMode,
   loadPluginSettings,
@@ -152,8 +153,10 @@ function App() {
         return
       }
 
+      const percentageMandatory = isTrayPercentageMandatory(style)
+
       let percentText: string | undefined
-      if (style === "textOnly" || trayShowPercentageRef.current) {
+      if (percentageMandatory || trayShowPercentageRef.current) {
         const firstFraction = bars[0]?.fraction
         if (typeof firstFraction === "number" && Number.isFinite(firstFraction)) {
           const clamped = Math.max(0, Math.min(1, firstFraction))
@@ -182,8 +185,13 @@ function App() {
       }
 
       const sizePx = getTrayIconSizePx(window.devicePixelRatio)
+      const firstProviderId = bars[0]?.id
+      const providerIconUrl =
+        style === "provider"
+          ? pluginsMetaRef.current.find((plugin) => plugin.id === firstProviderId)?.iconUrl
+          : undefined
 
-      renderTrayBarsIcon({ bars, sizePx, style, percentText })
+      renderTrayBarsIcon({ bars, sizePx, style, percentText, providerIconUrl })
         .then(async (img) => {
           await tray.setIcon(img)
           await tray.setIconAsTemplate(true)
@@ -500,13 +508,17 @@ function App() {
           console.error("Failed to load tray show percentage:", error)
         }
 
+        const normalizedTrayShowPercentage = isTrayPercentageMandatory(storedTrayIconStyle)
+          ? true
+          : storedTrayShowPercentage
+
         if (isMounted) {
           setPluginSettings(normalized)
           setAutoUpdateInterval(storedInterval)
           setThemeMode(storedThemeMode)
           setDisplayMode(storedDisplayMode)
           setTrayIconStyle(storedTrayIconStyle)
-          setTrayShowPercentage(storedTrayShowPercentage)
+          setTrayShowPercentage(normalizedTrayShowPercentage)
           const enabledIds = getEnabledPluginIds(normalized)
           setLoadingForPlugins(enabledIds)
           try {
@@ -517,6 +529,15 @@ function App() {
               setErrorForPlugins(enabledIds, "Failed to start probe")
             }
           }
+        }
+
+        if (
+          isTrayPercentageMandatory(storedTrayIconStyle) &&
+          storedTrayShowPercentage !== true
+        ) {
+          void saveTrayShowPercentage(true).catch((error) => {
+            console.error("Failed to save tray show percentage:", error)
+          })
         }
       } catch (e) {
         console.error("Failed to load plugin settings:", e)
@@ -630,6 +651,16 @@ function App() {
   }, [scheduleTrayIconUpdate])
 
   const handleTrayIconStyleChange = useCallback((style: TrayIconStyle) => {
+    const mandatory = isTrayPercentageMandatory(style)
+    if (mandatory && trayShowPercentageRef.current !== true) {
+      trayShowPercentageRef.current = true
+      setTrayShowPercentage(true)
+      void saveTrayShowPercentage(true).catch((error) => {
+        console.error("Failed to save tray show percentage:", error)
+      })
+    }
+
+    trayIconStyleRef.current = style
     setTrayIconStyle(style)
     // Tray icon style is a direct user-facing toggle; update tray immediately.
     scheduleTrayIconUpdate("settings", 0)
@@ -639,6 +670,7 @@ function App() {
   }, [scheduleTrayIconUpdate])
 
   const handleTrayShowPercentageChange = useCallback((value: boolean) => {
+    trayShowPercentageRef.current = value
     setTrayShowPercentage(value)
     // Tray icon text visibility is a direct user-facing toggle; update tray immediately.
     scheduleTrayIconUpdate("settings", 0)
@@ -754,6 +786,7 @@ function App() {
           onTrayIconStyleChange={handleTrayIconStyleChange}
           trayShowPercentage={trayShowPercentage}
           onTrayShowPercentageChange={handleTrayShowPercentageChange}
+          providerIconUrl={navPlugins[0]?.iconUrl}
         />
       )
     }

@@ -122,6 +122,36 @@ describe("tray-bars-icon", () => {
     }
   })
 
+  it("provider style renders provider image and text", () => {
+    const svg = makeTrayBarsSvg({
+      sizePx: 36,
+      style: "provider",
+      percentText: "83%",
+      providerIconUrl: "data:image/svg+xml;base64,ABC",
+      bars: [{ id: "a", fraction: 0.83 }],
+    })
+    expect(svg).toContain("<image ")
+    expect(svg).toContain('href="data:image/svg+xml;base64,ABC"')
+    expect(svg).toContain(">83%</text>")
+    const viewBox = svg.match(/viewBox="0 0 (\d+) (\d+)"/)
+    expect(viewBox).toBeTruthy()
+    if (viewBox) {
+      const width = Number(viewBox[1])
+      const height = Number(viewBox[2])
+      expect(width).toBeGreaterThan(height)
+    }
+  })
+
+  it("provider style falls back to a simple glyph when provider icon missing", () => {
+    const svg = makeTrayBarsSvg({
+      sizePx: 36,
+      style: "provider",
+      bars: [{ id: "a", fraction: 0.5 }],
+    })
+    expect(svg).not.toContain("<image ")
+    expect(svg).toContain("<circle ")
+  })
+
   it("renderTrayBarsIcon rasterizes SVG to an Image using canvas", async () => {
     const originalImage = window.Image
     const originalCreateElement = document.createElement.bind(document)
