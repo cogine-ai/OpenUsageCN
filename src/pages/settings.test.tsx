@@ -53,8 +53,10 @@ const defaultProps = {
   onThemeModeChange: vi.fn(),
   displayMode: "used" as const,
   onDisplayModeChange: vi.fn(),
-  updateStatus: { status: "idle" } as const,
-  onCheckForUpdates: vi.fn(),
+  trayIconStyle: "bars" as const,
+  onTrayIconStyleChange: vi.fn(),
+  trayShowPercentage: false,
+  onTrayShowPercentageChange: vi.fn(),
 }
 
 afterEach(() => {
@@ -67,15 +69,15 @@ describe("SettingsPage", () => {
     render(
       <SettingsPage
         {...defaultProps}
+        trayIconStyle="textOnly"
         plugins={[
-          { id: "a", name: "Alpha", enabled: true },
           { id: "b", name: "Beta", enabled: false },
         ]}
         onToggle={onToggle}
       />
     )
     const checkboxes = screen.getAllByRole("checkbox")
-    await userEvent.click(checkboxes[1])
+    await userEvent.click(checkboxes[0])
     expect(onToggle).toHaveBeenCalledWith("b")
   })
 
@@ -156,5 +158,83 @@ describe("SettingsPage", () => {
     )
     await userEvent.click(screen.getByRole("radio", { name: "Left" }))
     expect(onDisplayModeChange).toHaveBeenCalledWith("left")
+  })
+
+  it("renders tray icon style section", () => {
+    render(<SettingsPage {...defaultProps} />)
+    expect(screen.getByText("Menu Bar Icon")).toBeInTheDocument()
+    expect(screen.getByText("Choose how usage appears in the menu bar icon.")).toBeInTheDocument()
+    expect(screen.getByRole("radio", { name: "Bars" })).toBeInTheDocument()
+    expect(screen.getByRole("radio", { name: "Circle" })).toBeInTheDocument()
+    expect(screen.getByRole("radio", { name: "83%" })).toBeInTheDocument()
+  })
+
+  it("renders renamed usage section heading", () => {
+    render(<SettingsPage {...defaultProps} />)
+    expect(screen.getByText("Show Usage As")).toBeInTheDocument()
+  })
+
+  it("updates tray icon style", async () => {
+    const onTrayIconStyleChange = vi.fn()
+    render(
+      <SettingsPage
+        {...defaultProps}
+        onTrayIconStyleChange={onTrayIconStyleChange}
+      />
+    )
+    await userEvent.click(screen.getByRole("radio", { name: "Circle" }))
+    expect(onTrayIconStyleChange).toHaveBeenCalledWith("circle")
+  })
+
+  it("updates text-only tray icon style", async () => {
+    const onTrayIconStyleChange = vi.fn()
+    render(
+      <SettingsPage
+        {...defaultProps}
+        onTrayIconStyleChange={onTrayIconStyleChange}
+      />
+    )
+    await userEvent.click(screen.getByRole("radio", { name: "83%" }))
+    expect(onTrayIconStyleChange).toHaveBeenCalledWith("textOnly")
+  })
+
+  it("shows percentage checkbox only for icon styles", () => {
+    const { rerender } = render(
+      <SettingsPage
+        {...defaultProps}
+        trayIconStyle="bars"
+      />
+    )
+    expect(screen.getByText("Show percentage")).toBeInTheDocument()
+
+    rerender(
+      <SettingsPage
+        {...defaultProps}
+        trayIconStyle="circle"
+      />
+    )
+    expect(screen.getByText("Show percentage")).toBeInTheDocument()
+
+    rerender(
+      <SettingsPage
+        {...defaultProps}
+        trayIconStyle="textOnly"
+      />
+    )
+    expect(screen.queryByText("Show percentage")).not.toBeInTheDocument()
+  })
+
+  it("toggles show percentage checkbox", async () => {
+    const onTrayShowPercentageChange = vi.fn()
+    render(
+      <SettingsPage
+        {...defaultProps}
+        trayShowPercentage
+        onTrayShowPercentageChange={onTrayShowPercentageChange}
+      />
+    )
+    await userEvent.click(screen.getByText("Show percentage"))
+    expect(onTrayShowPercentageChange).toHaveBeenCalled()
+    expect(onTrayShowPercentageChange.mock.calls[0]?.[0]).toBe(false)
   })
 })

@@ -19,20 +19,27 @@ import {
   arePluginSettingsEqual,
   DEFAULT_AUTO_UPDATE_INTERVAL,
   DEFAULT_DISPLAY_MODE,
+  DEFAULT_TRAY_ICON_STYLE,
+  DEFAULT_TRAY_SHOW_PERCENTAGE,
   DEFAULT_THEME_MODE,
   getEnabledPluginIds,
   loadAutoUpdateInterval,
   loadDisplayMode,
   loadPluginSettings,
+  loadTrayShowPercentage,
+  loadTrayIconStyle,
   loadThemeMode,
   normalizePluginSettings,
   saveAutoUpdateInterval,
   saveDisplayMode,
   savePluginSettings,
+  saveTrayShowPercentage,
+  saveTrayIconStyle,
   saveThemeMode,
   type AutoUpdateIntervalMinutes,
   type DisplayMode,
   type PluginSettings,
+  type TrayIconStyle,
   type ThemeMode,
 } from "@/lib/settings"
 
@@ -63,11 +70,13 @@ function App() {
   const [autoUpdateResetToken, setAutoUpdateResetToken] = useState(0)
   const [themeMode, setThemeMode] = useState<ThemeMode>(DEFAULT_THEME_MODE)
   const [displayMode, setDisplayMode] = useState<DisplayMode>(DEFAULT_DISPLAY_MODE)
+  const [trayIconStyle, setTrayIconStyle] = useState<TrayIconStyle>(DEFAULT_TRAY_ICON_STYLE)
+  const [trayShowPercentage, setTrayShowPercentage] = useState(DEFAULT_TRAY_SHOW_PERCENTAGE)
   const [maxPanelHeightPx, setMaxPanelHeightPx] = useState<number | null>(null)
   const maxPanelHeightPxRef = useRef<number | null>(null)
   const [appVersion, setAppVersion] = useState("...")
 
-  const { updateStatus, triggerInstall, checkForUpdates } = useAppUpdate()
+  const { updateStatus, triggerInstall } = useAppUpdate()
   const [showAbout, setShowAbout] = useState(false)
 
   const trayRef = useRef<TrayIcon | null>(null)
@@ -81,10 +90,14 @@ function App() {
   const pluginSettingsRef = useRef(pluginSettings)
   const pluginStatesRef = useRef(pluginStates)
   const displayModeRef = useRef(displayMode)
+  const trayIconStyleRef = useRef(trayIconStyle)
+  const trayShowPercentageRef = useRef(trayShowPercentage)
   useEffect(() => { pluginsMetaRef.current = pluginsMeta }, [pluginsMeta])
   useEffect(() => { pluginSettingsRef.current = pluginSettings }, [pluginSettings])
   useEffect(() => { pluginStatesRef.current = pluginStates }, [pluginStates])
   useEffect(() => { displayModeRef.current = displayMode }, [displayMode])
+  useEffect(() => { trayIconStyleRef.current = trayIconStyle }, [trayIconStyle])
+  useEffect(() => { trayShowPercentageRef.current = trayShowPercentage }, [trayShowPercentage])
 
   // Fetch app version on mount
   useEffect(() => {
@@ -109,11 +122,13 @@ function App() {
         return
       }
 
+      const style = trayIconStyleRef.current
+      const maxBars = style === "bars" ? 4 : 1
       const bars = getTrayPrimaryBars({
         pluginsMeta: pluginsMetaRef.current,
         pluginSettings: pluginSettingsRef.current,
         pluginStates: pluginStatesRef.current,
-        maxBars: 4,
+        maxBars,
         displayMode: displayModeRef.current,
       })
 
@@ -137,9 +152,38 @@ function App() {
         return
       }
 
+      let percentText: string | undefined
+      if (style === "textOnly" || trayShowPercentageRef.current) {
+        const firstFraction = bars[0]?.fraction
+        if (typeof firstFraction === "number" && Number.isFinite(firstFraction)) {
+          const clamped = Math.max(0, Math.min(1, firstFraction))
+          const rounded = Math.round(clamped * 100)
+          percentText = `${rounded}%`
+        }
+      }
+
+      if (style === "textOnly" && !percentText) {
+        const gaugePath = trayGaugeIconPathRef.current
+        if (gaugePath) {
+          Promise.all([
+            tray.setIcon(gaugePath),
+            tray.setIconAsTemplate(true),
+          ])
+            .catch((e) => {
+              console.error("Failed to restore tray gauge icon:", e)
+            })
+            .finally(() => {
+              trayUpdatePendingRef.current = false
+            })
+        } else {
+          trayUpdatePendingRef.current = false
+        }
+        return
+      }
+
       const sizePx = getTrayIconSizePx(window.devicePixelRatio)
 
-      renderTrayBarsIcon({ bars, sizePx })
+      renderTrayBarsIcon({ bars, sizePx, style, percentText })
         .then(async (img) => {
           await tray.setIcon(img)
           await tray.setIconAsTemplate(true)
@@ -442,11 +486,27 @@ function App() {
           console.error("Failed to load display mode:", error)
         }
 
+        let storedTrayIconStyle = DEFAULT_TRAY_ICON_STYLE
+        try {
+          storedTrayIconStyle = await loadTrayIconStyle()
+        } catch (error) {
+          console.error("Failed to load tray icon style:", error)
+        }
+
+        let storedTrayShowPercentage = DEFAULT_TRAY_SHOW_PERCENTAGE
+        try {
+          storedTrayShowPercentage = await loadTrayShowPercentage()
+        } catch (error) {
+          console.error("Failed to load tray show percentage:", error)
+        }
+
         if (isMounted) {
           setPluginSettings(normalized)
           setAutoUpdateInterval(storedInterval)
           setThemeMode(storedThemeMode)
           setDisplayMode(storedDisplayMode)
+          setTrayIconStyle(storedTrayIconStyle)
+          setTrayShowPercentage(storedTrayShowPercentage)
           const enabledIds = getEnabledPluginIds(normalized)
           setLoadingForPlugins(enabledIds)
           try {
@@ -569,6 +629,24 @@ function App() {
     })
   }, [scheduleTrayIconUpdate])
 
+  const handleTrayIconStyleChange = useCallback((style: TrayIconStyle) => {
+    setTrayIconStyle(style)
+    // Tray icon style is a direct user-facing toggle; update tray immediately.
+    scheduleTrayIconUpdate("settings", 0)
+    void saveTrayIconStyle(style).catch((error) => {
+      console.error("Failed to save tray icon style:", error)
+    })
+  }, [scheduleTrayIconUpdate])
+
+  const handleTrayShowPercentageChange = useCallback((value: boolean) => {
+    setTrayShowPercentage(value)
+    // Tray icon text visibility is a direct user-facing toggle; update tray immediately.
+    scheduleTrayIconUpdate("settings", 0)
+    void saveTrayShowPercentage(value).catch((error) => {
+      console.error("Failed to save tray show percentage:", error)
+    })
+  }, [scheduleTrayIconUpdate])
+
   const handleAutoUpdateIntervalChange = useCallback((value: AutoUpdateIntervalMinutes) => {
     setAutoUpdateInterval(value)
     if (pluginSettings) {
@@ -672,8 +750,10 @@ function App() {
           onThemeModeChange={handleThemeModeChange}
           displayMode={displayMode}
           onDisplayModeChange={handleDisplayModeChange}
-          updateStatus={updateStatus}
-          onCheckForUpdates={checkForUpdates}
+          trayIconStyle={trayIconStyle}
+          onTrayIconStyleChange={handleTrayIconStyleChange}
+          trayShowPercentage={trayShowPercentage}
+          onTrayShowPercentageChange={handleTrayShowPercentageChange}
         />
       )
     }

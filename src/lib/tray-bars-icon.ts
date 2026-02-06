@@ -1,36 +1,217 @@
 import { Image } from "@tauri-apps/api/image"
 
 import type { TrayPrimaryBar } from "@/lib/tray-primary-progress"
+import type { TrayIconStyle } from "@/lib/settings"
 
 function rgbaToImageDataBytes(rgba: Uint8ClampedArray): Uint8Array {
   // Image.new expects Uint8Array. Uint8ClampedArray shares the same buffer layout.
   return new Uint8Array(rgba.buffer)
 }
 
+function escapeXmlText(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;")
+}
+
+function makeRoundedBarPath(args: {
+  x: number
+  y: number
+  w: number
+  h: number
+  leftRadius: number
+  rightRadius: number
+}): string {
+  const { x, y, w, h } = args
+  const leftRadius = Math.max(0, Math.min(args.leftRadius, h / 2, w / 2))
+  const rightRadius = Math.max(0, Math.min(args.rightRadius, h / 2, w / 2))
+  const x1 = x + w
+  const y1 = y + h
+  return [
+    `M ${x + leftRadius} ${y}`,
+    `L ${x1 - rightRadius} ${y}`,
+    `A ${rightRadius} ${rightRadius} 0 0 1 ${x1} ${y + rightRadius}`,
+    `L ${x1} ${y1 - rightRadius}`,
+    `A ${rightRadius} ${rightRadius} 0 0 1 ${x1 - rightRadius} ${y1}`,
+    `L ${x + leftRadius} ${y1}`,
+    `A ${leftRadius} ${leftRadius} 0 0 1 ${x} ${y1 - leftRadius}`,
+    `L ${x} ${y + leftRadius}`,
+    `A ${leftRadius} ${leftRadius} 0 0 1 ${x + leftRadius} ${y}`,
+    "Z",
+  ].join(" ")
+}
+
+function normalizePercentText(style: TrayIconStyle, percentText: string | undefined): string | undefined {
+  void style
+  if (typeof percentText !== "string") return undefined
+  const trimmed = percentText.trim()
+  return trimmed.length > 0 ? trimmed : undefined
+}
+
+function getBarsForStyle(style: TrayIconStyle, bars: TrayPrimaryBar[]): TrayPrimaryBar[] {
+  if (style === "circle" || style === "textOnly") return bars.slice(0, 1)
+  return bars
+}
+
+function getMinVisibleRemainderPx(trackW: number): number {
+  // Keep remainder clearly visible after tray downsampling.
+  return Math.max(4, Math.round(trackW * 0.2))
+}
+
+function getVisualBarFraction(fraction: number): number {
+  if (!Number.isFinite(fraction)) return 0
+  const clamped = Math.max(0, Math.min(1, fraction))
+  if (clamped > 0.7 && clamped < 1) {
+    // Quantize high-end bars by remainder in 15% steps so near-full values
+    // still leave a meaningful visible tail.
+    const remainder = 1 - clamped
+    const quantizedRemainder = Math.min(1, Math.ceil(remainder / 0.15) * 0.15)
+    return Math.max(0, 1 - quantizedRemainder)
+  }
+  return clamped
+}
+
+function getBarFillLayout(trackW: number, fraction: number): {
+  fillW: number
+  remainderDrawW: number
+  dividerX: number | null
+} {
+  if (!Number.isFinite(fraction) || fraction <= 0) {
+    return { fillW: 0, remainderDrawW: 0, dividerX: null }
+  }
+
+  const visual = getVisualBarFraction(fraction)
+  if (visual >= 1) {
+    return { fillW: trackW, remainderDrawW: 0, dividerX: null }
+  }
+
+  const minVisibleRemainderPx = getMinVisibleRemainderPx(trackW)
+  const maxFillW = Math.max(1, trackW - minVisibleRemainderPx)
+  const fillW = Math.max(1, Math.min(maxFillW, Math.round(trackW * visual)))
+  const trueRemainderW = trackW - fillW
+  const remainderDrawW = Math.min(trackW - 1, Math.max(trueRemainderW, minVisibleRemainderPx))
+  const dividerX = trackW - remainderDrawW
+  return { fillW, remainderDrawW, dividerX }
+}
+
+function estimateTextWidthPx(text: string, fontSize: number): number {
+  // Empirical estimate for SF Pro bold numeric glyphs in tray-sized icons.
+  return Math.ceil(text.length * fontSize * 0.62 + fontSize * 0.2)
+}
+
+function getSvgLayout(args: {
+  sizePx: number
+  style: TrayIconStyle
+  percentText?: string
+}): {
+  width: number
+  height: number
+  pad: number
+  gap: number
+  barsX: number
+  barsWidth: number
+  textX: number
+  textY: number
+  fontSize: number
+} {
+  const { sizePx, style, percentText } = args
+  const hasPercentText = typeof percentText === "string" && percentText.length > 0
+  const verticalNudgePx = 1
+  const pad = Math.max(1, Math.round(sizePx * 0.08)) // ~2px at 24–36px
+  const gap = Math.max(1, Math.round(sizePx * 0.03)) // ~1px at 36px
+
+  const height = sizePx
+  const barsX = pad
+  const barsWidth = sizePx - 2 * pad
+  const fontSize = Math.max(9, Math.round(sizePx * 0.72))
+  const textWidth = hasPercentText ? estimateTextWidthPx(percentText, fontSize) : 0
+  // Optical correction + global nudge down to align with the tray slot center.
+  const textY = Math.round(sizePx / 2) + 1 + verticalNudgePx
+
+  if (style === "textOnly") {
+    const textOnlyWidth = Math.max(Math.round(sizePx * 1.08), textWidth)
+    return {
+      width: hasPercentText ? textOnlyWidth + 2 * pad : sizePx,
+      height,
+      pad,
+      gap,
+      barsX,
+      barsWidth,
+      textX: pad,
+      textY,
+      fontSize,
+    }
+  }
+
+  if (!hasPercentText) {
+    return {
+      width: sizePx,
+      height,
+      pad,
+      gap,
+      barsX,
+      barsWidth,
+      textX: 0,
+      textY,
+      fontSize,
+    }
+  }
+
+  const textGap = Math.max(2, Math.round(sizePx * 0.08))
+  const textAreaWidth = Math.max(20, Math.round(sizePx * 1.5), textWidth + pad)
+  const rightPad = pad
+
+  return {
+    width: sizePx + textGap + textAreaWidth + rightPad,
+    height,
+    pad,
+    gap,
+    barsX,
+    barsWidth,
+    textX: sizePx + textGap,
+    textY,
+    fontSize,
+  }
+}
+
 export function makeTrayBarsSvg(args: {
   bars: TrayPrimaryBar[]
   sizePx: number
+  style?: TrayIconStyle
+  percentText?: string
 }): string {
-  const { bars, sizePx } = args
-  const n = Math.max(1, Math.min(4, bars.length || 1))
+  const { bars, sizePx, style = "bars", percentText } = args
+  const barsForStyle = getBarsForStyle(style, bars)
+  const n = Math.max(1, Math.min(4, barsForStyle.length || 1))
+  const text = normalizePercentText(style, percentText)
+  const layout = getSvgLayout({
+    sizePx,
+    style,
+    percentText: text,
+  })
 
-  const pad = Math.max(1, Math.round(sizePx * 0.08)) // ~2px at 24–36px
-  const gap = Math.max(1, Math.round(sizePx * 0.03)) // ~1px at 36px
-  const width = sizePx
-  const height = sizePx
+  const width = layout.width
+  const height = layout.height
+  const trackW = layout.barsWidth
 
-  const trackW = width - 2 * pad
   // For 1 bar, use same height as 2 bars (so it's not too chunky)
   const layoutN = Math.max(2, n)
-  const trackH = Math.max(1, Math.floor((height - 2 * pad - (layoutN - 1) * gap) / layoutN))
+  const trackH = Math.max(
+    1,
+    Math.floor((height - 2 * layout.pad - (layoutN - 1) * layout.gap) / layoutN)
+  )
   const rx = Math.max(1, Math.floor(trackH / 3))
 
   // Calculate vertical offset to center bars
-  const totalBarsHeight = n * trackH + (n - 1) * gap
-  const availableHeight = height - 2 * pad
-  const yOffset = pad + Math.floor((availableHeight - totalBarsHeight) / 2)
+  const totalBarsHeight = n * trackH + (n - 1) * layout.gap
+  const availableHeight = height - 2 * layout.pad
+  const yOffset = layout.pad + Math.floor((availableHeight - totalBarsHeight) / 2)
 
-  const trackOpacity = 0.22
+  const trackOpacity = 0.32
+  const remainderOpacity = 0.58
   const fillOpacity = 1
 
   const parts: string[] = []
@@ -38,33 +219,88 @@ export function makeTrayBarsSvg(args: {
     `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">`
   )
 
-  for (let i = 0; i < n; i += 1) {
-    const bar = bars[i]
-    const y = yOffset + i * (trackH + gap)
-    const x = pad
+  if (style === "circle") {
+    const chartSize = Math.max(6, sizePx - 2 * layout.pad)
+    const cx = layout.barsX + chartSize / 2
+    const cy = height / 2 + 1
+    const strokeW = Math.max(2, Math.round(chartSize * 0.16))
+    const radius = Math.max(1, Math.floor(chartSize / 2 - strokeW / 2) + 0.5)
 
-    // Track
     parts.push(
-      `<rect x="${x}" y="${y}" width="${trackW}" height="${trackH}" rx="${rx}" fill="black" opacity="${trackOpacity}" />`
+      `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="black" stroke-width="${strokeW}" opacity="${trackOpacity}" shape-rendering="geometricPrecision" />`
     )
 
-    const fraction = bar?.fraction
+    const fraction = barsForStyle[0]?.fraction
     if (typeof fraction === "number" && Number.isFinite(fraction) && fraction >= 0) {
       const clamped = Math.max(0, Math.min(1, fraction))
-      const fillW = Math.max(0, Math.round(trackW * clamped))
-      if (fillW > 0) {
+      if (clamped > 0) {
+        const circumference = 2 * Math.PI * radius
+        const dash = circumference * clamped
         parts.push(
-          `<rect x="${x}" y="${y}" width="${fillW}" height="${trackH}" rx="${rx}" fill="black" opacity="${fillOpacity}" />`
+          `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="black" stroke-width="${strokeW}" stroke-linecap="butt" stroke-dasharray="${dash} ${circumference}" transform="rotate(-90 ${cx} ${cy})" opacity="${fillOpacity}" shape-rendering="geometricPrecision" />`
         )
       }
     }
+  } else if (style !== "textOnly") {
+    for (let i = 0; i < n; i += 1) {
+      const bar = barsForStyle[i]
+      const y = yOffset + i * (trackH + layout.gap) + 1
+      const x = layout.barsX
+
+      // Track
+      parts.push(
+        `<rect x="${x}" y="${y}" width="${trackW}" height="${trackH}" rx="${rx}" fill="black" opacity="${trackOpacity}" />`
+      )
+
+      const fraction = bar?.fraction
+      if (typeof fraction === "number" && Number.isFinite(fraction) && fraction >= 0) {
+        const { fillW, remainderDrawW, dividerX } = getBarFillLayout(trackW, fraction)
+        if (fillW > 0) {
+          const movingEdgeRadius = Math.max(0, Math.floor(rx * 0.35))
+          if (fillW >= trackW) {
+            parts.push(
+              `<rect x="${x}" y="${y}" width="${fillW}" height="${trackH}" rx="${rx}" fill="black" opacity="${fillOpacity}" />`
+            )
+          } else {
+            const fillPath = makeRoundedBarPath({
+              x,
+              y,
+              w: fillW,
+              h: trackH,
+              leftRadius: rx,
+              rightRadius: movingEdgeRadius,
+            })
+            parts.push(`<path d="${fillPath}" fill="black" opacity="${fillOpacity}" />`)
+          }
+        }
+
+        if (fillW > 0 && remainderDrawW > 0 && dividerX !== null) {
+          const remainderX = x + dividerX
+          const remainderPath = makeRoundedBarPath({
+            x: remainderX,
+            y,
+            w: remainderDrawW,
+            h: trackH,
+            leftRadius: Math.max(0, Math.floor(rx * 0.2)),
+            rightRadius: rx,
+          })
+          parts.push(`<path d="${remainderPath}" fill="black" opacity="${remainderOpacity}" />`)
+        }
+      }
+    }
+  }
+
+  if (text) {
+    parts.push(
+      `<text x="${layout.textX}" y="${layout.textY}" fill="black" font-family="-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif" font-size="${layout.fontSize}" font-weight="700" dominant-baseline="middle">${escapeXmlText(text)}</text>`
+    )
   }
 
   parts.push(`</svg>`)
   return parts.join("")
 }
 
-async function rasterizeSvgToRgba(svg: string, sizePx: number): Promise<Uint8Array> {
+async function rasterizeSvgToRgba(svg: string, widthPx: number, heightPx: number): Promise<Uint8Array> {
   const blob = new Blob([svg], { type: "image/svg+xml" })
   const url = URL.createObjectURL(blob)
   try {
@@ -80,17 +316,17 @@ async function rasterizeSvgToRgba(svg: string, sizePx: number): Promise<Uint8Arr
     await loaded
 
     const canvas = document.createElement("canvas")
-    canvas.width = sizePx
-    canvas.height = sizePx
+    canvas.width = widthPx
+    canvas.height = heightPx
 
     const ctx = canvas.getContext("2d")
     if (!ctx) throw new Error("Canvas 2D context missing")
 
     // Clear to transparent; template icons use alpha as mask.
-    ctx.clearRect(0, 0, sizePx, sizePx)
-    ctx.drawImage(img, 0, 0, sizePx, sizePx)
+    ctx.clearRect(0, 0, widthPx, heightPx)
+    ctx.drawImage(img, 0, 0, widthPx, heightPx)
 
-    const imageData = ctx.getImageData(0, 0, sizePx, sizePx)
+    const imageData = ctx.getImageData(0, 0, widthPx, heightPx)
     return rgbaToImageDataBytes(imageData.data)
   } finally {
     URL.revokeObjectURL(url)
@@ -100,11 +336,19 @@ async function rasterizeSvgToRgba(svg: string, sizePx: number): Promise<Uint8Arr
 export async function renderTrayBarsIcon(args: {
   bars: TrayPrimaryBar[]
   sizePx: number
+  style?: TrayIconStyle
+  percentText?: string
 }): Promise<Image> {
-  const { bars, sizePx } = args
-  const svg = makeTrayBarsSvg({ bars, sizePx })
-  const rgba = await rasterizeSvgToRgba(svg, sizePx)
-  return await Image.new(rgba, sizePx, sizePx)
+  const { bars, sizePx, style = "bars", percentText } = args
+  const text = normalizePercentText(style, percentText)
+  const svg = makeTrayBarsSvg({ bars, sizePx, style, percentText: text })
+  const layout = getSvgLayout({
+    sizePx,
+    style,
+    percentText: text,
+  })
+  const rgba = await rasterizeSvgToRgba(svg, layout.width, layout.height)
+  return await Image.new(rgba, layout.width, layout.height)
 }
 
 export function getTrayIconSizePx(devicePixelRatio: number | undefined): number {
@@ -112,4 +356,3 @@ export function getTrayIconSizePx(devicePixelRatio: number | undefined): number 
   // 18pt-ish slot -> render at 18px * dpr for crispness (36px on Retina).
   return Math.max(18, Math.round(18 * dpr))
 }
-

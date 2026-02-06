@@ -3,17 +3,23 @@ import {
   DEFAULT_AUTO_UPDATE_INTERVAL,
   DEFAULT_DISPLAY_MODE,
   DEFAULT_PLUGIN_SETTINGS,
+  DEFAULT_TRAY_ICON_STYLE,
+  DEFAULT_TRAY_SHOW_PERCENTAGE,
   DEFAULT_THEME_MODE,
   arePluginSettingsEqual,
   getEnabledPluginIds,
   loadAutoUpdateInterval,
   loadDisplayMode,
   loadPluginSettings,
+  loadTrayIconStyle,
+  loadTrayShowPercentage,
   loadThemeMode,
   normalizePluginSettings,
   saveAutoUpdateInterval,
   saveDisplayMode,
   savePluginSettings,
+  saveTrayIconStyle,
+  saveTrayShowPercentage,
   saveThemeMode,
 } from "@/lib/settings"
 import type { PluginMeta } from "@/lib/plugin-types"
@@ -129,5 +135,43 @@ describe("settings", () => {
   it("falls back to default for invalid display mode", async () => {
     storeState.set("displayMode", "invalid")
     await expect(loadDisplayMode()).resolves.toBe(DEFAULT_DISPLAY_MODE)
+  })
+
+  it("loads default tray icon style when missing", async () => {
+    await expect(loadTrayIconStyle()).resolves.toBe(DEFAULT_TRAY_ICON_STYLE)
+  })
+
+  it("loads stored tray icon style", async () => {
+    storeState.set("trayIconStyle", "circle")
+    await expect(loadTrayIconStyle()).resolves.toBe("circle")
+  })
+
+  it("saves tray icon style", async () => {
+    await saveTrayIconStyle("textOnly")
+    await expect(loadTrayIconStyle()).resolves.toBe("textOnly")
+  })
+
+  it("falls back to default for invalid tray icon style", async () => {
+    storeState.set("trayIconStyle", "invalid")
+    await expect(loadTrayIconStyle()).resolves.toBe(DEFAULT_TRAY_ICON_STYLE)
+  })
+
+  it("loads default tray show percentage when missing", async () => {
+    await expect(loadTrayShowPercentage()).resolves.toBe(DEFAULT_TRAY_SHOW_PERCENTAGE)
+  })
+
+  it("loads stored tray show percentage", async () => {
+    storeState.set("trayShowPercentage", true)
+    await expect(loadTrayShowPercentage()).resolves.toBe(true)
+  })
+
+  it("saves tray show percentage", async () => {
+    await saveTrayShowPercentage(true)
+    await expect(loadTrayShowPercentage()).resolves.toBe(true)
+  })
+
+  it("falls back to default for invalid tray show percentage", async () => {
+    storeState.set("trayShowPercentage", "invalid")
+    await expect(loadTrayShowPercentage()).resolves.toBe(DEFAULT_TRAY_SHOW_PERCENTAGE)
   })
 })

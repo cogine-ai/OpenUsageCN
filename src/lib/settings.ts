@@ -16,19 +16,26 @@ export type ThemeMode = "system" | "light" | "dark";
 
 export type DisplayMode = "used" | "left";
 
+export type TrayIconStyle = "bars" | "circle" | "textOnly";
+
 const SETTINGS_STORE_PATH = "settings.json";
 const PLUGIN_SETTINGS_KEY = "plugins";
 const AUTO_UPDATE_SETTINGS_KEY = "autoUpdateInterval";
 const THEME_MODE_KEY = "themeMode";
 const DISPLAY_MODE_KEY = "displayMode";
+const TRAY_ICON_STYLE_KEY = "trayIconStyle";
+const TRAY_SHOW_PERCENTAGE_KEY = "trayShowPercentage";
 
 export const DEFAULT_AUTO_UPDATE_INTERVAL: AutoUpdateIntervalMinutes = 15;
 export const DEFAULT_THEME_MODE: ThemeMode = "system";
 export const DEFAULT_DISPLAY_MODE: DisplayMode = "left";
+export const DEFAULT_TRAY_ICON_STYLE: TrayIconStyle = "bars";
+export const DEFAULT_TRAY_SHOW_PERCENTAGE = false;
 
 const AUTO_UPDATE_INTERVALS: AutoUpdateIntervalMinutes[] = [5, 15, 30, 60];
 const THEME_MODES: ThemeMode[] = ["system", "light", "dark"];
 const DISPLAY_MODES: DisplayMode[] = ["used", "left"];
+const TRAY_ICON_STYLES: TrayIconStyle[] = ["bars", "circle", "textOnly"];
 
 export const AUTO_UPDATE_OPTIONS: { value: AutoUpdateIntervalMinutes; label: string }[] =
   AUTO_UPDATE_INTERVALS.map((value) => ({
@@ -45,6 +52,12 @@ export const THEME_OPTIONS: { value: ThemeMode; label: string }[] =
 export const DISPLAY_MODE_OPTIONS: { value: DisplayMode; label: string }[] = [
   { value: "left", label: "Left" },
   { value: "used", label: "Used" },
+];
+
+export const TRAY_ICON_STYLE_OPTIONS: { value: TrayIconStyle; label: string }[] = [
+  { value: "bars", label: "Bars" },
+  { value: "circle", label: "Circle" },
+  { value: "textOnly", label: "83%" },
 ];
 
 const store = new LazyStore(SETTINGS_STORE_PATH);
@@ -155,6 +168,35 @@ export async function loadDisplayMode(): Promise<DisplayMode> {
 
 export async function saveDisplayMode(mode: DisplayMode): Promise<void> {
   await store.set(DISPLAY_MODE_KEY, mode);
+  await store.save();
+}
+
+export function isTrayIconStyle(value: unknown): value is TrayIconStyle {
+  return typeof value === "string" && TRAY_ICON_STYLES.includes(value as TrayIconStyle);
+}
+
+export async function loadTrayIconStyle(): Promise<TrayIconStyle> {
+  const stored = await store.get<unknown>(TRAY_ICON_STYLE_KEY);
+  // Backward compatibility with older tray style values.
+  if (stored === "barsWithPercentText" || stored === "barWithPercentText") return "bars";
+  if (stored === "circularWithPercentText") return "circle";
+  if (isTrayIconStyle(stored)) return stored;
+  return DEFAULT_TRAY_ICON_STYLE;
+}
+
+export async function saveTrayIconStyle(style: TrayIconStyle): Promise<void> {
+  await store.set(TRAY_ICON_STYLE_KEY, style);
+  await store.save();
+}
+
+export async function loadTrayShowPercentage(): Promise<boolean> {
+  const stored = await store.get<unknown>(TRAY_SHOW_PERCENTAGE_KEY);
+  if (typeof stored === "boolean") return stored;
+  return DEFAULT_TRAY_SHOW_PERCENTAGE;
+}
+
+export async function saveTrayShowPercentage(value: boolean): Promise<void> {
+  await store.set(TRAY_SHOW_PERCENTAGE_KEY, value);
   await store.save();
 }
 

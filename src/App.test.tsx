@@ -17,6 +17,11 @@ const state = vi.hoisted(() => ({
   saveThemeModeMock: vi.fn(),
   loadDisplayModeMock: vi.fn(),
   saveDisplayModeMock: vi.fn(),
+  loadTrayIconStyleMock: vi.fn(),
+  saveTrayIconStyleMock: vi.fn(),
+  loadTrayShowPercentageMock: vi.fn(),
+  saveTrayShowPercentageMock: vi.fn(),
+  renderTrayBarsIconMock: vi.fn(),
   probeHandlers: null as null | { onResult: (output: any) => void; onBatchComplete: () => void },
   trayGetByIdMock: vi.fn(),
   traySetIconMock: vi.fn(),
@@ -126,7 +131,7 @@ vi.mock("@tauri-apps/plugin-process", () => ({
 
 vi.mock("@/lib/tray-bars-icon", () => ({
   getTrayIconSizePx: () => 36,
-  renderTrayBarsIcon: () => Promise.resolve({}),
+  renderTrayBarsIcon: state.renderTrayBarsIconMock,
 }))
 
 vi.mock("@/hooks/use-probe-events", () => ({
@@ -148,6 +153,10 @@ vi.mock("@/lib/settings", async () => {
     saveThemeMode: state.saveThemeModeMock,
     loadDisplayMode: state.loadDisplayModeMock,
     saveDisplayMode: state.saveDisplayModeMock,
+    loadTrayIconStyle: state.loadTrayIconStyleMock,
+    saveTrayIconStyle: state.saveTrayIconStyleMock,
+    loadTrayShowPercentage: state.loadTrayShowPercentageMock,
+    saveTrayShowPercentage: state.saveTrayShowPercentageMock,
   }
 })
 
@@ -170,6 +179,11 @@ describe("App", () => {
     state.saveThemeModeMock.mockReset()
     state.loadDisplayModeMock.mockReset()
     state.saveDisplayModeMock.mockReset()
+    state.loadTrayIconStyleMock.mockReset()
+    state.saveTrayIconStyleMock.mockReset()
+    state.loadTrayShowPercentageMock.mockReset()
+    state.saveTrayShowPercentageMock.mockReset()
+    state.renderTrayBarsIconMock.mockReset()
     state.trayGetByIdMock.mockReset()
     state.traySetIconMock.mockReset()
     state.traySetIconAsTemplateMock.mockReset()
@@ -185,6 +199,11 @@ describe("App", () => {
     state.saveThemeModeMock.mockResolvedValue(undefined)
     state.loadDisplayModeMock.mockResolvedValue("left")
     state.saveDisplayModeMock.mockResolvedValue(undefined)
+    state.loadTrayIconStyleMock.mockResolvedValue("bars")
+    state.saveTrayIconStyleMock.mockResolvedValue(undefined)
+    state.loadTrayShowPercentageMock.mockResolvedValue(false)
+    state.saveTrayShowPercentageMock.mockResolvedValue(undefined)
+    state.renderTrayBarsIconMock.mockResolvedValue({})
     Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
       configurable: true,
       get() {
@@ -269,14 +288,14 @@ describe("App", () => {
   })
 
   it("updates tray icon on probe results when plugin has a primary progress", async () => {
-    state.invokeMock.mockImplementationOnce(async (cmd: string) => {
+    state.invokeMock.mockImplementation(async (cmd: string) => {
       if (cmd === "list_plugins") {
         return [
           {
             id: "a",
             name: "Alpha",
             iconUrl: "icon-a",
-            primaryProgressLabel: "Session",
+            primaryCandidates: ["Session"],
             lines: [{ type: "progress", label: "Session", scope: "overview" }],
           },
         ]
@@ -289,8 +308,8 @@ describe("App", () => {
     await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
 
     // Init will trigger an icon generation attempt (bars exist but no data yet).
-    await waitFor(() => expect(state.traySetIconMock).toHaveBeenCalled())
-    const callsBefore = state.traySetIconMock.mock.calls.length
+    await waitFor(() => expect(state.renderTrayBarsIconMock).toHaveBeenCalled())
+    const callsBefore = state.renderTrayBarsIconMock.mock.calls.length
 
     state.probeHandlers?.onResult({
       providerId: "a",
@@ -299,7 +318,109 @@ describe("App", () => {
       lines: [{ type: "progress", label: "Session", used: 50, limit: 100, format: { kind: "percent" } }],
     })
 
-    await waitFor(() => expect(state.traySetIconMock.mock.calls.length).toBeGreaterThan(callsBefore))
+    await waitFor(() => expect(state.renderTrayBarsIconMock.mock.calls.length).toBeGreaterThan(callsBefore))
+    await waitFor(() => expect(state.traySetIconMock).toHaveBeenCalled())
+  })
+
+  it("uses one metric for circle tray style", async () => {
+    state.loadTrayIconStyleMock.mockResolvedValueOnce("circle")
+    state.invokeMock.mockImplementation(async (cmd: string) => {
+      if (cmd === "list_plugins") {
+        return [
+          {
+            id: "a",
+            name: "Alpha",
+            iconUrl: "icon-a",
+            primaryCandidates: ["Session"],
+            lines: [{ type: "progress", label: "Session", scope: "overview" }],
+          },
+          {
+            id: "b",
+            name: "Beta",
+            iconUrl: "icon-b",
+            primaryCandidates: ["Session"],
+            lines: [{ type: "progress", label: "Session", scope: "overview" }],
+          },
+        ]
+      }
+      return null
+    })
+    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b"], disabled: [] })
+
+    render(<App />)
+    await waitFor(() => expect(state.renderTrayBarsIconMock).toHaveBeenCalled())
+
+    const firstCall = state.renderTrayBarsIconMock.mock.calls[0]?.[0]
+    expect(firstCall.style).toBe("circle")
+    expect(firstCall.bars).toHaveLength(1)
+  })
+
+  it("uses text-only tray style", async () => {
+    state.loadTrayIconStyleMock.mockResolvedValueOnce("textOnly")
+    state.invokeMock.mockImplementation(async (cmd: string) => {
+      if (cmd === "list_plugins") {
+        return [
+          {
+            id: "a",
+            name: "Alpha",
+            iconUrl: "icon-a",
+            primaryCandidates: ["Session"],
+            lines: [{ type: "progress", label: "Session", scope: "overview" }],
+          },
+          {
+            id: "b",
+            name: "Beta",
+            iconUrl: "icon-b",
+            primaryCandidates: ["Session"],
+            lines: [{ type: "progress", label: "Session", scope: "overview" }],
+          },
+        ]
+      }
+      return null
+    })
+    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b"], disabled: [] })
+
+    render(<App />)
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+
+    state.probeHandlers?.onResult({
+      providerId: "a",
+      displayName: "Alpha",
+      iconUrl: "icon-a",
+      lines: [{ type: "progress", label: "Session", used: 50, limit: 100, format: { kind: "percent" } }],
+    })
+
+    await waitFor(() => expect(state.renderTrayBarsIconMock).toHaveBeenCalled())
+    const latestCall = state.renderTrayBarsIconMock.mock.calls.at(-1)?.[0]
+    expect(latestCall.style).toBe("textOnly")
+    expect(latestCall.bars).toHaveLength(1)
+    expect(latestCall.percentText).toBe("50%")
+  })
+
+  it("hides tray percent text when first fraction is missing and percentage enabled", async () => {
+    state.loadTrayShowPercentageMock.mockResolvedValueOnce(true)
+    state.invokeMock.mockImplementation(async (cmd: string) => {
+      if (cmd === "list_plugins") {
+        return [
+          {
+            id: "a",
+            name: "Alpha",
+            iconUrl: "icon-a",
+            primaryCandidates: ["Session"],
+            lines: [{ type: "progress", label: "Session", scope: "overview" }],
+          },
+        ]
+      }
+      return null
+    })
+    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a"], disabled: [] })
+
+    render(<App />)
+    await waitFor(() => expect(state.renderTrayBarsIconMock).toHaveBeenCalled())
+
+    const firstCall = state.renderTrayBarsIconMock.mock.calls[0]?.[0]
+    expect(firstCall.style).toBe("bars")
+    expect(firstCall.percentText).toBeUndefined()
   })
 
   it("covers about open/close callbacks", async () => {
@@ -339,6 +460,58 @@ describe("App", () => {
     errorSpy.mockRestore()
   })
 
+  it("updates tray icon style in settings", async () => {
+    render(<App />)
+    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
+    await userEvent.click(settingsButtons[0])
+
+    await userEvent.click(await screen.findByRole("radio", { name: "Circle" }))
+    expect(state.saveTrayIconStyleMock).toHaveBeenCalledWith("circle")
+  })
+
+  it("updates text-only tray icon style in settings", async () => {
+    render(<App />)
+    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
+    await userEvent.click(settingsButtons[0])
+
+    await userEvent.click(await screen.findByRole("radio", { name: "83%" }))
+    expect(state.saveTrayIconStyleMock).toHaveBeenCalledWith("textOnly")
+  })
+
+  it("updates tray show percentage in settings", async () => {
+    render(<App />)
+    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
+    await userEvent.click(settingsButtons[0])
+
+    await userEvent.click(await screen.findByText("Show percentage"))
+    expect(state.saveTrayShowPercentageMock).toHaveBeenCalledWith(true)
+  })
+
+  it("hides tray show percentage checkbox for text-only style", async () => {
+    render(<App />)
+    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
+    await userEvent.click(settingsButtons[0])
+
+    await userEvent.click(await screen.findByRole("radio", { name: "83%" }))
+    await waitFor(() =>
+      expect(screen.queryByText("Show percentage")).not.toBeInTheDocument()
+    )
+  })
+
+  it("logs when saving tray icon style fails", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    state.saveTrayIconStyleMock.mockRejectedValueOnce(new Error("save tray icon style"))
+
+    render(<App />)
+    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
+    await userEvent.click(settingsButtons[0])
+
+    await userEvent.click(await screen.findByRole("radio", { name: "Circle" }))
+    await waitFor(() => expect(errorSpy).toHaveBeenCalled())
+
+    errorSpy.mockRestore()
+  })
+
   it("shows provider not found when tray navigates to unknown view", async () => {
     state.isTauriMock.mockReturnValue(true)
     render(<App />)
@@ -367,9 +540,10 @@ describe("App", () => {
     const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
     await userEvent.click(settingsButtons[0])
     const checkboxes = await screen.findAllByRole("checkbox")
-    await userEvent.click(checkboxes[0])
+    const pluginCheckbox = checkboxes[checkboxes.length - 1]
+    await userEvent.click(pluginCheckbox)
     expect(state.savePluginSettingsMock).toHaveBeenCalled()
-    await userEvent.click(checkboxes[0])
+    await userEvent.click(pluginCheckbox)
     expect(state.savePluginSettingsMock).toHaveBeenCalledTimes(2)
   })
 
@@ -395,6 +569,17 @@ describe("App", () => {
   it("logs when loading display mode fails", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
     state.loadDisplayModeMock.mockRejectedValueOnce(new Error("load display mode"))
+
+    render(<App />)
+    await waitFor(() => expect(state.invokeMock).toHaveBeenCalledWith("list_plugins"))
+    await waitFor(() => expect(errorSpy).toHaveBeenCalled())
+
+    errorSpy.mockRestore()
+  })
+
+  it("logs when loading tray icon style fails", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    state.loadTrayIconStyleMock.mockRejectedValueOnce(new Error("load tray icon style"))
 
     render(<App />)
     await waitFor(() => expect(state.invokeMock).toHaveBeenCalledWith("list_plugins"))
@@ -469,7 +654,8 @@ describe("App", () => {
     const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
     await userEvent.click(settingsButtons[0])
     const checkboxes = await screen.findAllByRole("checkbox")
-    await userEvent.click(checkboxes[1])
+    const targetCheckbox = checkboxes[checkboxes.length - 1]
+    await userEvent.click(targetCheckbox)
     await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
     expect(errorSpy).toHaveBeenCalled()
     errorSpy.mockRestore()
@@ -481,7 +667,8 @@ describe("App", () => {
     const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
     await userEvent.click(settingsButtons[0])
     const checkboxes = await screen.findAllByRole("checkbox")
-    await userEvent.click(checkboxes[1])
+    const targetCheckbox = checkboxes[checkboxes.length - 1]
+    await userEvent.click(targetCheckbox)
     await waitFor(() => expect(state.startBatchMock).toHaveBeenCalledWith(["b"]))
   })
 
@@ -569,7 +756,8 @@ describe("App", () => {
 
     // Toggle then reorder quickly (within debounce window) to force timer replacement.
     const checkboxes = await screen.findAllByRole("checkbox")
-    await userEvent.click(checkboxes[0])
+    const pluginCheckbox = checkboxes[checkboxes.length - 1]
+    await userEvent.click(pluginCheckbox)
     dndState.latestOnDragEnd?.({ active: { id: "a" }, over: { id: "b" } })
 
     expect(state.savePluginSettingsMock).toHaveBeenCalled()
