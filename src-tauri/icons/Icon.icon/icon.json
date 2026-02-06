@@ -1,14 +1,24 @@
 {
   "fill" : {
-    "automatic-gradient" : "extended-srgb:0.00000,0.53333,1.00000,1.00000"
+    "automatic-gradient" : "display-p3:0.80265,0.99122,0.31665,1.00000"
   },
   "groups" : [
     {
       "layers" : [
         {
-          "fill" : {
-            "solid" : "srgb:1.00000,1.00000,1.00000,1.00000"
-          },
+          "fill-specializations" : [
+            {
+              "value" : {
+                "solid" : "display-p3:0.25418,0.31292,0.07529,1.00000"
+              }
+            },
+            {
+              "appearance" : "dark",
+              "value" : {
+                "solid" : "display-p3:0.80265,0.99122,0.31665,1.00000"
+              }
+            }
+          ],
           "image-name" : "dashboard-3-line.svg",
           "name" : "dashboard-3-line",
           "position" : {
