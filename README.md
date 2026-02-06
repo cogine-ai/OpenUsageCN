@@ -2,7 +2,7 @@
 
 **Track all your AI coding subscriptions in one place.**
 
-Cursor, Claude, Codex — and more coming. See your usage at a glance from your menu bar. No digging through dashboards.
+Cursor, Claude, Codex, and more coming. See your usage at a glance from your menu bar. No digging through dashboards.
 
 ![OpenUsage Screenshot](screenshot.png)
 
@@ -10,23 +10,23 @@ Cursor, Claude, Codex — and more coming. See your usage at a glance from your 
 
 [**Download the latest release**](https://github.com/robinebers/openusage/releases/latest) (macOS, Apple Silicon & Intel)
 
-The app auto-updates — install once and you're set.
+The app auto-updates. Install once and you're set.
 
 ## What It Does
 
-OpenUsage lives in your menu bar and shows you how much of your AI coding subscriptions you've used. Progress bars, badges, and clear labels — no mental math required.
+OpenUsage lives in your menu bar and shows you how much of your AI coding subscriptions you've used. Progress bars, badges, and clear labels. No mental math required.
 
-- **One glance** — all your AI tools, one panel
-- **Always up-to-date** — refreshes automatically on a schedule you pick
-- **Lightweight** — opens instantly, stays out of your way
-- **Plugin-based** — new providers get added without updating the whole app
+- **One glance.** All your AI tools, one panel.
+- **Always up-to-date.** Refreshes automatically on a schedule you pick.
+- **Lightweight.** Opens instantly, stays out of your way.
+- **Plugin-based.** New providers get added without updating the whole app.
 
 ## Supported Providers
 
-- [**Cursor**](docs/providers/cursor.md) — plan, usage, on-demand
-- [**Claude**](docs/providers/claude.md) — session, weekly, extra usage
-- [**Codex**](docs/providers/codex.md) — session, weekly, code reviews, extra usage
-- [**Copilot**](docs/providers/copilot.md) — usage tracking
+- [**Cursor**](docs/providers/cursor.md) / plan, usage, on-demand
+- [**Claude**](docs/providers/claude.md) / session, weekly, extra usage
+- [**Codex**](docs/providers/codex.md) / session, weekly, code reviews, extra usage
+- [**Copilot**](docs/providers/copilot.md) / usage tracking
 
 ### Coming Soon
 
@@ -39,7 +39,7 @@ Want a provider that's not listed? [Open an issue.](https://github.com/robineber
 
 ## Open Source, Community Driven
 
-OpenUsage is built by its users. Hundreds of people use it daily, and the project grows through community contributions — new providers, bug fixes, and ideas.
+OpenUsage is built by its users. Hundreds of people use it daily, and the project grows through community contributions: new providers, bug fixes, and ideas.
 
 I maintain the project as a guide and quality gatekeeper, but this is your app as much as mine. If something is missing or broken, the best way to get it fixed is to contribute by opening an issue, or submitting a PR.
 
@@ -49,15 +49,15 @@ Plugins are currently bundled as we build our the API, but soon will be made fle
 
 ### How to Contribute
 
-- **Add a provider** — each one is just a plugin. See the [Plugin API](docs/plugins/api.md).
-- **Fix a bug** — PRs welcome. Provide before/after screenshots.
-- **Request a feature** — [open an issue](https://github.com/robinebers/openusage/issues/new) and make your case.
+- **Add a provider.** Each one is just a plugin. See the [Plugin API](docs/plugins/api.md).
+- **Fix a bug.** PRs welcome. Provide before/after screenshots.
+- **Request a feature.** [Open an issue](https://github.com/robinebers/openusage/issues/new) and make your case.
 
 Keep it simple. No feature creep, no AI-generated commit messages, test your changes.
 
 ## Credits
 
-Inspired by [CodexBar](https://github.com/steipete/CodexBar) by [@steipete](https://github.com/steipete) — same idea, very different approach.
+Inspired by [CodexBar](https://github.com/steipete/CodexBar) by [@steipete](https://github.com/steipete). Same idea, very different approach.
 
 ## License
 
