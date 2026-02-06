@@ -80,8 +80,8 @@ function TrayIconStylePreview({
   isActive: boolean;
   showPercentage: boolean;
 }) {
-  const trackClass = isActive ? "bg-primary-foreground/30" : "bg-foreground/30";
-  const remainderClass = isActive ? "bg-primary-foreground/55" : "bg-foreground/55";
+  const trackClass = isActive ? "bg-primary-foreground/30" : "bg-foreground/15";
+  const remainderClass = isActive ? "bg-primary-foreground/55" : "bg-foreground/25";
   const fillClass = isActive ? "bg-primary-foreground" : "bg-foreground";
   const textClass = isActive ? "text-primary-foreground" : "text-foreground";
 
@@ -282,9 +282,9 @@ export function SettingsPage({
   return (
     <div className="py-3 space-y-4">
       <section>
-        <h3 className="text-lg font-semibold mb-1">Appearance</h3>
-        <p className="text-sm text-foreground mb-2">
-          Choose your color theme
+        <h3 className="text-lg font-semibold mb-0">Appearance</h3>
+        <p className="text-sm text-muted-foreground mb-2">
+          How it looks around here
         </p>
         <div className="bg-muted/50 rounded-lg p-1">
           <div className="flex gap-1" role="radiogroup" aria-label="Theme mode">
@@ -309,9 +309,9 @@ export function SettingsPage({
         </div>
       </section>
       <section>
-        <h3 className="text-lg font-semibold mb-1">Show Usage As</h3>
-        <p className="text-sm text-foreground mb-2">
-          Show how much was used or is left
+        <h3 className="text-lg font-semibold mb-0">Show Usage As</h3>
+        <p className="text-sm text-muted-foreground mb-2">
+          Glass half full or half empty
         </p>
         <div className="bg-muted/50 rounded-lg p-1">
           <div className="flex gap-1" role="radiogroup" aria-label="Usage display mode">
@@ -336,9 +336,9 @@ export function SettingsPage({
         </div>
       </section>
       <section>
-        <h3 className="text-lg font-semibold mb-1">Menu Bar Icon</h3>
-        <p className="text-sm text-foreground mb-2">
-          Choose how usage appears in the menu bar icon.
+        <h3 className="text-lg font-semibold mb-0">Menu Bar Icon</h3>
+        <p className="text-sm text-muted-foreground mb-2">
+          The little guy up top
         </p>
         <div className="bg-muted/50 rounded-lg p-1">
           <div className="flex gap-1" role="radiogroup" aria-label="Tray icon style">
@@ -382,9 +382,9 @@ export function SettingsPage({
         )}
       </section>
       <section>
-        <h3 className="text-lg font-semibold mb-1">Auto Update</h3>
-        <p className="text-sm text-foreground mb-2">
-          How often we update your usage
+        <h3 className="text-lg font-semibold mb-0">Auto Update</h3>
+        <p className="text-sm text-muted-foreground mb-2">
+          How obsessive are you
         </p>
         <div className="bg-muted/50 rounded-lg p-1">
           <div className="flex gap-1" role="radiogroup" aria-label="Auto-update interval">
@@ -409,9 +409,9 @@ export function SettingsPage({
         </div>
       </section>
       <section>
-        <h3 className="text-lg font-semibold mb-1">Plugins</h3>
-        <p className="text-sm text-foreground mb-2">
-          Manage and reorder sources
+        <h3 className="text-lg font-semibold mb-0">Plugins</h3>
+        <p className="text-sm text-muted-foreground mb-2">
+          Your lineup
         </p>
         <div className="bg-muted/50 rounded-lg p-1 space-y-1">
           <DndContext

@@ -71,7 +71,7 @@ export function SideNav({ activeView, onViewChange, plugins }: SideNavProps) {
         onClick={() => onViewChange("home")}
         aria-label="Home"
       >
-        <GaugeIcon className="size-6" />
+        <GaugeIcon className="size-6 dark:text-page-accent" />
       </NavButton>
 
       {/* Plugin icons */}
