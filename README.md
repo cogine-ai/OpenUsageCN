@@ -1,46 +1,80 @@
 # OpenUsage
 
-A re-imagined menu bar app for tracking AI coding tool subscriptions like Cursor, Claude, Codex and more, all in one place with a heavy focus on UX, stability, and speed.
+**Track all your AI coding subscriptions in one place.**
 
-Inspired by [CodexBar](https://github.com/steipete/CodexBar) by [@steipete](https://github.com/steipete).
-
-Same idea, but a very different approach:
-
-- **Fast** — Kept minimal to load fast
-- **User Experience** — Extremely simple by design
-- **Plugin architecture** — add/update providers without waiting on maintainers
-- **Cross-platform** — Tauri instead of native Swift
-- **Web tech** — React + TypeScript frontend
+Cursor, Claude, Codex — and more coming. See your usage at a glance from your menu bar. No digging through dashboards.
 
 ![OpenUsage Screenshot](screenshot.png)
 
-## How It Works
+## Download
 
-Each provider (Cursor, Claude, etc.) is a JavaScript plugin running in a QuickJS runtime. Plugins define a `probe()` function that fetches usage data via HTTP, local files, or SQLite databases and returns structured metrics (text, progress bars, badges).
+[**Download the latest release**](https://github.com/robinebers/openusage/releases/latest) (macOS, Apple Silicon & Intel)
 
-The app calls all plugins on launch and on a configurable auto-update interval (5/15/30/60 minutes).
+The app auto-updates — install once and you're set.
 
-See [Plugin API](docs/plugins/api.md) for the full spec.
+## What It Does
 
-## Status
+OpenUsage lives in your menu bar and shows you how much of your AI coding subscriptions you've used. Progress bars, badges, and clear labels — no mental math required.
 
-Early development. But somewhat works.
+- **One glance** — all your AI tools, one panel
+- **Always up-to-date** — refreshes automatically on a schedule you pick
+- **Lightweight** — opens instantly, stays out of your way
+- **Plugin-based** — new providers get added without updating the whole app
 
-In theory the plugin system and API are already working but I only bundled three plugins so far with no actual way of adding or updating them for now.
+## Supported Providers
 
-I do this because I want to control the API for the beginning of the rollout of this app to see if it is solid enough to allow external plugin developers.
+- [**Cursor**](docs/providers/cursor.md) — plan, usage, on-demand
+- [**Claude**](docs/providers/claude.md) — session, weekly, extra usage
+- [**Codex**](docs/providers/codex.md) — session, weekly, code reviews, extra usage
+- [**Copilot**](docs/providers/copilot.md) — usage tracking
 
-If you're interested in contributing to OpenUsage, you can clone this repo and start developing by putting plugins into `plugins/` which are loaded on launch while developing.
+### Coming Soon
 
-## Stack
+- [Gemini](https://github.com/robinebers/openusage/issues/13) / [Antigravity](https://github.com/robinebers/openusage/issues/14)
+- [Factory / Droid](https://github.com/robinebers/openusage/issues/16)
+- [Windsurf](https://github.com/robinebers/openusage/issues/15)
+- [Vercel AI Gateway](https://github.com/robinebers/openusage/issues/18)
+
+Want a provider that's not listed? [Open an issue.](https://github.com/robinebers/openusage/issues/new)
+
+## Open Source, Community Driven
+
+OpenUsage is built by its users. Hundreds of people use it daily, and the project grows through community contributions — new providers, bug fixes, and ideas.
+
+I maintain the project as a guide and quality gatekeeper, but this is your app as much as mine. If something is missing or broken, the best way to get it fixed is to contribute by opening an issue, or submitting a PR.
+
+Plugins are currently bundled as we build our the API, but soon will be made flexible so you can build and load their own.
+
+**Windows/Linux:** high-priority and on the todo, but I need testers with some time, willing to help out.
+
+### How to Contribute
+
+- **Add a provider** — each one is just a plugin. See the [Plugin API](docs/plugins/api.md).
+- **Fix a bug** — PRs welcome. Provide before/after screenshots.
+- **Request a feature** — [open an issue](https://github.com/robinebers/openusage/issues/new) and make your case.
+
+Keep it simple. No feature creep, no AI-generated commit messages, test your changes.
+
+## Credits
+
+Inspired by [CodexBar](https://github.com/steipete/CodexBar) by [@steipete](https://github.com/steipete) — same idea, very different approach.
+
+## License
+
+MIT
+
+---
+
+<details>
+<summary><strong>Build from source</strong></summary>
+
+### Stack
 
 - Tauri 2 + Rust
 - React 19, Tailwind 4, Base UI
 - Vite 7, bun
 
-## Install
-
-### From Source
+### Build
 
 ```bash
 git clone https://github.com/robinebers/openusage
@@ -58,37 +92,4 @@ bun install
 bun tauri dev
 ```
 
-## Providers
-
-Current:
-- [Cursor](docs/providers/cursor.md) — plan, usage, on-demand
-- [Claude](docs/providers/claude.md) — session, weekly, extra usage
-- [Codex](docs/providers/codex.md) — session, weekly, code reviews, extra usage
-
-Soon:
-- [Gemini](https://github.com/robinebers/openusage/issues/13)/[Antigravity](https://github.com/robinebers/openusage/issues/14)
-- [Factory/Droid](https://github.com/robinebers/openusage/issues/16)
-- [Copilot](https://github.com/robinebers/openusage/issues/22)
-- [Windsurf](https://github.com/robinebers/openusage/issues/15) (?)
-- [Vercel AI Gateway](https://github.com/robinebers/openusage/issues/18) (?)
-
-Adding a provider = adding a plugin. See [Plugin API](docs/plugins/api.md).
-
-## Contributing
-
-PRs welcome. Keep it simple:
-
-- No feature creep
-- No AI-generated commit messages
-- Test your changes
-- Provide before/after screenshots
-
-## License
-
-MIT
-
-## Credits
-
-[@steipete](https://github.com/steipete) for CodexBar and all the people that contributed to it.
-
-Codex/Claude Code/Cursor for enabling me to do this on a weekend.
+</details>
