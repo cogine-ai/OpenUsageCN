@@ -45,7 +45,7 @@ function NavButton({ isActive, onClick, children, "aria-label": ariaLabel }: Nav
         "relative flex items-center justify-center w-full p-2.5 transition-colors",
         "hover:bg-accent",
         isActive
-          ? "text-foreground before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-primary before:rounded-full"
+          ? "text-foreground before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-primary dark:before:bg-page-accent before:rounded-full"
           : "text-muted-foreground"
       )}
     >
@@ -57,7 +57,7 @@ function NavButton({ isActive, onClick, children, "aria-label": ariaLabel }: Nav
 function getIconColor(brandColor: string | undefined, isDark: boolean): string {
   if (!brandColor) return "currentColor"
   const luminance = getRelativeLuminance(brandColor)
-  if (isDark && luminance < 0.15) return "currentColor"
+  if (isDark && luminance < 0.15) return "#ffffff"
   if (!isDark && luminance > 0.85) return "currentColor"
   return brandColor
 }
@@ -66,7 +66,7 @@ export function SideNav({ activeView, onViewChange, plugins }: SideNavProps) {
   const isDark = useDarkMode()
 
   return (
-    <nav className="flex flex-col w-12 border-r bg-muted/30 py-3">
+    <nav className="flex flex-col w-12 border-r bg-muted/50 dark:bg-card py-3">
       {/* Home */}
       <NavButton
         isActive={activeView === "home"}
