@@ -56,6 +56,13 @@ Plugins are currently bundled as we build our the API, but soon will be made fle
 
 Keep it simple. No feature creep, no AI-generated commit messages, test your changes.
 
+## Built Entirely with AI
+
+Not a single line of code in this project was read or written by hand. 100% AI-generated, AI-reviewed, AI-shipped — using [Cursor](https://cursor.com), [Claude Code](https://docs.anthropic.com/en/docs/claude-code), and [Codex CLI](https://github.com/openai/codex).
+
+OpenUsage is a real-world example of what I teach in the [AI Builder's Blueprint](https://itsbyrob.in/EBDqgJ6
+) — a proven process for building and shipping software with AI, no coding background required.
+
 ## Sponsors
 
 OpenUsage is supported by our sponsors. Become a sponsor to get your logo here and on [openusage.ai](https://openusage.ai).
