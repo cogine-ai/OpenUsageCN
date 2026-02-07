@@ -99,6 +99,29 @@ state.counter++
 ctx.host.fs.writeText(statePath, JSON.stringify(state, null, 2))
 ```
 
+## Environment
+
+```typescript
+host.env.get(name: string): string | null
+```
+
+Reads an environment variable by name.
+
+### Behavior
+
+- Returns variable value as string when set
+- Returns `null` when missing
+- Variable must be whitelisted first in `src-tauri/src/plugin_engine/host_api.rs`
+
+### Example
+
+```javascript
+const codexHome = ctx.host.env.get("CODEX_HOME")
+const authPath = codexHome
+  ? codexHome.replace(/\/+$/, "") + "/auth.json"
+  : "~/.config/codex/auth.json"
+```
+
 ## HTTP
 
 ```typescript
