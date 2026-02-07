@@ -1,4 +1,6 @@
-import { Settings } from "lucide-react"
+import { CircleHelp, Settings } from "lucide-react"
+import { openUrl } from "@tauri-apps/plugin-opener"
+import { invoke } from "@tauri-apps/api/core"
 
 function GaugeIcon({ className }: { className?: string }) {
   return (
@@ -103,6 +105,18 @@ export function SideNav({ activeView, onViewChange, plugins }: SideNavProps) {
 
       {/* Spacer */}
       <div className="flex-1" />
+
+      {/* Help */}
+      <NavButton
+        isActive={false}
+        onClick={() => {
+          openUrl("https://github.com/robinebers/openusage/issues").catch(console.error)
+          invoke("hide_panel").catch(console.error)
+        }}
+        aria-label="Help"
+      >
+        <CircleHelp className="size-6" />
+      </NavButton>
 
       {/* Settings */}
       <NavButton
