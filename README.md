@@ -23,12 +23,12 @@ OpenUsage lives in your menu bar and shows you how much of your AI coding subscr
 
 ## Supported Providers
 
-- [**Antigravity**](docs/providers/antigravity.md) / usage tracking
+- [**Antigravity**](docs/providers/antigravity.md) / all models
 - [**Claude**](docs/providers/claude.md) / session, weekly, extra usage
-- [**Codex**](docs/providers/codex.md) / session, weekly, code reviews, extra usage
-- [**Copilot**](docs/providers/copilot.md) / usage tracking
-- [**Cursor**](docs/providers/cursor.md) / plan, usage, on-demand
-- [**Windsurf**](docs/providers/windsurf.md) / usage tracking
+- [**Codex**](docs/providers/codex.md) / session, weekly, reviews, credits
+- [**Copilot**](docs/providers/copilot.md) / premium, chat, completions
+- [**Cursor**](docs/providers/cursor.md) / credits, plan usage, on-demand
+- [**Windsurf**](docs/providers/windsurf.md) / prompt credits, flex credits
 
 ### Maybe Soon
 
