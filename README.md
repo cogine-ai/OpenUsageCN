@@ -2,7 +2,7 @@
 
 **Track all your AI coding subscriptions in one place.**
 
-Cursor, Claude, Codex, and more coming. See your usage at a glance from your menu bar. No digging through dashboards.
+Amp, Cursor, Claude, Codex, and more coming. See your usage at a glance from your menu bar. No digging through dashboards.
 
 ![OpenUsage Screenshot](screenshot.png)
 
@@ -23,6 +23,7 @@ OpenUsage lives in your menu bar and shows you how much of your AI coding subscr
 
 ## Supported Providers
 
+- [**Amp**](docs/providers/amp.md) / free tier, bonus, credits
 - [**Antigravity**](docs/providers/antigravity.md) / all models
 - [**Claude**](docs/providers/claude.md) / session, weekly, extra usage
 - [**Codex**](docs/providers/codex.md) / session, weekly, reviews, credits
