@@ -38,6 +38,7 @@ OpenUsage lives in your menu bar and shows you how much of your AI coding subscr
 - [Gemini](https://github.com/robinebers/openusage/issues/13)
 - [Vercel AI Gateway](https://github.com/robinebers/openusage/issues/18)
 
+Community contributions welcome.
 Want a provider that's not listed? [Open an issue.](https://github.com/robinebers/openusage/issues/new)
 
 ## Open Source, Community Driven
