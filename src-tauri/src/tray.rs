@@ -6,7 +6,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use tauri_nspanel::ManagerExt;
 use tauri_plugin_store::StoreExt;
 
-use crate::panel::position_panel_at_tray_icon;
+use crate::panel::{get_or_init_panel, position_panel_at_tray_icon, show_panel};
 
 const LOG_LEVEL_STORE_KEY: &str = "logLevel";
 
@@ -42,35 +42,6 @@ fn set_stored_log_level(app_handle: &AppHandle, level: log::LevelFilter) {
         let _ = store.save();
     }
     log::set_max_level(level);
-}
-
-
-macro_rules! get_or_init_panel {
-    ($app_handle:expr) => {
-        match $app_handle.get_webview_panel("main") {
-            Ok(panel) => Some(panel),
-            Err(_) => {
-                if let Err(err) = crate::panel::init($app_handle) {
-                    log::error!("Failed to init panel: {}", err);
-                    None
-                } else {
-                    match $app_handle.get_webview_panel("main") {
-                        Ok(panel) => Some(panel),
-                        Err(err) => {
-                            log::error!("Panel missing after init: {:?}", err);
-                            None
-                        }
-                    }
-                }
-            }
-        }
-    };
-}
-
-fn show_panel(app_handle: &AppHandle) {
-    if let Some(panel) = get_or_init_panel!(app_handle) {
-        panel.show_and_make_key();
-    }
 }
 
 pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {

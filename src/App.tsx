@@ -20,6 +20,7 @@ import {
   arePluginSettingsEqual,
   DEFAULT_AUTO_UPDATE_INTERVAL,
   DEFAULT_DISPLAY_MODE,
+  DEFAULT_GLOBAL_SHORTCUT,
   DEFAULT_RESET_TIMER_DISPLAY_MODE,
   DEFAULT_TRAY_ICON_STYLE,
   DEFAULT_TRAY_SHOW_PERCENTAGE,
@@ -29,6 +30,7 @@ import {
   isTrayPercentageMandatory,
   loadAutoUpdateInterval,
   loadDisplayMode,
+  loadGlobalShortcut,
   loadPluginSettings,
   loadResetTimerDisplayMode,
   loadTrayShowPercentage,
@@ -37,6 +39,7 @@ import {
   normalizePluginSettings,
   saveAutoUpdateInterval,
   saveDisplayMode,
+  saveGlobalShortcut,
   savePluginSettings,
   saveResetTimerDisplayMode,
   saveTrayShowPercentage,
@@ -44,6 +47,7 @@ import {
   saveThemeMode,
   type AutoUpdateIntervalMinutes,
   type DisplayMode,
+  type GlobalShortcut,
   type PluginSettings,
   type ResetTimerDisplayMode,
   type TrayIconStyle,
@@ -84,6 +88,7 @@ function App() {
   )
   const [trayIconStyle, setTrayIconStyle] = useState<TrayIconStyle>(DEFAULT_TRAY_ICON_STYLE)
   const [trayShowPercentage, setTrayShowPercentage] = useState(DEFAULT_TRAY_SHOW_PERCENTAGE)
+  const [globalShortcut, setGlobalShortcut] = useState<GlobalShortcut>(DEFAULT_GLOBAL_SHORTCUT)
   const [maxPanelHeightPx, setMaxPanelHeightPx] = useState<number | null>(null)
   const maxPanelHeightPxRef = useRef<number | null>(null)
   const [appVersion, setAppVersion] = useState("...")
@@ -545,6 +550,13 @@ function App() {
           console.error("Failed to load tray show percentage:", error)
         }
 
+        let storedGlobalShortcut = DEFAULT_GLOBAL_SHORTCUT
+        try {
+          storedGlobalShortcut = await loadGlobalShortcut()
+        } catch (error) {
+          console.error("Failed to load global shortcut:", error)
+        }
+
         const normalizedTrayShowPercentage = isTrayPercentageMandatory(storedTrayIconStyle)
           ? true
           : storedTrayShowPercentage
@@ -557,6 +569,7 @@ function App() {
           setResetTimerDisplayMode(storedResetTimerDisplayMode)
           setTrayIconStyle(storedTrayIconStyle)
           setTrayShowPercentage(normalizedTrayShowPercentage)
+          setGlobalShortcut(storedGlobalShortcut)
           const enabledIds = getEnabledPluginIds(normalized)
           setLoadingForPlugins(enabledIds)
           try {
@@ -785,6 +798,18 @@ function App() {
     })
   }, [pluginSettings])
 
+  const handleGlobalShortcutChange = useCallback((value: GlobalShortcut) => {
+    track("setting_changed", { setting: "global_shortcut", value: value ?? "disabled" })
+    setGlobalShortcut(value)
+    void saveGlobalShortcut(value).catch((error) => {
+      console.error("Failed to save global shortcut:", error)
+    })
+    // Update the shortcut registration in the backend
+    invoke("update_global_shortcut", { shortcut: value }).catch((error) => {
+      console.error("Failed to update global shortcut:", error)
+    })
+  }, [])
+
   const settingsPlugins = useMemo(() => {
     if (!pluginSettings) return []
     const pluginMap = new Map(pluginsMeta.map((plugin) => [plugin.id, plugin]))
@@ -904,6 +929,8 @@ function App() {
           onTrayIconStyleChange={handleTrayIconStyleChange}
           trayShowPercentage={trayShowPercentage}
           onTrayShowPercentageChange={handleTrayShowPercentageChange}
+          globalShortcut={globalShortcut}
+          onGlobalShortcutChange={handleGlobalShortcutChange}
           providerIconUrl={navPlugins[0]?.iconUrl}
         />
       )

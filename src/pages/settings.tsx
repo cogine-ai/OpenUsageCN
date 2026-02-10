@@ -18,6 +18,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { GripVertical } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
+import { GlobalShortcutSection } from "@/components/global-shortcut-section";
 import {
   AUTO_UPDATE_OPTIONS,
   DISPLAY_MODE_OPTIONS,
@@ -27,6 +28,7 @@ import {
   isTrayPercentageMandatory,
   type AutoUpdateIntervalMinutes,
   type DisplayMode,
+  type GlobalShortcut,
   type ResetTimerDisplayMode,
   type ThemeMode,
   type TrayIconStyle,
@@ -273,6 +275,8 @@ interface SettingsPageProps {
   onTrayIconStyleChange: (value: TrayIconStyle) => void;
   trayShowPercentage: boolean;
   onTrayShowPercentageChange: (value: boolean) => void;
+  globalShortcut: GlobalShortcut;
+  onGlobalShortcutChange: (value: GlobalShortcut) => void;
   providerIconUrl?: string;
 }
 
@@ -292,6 +296,8 @@ export function SettingsPage({
   onTrayIconStyleChange,
   trayShowPercentage,
   onTrayShowPercentageChange,
+  globalShortcut,
+  onGlobalShortcutChange,
   providerIconUrl,
 }: SettingsPageProps) {
   const percentageMandatory = isTrayPercentageMandatory(trayIconStyle);
@@ -492,6 +498,10 @@ export function SettingsPage({
           </div>
         </div>
       </section>
+      <GlobalShortcutSection
+        globalShortcut={globalShortcut}
+        onGlobalShortcutChange={onGlobalShortcutChange}
+      />
       <section>
         <h3 className="text-lg font-semibold mb-0">Plugins</h3>
         <p className="text-sm text-muted-foreground mb-2">

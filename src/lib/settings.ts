@@ -20,6 +20,8 @@ export type ResetTimerDisplayMode = "relative" | "absolute";
 
 export type TrayIconStyle = "bars" | "circle" | "provider" | "textOnly";
 
+export type GlobalShortcut = string | null;
+
 const SETTINGS_STORE_PATH = "settings.json";
 const PLUGIN_SETTINGS_KEY = "plugins";
 const AUTO_UPDATE_SETTINGS_KEY = "autoUpdateInterval";
@@ -28,6 +30,7 @@ const DISPLAY_MODE_KEY = "displayMode";
 const RESET_TIMER_DISPLAY_MODE_KEY = "resetTimerDisplayMode";
 const TRAY_ICON_STYLE_KEY = "trayIconStyle";
 const TRAY_SHOW_PERCENTAGE_KEY = "trayShowPercentage";
+const GLOBAL_SHORTCUT_KEY = "globalShortcut";
 
 export const DEFAULT_AUTO_UPDATE_INTERVAL: AutoUpdateIntervalMinutes = 15;
 export const DEFAULT_THEME_MODE: ThemeMode = "system";
@@ -35,6 +38,7 @@ export const DEFAULT_DISPLAY_MODE: DisplayMode = "left";
 export const DEFAULT_RESET_TIMER_DISPLAY_MODE: ResetTimerDisplayMode = "relative";
 export const DEFAULT_TRAY_ICON_STYLE: TrayIconStyle = "bars";
 export const DEFAULT_TRAY_SHOW_PERCENTAGE = false;
+export const DEFAULT_GLOBAL_SHORTCUT: GlobalShortcut = null;
 
 const AUTO_UPDATE_INTERVALS: AutoUpdateIntervalMinutes[] = [5, 15, 30, 60];
 const THEME_MODES: ThemeMode[] = ["system", "light", "dark"];
@@ -245,4 +249,20 @@ export async function saveTrayShowPercentage(value: boolean): Promise<void> {
 export function getEnabledPluginIds(settings: PluginSettings): string[] {
   const disabledSet = new Set(settings.disabled);
   return settings.order.filter((id) => !disabledSet.has(id));
+}
+
+function isGlobalShortcut(value: unknown): value is GlobalShortcut {
+  if (value === null) return true;
+  return typeof value === "string";
+}
+
+export async function loadGlobalShortcut(): Promise<GlobalShortcut> {
+  const stored = await store.get<unknown>(GLOBAL_SHORTCUT_KEY);
+  if (isGlobalShortcut(stored)) return stored;
+  return DEFAULT_GLOBAL_SHORTCUT;
+}
+
+export async function saveGlobalShortcut(shortcut: GlobalShortcut): Promise<void> {
+  await store.set(GLOBAL_SHORTCUT_KEY, shortcut);
+  await store.save();
 }
