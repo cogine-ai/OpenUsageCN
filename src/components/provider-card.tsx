@@ -58,8 +58,8 @@ function formatResetIn(nowMs: number, resetsAtIso: string): string | null {
   if (!Number.isFinite(resetsAtMs)) return null
   const deltaMs = resetsAtMs - nowMs
   if (deltaMs < RESET_SOON_THRESHOLD_MS) return "Resets soon"
-  const durationText = formatCompactDuration(deltaMs)
-  return durationText ? `Resets in ${durationText}` : "Resets in <1m"
+  const durationText = formatCompactDuration(deltaMs)!
+  return `Resets in ${durationText}`
 }
 
 const RESET_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
