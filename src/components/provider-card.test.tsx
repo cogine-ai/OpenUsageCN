@@ -479,14 +479,13 @@ describe("ProviderCard", () => {
     expect(screen.getByText("90% used at reset")).toBeInTheDocument()
     expect(screen.getByText("Limit in 8h 0m")).toBeInTheDocument()
 
+    // On-track hides the marker (like CodexBar); only ahead + behind show it
     const markers = document.querySelectorAll<HTMLElement>('[data-slot="progress-marker"]')
-    expect(markers).toHaveLength(3)
+    expect(markers).toHaveLength(2)
     expect(markers[0]?.style.left).toBe("50%")
     expect(markers[1]?.style.left).toBe("50%")
-    expect(markers[2]?.style.left).toBe("50%")
     expect(markers[0]).toHaveClass("bg-muted-foreground")
     expect(markers[1]).toHaveClass("bg-muted-foreground")
-    expect(markers[2]).toHaveClass("bg-muted-foreground")
     vi.useRealTimers()
   })
 
@@ -542,7 +541,7 @@ describe("ProviderCard", () => {
     vi.useRealTimers()
   })
 
-  it("shows time marker when reset metadata exists even early in period", () => {
+  it("hides marker when pace is unavailable early in period", () => {
     vi.useFakeTimers()
     const now = new Date("2026-02-02T00:45:00.000Z")
     vi.setSystemTime(now)
@@ -564,10 +563,7 @@ describe("ProviderCard", () => {
       />
     )
     expect(screen.queryByLabelText("Plenty of room")).not.toBeInTheDocument()
-    const marker = document.querySelector<HTMLElement>('[data-slot="progress-marker"]')
-    expect(marker).toBeTruthy()
-    expect(marker?.style.left).toBe("3.125%")
-    expect(marker).toHaveClass("bg-muted-foreground")
+    expect(document.querySelector('[data-slot="progress-marker"]')).toBeNull()
     vi.useRealTimers()
   })
 

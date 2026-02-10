@@ -394,7 +394,7 @@ function MetricLineRenderer({
       ? calculatePaceStatus(line.used, line.limit, resetsAtMs, periodDurationMs!, now)
       : null
     const paceStatus = paceResult?.status ?? null
-    const paceMarkerValue = hasTimeMarkerContext
+    const paceMarkerValue = hasTimeMarkerContext && paceStatus && paceStatus !== "on-track"
       ? (() => {
           const periodStartMs = resetsAtMs - periodDurationMs!
           const elapsedFraction = clamp01((now - periodStartMs) / periodDurationMs!)
