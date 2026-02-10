@@ -288,4 +288,108 @@ describe("windsurf plugin", () => {
     expect(parsed.metadata.ideName).toBe("windsurf")
   })
 
+  it("falls back from https to http when probing LS port", async () => {
+    const ctx = makeCtx()
+    setupLsMock(ctx, makeDiscovery(), "sk-ws-01-test", makeLsResponse())
+
+    ctx.host.http.request.mockImplementation((reqOpts) => {
+      const url = String(reqOpts.url)
+      if (url.includes("GetUnleashData")) {
+        if (url.startsWith("https://")) throw new Error("self-signed cert")
+        return { status: 200, bodyText: "{}" }
+      }
+      return { status: 200, bodyText: JSON.stringify(makeLsResponse()) }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBe("Teams")
+    const unleashCalls = ctx.host.http.request.mock.calls
+      .map((call) => String(call[0]?.url))
+      .filter((url) => url.includes("GetUnleashData"))
+    expect(unleashCalls.some((url) => url.startsWith("http://"))).toBe(true)
+  })
+
+  it("uses extensionPort when direct probes fail for all discovered ports", async () => {
+    const ctx = makeCtx()
+    const discovery = makeDiscovery({ ports: [42001], extensionPort: 42002 })
+    setupLsMock(ctx, discovery, "sk-ws-01-test", makeLsResponse())
+
+    ctx.host.http.request.mockImplementation((reqOpts) => {
+      const url = String(reqOpts.url)
+      if (url.includes("GetUnleashData")) {
+        throw new Error("probe failed")
+      }
+      if (url.includes(":42002/") && url.includes("GetUserStatus")) {
+        return { status: 200, bodyText: JSON.stringify(makeLsResponse()) }
+      }
+      return { status: 500, bodyText: "{}" }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    expect(result.plan).toBe("Teams")
+  })
+
+  it("returns unlimited badge when all credit buckets are non-positive", async () => {
+    const ctx = makeCtx()
+    setupLsMock(
+      ctx,
+      makeDiscovery(),
+      "sk-ws-01-test",
+      makeLsResponse({ availablePromptCredits: -1, availableFlexCredits: -1 })
+    )
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.lines).toEqual([{ type: "badge", label: "Credits", text: "Unlimited" }])
+  })
+
+  it("clamps negative used credits to zero", async () => {
+    const ctx = makeCtx()
+    setupLsMock(
+      ctx,
+      makeDiscovery(),
+      "sk-ws-01-test",
+      makeLsResponse({ availablePromptCredits: 50000, usedPromptCredits: -500, availableFlexCredits: -1 })
+    )
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    const prompt = result.lines.find((l) => l.label === "Prompt credits")
+    expect(prompt.used).toBe(0)
+  })
+
+  it("omits billing period when plan dates are invalid", async () => {
+    const ctx = makeCtx()
+    setupLsMock(
+      ctx,
+      makeDiscovery(),
+      "sk-ws-01-test",
+      makeLsResponse({ planStart: "not-a-date", planEnd: "2026-02-18T09:07:17Z", availableFlexCredits: -1 })
+    )
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    const prompt = result.lines.find((l) => l.label === "Prompt credits")
+    expect(prompt.periodDurationMs).toBeUndefined()
+  })
+
+  it("throws when GetUserStatus returns non-2xx", async () => {
+    const ctx = makeCtx()
+    setupLsMock(ctx, makeDiscovery(), "sk-ws-01-test", makeLsResponse())
+
+    ctx.host.http.request.mockImplementation((reqOpts) => {
+      if (String(reqOpts.url).includes("GetUnleashData")) {
+        return { status: 200, bodyText: "{}" }
+      }
+      return { status: 500, bodyText: "{}" }
+    })
+
+    const plugin = await loadPlugin()
+    expect(() => plugin.probe(ctx)).toThrow("Start Windsurf and try again.")
+  })
+
 })

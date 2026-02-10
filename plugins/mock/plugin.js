@@ -54,6 +54,7 @@
         lineProgress({ label: "Huge numbers", used: 8429301, limit: 10000000, format: { kind: "count", suffix: "tokens" } }),
         lineProgress({ label: "Tiny sliver", used: 1, limit: 10000, format: { kind: "percent" } }),
         lineProgress({ label: "Almost full", used: 9999, limit: 10000, format: { kind: "percent" } }),
+        lineProgress({ label: "Colored progress", used: 77, limit: 100, format: { kind: "percent" }, color: "#22c55e" }),
         lineProgress({ label: "Reset in minutes", used: 12, limit: 100, format: { kind: "percent" }, resetsAt: _soonReset }),
         lineProgress({ label: "Reset in hours", used: 28, limit: 100, format: { kind: "percent" }, resetsAt: _hourReset }),
         lineProgress({ label: "Reset in days", used: 43, limit: 100, format: { kind: "percent" }, resetsAt: _multiDayReset }),
@@ -61,12 +62,14 @@
         lineProgress({ label: "Expired reset", used: 42, limit: 100, format: { kind: "percent" }, resetsAt: _pastReset, periodDurationMs: _30d }),
         // Text lines
         lineText({ label: "Status", value: "Active" }),
+        lineText({ label: "Status detail", value: "Preview build", color: "#3b82f6", subtitle: "Mock subtitle" }),
         lineText({ label: "Very long value", value: "This is an extremely long value string that should test text overflow and wrapping behavior in the card layout" }),
         lineText({ label: "", value: "Empty label" }),
         // Badge lines
         lineBadge({ label: "Tier", text: "Enterprise", color: "#8B5CF6" }),
         lineBadge({ label: "Alert", text: "Rate limited", color: "#ef4444" }),
         lineBadge({ label: "Region", text: "us-east-1" }),
+        lineBadge({ label: "Build", text: "Canary", subtitle: "Internal channel" }),
       ],
     }
   }

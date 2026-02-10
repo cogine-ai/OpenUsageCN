@@ -45,6 +45,7 @@ Work style: Be radically precise. No fluff. Pure information only (drop grammar;
 - Avoid manual `git stash`; if Git auto-stashes during pull/rebase, that’s fine (hint, not hard guardrail).
 - If user types a command (“pull and push”), that’s consent for that command.
 - Big review: `git --no-pager diff --color=never`.
+- Before creating a PR, run `bun run test:coverage`; coverage minimums must pass.
 
 ## Error Handling
 - Expected issues: explicit result types (not throw/try/catch).
@@ -86,10 +87,14 @@ Work style: Be radically precise. No fluff. Pure information only (drop grammar;
 - When using Vercel AI Gateway, use a single API key across the project, not individual providers.
 - When using Convex, run `bunx convex dev --once` to verify, not `bunx convex codegen`.
 
+## Before Creating Pull Request
+- Before creating a PR or pushing to main, ensure that `README.md` is updated with what plugins are supported.
+- On any plugin change/new plugin, audit plugin-exposed request/response fields against `src-tauri/src/plugin_engine/host_api.rs` redaction lists and add/update tests for gaps. Compare with existing plugins for patterns.
+- In `plugin.json`, set `brandColor` to the provider's real brand color.
+- Plugin SVG logos must use `currentColor` so icon theming works correctly.
+
 ## User Notes
 Use below list to store and recall user notes when asked to do so.
 
 - Tauri IPC: JS must use camelCase (`{ batchId, pluginIds }`), Tauri auto-converts to Rust's snake_case. Never send snake_case from JS—params silently won't match.
 - tauri-action `latest.json`: Parallel matrix builds are safe—action fetches existing `latest.json`, merges platform entries, re-uploads. No `max-parallel: 1` needed.
-- Before creating a PR or pushing to main, ensure that `README.md` is updated with what plugins are supported.
-- On any plugin change/new plugin, audit plugin-exposed request/response fields against `src-tauri/src/plugin_engine/host_api.rs` redaction lists and add/update tests for gaps.
