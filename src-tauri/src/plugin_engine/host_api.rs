@@ -1,7 +1,51 @@
 use rquickjs::{Ctx, Exception, Function, Object};
+use std::collections::HashMap;
 use std::path::PathBuf;
+use std::process::Command;
+use std::sync::{Mutex, OnceLock};
 
 const WHITELISTED_ENV_VARS: [&str; 3] = ["CODEX_HOME", "ZAI_API_KEY", "GLM_API_KEY"];
+
+fn last_non_empty_trimmed_line(text: &str) -> Option<String> {
+    text.lines()
+        .map(|line| line.trim())
+        .rev()
+        .find(|line| !line.is_empty())
+        .map(|line| line.to_string())
+}
+
+fn read_env_value_via_command(program: &str, args: &[&str]) -> Option<String> {
+    let output = Command::new(program).args(args).output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    last_non_empty_trimmed_line(&stdout)
+}
+
+fn terminal_zsh_env_cache() -> &'static Mutex<HashMap<String, Option<String>>> {
+    static CACHE: OnceLock<Mutex<HashMap<String, Option<String>>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn read_env_from_interactive_zsh(name: &str) -> Option<String> {
+    let script = format!("printenv {}", name);
+    read_env_value_via_command("/bin/zsh", &["-ilc", script.as_str()])
+}
+
+fn resolve_env_from_terminal_zsh_cache(name: &str) -> Option<String> {
+    if let Ok(cache) = terminal_zsh_env_cache().lock() {
+        if let Some(cached) = cache.get(name) {
+            return cached.clone();
+        }
+    }
+
+    let resolved = read_env_from_interactive_zsh(name);
+    if let Ok(mut cache) = terminal_zsh_env_cache().lock() {
+        cache.insert(name.to_string(), resolved.clone());
+    }
+    resolved
+}
 
 /// Redact sensitive value to first4...last4 format (UTF-8 safe)
 fn redact_value(value: &str) -> String {
@@ -131,7 +175,7 @@ pub fn inject_host_api<'js>(
     let host = Object::new(ctx.clone())?;
     inject_log(ctx, &host, plugin_id)?;
     inject_fs(ctx, &host)?;
-    inject_env(ctx, &host)?;
+    inject_env(ctx, &host, plugin_id)?;
     inject_http(ctx, &host, plugin_id)?;
     inject_keychain(ctx, &host)?;
     inject_sqlite(ctx, &host)?;
@@ -219,16 +263,16 @@ fn inject_fs<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()> {
     Ok(())
 }
 
-fn inject_env<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()> {
+fn inject_env<'js>(ctx: &Ctx<'js>, host: &Object<'js>, _plugin_id: &str) -> rquickjs::Result<()> {
     let env_obj = Object::new(ctx.clone())?;
     env_obj.set(
         "get",
         Function::new(ctx.clone(), move |name: String| -> Option<String> {
-            if WHITELISTED_ENV_VARS.contains(&name.as_str()) {
-                std::env::var(&name).ok()
-            } else {
-                None
+            if !WHITELISTED_ENV_VARS.contains(&name.as_str()) {
+                return None;
             }
+
+            resolve_env_from_terminal_zsh_cache(&name)
         })?,
     )?;
     host.set("env", env_obj)?;
@@ -1252,6 +1296,20 @@ mod tests {
     use rquickjs::{Context, Function, Object, Runtime};
 
     #[test]
+    fn last_non_empty_trimmed_line_uses_final_value_when_stdout_is_noisy() {
+        let stdout = "banner line\nanother message\n  sk-test-key-12345  \n";
+        let value = last_non_empty_trimmed_line(stdout);
+        assert_eq!(value.as_deref(), Some("sk-test-key-12345"));
+    }
+
+    #[test]
+    fn last_non_empty_trimmed_line_returns_none_for_empty_stdout() {
+        let stdout = "  \n\n\t\n";
+        let value = last_non_empty_trimmed_line(stdout);
+        assert!(value.is_none());
+    }
+
+    #[test]
     fn keychain_api_exposes_write() {
         let rt = Runtime::new().expect("runtime");
         let ctx = Context::full(&rt).expect("context");
@@ -1285,12 +1343,17 @@ mod tests {
             let get: Function = env.get("get").expect("get");
 
             for name in WHITELISTED_ENV_VARS {
+                let expected = read_env_from_interactive_zsh(name);
                 let value: Option<String> = get.call((name.to_string(),)).expect("get whitelisted var");
-                assert_eq!(value, std::env::var(name).ok(), "{name} should match process env");
+                assert_eq!(value, expected, "{name} should match interactive zsh env");
 
                 let js_expr = format!(r#"__openusage_ctx.host.env.get("{}")"#, name);
                 let js_value: Option<String> = ctx.eval(js_expr).expect("js get whitelisted var");
-                assert_eq!(js_value, std::env::var(name).ok(), "{name} should match process env from JS");
+                assert_eq!(
+                    js_value,
+                    expected,
+                    "{name} should match interactive zsh env from JS"
+                );
             }
 
             let blocked: Option<String> = get
