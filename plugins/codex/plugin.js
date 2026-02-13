@@ -414,10 +414,10 @@
       if (Array.isArray(data.additional_rate_limits)) {
         for (const entry of data.additional_rate_limits) {
           if (!entry || !entry.rate_limit) continue
-          var name = typeof entry.limit_name === "string" ? entry.limit_name : ""
-          var shortName = name.replace(/^GPT-[\d.]+-Codex-/, "")
+          const name = typeof entry.limit_name === "string" ? entry.limit_name : ""
+          let shortName = name.replace(/^GPT-[\d.]+-Codex-/, "")
           if (!shortName) shortName = name || "Model"
-          var rl = entry.rate_limit
+          const rl = entry.rate_limit
           if (rl.primary_window && typeof rl.primary_window.used_percent === "number") {
             lines.push(ctx.line.progress({
               label: shortName,
