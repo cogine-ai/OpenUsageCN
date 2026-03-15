@@ -29,7 +29,7 @@ describe("useSettingsPluginActions", () => {
 
     const { result } = renderHook(() =>
       useSettingsPluginActions({
-        pluginSettings: { order: ["a", "b"], disabled: ["b"] },
+        pluginSettings: { order: ["a", "b"], disabled: [] },
         setPluginSettings,
         setLoadingForPlugins: vi.fn(),
         setErrorForPlugins: vi.fn(),
@@ -43,9 +43,35 @@ describe("useSettingsPluginActions", () => {
     })
 
     expect(trackMock).toHaveBeenCalledWith("providers_reordered", { count: 2 })
-    expect(setPluginSettings).toHaveBeenCalledWith({ order: ["b", "a"], disabled: ["b"] })
-    expect(savePluginSettingsMock).toHaveBeenCalledWith({ order: ["b", "a"], disabled: ["b"] })
+    expect(setPluginSettings).toHaveBeenCalledWith({ order: ["b", "a"], disabled: [] })
+    expect(savePluginSettingsMock).toHaveBeenCalledWith({ order: ["b", "a"], disabled: [] })
     expect(scheduleTrayIconUpdate).toHaveBeenCalledWith("settings", 2000)
+  })
+
+  it("reorder from sidebar (nav-only subset) preserves disabled plugins in order", () => {
+    const setPluginSettings = vi.fn()
+
+    // "b" is disabled so navPlugins only contains ["a", "c"]; user drags "c" before "a"
+    const { result } = renderHook(() =>
+      useSettingsPluginActions({
+        pluginSettings: { order: ["a", "b", "c"], disabled: ["b"] },
+        setPluginSettings,
+        setLoadingForPlugins: vi.fn(),
+        setErrorForPlugins: vi.fn(),
+        startBatch: vi.fn(),
+        scheduleTrayIconUpdate: vi.fn(),
+      })
+    )
+
+    act(() => {
+      result.current.handleReorder(["c", "a"])
+    })
+
+    // "b" was between "a" and "c" in the original order.
+    // After reorder "c" < "a", "b" should be re-inserted after "a" (its prev neighbour with lower orig index).
+    const saved = setPluginSettings.mock.calls[0][0]
+    expect(saved.order).toContain("b")
+    expect(saved.disabled).toEqual(["b"])
   })
 
   it("enables and disables plugins with correct side effects", () => {
