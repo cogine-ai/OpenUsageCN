@@ -35,7 +35,7 @@ export function useSettingsPluginActions({
     for (const id of missing) {
       const prevIdx = (pluginSettings.order ?? []).indexOf(id)
       // Insert after the last merged entry whose original index < prevIdx
-      let insertAt = merged.length
+      let insertAt = 0 // default: prepend if id originally preceded all visible entries
       for (let i = merged.length - 1; i >= 0; i--) {
         const mergedPrevIdx = (pluginSettings.order ?? []).indexOf(merged[i])
         if (mergedPrevIdx < prevIdx) {
