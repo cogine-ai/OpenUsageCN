@@ -111,7 +111,7 @@ function SortableNavPlugin({ plugin, isActive, isDark, onClick, onContextMenu }:
   }
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners} role="presentation">
       <NavButton
         isActive={isActive}
         onClick={onClick}
