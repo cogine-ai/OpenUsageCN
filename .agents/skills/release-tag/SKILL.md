@@ -74,22 +74,25 @@ chore: bump version to {new_version}
 git tag -a v{new_version} -m "v{new_version}"
 ```
 
-### 6. Create GitHub Release
+### 6. Push Commit + Tag
 
-```bash
-gh release create v{new_version} --title "v{new_version}" --notes "{approved_changelog}"
-```
-
-If the release already exists (e.g. created by CI), use `gh release edit` instead.
-
-### 7. Offer to Push
-
-Ask the user before pushing. If confirmed:
+Ask the user before pushing. If confirmed, push the commit and tag **before** creating the GitHub Release — `gh release create` resolves the tag on the remote, so the version bump commit must already be there.
 
 ```bash
 git push origin {branch}
 git push origin v{new_version}
 ```
+
+### 7. Create GitHub Release
+
+Do **not** create the release before the push — CI (e.g. tauri-action) may create its own release when it sees the tag. After the push, check whether the release already exists:
+
+```bash
+gh release view v{new_version} -R {owner}/{repo} 2>/dev/null
+```
+
+- If it **does not** exist: `gh release create v{new_version} --title "v{new_version}" --notes "{changelog}"`
+- If it **already exists** (CI created it): `gh release edit v{new_version} --notes "{changelog}"` to add the release notes, then delete any leftover draft duplicates.
 
 ## Changelog Template
 
