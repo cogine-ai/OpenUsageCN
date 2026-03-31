@@ -1,15 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { makeCtx } from "../test-helpers.js"
 
+let pluginLoadNonce = 0
+
 const loadPlugin = async () => {
-  await import("./plugin.js")
+  await import(`./plugin.js?test=${pluginLoadNonce++}`)
   return globalThis.__openusage_plugin
 }
 
 describe("claude plugin", () => {
   beforeEach(() => {
     delete globalThis.__openusage_plugin
-    vi.resetModules()
   })
 
   it("throws when no credentials", async () => {
@@ -74,6 +75,110 @@ describe("claude plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
     expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
+  })
+
+  it("reads credentials from CLAUDE_CONFIG_DIR and passes it to ccusage", async () => {
+    const ctx = makeCtx()
+    const configDir = "/tmp/custom-claude-home"
+    const configCredFile = configDir + "/.credentials.json"
+    const credsJson = JSON.stringify({ claudeAiOauth: { accessToken: "token", subscriptionType: "pro" } })
+    ctx.host.env.get.mockImplementation((name) => (name === "CLAUDE_CONFIG_DIR" ? configDir : null))
+    ctx.host.fs.exists = vi.fn((path) => path === configCredFile)
+    ctx.host.fs.readText = vi.fn((path) => {
+      if (path !== configCredFile) {
+        throw new Error("unexpected readText path: " + path)
+      }
+      return credsJson
+    })
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify({
+        five_hour: { utilization: 10, resets_at: "2099-01-01T00:00:00.000Z" },
+      }),
+    })
+    ctx.host.ccusage.query = vi.fn(() => ({ status: "ok", data: { daily: [] } }))
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
+    expect(ctx.host.fs.readText).toHaveBeenCalledWith(configCredFile)
+    expect(ctx.host.ccusage.query).toHaveBeenCalledWith(
+      expect.objectContaining({ homePath: configDir })
+    )
+  })
+
+  it("looks up Claude Code-staging-oauth-credentials in keychain", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.exists = () => false
+    ctx.host.env.get.mockImplementation((name) => {
+      if (name === "USER_TYPE") return "ant"
+      if (name === "USE_STAGING_OAUTH") return "1"
+      return null
+    })
+    ctx.host.keychain.readGenericPassword.mockImplementation((service) => {
+      if (service === "Claude Code-staging-oauth-credentials") {
+        return JSON.stringify({ claudeAiOauth: { accessToken: "token", subscriptionType: "pro" } })
+      }
+      if (service === "Claude Code-credentials") {
+        return JSON.stringify({ claudeAiOauth: { refreshToken: "fallback-only" } })
+      }
+      return null
+    })
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify({
+        five_hour: { utilization: 10, resets_at: "2099-01-01T00:00:00.000Z" },
+      }),
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
+    expect(ctx.host.keychain.readGenericPassword).toHaveBeenCalledWith(
+      "Claude Code-staging-oauth-credentials"
+    )
+  })
+
+  it("uses env-injected OAuth tokens without hitting /api/oauth/usage", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.exists = () => false
+    ctx.host.fs.readText = () => {
+      throw new Error("unexpected file read")
+    }
+    ctx.host.env.get.mockImplementation((name) =>
+      name === "CLAUDE_CODE_OAUTH_TOKEN" ? "env-oauth-token" : null
+    )
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify({
+        five_hour: { utilization: 10, resets_at: "2099-01-01T00:00:00.000Z" },
+      }),
+    })
+    ctx.host.ccusage.query = vi.fn(() => ({
+      status: "ok",
+      data: {
+        daily: [
+          {
+            date: "2024-01-01",
+            inputTokens: 100,
+            outputTokens: 50,
+            cacheCreationTokens: 0,
+            cacheReadTokens: 0,
+            totalTokens: 150,
+            totalCost: 0.25,
+          },
+        ],
+      },
+    }))
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(
+      ctx.host.http.request.mock.calls.some((call) => String(call[0]?.url).includes("/api/oauth/usage"))
+    ).toBe(false)
+    expect(result.lines.find((line) => line.label === "Last 30 Days")?.value).toContain("150 tokens")
   })
 
   it("renders usage lines from response", async () => {
@@ -510,6 +615,42 @@ describe("claude plugin", () => {
     expect(ctx.host.fs.writeText).toHaveBeenCalled()
   })
 
+  it("includes user:file_upload in the OAuth refresh scope", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.exists = () => true
+    ctx.host.fs.readText = () =>
+      JSON.stringify({
+        claudeAiOauth: {
+          accessToken: "old-token",
+          refreshToken: "refresh",
+          expiresAt: Date.now() - 1000,
+          subscriptionType: "pro",
+        },
+      })
+
+    let refreshBody = null
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("/v1/oauth/token")) {
+        refreshBody = JSON.parse(opts.bodyText)
+        return {
+          status: 200,
+          bodyText: JSON.stringify({ access_token: "new-token", expires_in: 3600, refresh_token: "refresh2" }),
+        }
+      }
+      return {
+        status: 200,
+        bodyText: JSON.stringify({
+          five_hour: { utilization: 10, resets_at: "2099-01-01T00:00:00.000Z" },
+        }),
+      }
+    })
+
+    const plugin = await loadPlugin()
+    plugin.probe(ctx)
+
+    expect(refreshBody.scope).toContain("user:file_upload")
+  })
+
   it("refreshes keychain credentials and writes back to keychain", async () => {
     const ctx = makeCtx()
     ctx.host.fs.exists = () => false
@@ -800,8 +941,6 @@ describe("claude plugin", () => {
         }
       })
 
-      delete globalThis.__openusage_plugin
-      vi.resetModules()
       const plugin = await loadPlugin()
       const result = plugin.probe(ctx)
       expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()

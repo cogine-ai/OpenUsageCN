@@ -11,8 +11,16 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 
-const WHITELISTED_ENV_VARS: [&str; 6] = [
+const WHITELISTED_ENV_VARS: [&str; 14] = [
     "CODEX_HOME",
+    "CLAUDE_CONFIG_DIR",
+    "CLAUDE_CODE_OAUTH_TOKEN",
+    "USER_TYPE",
+    "USE_STAGING_OAUTH",
+    "USE_LOCAL_OAUTH",
+    "CLAUDE_CODE_CUSTOM_OAUTH_URL",
+    "CLAUDE_CODE_OAUTH_CLIENT_ID",
+    "CLAUDE_LOCAL_OAUTH_API_BASE",
     "ZAI_API_KEY",
     "GLM_API_KEY",
     "MINIMAX_API_KEY",
@@ -45,6 +53,36 @@ fn read_env_value_via_command(program: &str, args: &[&str]) -> Option<String> {
     }
     let stdout = String::from_utf8_lossy(&output.stdout);
     last_non_empty_trimmed_line(&stdout)
+}
+
+fn current_macos_keychain_account() -> String {
+    read_env_from_process("USER")
+        .or_else(|| read_env_value_via_command("id", &["-un"]))
+        .unwrap_or_else(|| "openusage-user".to_string())
+}
+
+fn keychain_find_generic_password_args(service: &str, account: &str) -> Vec<OsString> {
+    vec![
+        OsString::from("find-generic-password"),
+        OsString::from("-a"),
+        OsString::from(account),
+        OsString::from("-s"),
+        OsString::from(service),
+        OsString::from("-w"),
+    ]
+}
+
+fn keychain_add_generic_password_args(service: &str, account: &str, value: &str) -> Vec<OsString> {
+    vec![
+        OsString::from("add-generic-password"),
+        OsString::from("-U"),
+        OsString::from("-a"),
+        OsString::from(account),
+        OsString::from("-s"),
+        OsString::from(service),
+        OsString::from("-w"),
+        OsString::from(value),
+    ]
 }
 
 fn terminal_env_cache() -> &'static Mutex<HashMap<String, Option<String>>> {
@@ -236,6 +274,10 @@ fn redact_body(body: &str) -> String {
         "userId",
         "account_id",
         "accountId",
+        "team_id",
+        "teamId",
+        "payment_id",
+        "paymentId",
         "email",
         "login",
         "analytics_tracking_id",
@@ -251,6 +293,12 @@ fn redact_body(body: &str) -> String {
                 })
                 .to_string();
         }
+    }
+
+    if let Ok(path_re) =
+        regex_lite::Regex::new(r#"(/(?:Users|home|opt|private|var|tmp|Applications)/[^\s"')]+)"#)
+    {
+        result = path_re.replace_all(&result, "[PATH]").to_string();
     }
 
     result
@@ -273,6 +321,18 @@ fn redact_log_message(msg: &str) -> String {
                 redact_value(&caps[0])
             })
             .to_string();
+    }
+    if let Ok(account_re) = regex_lite::Regex::new(r#"(account=)([^,\s]+)"#) {
+        result = account_re
+            .replace_all(&result, |caps: &regex_lite::Captures| {
+                format!("{}{}", &caps[1], redact_value(&caps[2]))
+            })
+            .to_string();
+    }
+    if let Ok(path_re) =
+        regex_lite::Regex::new(r#"(/(?:Users|home|opt|private|var|tmp|Applications)/[^\s"')]+)"#)
+    {
+        result = path_re.replace_all(&result, "[PATH]").to_string();
     }
     result
 }
@@ -403,7 +463,7 @@ pub fn inject_host_api<'js>(
     inject_crypto(ctx, &host)?;
     inject_env(ctx, &host, plugin_id)?;
     inject_http(ctx, &host, plugin_id)?;
-    inject_keychain(ctx, &host)?;
+    inject_keychain(ctx, &host, plugin_id)?;
     inject_sqlite(ctx, &host)?;
     inject_ls(ctx, &host, plugin_id)?;
     inject_ccusage(ctx, &host, plugin_id)?;
@@ -1888,8 +1948,13 @@ pub fn patch_ccusage_wrapper(ctx: &rquickjs::Ctx<'_>) -> rquickjs::Result<()> {
     )
 }
 
-fn inject_keychain<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()> {
+fn inject_keychain<'js>(
+    ctx: &Ctx<'js>,
+    host: &Object<'js>,
+    plugin_id: &str,
+) -> rquickjs::Result<()> {
     let keychain_obj = Object::new(ctx.clone())?;
+    let pid_read = plugin_id.to_string();
 
     keychain_obj.set(
         "readGenericPassword",
@@ -1902,8 +1967,17 @@ fn inject_keychain<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<
                         "keychain API is only supported on macOS",
                     ));
                 }
+                let account = current_macos_keychain_account();
+                let args = keychain_find_generic_password_args(&service, &account);
+                let redacted_account = redact_value(&account);
+                log::info!(
+                    "[plugin:{}] keychain read: service={}, account={}",
+                    pid_read,
+                    service,
+                    redacted_account
+                );
                 let output = std::process::Command::new("security")
-                    .args(["find-generic-password", "-s", &service, "-w"])
+                    .args(&args)
                     .output()
                     .map_err(|e| {
                         Exception::throw_message(
@@ -1915,17 +1989,31 @@ fn inject_keychain<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<
                 if !output.status.success() {
                     let stderr = String::from_utf8_lossy(&output.stderr);
                     let first_line = stderr.lines().next().unwrap_or("").trim();
+                    log::warn!(
+                        "[plugin:{}] keychain read miss: service={}, account={}, error={}",
+                        pid_read,
+                        service,
+                        redacted_account,
+                        first_line
+                    );
                     return Err(Exception::throw_message(
                         &ctx_inner,
                         &format!("keychain item not found: {}", first_line),
                     ));
                 }
 
+                log::info!(
+                    "[plugin:{}] keychain read hit: service={}, account={}",
+                    pid_read,
+                    service,
+                    redacted_account
+                );
                 Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
             },
         )?,
     )?;
 
+    let pid_write = plugin_id.to_string();
     keychain_obj.set(
         "writeGenericPassword",
         Function::new(
@@ -1937,61 +2025,44 @@ fn inject_keychain<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<
                         "keychain API is only supported on macOS",
                     ));
                 }
-
-                // First, try to find existing entry and extract its account
-                let mut account_arg: Option<String> = None;
-                let find_output = std::process::Command::new("security")
-                    .args(["find-generic-password", "-s", &service])
-                    .output();
-
-                if let Ok(output) = find_output {
-                    if output.status.success() {
-                        // Parse account from output: "acct"<blob>="value"
-                        let stdout = String::from_utf8_lossy(&output.stdout);
-                        for line in stdout.lines() {
-                            if let Some(start) = line.find("\"acct\"<blob>=\"") {
-                                let rest = &line[start + 14..];
-                                if let Some(end) = rest.find('"') {
-                                    account_arg = Some(rest[..end].to_string());
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Build command with account if found
-                let output = if let Some(ref acct) = account_arg {
-                    std::process::Command::new("security")
-                        .args([
-                            "add-generic-password",
-                            "-s",
-                            &service,
-                            "-a",
-                            acct,
-                            "-w",
-                            &value,
-                            "-U",
-                        ])
-                        .output()
-                } else {
-                    std::process::Command::new("security")
-                        .args(["add-generic-password", "-s", &service, "-w", &value, "-U"])
-                        .output()
-                }
-                .map_err(|e| {
+                let account = current_macos_keychain_account();
+                let args = keychain_add_generic_password_args(&service, &account, &value);
+                let redacted_account = redact_value(&account);
+                log::info!(
+                    "[plugin:{}] keychain write: service={}, account={}",
+                    pid_write,
+                    service,
+                    redacted_account
+                );
+                let output = std::process::Command::new("security")
+                    .args(&args)
+                    .output()
+                    .map_err(|e| {
                     Exception::throw_message(&ctx_inner, &format!("keychain write failed: {}", e))
                 })?;
 
                 if !output.status.success() {
                     let stderr = String::from_utf8_lossy(&output.stderr);
                     let first_line = stderr.lines().next().unwrap_or("").trim();
+                    log::warn!(
+                        "[plugin:{}] keychain write failed: service={}, account={}, error={}",
+                        pid_write,
+                        service,
+                        redacted_account,
+                        first_line
+                    );
                     return Err(Exception::throw_message(
                         &ctx_inner,
                         &format!("keychain write failed: {}", first_line),
                     ));
                 }
 
+                log::info!(
+                    "[plugin:{}] keychain write succeeded: service={}, account={}",
+                    pid_write,
+                    service,
+                    redacted_account
+                );
                 Ok(())
             },
         )?,
@@ -2281,6 +2352,24 @@ mod tests {
 
     #[test]
     fn env_api_respects_allowlist_in_host_and_js() {
+        let claude_env_vars = [
+            "CLAUDE_CONFIG_DIR",
+            "CLAUDE_CODE_OAUTH_TOKEN",
+            "USER_TYPE",
+            "USE_STAGING_OAUTH",
+            "USE_LOCAL_OAUTH",
+            "CLAUDE_CODE_CUSTOM_OAUTH_URL",
+            "CLAUDE_CODE_OAUTH_CLIENT_ID",
+            "CLAUDE_LOCAL_OAUTH_API_BASE",
+        ];
+
+        for name in claude_env_vars {
+            assert!(
+                WHITELISTED_ENV_VARS.contains(&name),
+                "{name} must be whitelisted for Claude auth compatibility"
+            );
+        }
+
         let rt = Runtime::new().expect("runtime");
         let ctx = Context::full(&rt).expect("context");
         ctx.with(|ctx| {
@@ -2376,6 +2465,83 @@ mod tests {
                 "process env should be preferred from JS"
             );
         });
+    }
+
+    #[test]
+    fn current_macos_keychain_account_prefers_user_env() {
+        struct RestoreEnvVar {
+            name: &'static str,
+            old: Option<String>,
+        }
+
+        impl Drop for RestoreEnvVar {
+            fn drop(&mut self) {
+                if let Some(value) = self.old.take() {
+                    // SAFETY: tests serialize env changes via this guard; value is restored on drop.
+                    unsafe { std::env::set_var(self.name, value) };
+                } else {
+                    // SAFETY: tests serialize env changes via this guard; var is restored/removed on drop.
+                    unsafe { std::env::remove_var(self.name) };
+                }
+            }
+        }
+
+        let name = "USER";
+        let old = std::env::var(name).ok();
+        let _restore = RestoreEnvVar { name, old };
+        // SAFETY: this test restores the previous value in `Drop`.
+        unsafe { std::env::set_var(name, "openusage-test-user") };
+
+        assert_eq!(current_macos_keychain_account(), "openusage-test-user");
+    }
+
+    #[test]
+    fn keychain_find_generic_password_args_include_account_and_service() {
+        let args =
+            keychain_find_generic_password_args("Claude Code-credentials", "openusage-test-user");
+        let rendered: Vec<String> = args
+            .into_iter()
+            .map(|value| value.to_string_lossy().into_owned())
+            .collect();
+
+        assert_eq!(
+            rendered,
+            vec![
+                "find-generic-password",
+                "-a",
+                "openusage-test-user",
+                "-s",
+                "Claude Code-credentials",
+                "-w",
+            ]
+        );
+    }
+
+    #[test]
+    fn keychain_add_generic_password_args_include_update_account_service_and_value() {
+        let args = keychain_add_generic_password_args(
+            "Claude Code-credentials",
+            "openusage-test-user",
+            "secret-value",
+        );
+        let rendered: Vec<String> = args
+            .into_iter()
+            .map(|value| value.to_string_lossy().into_owned())
+            .collect();
+
+        assert_eq!(
+            rendered,
+            vec![
+                "add-generic-password",
+                "-U",
+                "-a",
+                "openusage-test-user",
+                "-s",
+                "Claude Code-credentials",
+                "-w",
+                "secret-value",
+            ]
+        );
     }
 
     #[test]
@@ -2498,6 +2664,33 @@ mod tests {
     }
 
     #[test]
+    fn redact_body_redacts_team_id_payment_id_and_paths() {
+        let body = r#"{"teamId":"cc1ac023-9ff5-4c1f-a5a4-ae2a82df4243","paymentId":"cus_S5m1PGxjLWoc1c","binaryPath":"/opt/homebrew/bin/bunx","homePath":"/Users/rebers/.claude"}"#;
+        let redacted = redact_body(body);
+        assert!(
+            !redacted.contains("cc1ac023-9ff5-4c1f-a5a4-ae2a82df4243"),
+            "teamId should be redacted, got: {}",
+            redacted
+        );
+        assert!(
+            !redacted.contains("cus_S5m1PGxjLWoc1c"),
+            "paymentId should be redacted, got: {}",
+            redacted
+        );
+        assert!(
+            !redacted.contains("/opt/homebrew/bin/bunx"),
+            "path should be redacted, got: {}",
+            redacted
+        );
+        assert!(
+            !redacted.contains("/Users/rebers/.claude"),
+            "path should be redacted, got: {}",
+            redacted
+        );
+        assert!(redacted.contains("[PATH]"), "expected path marker, got: {}", redacted);
+    }
+
+    #[test]
     fn redact_log_message_redacts_jwt_and_api_key() {
         let msg = "token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U key=sk-1234567890abcdef";
         let redacted = redact_log_message(msg);
@@ -2509,6 +2702,33 @@ mod tests {
             !redacted.contains("sk-1234567890abcdef"),
             "API key should be redacted"
         );
+    }
+
+    #[test]
+    fn redact_log_message_redacts_account_and_paths() {
+        let msg = "keychain read: service=Claude Code-credentials, account=rebers path=/opt/homebrew/bin/bunx home=/Users/rebers/.claude";
+        let redacted = redact_log_message(msg);
+        assert!(
+            !redacted.contains("account=rebers"),
+            "account should be redacted, got: {}",
+            redacted
+        );
+        assert!(
+            !redacted.contains("/opt/homebrew/bin/bunx"),
+            "path should be redacted, got: {}",
+            redacted
+        );
+        assert!(
+            !redacted.contains("/Users/rebers/.claude"),
+            "path should be redacted, got: {}",
+            redacted
+        );
+        assert!(
+            redacted.contains("account=[REDACTED]"),
+            "expected redacted account, got: {}",
+            redacted
+        );
+        assert!(redacted.contains("[PATH]"), "expected redacted path, got: {}", redacted);
     }
 
     #[test]

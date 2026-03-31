@@ -525,7 +525,7 @@ pub fn run() {
 
             let app_data_dir = app.path().app_data_dir().expect("no app data dir");
             let resource_dir = app.path().resource_dir().expect("no resource dir");
-            log::debug!("app_data_dir: {:?}", app_data_dir);
+            log::debug!("app_data_dir: [PATH]");
 
             let (_, plugins) = plugin_engine::initialize_plugins(&app_data_dir, &resource_dir);
             let known_plugin_ids: Vec<String> =
