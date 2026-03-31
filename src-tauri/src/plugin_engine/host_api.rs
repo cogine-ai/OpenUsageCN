@@ -55,10 +55,22 @@ fn read_env_value_via_command(program: &str, args: &[&str]) -> Option<String> {
     last_non_empty_trimmed_line(&stdout)
 }
 
-fn current_macos_keychain_account() -> String {
-    read_env_from_process("USER")
+fn current_macos_keychain_account_from_user_env(user_env: Option<String>) -> String {
+    user_env
+        .and_then(|value| {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        })
         .or_else(|| read_env_value_via_command("id", &["-un"]))
         .unwrap_or_else(|| "openusage-user".to_string())
+}
+
+fn current_macos_keychain_account() -> String {
+    current_macos_keychain_account_from_user_env(read_env_from_process("USER"))
 }
 
 fn keychain_find_generic_password_args(service: &str, account: &str) -> Vec<OsString> {
@@ -304,8 +316,8 @@ fn redact_body(body: &str) -> String {
     result
 }
 
-/// Lightweight redaction for plugin log messages (JWT + API key patterns only).
-fn redact_log_message(msg: &str) -> String {
+/// Lightweight redaction for log messages.
+pub(crate) fn redact_log_message(msg: &str) -> String {
     let mut result = msg.to_string();
     if let Ok(jwt_re) = regex_lite::Regex::new(r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+")
     {
@@ -1763,14 +1775,16 @@ fn run_ccusage_with_runner(
 
     if let Some(home_path) = ccusage_home_override(opts, provider) {
         let config = ccusage_provider_config(provider);
-        command.env(config.home_env_var, home_path);
+        command.env(config.home_env_var, expand_path(&home_path));
     }
+
+    let redacted_program = redact_log_message(program);
 
     log::info!(
         "[plugin:{}] ccusage query via {} ({})",
         plugin_id,
         ccusage_runner_label(kind),
-        program
+        redacted_program
     );
 
     let mut child = match command.spawn() {
@@ -2038,8 +2052,11 @@ fn inject_keychain<'js>(
                     .args(&args)
                     .output()
                     .map_err(|e| {
-                    Exception::throw_message(&ctx_inner, &format!("keychain write failed: {}", e))
-                })?;
+                        Exception::throw_message(
+                            &ctx_inner,
+                            &format!("keychain write failed: {}", e),
+                        )
+                    })?;
 
                 if !output.status.success() {
                     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -2468,31 +2485,19 @@ mod tests {
     }
 
     #[test]
-    fn current_macos_keychain_account_prefers_user_env() {
-        struct RestoreEnvVar {
-            name: &'static str,
-            old: Option<String>,
-        }
+    fn current_macos_keychain_account_prefers_explicit_user_value() {
+        assert_eq!(
+            current_macos_keychain_account_from_user_env(Some("openusage-test-user".to_string())),
+            "openusage-test-user"
+        );
+    }
 
-        impl Drop for RestoreEnvVar {
-            fn drop(&mut self) {
-                if let Some(value) = self.old.take() {
-                    // SAFETY: tests serialize env changes via this guard; value is restored on drop.
-                    unsafe { std::env::set_var(self.name, value) };
-                } else {
-                    // SAFETY: tests serialize env changes via this guard; var is restored/removed on drop.
-                    unsafe { std::env::remove_var(self.name) };
-                }
-            }
-        }
+    #[test]
+    fn expand_path_expands_tilde_prefix() {
+        let home = dirs::home_dir().expect("home dir");
+        let expected = home.join(".claude-custom").to_string_lossy().to_string();
 
-        let name = "USER";
-        let old = std::env::var(name).ok();
-        let _restore = RestoreEnvVar { name, old };
-        // SAFETY: this test restores the previous value in `Drop`.
-        unsafe { std::env::set_var(name, "openusage-test-user") };
-
-        assert_eq!(current_macos_keychain_account(), "openusage-test-user");
+        assert_eq!(expand_path("~/.claude-custom"), expected);
     }
 
     #[test]
@@ -2687,7 +2692,11 @@ mod tests {
             "path should be redacted, got: {}",
             redacted
         );
-        assert!(redacted.contains("[PATH]"), "expected path marker, got: {}", redacted);
+        assert!(
+            redacted.contains("[PATH]"),
+            "expected path marker, got: {}",
+            redacted
+        );
     }
 
     #[test]
@@ -2728,7 +2737,11 @@ mod tests {
             "expected redacted account, got: {}",
             redacted
         );
-        assert!(redacted.contains("[PATH]"), "expected redacted path, got: {}", redacted);
+        assert!(
+            redacted.contains("[PATH]"),
+            "expected redacted path, got: {}",
+            redacted
+        );
     }
 
     #[test]

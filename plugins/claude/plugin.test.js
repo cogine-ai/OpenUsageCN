@@ -1,18 +1,16 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeAll, describe, expect, it, vi } from "vitest"
 import { makeCtx } from "../test-helpers.js"
 
-let pluginLoadNonce = 0
+let plugin = null
 
-const loadPlugin = async () => {
-  await import(`./plugin.js?test=${pluginLoadNonce++}`)
-  return globalThis.__openusage_plugin
-}
+beforeAll(async () => {
+  await import("./plugin.js")
+  plugin = globalThis.__openusage_plugin
+})
+
+const loadPlugin = async () => plugin
 
 describe("claude plugin", () => {
-  beforeEach(() => {
-    delete globalThis.__openusage_plugin
-  })
-
   it("throws when no credentials", async () => {
     const ctx = makeCtx()
     const plugin = await loadPlugin()
