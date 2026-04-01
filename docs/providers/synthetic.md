@@ -139,19 +139,21 @@ No plan name is returned by the API. The plugin does not set a plan label.
 
 ## Displayed Lines
 
-| Line           | Scope    | Condition                        | Description                                    |
-|----------------|----------|----------------------------------|------------------------------------------------|
-| 5h Rate Limit  | overview | `rollingFiveHourLimit` present   | Requests remaining in 5-hour rolling window    |
-| Mana Bar       | overview | `weeklyTokenLimit` present       | Weekly token budget as percentage              |
-| Rate Limited   | detail   | `rollingFiveHourLimit.limited`   | Red badge shown only when actively rate limited|
-| Subscription   | detail   | `subscription` present           | Legacy request count for billing period        |
-| Search         | detail   | `search.hourly` present          | Hourly search request quota                    |
+| Line            | Scope    | Condition                                                 | Description                                   |
+|-----------------|----------|-----------------------------------------------------------|-----------------------------------------------|
+| 5h Rate Limit   | overview | `rollingFiveHourLimit.max` and `remaining` are numeric    | Usage in 5-hour rolling window (used / limit) |
+| Mana Bar        | overview | `weeklyTokenLimit.percentRemaining` is numeric            | Weekly token budget as percentage used        |
+| Rate Limited    | detail   | `rollingFiveHourLimit.limited`                            | Red badge shown only when actively rate limited |
+| Subscription    | overview | `subscription` present and no usable v3 quota lines exist | Legacy request count for billing period       |
+| Free Tool Calls | detail   | `freeToolCalls.limit > 0` and no usable v3 quota lines exist | Legacy free tool-call quota                |
+| Search          | detail   | `search.hourly` present                                   | Hourly search request quota                   |
 
 5h Rate Limit is the primary (tray icon) metric — it's the first constraint users hit during active use.
 
 Progress lines include:
-- `resetsAt` — ISO timestamp of next restoration tick (5h, mana) or renewal (subscription, search)
-- `periodDurationMs` — 5 hours (rate limit), 1 week (mana), or 1 hour (search)
+- 5h Rate Limit / Mana Bar: usage fields only, with no reset metadata
+- Subscription / Free Tool Calls: `resetsAt` from `renewsAt`
+- Search: `resetsAt` from `renewsAt` and `periodDurationMs = 3600000`
 
 ## Errors
 

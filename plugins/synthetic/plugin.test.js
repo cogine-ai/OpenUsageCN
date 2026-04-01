@@ -367,6 +367,13 @@ describe("synthetic plugin", () => {
       expect(() => plugin.probe(ctx)).toThrow("HTTP 500");
     });
 
+    it("uses nested API error messages when the error payload is structured", () => {
+      var ctx = makeCtx();
+      setPiAuth(ctx, "syn_testkey");
+      mockHttp(ctx, { error: { message: "Credits required for this feature." } }, 429);
+      expect(() => plugin.probe(ctx)).toThrow("Credits required for this feature.");
+    });
+
     it("throws on unparseable JSON", () => {
       var ctx = makeCtx();
       setPiAuth(ctx, "syn_testkey");
@@ -599,6 +606,36 @@ describe("synthetic plugin", () => {
       expect(line.format.suffix).toBe("requests");
     });
 
+    it("shown when v3 blocks are placeholders without usable numeric fields", () => {
+      var ctx = makeCtx();
+      setPiAuth(ctx, "syn_testkey");
+      var payload = successPayload({
+        rollingFiveHourLimit: {},
+        weeklyTokenLimit: {},
+      });
+      payload.freeToolCalls = {
+        limit: 500,
+        requests: 53.5,
+        renewsAt: "2026-03-18T18:12:22.366Z",
+      };
+      mockHttp(ctx, payload);
+      var result = plugin.probe(ctx);
+      expect(result.lines.find((l) => l.label === "Subscription")).toBeTruthy();
+      expect(result.lines.find((l) => l.label === "Free Tool Calls")).toBeTruthy();
+    });
+
+    it("hidden when either v3 quota block is usable", () => {
+      var ctx = makeCtx();
+      setPiAuth(ctx, "syn_testkey");
+      var payload = successPayload({
+        rollingFiveHourLimit: {},
+      });
+      mockHttp(ctx, payload);
+      var result = plugin.probe(ctx);
+      var line = result.lines.find((l) => l.label === "Subscription");
+      expect(line).toBeUndefined();
+    });
+
     it("includes resetsAt for legacy users", () => {
       var ctx = makeCtx();
       setPiAuth(ctx, "syn_testkey");
@@ -728,7 +765,7 @@ describe("synthetic plugin", () => {
       expect(result.lines[2].label).toBe("Search");
     });
 
-    it("returns 5 lines when rate limited", () => {
+    it("returns 4 lines when rate limited", () => {
       var ctx = makeCtx();
       setPiAuth(ctx, "syn_testkey");
       mockHttp(

@@ -48,6 +48,39 @@
     }
   }
 
+  function hasUsableRollingFiveHourLimit(value) {
+    return (
+      value &&
+      typeof value.max === "number" &&
+      typeof value.remaining === "number"
+    );
+  }
+
+  function hasUsableWeeklyTokenLimit(value) {
+    return value && typeof value.percentRemaining === "number";
+  }
+
+  function normalizeApiErrorMessage(json, status) {
+    var fallback = "Request failed (HTTP " + status + ")";
+    if (!json || typeof json !== "object") return fallback;
+
+    var direct = typeof json.error === "string" ? json.error.trim() : "";
+    if (direct) return direct;
+
+    if (json.error && typeof json.error === "object") {
+      var nested = typeof json.error.message === "string" ? json.error.message.trim() : "";
+      if (nested) return nested;
+
+      var serialized = JSON.stringify(json.error);
+      if (serialized && serialized !== "{}") return serialized;
+    }
+
+    var message = typeof json.message === "string" ? json.message.trim() : "";
+    if (message) return message;
+
+    return fallback;
+  }
+
   function loadApiKey(ctx) {
     var piDir = resolvePiAgentDir(ctx);
 
@@ -121,8 +154,7 @@
     }
 
     if (resp.status < 200 || resp.status >= 300) {
-      var msg =
-        json && json.error ? json.error : "Request failed (HTTP " + resp.status + ")";
+      var msg = normalizeApiErrorMessage(json, resp.status);
       throw msg;
     }
 
@@ -133,10 +165,7 @@
     var lines = [];
 
     // 5h Rate Limit — hero metric (immediate blocker)
-    if (
-      json.rollingFiveHourLimit &&
-      typeof json.rollingFiveHourLimit.max === "number"
-    ) {
+    if (hasUsableRollingFiveHourLimit(json.rollingFiveHourLimit)) {
       var rfl = json.rollingFiveHourLimit;
       var rflUsed = Math.max(0, rfl.max - rfl.remaining);
       lines.push(ctx.line.progress({
@@ -148,10 +177,7 @@
     }
 
     // Mana Bar — longer-term weekly budget
-    if (
-      json.weeklyTokenLimit &&
-      typeof json.weeklyTokenLimit.percentRemaining === "number"
-    ) {
+    if (hasUsableWeeklyTokenLimit(json.weeklyTokenLimit)) {
       var pct = json.weeklyTokenLimit.percentRemaining;
       var manaUsed = Math.max(0, Math.round(100 - pct));
       lines.push(ctx.line.progress({
@@ -177,7 +203,9 @@
     }
 
     // Subscription — legacy request count, only shown if NOT on v3 rate limits
-    var onV3 = !!json.rollingFiveHourLimit || !!json.weeklyTokenLimit;
+    var onV3 =
+      hasUsableRollingFiveHourLimit(json.rollingFiveHourLimit) ||
+      hasUsableWeeklyTokenLimit(json.weeklyTokenLimit);
     if (!onV3 && json.subscription && typeof json.subscription.limit === "number") {
       var sub = json.subscription;
       var subOpts = {
