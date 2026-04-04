@@ -97,6 +97,7 @@
   function formatDollarsFromMicros(value) {
     var micros = readFiniteNumber(value)
     if (micros === null) return null
+    if (!Number.isFinite(micros)) return null
     if (micros < 0) micros = 0
     return "$" + (micros / 1000000).toFixed(2)
   }
