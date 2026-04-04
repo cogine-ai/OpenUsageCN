@@ -119,7 +119,6 @@
     return (
       readFiniteNumber(planStatus && planStatus.dailyQuotaRemainingPercent) !== null &&
       readFiniteNumber(planStatus && planStatus.weeklyQuotaRemainingPercent) !== null &&
-      readFiniteNumber(planStatus && planStatus.overageBalanceMicros) !== null &&
       readFiniteNumber(planStatus && planStatus.dailyQuotaResetAtUnix) !== null &&
       readFiniteNumber(planStatus && planStatus.weeklyQuotaResetAtUnix) !== null
     )
@@ -138,20 +137,21 @@
     var weeklyReset = unixSecondsToIso(ctx, planStatus.weeklyQuotaResetAtUnix)
     var extraUsageBalance = formatDollarsFromMicros(planStatus.overageBalanceMicros)
 
-    if (!dailyReset || !weeklyReset || !extraUsageBalance) throw QUOTA_HINT
+    if (!dailyReset || !weeklyReset) throw QUOTA_HINT
 
     var dailyLine = buildQuotaLine(ctx, "Daily quota", planStatus.dailyQuotaRemainingPercent, dailyReset, DAY_MS)
     var weeklyLine = buildQuotaLine(ctx, "Weekly quota", planStatus.weeklyQuotaRemainingPercent, weeklyReset, WEEK_MS)
 
     if (!dailyLine || !weeklyLine) throw QUOTA_HINT
 
+    var lines = [dailyLine, weeklyLine]
+    if (extraUsageBalance) {
+      lines.push(ctx.line.text({ label: "Extra usage balance", value: extraUsageBalance }))
+    }
+
     return {
       plan: planName,
-      lines: [
-        dailyLine,
-        weeklyLine,
-        ctx.line.text({ label: "Extra usage balance", value: extraUsageBalance }),
-      ],
+      lines: lines,
     }
   }
 
