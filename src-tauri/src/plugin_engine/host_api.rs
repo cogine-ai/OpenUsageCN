@@ -602,7 +602,17 @@ fn inject_http<'js>(ctx: &Ctx<'js>, host: &Object<'js>, plugin_id: &str) -> rqui
                 let timeout_ms = req.timeout_ms.unwrap_or(10_000);
                 let mut builder = reqwest::blocking::Client::builder()
                     .timeout(std::time::Duration::from_millis(timeout_ms))
+                    .connect_timeout(std::time::Duration::from_millis(timeout_ms))
                     .redirect(reqwest::redirect::Policy::none());
+
+                // Apply pre-resolved proxy (localhost bypass already configured)
+                if let Some(resolved) = crate::config::get_resolved_proxy() {
+                    builder = builder.proxy(resolved.proxy.clone());
+                    log::debug!("[http] proxy active");
+                } else {
+                    log::debug!("[http] proxy not used");
+                }
+
                 if req.dangerously_ignore_tls.unwrap_or(false) {
                     builder = builder.danger_accept_invalid_certs(true);
                 }
