@@ -33,16 +33,16 @@ pub fn get_resolved_proxy() -> Option<&'static ResolvedProxy> {
 }
 
 /// Config file path: ~/.openusage/config.json
-fn config_path() -> PathBuf {
-    dirs::home_dir()
-        .unwrap_or_default()
-        .join(".openusage")
-        .join("config.json")
+fn config_path() -> Option<PathBuf> {
+    dirs::home_dir().map(|home| home.join(".openusage").join("config.json"))
 }
 
 /// Loads config from disk, resolves proxy, logs result.
 fn load_and_resolve_proxy() -> Option<ResolvedProxy> {
-    let path = config_path();
+    let Some(path) = config_path() else {
+        log::debug!("[config] no home directory, proxy disabled");
+        return None;
+    };
     let config = match std::fs::read_to_string(&path) {
         Ok(contents) => match serde_json::from_str::<AppConfig>(&contents) {
             Ok(cfg) => cfg,
