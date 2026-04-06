@@ -233,6 +233,8 @@ fn redact_url(url: &str) -> String {
         "userid",
         "account_id",
         "accountid",
+        "profilearn",
+        "profile_arn",
         "email",
         "login",
     ];
@@ -316,6 +318,8 @@ fn redact_body(body: &str) -> String {
         "teamId",
         "payment_id",
         "paymentId",
+        "profile_arn",
+        "profileArn",
         "email",
         "login",
         "analytics_tracking_id",
@@ -2783,6 +2787,22 @@ mod tests {
     }
 
     #[test]
+    fn redact_url_redacts_profile_arn_query_param() {
+        let url = "https://q.us-east-1.amazonaws.com/getUsageLimits?profileArn=arn:aws:codewhisperer:us-east-1:699475941385:profile/EHGA3GRVQMUK&origin=AI_EDITOR";
+        let redacted = redact_url(url);
+        assert!(
+            !redacted.contains("699475941385"),
+            "profileArn should be redacted, got: {}",
+            redacted
+        );
+        assert!(
+            redacted.contains("origin=AI_EDITOR"),
+            "non-sensitive params should remain visible, got: {}",
+            redacted
+        );
+    }
+
+    #[test]
     fn redact_body_redacts_jwt() {
         let body = r#"{"token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"}"#;
         let redacted = redact_body(body);
@@ -2892,6 +2912,22 @@ mod tests {
         assert!(
             redacted.contains("[PATH]"),
             "expected path marker, got: {}",
+            redacted
+        );
+    }
+
+    #[test]
+    fn redact_body_redacts_profile_arn_fields() {
+        let body = r#"{"profileArn":"arn:aws:codewhisperer:us-east-1:699475941385:profile/EHGA3GRVQMUK","profile_arn":"arn:aws:codewhisperer:us-east-1:699475941385:profile/EHGA3GRVQMUK"}"#;
+        let redacted = redact_body(body);
+        assert!(
+            !redacted.contains("699475941385"),
+            "profile arn should be redacted, got: {}",
+            redacted
+        );
+        assert!(
+            redacted.contains("arn:...QMUK"),
+            "profile arn should use first4...last4 redaction, got: {}",
             redacted
         );
     }
