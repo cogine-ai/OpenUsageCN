@@ -1,5 +1,6 @@
 #[cfg(target_os = "macos")]
 mod app_nap;
+mod config;
 mod local_http_api;
 mod panel;
 mod plugin_engine;
@@ -514,6 +515,9 @@ pub fn run() {
 
             let version = app.package_info().version.to_string();
             log::info!("OpenUsage v{} starting", version);
+
+            // Load config early (lazy init via OnceLock, zero-cost after)
+            let _proxy = config::get_resolved_proxy();
 
             track_daily_active_if_needed(app.handle());
             #[cfg(desktop)]
