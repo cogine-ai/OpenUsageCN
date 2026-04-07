@@ -200,6 +200,35 @@
     return KEYCHAIN_SERVICE_PREFIX + getOauthConfig(ctx).oauthFileSuffix + "-credentials"
   }
 
+  function readKeychainCredentialText(ctx, service) {
+    const keychain = ctx.host.keychain
+    if (!keychain) return null
+
+    if (typeof keychain.readGenericPasswordForCurrentUser === "function") {
+      try {
+        const value = keychain.readGenericPasswordForCurrentUser(service)
+        if (value) {
+          return { value, source: "keychain-current-user" }
+        }
+      } catch (e) {
+        ctx.host.log.info("current-user keychain read failed, trying legacy lookup: " + String(e))
+      }
+    }
+
+    if (typeof keychain.readGenericPassword !== "function") return null
+
+    try {
+      const value = keychain.readGenericPassword(service)
+      if (value) {
+        return { value, source: "keychain-legacy" }
+      }
+    } catch (e) {
+      ctx.host.log.info("keychain read failed (may not exist): " + String(e))
+    }
+
+    return null
+  }
+
   function loadStoredCredentials(ctx, suppressMissingWarn) {
     const credFile = getClaudeCredentialsPath(ctx)
     // Try file first
@@ -221,21 +250,17 @@
     }
 
     // Try keychain fallback
-    try {
-      const keychainValue = ctx.host.keychain.readGenericPassword(getClaudeKeychainService(ctx))
-      if (keychainValue) {
-        const parsed = tryParseCredentialJSON(ctx, keychainValue)
-        if (parsed) {
-          const oauth = parsed.claudeAiOauth
-          if (oauth && oauth.accessToken) {
-            ctx.host.log.info("credentials loaded from keychain")
-            return { oauth, source: "keychain", fullData: parsed }
-          }
+    const keychainResult = readKeychainCredentialText(ctx, getClaudeKeychainService(ctx))
+    if (keychainResult && keychainResult.value) {
+      const parsed = tryParseCredentialJSON(ctx, keychainResult.value)
+      if (parsed) {
+        const oauth = parsed.claudeAiOauth
+        if (oauth && oauth.accessToken) {
+          ctx.host.log.info("credentials loaded from keychain")
+          return { oauth, source: keychainResult.source, fullData: parsed }
         }
-        ctx.host.log.warn("keychain has data but no valid oauth")
       }
-    } catch (e) {
-      ctx.host.log.info("keychain read failed (may not exist): " + String(e))
+      ctx.host.log.warn("keychain has data but no valid oauth")
     }
 
     if (!suppressMissingWarn) {
@@ -282,7 +307,17 @@
       } catch (e) {
         ctx.host.log.error("Failed to write Claude credentials file: " + String(e))
       }
-    } else if (source === "keychain") {
+    } else if (source === "keychain-current-user") {
+      try {
+        if (typeof ctx.host.keychain.writeGenericPasswordForCurrentUser === "function") {
+          ctx.host.keychain.writeGenericPasswordForCurrentUser(getClaudeKeychainService(ctx), text)
+        } else {
+          ctx.host.keychain.writeGenericPassword(getClaudeKeychainService(ctx), text)
+        }
+      } catch (e) {
+        ctx.host.log.error("Failed to write Claude credentials keychain: " + String(e))
+      }
+    } else if (source === "keychain-legacy" || source === "keychain") {
       try {
         ctx.host.keychain.writeGenericPassword(getClaudeKeychainService(ctx), text)
       } catch (e) {

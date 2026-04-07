@@ -73,7 +73,16 @@ fn current_macos_keychain_account() -> String {
     current_macos_keychain_account_from_user_env(read_env_from_process("USER"))
 }
 
-fn keychain_find_generic_password_args(service: &str, account: &str) -> Vec<OsString> {
+fn keychain_find_generic_password_args(service: &str) -> Vec<OsString> {
+    vec![
+        OsString::from("find-generic-password"),
+        OsString::from("-s"),
+        OsString::from(service),
+        OsString::from("-w"),
+    ]
+}
+
+fn keychain_find_generic_password_args_for_account(service: &str, account: &str) -> Vec<OsString> {
     vec![
         OsString::from("find-generic-password"),
         OsString::from("-a"),
@@ -84,7 +93,22 @@ fn keychain_find_generic_password_args(service: &str, account: &str) -> Vec<OsSt
     ]
 }
 
-fn keychain_add_generic_password_args(service: &str, account: &str, value: &str) -> Vec<OsString> {
+fn keychain_add_generic_password_args(service: &str, value: &str) -> Vec<OsString> {
+    vec![
+        OsString::from("add-generic-password"),
+        OsString::from("-U"),
+        OsString::from("-s"),
+        OsString::from(service),
+        OsString::from("-w"),
+        OsString::from(value),
+    ]
+}
+
+fn keychain_add_generic_password_args_for_account(
+    service: &str,
+    account: &str,
+    value: &str,
+) -> Vec<OsString> {
     vec![
         OsString::from("add-generic-password"),
         OsString::from("-U"),
@@ -1981,12 +2005,60 @@ fn inject_keychain<'js>(
                         "keychain API is only supported on macOS",
                     ));
                 }
+                log::info!("[plugin:{}] keychain read: service={}", pid_read, service);
+                let output = std::process::Command::new("security")
+                    .args(keychain_find_generic_password_args(&service))
+                    .output()
+                    .map_err(|e| {
+                        Exception::throw_message(
+                            &ctx_inner,
+                            &format!("keychain read failed: {}", e),
+                        )
+                    })?;
+
+                if !output.status.success() {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    let first_line = stderr.lines().next().unwrap_or("").trim();
+                    log::warn!(
+                        "[plugin:{}] keychain read miss: service={}, error={}",
+                        pid_read,
+                        service,
+                        first_line
+                    );
+                    return Err(Exception::throw_message(
+                        &ctx_inner,
+                        &format!("keychain item not found: {}", first_line),
+                    ));
+                }
+
+                log::info!(
+                    "[plugin:{}] keychain read hit: service={}",
+                    pid_read,
+                    service
+                );
+                Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+            },
+        )?,
+    )?;
+
+    let pid_read_current_user = plugin_id.to_string();
+    keychain_obj.set(
+        "readGenericPasswordForCurrentUser",
+        Function::new(
+            ctx.clone(),
+            move |ctx_inner: Ctx<'_>, service: String| -> rquickjs::Result<String> {
+                if !cfg!(target_os = "macos") {
+                    return Err(Exception::throw_message(
+                        &ctx_inner,
+                        "keychain API is only supported on macOS",
+                    ));
+                }
                 let account = current_macos_keychain_account();
-                let args = keychain_find_generic_password_args(&service, &account);
+                let args = keychain_find_generic_password_args_for_account(&service, &account);
                 let redacted_account = redact_value(&account);
                 log::info!(
                     "[plugin:{}] keychain read: service={}, account={}",
-                    pid_read,
+                    pid_read_current_user,
                     service,
                     redacted_account
                 );
@@ -2005,7 +2077,7 @@ fn inject_keychain<'js>(
                     let first_line = stderr.lines().next().unwrap_or("").trim();
                     log::warn!(
                         "[plugin:{}] keychain read miss: service={}, account={}, error={}",
-                        pid_read,
+                        pid_read_current_user,
                         service,
                         redacted_account,
                         first_line
@@ -2018,7 +2090,7 @@ fn inject_keychain<'js>(
 
                 log::info!(
                     "[plugin:{}] keychain read hit: service={}, account={}",
-                    pid_read,
+                    pid_read_current_user,
                     service,
                     redacted_account
                 );
@@ -2039,12 +2111,87 @@ fn inject_keychain<'js>(
                         "keychain API is only supported on macOS",
                     ));
                 }
+                log::info!("[plugin:{}] keychain write: service={}", pid_write, service);
+
+                let mut account_arg: Option<String> = None;
+                let find_output = std::process::Command::new("security")
+                    .args(["find-generic-password", "-s", &service])
+                    .output();
+
+                if let Ok(output) = find_output {
+                    if output.status.success() {
+                        let stdout = String::from_utf8_lossy(&output.stdout);
+                        for line in stdout.lines() {
+                            if let Some(start) = line.find("\"acct\"<blob>=\"") {
+                                let rest = &line[start + 14..];
+                                if let Some(end) = rest.find('"') {
+                                    account_arg = Some(rest[..end].to_string());
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                let output = if let Some(ref acct) = account_arg {
+                    std::process::Command::new("security")
+                        .args(keychain_add_generic_password_args_for_account(
+                            &service, acct, &value,
+                        ))
+                        .output()
+                } else {
+                    std::process::Command::new("security")
+                        .args(keychain_add_generic_password_args(&service, &value))
+                        .output()
+                }
+                .map_err(|e| {
+                    Exception::throw_message(&ctx_inner, &format!("keychain write failed: {}", e))
+                })?;
+
+                if !output.status.success() {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    let first_line = stderr.lines().next().unwrap_or("").trim();
+                    log::warn!(
+                        "[plugin:{}] keychain write failed: service={}, error={}",
+                        pid_write,
+                        service,
+                        first_line
+                    );
+                    return Err(Exception::throw_message(
+                        &ctx_inner,
+                        &format!("keychain write failed: {}", first_line),
+                    ));
+                }
+
+                log::info!(
+                    "[plugin:{}] keychain write succeeded: service={}",
+                    pid_write,
+                    service
+                );
+                Ok(())
+            },
+        )?,
+    )?;
+
+    let pid_write_current_user = plugin_id.to_string();
+    keychain_obj.set(
+        "writeGenericPasswordForCurrentUser",
+        Function::new(
+            ctx.clone(),
+            move |ctx_inner: Ctx<'_>, service: String, value: String| -> rquickjs::Result<()> {
+                if !cfg!(target_os = "macos") {
+                    return Err(Exception::throw_message(
+                        &ctx_inner,
+                        "keychain API is only supported on macOS",
+                    ));
+                }
                 let account = current_macos_keychain_account();
-                let args = keychain_add_generic_password_args(&service, &account, &value);
+                let args =
+                    keychain_add_generic_password_args_for_account(&service, &account, &value);
                 let redacted_account = redact_value(&account);
                 log::info!(
                     "[plugin:{}] keychain write: service={}, account={}",
-                    pid_write,
+                    pid_write_current_user,
                     service,
                     redacted_account
                 );
@@ -2063,7 +2210,7 @@ fn inject_keychain<'js>(
                     let first_line = stderr.lines().next().unwrap_or("").trim();
                     log::warn!(
                         "[plugin:{}] keychain write failed: service={}, account={}, error={}",
-                        pid_write,
+                        pid_write_current_user,
                         service,
                         redacted_account,
                         first_line
@@ -2076,7 +2223,7 @@ fn inject_keychain<'js>(
 
                 log::info!(
                     "[plugin:{}] keychain write succeeded: service={}, account={}",
-                    pid_write,
+                    pid_write_current_user,
                     service,
                     redacted_account
                 );
@@ -2348,7 +2495,7 @@ mod tests {
     }
 
     #[test]
-    fn keychain_api_exposes_write() {
+    fn keychain_api_exposes_write_variants() {
         let rt = Runtime::new().expect("runtime");
         let ctx = Context::full(&rt).expect("context");
         ctx.with(|ctx| {
@@ -2361,9 +2508,15 @@ mod tests {
             let _read: Function = keychain
                 .get("readGenericPassword")
                 .expect("readGenericPassword");
+            let _read_current_user: Function = keychain
+                .get("readGenericPasswordForCurrentUser")
+                .expect("readGenericPasswordForCurrentUser");
             let _write: Function = keychain
                 .get("writeGenericPassword")
                 .expect("writeGenericPassword");
+            let _write_current_user: Function = keychain
+                .get("writeGenericPasswordForCurrentUser")
+                .expect("writeGenericPasswordForCurrentUser");
         });
     }
 
@@ -2501,9 +2654,30 @@ mod tests {
     }
 
     #[test]
-    fn keychain_find_generic_password_args_include_account_and_service() {
-        let args =
-            keychain_find_generic_password_args("Claude Code-credentials", "openusage-test-user");
+    fn keychain_find_generic_password_args_include_service_only_lookup() {
+        let args = keychain_find_generic_password_args("Claude Code-credentials");
+        let rendered: Vec<String> = args
+            .into_iter()
+            .map(|value| value.to_string_lossy().into_owned())
+            .collect();
+
+        assert_eq!(
+            rendered,
+            vec![
+                "find-generic-password",
+                "-s",
+                "Claude Code-credentials",
+                "-w",
+            ]
+        );
+    }
+
+    #[test]
+    fn keychain_find_generic_password_args_for_account_include_account_and_service() {
+        let args = keychain_find_generic_password_args_for_account(
+            "Claude Code-credentials",
+            "openusage-test-user",
+        );
         let rendered: Vec<String> = args
             .into_iter()
             .map(|value| value.to_string_lossy().into_owned())
@@ -2523,8 +2697,29 @@ mod tests {
     }
 
     #[test]
-    fn keychain_add_generic_password_args_include_update_account_service_and_value() {
-        let args = keychain_add_generic_password_args(
+    fn keychain_add_generic_password_args_include_service_only_write() {
+        let args = keychain_add_generic_password_args("Claude Code-credentials", "secret-value");
+        let rendered: Vec<String> = args
+            .into_iter()
+            .map(|value| value.to_string_lossy().into_owned())
+            .collect();
+
+        assert_eq!(
+            rendered,
+            vec![
+                "add-generic-password",
+                "-U",
+                "-s",
+                "Claude Code-credentials",
+                "-w",
+                "secret-value",
+            ]
+        );
+    }
+
+    #[test]
+    fn keychain_add_generic_password_args_for_account_include_update_account_service_and_value() {
+        let args = keychain_add_generic_password_args_for_account(
             "Claude Code-credentials",
             "openusage-test-user",
             "secret-value",
