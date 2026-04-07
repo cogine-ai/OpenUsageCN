@@ -111,8 +111,8 @@ fn position_panel_from_tray(app_handle: &AppHandle) {
 /// Show the panel (initializing if needed), positioned under the tray icon.
 pub fn show_panel(app_handle: &AppHandle) {
     if let Some(panel) = get_or_init_panel!(app_handle) {
-        position_panel_from_tray(app_handle);
         panel.show_and_make_key();
+        position_panel_from_tray(app_handle);
     }
 }
 
@@ -128,8 +128,8 @@ pub fn toggle_panel(app_handle: &AppHandle) {
         panel.hide();
     } else {
         log::debug!("toggle_panel: showing panel");
-        position_panel_from_tray(app_handle);
         panel.show_and_make_key();
+        position_panel_from_tray(app_handle);
     }
 }
 
