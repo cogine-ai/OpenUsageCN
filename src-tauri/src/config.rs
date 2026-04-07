@@ -86,7 +86,7 @@ pub fn redact_proxy_url(url: &str) -> String {
     if let Some(at_pos) = url.find('@') {
         if let Some(scheme_end) = url.find("://") {
             let userinfo_start = scheme_end + 3;
-            format!("{}://***@{}", &url[..userinfo_start], &url[at_pos + 1..])
+            format!("{}***@{}", &url[..userinfo_start], &url[at_pos + 1..])
         } else {
             format!("***@{}", &url[at_pos + 1..])
         }
@@ -103,7 +103,7 @@ mod tests {
     fn redact_proxy_url_with_credentials() {
         let url = "http://user:pass@127.0.0.1:10808";
         let redacted = redact_proxy_url(url);
-        assert!(redacted.contains("***"));
+        assert_eq!(redacted, "http://***@127.0.0.1:10808");
         assert!(!redacted.contains("user"));
         assert!(!redacted.contains("pass"));
     }
