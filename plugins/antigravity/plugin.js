@@ -432,12 +432,15 @@
       // planInfo.planName field inherited from Windsurf/Codeium, which always
       // returns "Pro" for all paid tiers including Google AI Ultra.
       var ut = data.userStatus.userTier
-      if (ut && ut.name) {
-        plan = ut.name
+      var userTierName =
+        ut && typeof ut.name === "string" && ut.name.trim() ? ut.name.trim() : null
+      if (userTierName) {
+        plan = userTierName
       } else {
         var ps = data.userStatus.planStatus || {}
         var pi = ps.planInfo || {}
-        plan = pi.planName || null
+        plan =
+          typeof pi.planName === "string" && pi.planName.trim() ? pi.planName.trim() : null
       }
     }
 

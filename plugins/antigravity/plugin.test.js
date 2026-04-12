@@ -196,8 +196,6 @@ describe("antigravity plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    expect(result.plan).toBe("Pro")
-
     // No userTier in default fixture → falls back to planInfo.planName
     expect(result.plan).toBe("Pro")
 
