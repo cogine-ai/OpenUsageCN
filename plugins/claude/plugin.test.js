@@ -468,13 +468,48 @@ describe("claude plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("Token expired")
   })
 
-  it("throws HTTP status details for non-auth usage failures", async () => {
+  it("shows rate limited badge on 429 without throwing", async () => {
     const ctx = makeCtx()
     ctx.host.fs.readText = () => JSON.stringify({ claudeAiOauth: { accessToken: "token" } })
     ctx.host.fs.exists = () => true
-    ctx.host.http.request.mockReturnValue({ status: 429, bodyText: "" })
+    ctx.host.http.request.mockReturnValue({ status: 429, bodyText: "", headers: {} })
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Usage request failed (HTTP 429)")
+    const result = plugin.probe(ctx)
+    const statusLine = result.lines.find((line) => line.label === "Status")
+    expect(statusLine).toBeTruthy()
+    expect(statusLine.text).toContain("Rate limited")
+    expect(result.lines.find((line) => line.label === "Note")).toBeTruthy()
+  })
+
+  it("shows Retry-After info on 429 when header is present", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.readText = () => JSON.stringify({ claudeAiOauth: { accessToken: "token" } })
+    ctx.host.fs.exists = () => true
+    ctx.host.http.request.mockReturnValue({
+      status: 429,
+      bodyText: "",
+      headers: { "Retry-After": "600" }, // 10 minutes
+    })
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    const statusLine = result.lines.find((line) => line.label === "Status")
+    expect(statusLine).toBeTruthy()
+    expect(statusLine.text).toContain("10m")
+    const noteLine = result.lines.find((line) => line.label === "Note")
+    expect(noteLine).toBeTruthy()
+    expect(noteLine.value).toContain("10m")
+  })
+
+  it("shows generic rate limited message when Retry-After is missing", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.readText = () => JSON.stringify({ claudeAiOauth: { accessToken: "token" } })
+    ctx.host.fs.exists = () => true
+    ctx.host.http.request.mockReturnValue({ status: 429, bodyText: "", headers: {} })
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    const statusLine = result.lines.find((line) => line.label === "Status")
+    expect(statusLine).toBeTruthy()
+    expect(statusLine.text).toContain("try again later")
   })
 
   it("uses keychain credentials", async () => {
@@ -1716,6 +1751,49 @@ describe("claude plugin", () => {
       const last30 = result.lines.find((l) => l.label === "Last 30 Days")
       expect(todayLine.value).toContain("1.5K tokens")
       expect(last30.value).toContain("12K tokens")
+    })
+
+    it("shows rate limited status after all retries exhausted", async () => {
+      const todayKey = localDayKey(new Date())
+      const ctx = makeProbeCtx({
+        ccusageResult: okUsage([
+          { date: todayKey, inputTokens: 100, outputTokens: 50, totalTokens: 150, totalCost: 0.25 },
+        ]),
+      })
+      // All calls return 429
+      ctx.host.http.request.mockReturnValue({
+        status: 429,
+        bodyText: '{"error":"rate limited"}',
+        headers: { "Retry-After": "1200" }, // 20 minutes
+      })
+      const plugin = await loadPlugin()
+      const result = plugin.probe(ctx)
+      expect(result.lines.find((line) => line.label === "Today")).toBeTruthy()
+      const statusLine = result.lines.find((line) => line.label === "Status")
+      expect(statusLine).toBeTruthy()
+      expect(statusLine.text).toContain("20m")
+      const noteLine = result.lines.find((line) => line.label === "Note")
+      expect(noteLine).toBeTruthy()
+      expect(noteLine.value).toContain("20m")
+    })
+  })
+
+  describe("rate limiting (429)", () => {
+    it("parses Retry-After HTTP-date header", async () => {
+      const ctx = makeCtx()
+      ctx.host.fs.readText = () => JSON.stringify({ claudeAiOauth: { accessToken: "token" } })
+      ctx.host.fs.exists = () => true
+      const futureDate = new Date(Date.now() + 15 * 60 * 1000).toUTCString()
+      ctx.host.http.request.mockReturnValue({
+        status: 429,
+        bodyText: "",
+        headers: { "Retry-After": futureDate },
+      })
+      const plugin = await loadPlugin()
+      const result = plugin.probe(ctx)
+      const noteLine = result.lines.find((line) => line.label === "Note")
+      expect(noteLine).toBeTruthy()
+      expect(noteLine.value).toContain("15m")
     })
   })
 })
