@@ -780,11 +780,11 @@ describe("App", () => {
     render(<App />)
     const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
     await userEvent.click(settingsButtons[0])
-    const checkboxes = await screen.findAllByRole("checkbox")
-    const pluginCheckbox = checkboxes[checkboxes.length - 1]
-    await userEvent.click(pluginCheckbox)
+    // Re-query before each click: the Checkbox remounts on each toggle because
+    // its key includes plugin.enabled, so the reference goes stale after click 1.
+    await userEvent.click((await screen.findAllByRole("checkbox")).at(-1)!)
     expect(state.savePluginSettingsMock).toHaveBeenCalledTimes(1)
-    await userEvent.click(pluginCheckbox)
+    await userEvent.click((await screen.findAllByRole("checkbox")).at(-1)!)
     expect(state.savePluginSettingsMock).toHaveBeenCalledTimes(2)
   })
 
