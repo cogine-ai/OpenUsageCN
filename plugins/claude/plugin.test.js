@@ -1822,5 +1822,148 @@ describe("claude plugin", () => {
         vi.useRealTimers()
       }
     })
+
+    it("does not call API again while rate-limit window is active", async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date("2026-04-14T10:00:00.000Z"))
+      try {
+        const ctx = makeCtx()
+        ctx.host.fs.readText = () => JSON.stringify({ claudeAiOauth: { accessToken: "token" } })
+        ctx.host.fs.exists = () => true
+        ctx.host.http.request.mockReturnValue({
+          status: 429,
+          bodyText: "",
+          headers: { "Retry-After": "300" }, // 5 minutes
+        })
+        const plugin = await loadPlugin()
+
+        // First probe — gets 429, stores rateLimitedUntilMs
+        plugin.probe(ctx)
+        expect(ctx.host.http.request).toHaveBeenCalledTimes(1)
+
+        // Second probe 60 s later — still within window, must NOT call API
+        vi.setSystemTime(new Date("2026-04-14T10:01:00.000Z"))
+        const result2 = plugin.probe(ctx)
+        expect(ctx.host.http.request).toHaveBeenCalledTimes(1) // no new request
+        const statusLine = result2.lines.find((l) => l.label === "Status")
+        expect(statusLine).toBeTruthy()
+        expect(statusLine.text).toMatch(/4m/) // ~4 minutes remaining
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it("resumes API calls after rate-limit window expires", async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date("2026-04-14T10:00:00.000Z"))
+      try {
+        const ctx = makeCtx()
+        ctx.host.fs.readText = () => JSON.stringify({ claudeAiOauth: { accessToken: "token" } })
+        ctx.host.fs.exists = () => true
+        ctx.host.http.request
+          .mockReturnValueOnce({ status: 429, bodyText: "", headers: { "Retry-After": "60" } })
+          .mockReturnValue({ status: 200, bodyText: "{}", headers: {} })
+        const plugin = await loadPlugin()
+
+        // First probe → 429
+        plugin.probe(ctx)
+        expect(ctx.host.http.request).toHaveBeenCalledTimes(1)
+
+        // 90 s later — window expired, should attempt API again
+        vi.setSystemTime(new Date("2026-04-14T10:01:30.000Z"))
+        const result2 = plugin.probe(ctx)
+        expect(ctx.host.http.request).toHaveBeenCalledTimes(2)
+        // No rate-limited badge after success
+        expect(result2.lines.find((l) => l.label === "Status")).toBeUndefined()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it("skips API call when minimum fetch interval has not elapsed", async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date("2026-04-14T10:00:00.000Z"))
+      try {
+        const ctx = makeCtx()
+        ctx.host.fs.readText = () => JSON.stringify({ claudeAiOauth: { accessToken: "token" } })
+        ctx.host.fs.exists = () => true
+        ctx.host.http.request.mockReturnValue({ status: 200, bodyText: "{}", headers: {} })
+        const plugin = await loadPlugin()
+
+        // First probe — succeeds
+        plugin.probe(ctx)
+        expect(ctx.host.http.request).toHaveBeenCalledTimes(1)
+
+        // 30 s later — within MIN_USAGE_FETCH_INTERVAL_MS (5 min), no new request
+        vi.setSystemTime(new Date("2026-04-14T10:00:30.000Z"))
+        plugin.probe(ctx)
+        expect(ctx.host.http.request).toHaveBeenCalledTimes(1)
+
+        // 5+ minutes later — interval elapsed, should fetch again
+        vi.setSystemTime(new Date("2026-04-14T10:05:01.000Z"))
+        plugin.probe(ctx)
+        expect(ctx.host.http.request).toHaveBeenCalledTimes(2)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it("shows cached plan data while rate-limited", async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date("2026-04-14T10:00:00.000Z"))
+      try {
+        const successBody = JSON.stringify({
+          five_hour: { utilization: 42, resets_at: null },
+        })
+        const ctx = makeCtx()
+        ctx.host.fs.readText = () => JSON.stringify({ claudeAiOauth: { accessToken: "token" } })
+        ctx.host.fs.exists = () => true
+        ctx.host.http.request
+          .mockReturnValueOnce({ status: 200, bodyText: successBody, headers: {} })
+          .mockReturnValue({ status: 429, bodyText: "", headers: { "Retry-After": "300" } })
+        const plugin = await loadPlugin()
+
+        // First probe succeeds → data cached
+        const result1 = plugin.probe(ctx)
+        expect(result1.lines.find((l) => l.label === "Session")).toBeTruthy()
+
+        // Second probe — 429, but cached data is shown alongside rate-limit badge
+        vi.setSystemTime(new Date("2026-04-14T10:05:01.000Z")) // past min interval
+        const result2 = plugin.probe(ctx)
+        expect(result2.lines.find((l) => l.label === "Session")).toBeTruthy()
+        expect(result2.lines.find((l) => l.label === "Status")).toBeTruthy()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it("uses default 5-minute backoff when no Retry-After header on 429", async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date("2026-04-14T10:00:00.000Z"))
+      try {
+        const ctx = makeCtx()
+        ctx.host.fs.readText = () => JSON.stringify({ claudeAiOauth: { accessToken: "token" } })
+        ctx.host.fs.exists = () => true
+        ctx.host.http.request
+          .mockReturnValueOnce({ status: 429, bodyText: "", headers: {} }) // no Retry-After
+          .mockReturnValue({ status: 200, bodyText: "{}", headers: {} })
+        const plugin = await loadPlugin()
+
+        plugin.probe(ctx)
+        expect(ctx.host.http.request).toHaveBeenCalledTimes(1)
+
+        // 4 min 59 s later — default 5 min backoff still active
+        vi.setSystemTime(new Date("2026-04-14T10:04:59.000Z"))
+        plugin.probe(ctx)
+        expect(ctx.host.http.request).toHaveBeenCalledTimes(1)
+
+        // 5 min 1 s later — backoff expired
+        vi.setSystemTime(new Date("2026-04-14T10:05:01.000Z"))
+        plugin.probe(ctx)
+        expect(ctx.host.http.request).toHaveBeenCalledTimes(2)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
   })
 })
