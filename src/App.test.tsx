@@ -774,10 +774,10 @@ describe("App", () => {
   })
 
   it("toggles plugins in settings", async () => {
+    // Use already-normalised settings so no init save fires (b is disabled
+    // because "b" is not in DEFAULT_ENABLED_PLUGINS = ["claude","codex","cursor"])
+    state.loadPluginSettingsMock.mockResolvedValue({ order: ["a", "b"], disabled: ["b"] })
     render(<App />)
-    // Wait for app-init normalisation save to complete before counting
-    await waitFor(() => expect(state.savePluginSettingsMock).toHaveBeenCalled())
-    state.savePluginSettingsMock.mockClear()
     const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
     await userEvent.click(settingsButtons[0])
     const checkboxes = await screen.findAllByRole("checkbox")
