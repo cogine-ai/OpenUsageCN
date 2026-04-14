@@ -424,7 +424,7 @@
 
   function parseRetryAfterSeconds(headers) {
     if (!headers) return null
-    const raw = headers["retry-after"] || headers["Retry-After"]
+    const raw = headers["retry-after"] ?? headers["Retry-After"]
     if (raw === undefined || raw === null) return null
     const str = String(raw).trim()
     if (!str) return null
@@ -444,18 +444,6 @@
     if (seconds <= 0) return "now"
     const mins = Math.ceil(seconds / 60)
     return mins + "m"
-  }
-
-  function fetchUsageWithRetryAfter(ctx, accessToken) {
-    const resp = fetchUsage(ctx, accessToken)
-    if (resp.status === 429) {
-      const retryAfter = parseRetryAfterSeconds(resp.headers)
-      if (retryAfter !== null) {
-        ctx.host.log.info("429 received, Retry-After: " + retryAfter + "s")
-        resp._retryAfterSeconds = retryAfter
-      }
-    }
-    return resp
   }
 
   function queryTokenUsage(ctx, homePath) {
@@ -675,7 +663,7 @@
         resp = ctx.util.retryOnceOnAuth({
           request: (token) => {
             try {
-              return fetchUsageWithRetryAfter(ctx, token || accessToken)
+              return fetchUsage(ctx, token || accessToken)
             } catch (e) {
               ctx.host.log.error("usage request exception: " + String(e))
               if (didRefresh) {
@@ -703,7 +691,7 @@
 
       if (resp.status === 429) {
         rateLimited = true
-        retryAfterSeconds = resp._retryAfterSeconds ?? null
+        retryAfterSeconds = parseRetryAfterSeconds(resp.headers)
         ctx.host.log.warn("usage rate limited (429), skipping live usage fetch")
         if (retryAfterSeconds !== null) {
           ctx.host.log.info("Retry-After: " + retryAfterSeconds + "s")

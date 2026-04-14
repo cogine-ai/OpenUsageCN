@@ -1799,21 +1799,28 @@ describe("claude plugin", () => {
 
   describe("rate limiting (429)", () => {
     it("parses Retry-After HTTP-date header", async () => {
-      const ctx = makeCtx()
-      ctx.host.fs.readText = () => JSON.stringify({ claudeAiOauth: { accessToken: "token" } })
-      ctx.host.fs.exists = () => true
-      // Use a fixed HTTP-date to avoid flakiness
-      ctx.host.http.request.mockReturnValue({
-        status: 429,
-        bodyText: "",
-        headers: { "Retry-After": "Mon, 13 Apr 2026 12:30:00 GMT" },
-      })
-      const plugin = await loadPlugin()
-      const result = plugin.probe(ctx)
-      const noteLine = result.lines.find((line) => line.label === "Note")
-      expect(noteLine).toBeTruthy()
-      // Should show some minute value or "now" (depends on current time)
-      expect(noteLine.value).toMatch(/retry in ~(\d+m|now)/)
+      // Freeze time so HTTP-date parsing is deterministic
+      const frozenNow = new Date("2026-04-14T10:00:00.000Z")
+      vi.useFakeTimers()
+      vi.setSystemTime(frozenNow)
+      try {
+        const ctx = makeCtx()
+        ctx.host.fs.readText = () => JSON.stringify({ claudeAiOauth: { accessToken: "token" } })
+        ctx.host.fs.exists = () => true
+        // 15 minutes after frozenNow → expect "~15m"
+        ctx.host.http.request.mockReturnValue({
+          status: 429,
+          bodyText: "",
+          headers: { "Retry-After": "Mon, 14 Apr 2026 10:15:00 GMT" },
+        })
+        const plugin = await loadPlugin()
+        const result = plugin.probe(ctx)
+        const noteLine = result.lines.find((line) => line.label === "Note")
+        expect(noteLine).toBeTruthy()
+        expect(noteLine.value).toBe("Live usage rate limited — retry in ~15m")
+      } finally {
+        vi.useRealTimers()
+      }
     })
   })
 })
