@@ -777,6 +777,8 @@ describe("claude plugin", () => {
     const plugin = await loadPlugin()
     expect(() => plugin.probe(ctx)).toThrow("HTTP 500")
 
+    // Reset lastUsageFetchMs so the second probe is not throttled by min-interval guard
+    plugin._resetState()
     ctx.host.http.request.mockReturnValueOnce({ status: 200, bodyText: "not-json" })
     expect(() => plugin.probe(ctx)).toThrow("Usage response invalid")
   })
@@ -1835,6 +1837,8 @@ describe("claude plugin", () => {
         const ctx = makeCtx()
         ctx.host.fs.readText = () => JSON.stringify({ claudeAiOauth: { accessToken: "token" } })
         ctx.host.fs.exists = () => true
+        // Isolate Promoclock so it doesn't add extra calls to ctx.host.http.request
+        ctx.util.requestJson = vi.fn(() => ({ resp: { status: 200, bodyText: "{}", headers: {} }, json: {} }))
         ctx.host.http.request.mockReturnValue({
           status: 429,
           bodyText: "",
@@ -1865,6 +1869,8 @@ describe("claude plugin", () => {
         const ctx = makeCtx()
         ctx.host.fs.readText = () => JSON.stringify({ claudeAiOauth: { accessToken: "token" } })
         ctx.host.fs.exists = () => true
+        // Isolate Promoclock so it doesn't add extra calls to ctx.host.http.request
+        ctx.util.requestJson = vi.fn(() => ({ resp: { status: 200, bodyText: "{}", headers: {} }, json: {} }))
         ctx.host.http.request
           .mockReturnValueOnce({ status: 429, bodyText: "", headers: { "Retry-After": "60" } })
           .mockReturnValue({ status: 200, bodyText: "{}", headers: {} })
@@ -1892,6 +1898,8 @@ describe("claude plugin", () => {
         const ctx = makeCtx()
         ctx.host.fs.readText = () => JSON.stringify({ claudeAiOauth: { accessToken: "token" } })
         ctx.host.fs.exists = () => true
+        // Isolate Promoclock so it doesn't add extra calls to ctx.host.http.request
+        ctx.util.requestJson = vi.fn(() => ({ resp: { status: 200, bodyText: "{}", headers: {} }, json: {} }))
         ctx.host.http.request.mockReturnValue({ status: 200, bodyText: "{}", headers: {} })
         const plugin = await loadPlugin()
 
@@ -1949,6 +1957,8 @@ describe("claude plugin", () => {
         const ctx = makeCtx()
         ctx.host.fs.readText = () => JSON.stringify({ claudeAiOauth: { accessToken: "token" } })
         ctx.host.fs.exists = () => true
+        // Isolate Promoclock so it doesn't add extra calls to ctx.host.http.request
+        ctx.util.requestJson = vi.fn(() => ({ resp: { status: 200, bodyText: "{}", headers: {} }, json: {} }))
         ctx.host.http.request
           .mockReturnValueOnce({ status: 429, bodyText: "", headers: {} }) // no Retry-After
           .mockReturnValue({ status: 200, bodyText: "{}", headers: {} })
