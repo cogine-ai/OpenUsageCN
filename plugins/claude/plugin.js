@@ -660,15 +660,22 @@
         retryAfterSeconds = Math.ceil((rateLimitedUntilMs - nowMs) / 1000)
         data = cachedUsageData
         ctx.host.log.info("usage fetch skipped: rate-limited for " + retryAfterSeconds + "s more")
-      } else if (nowMs - lastUsageFetchMs < MIN_USAGE_FETCH_INTERVAL_MS) {
-        // Polled too recently — reuse last cached response without hitting the API.
-        data = cachedUsageData
-        ctx.host.log.info(
-          "usage fetch skipped: last fetch was " +
-          Math.round((nowMs - lastUsageFetchMs) / 1000) + "s ago (min interval " +
-          MIN_USAGE_FETCH_INTERVAL_MS / 1000 + "s)"
-        )
       } else {
+        // Rate-limit window has expired (or was never set).  Check whether we were
+        // previously rate-limited so we can bypass the min-interval guard: a short
+        // Retry-After (< 5 min) must not be swallowed by the normal poll throttle.
+        const wasRateLimited = rateLimitedUntilMs > 0
+        rateLimitedUntilMs = 0
+
+        if (!wasRateLimited && nowMs - lastUsageFetchMs < MIN_USAGE_FETCH_INTERVAL_MS) {
+          // Polled too recently in normal operation — reuse last cached response.
+          data = cachedUsageData
+          ctx.host.log.info(
+            "usage fetch skipped: last fetch was " +
+            Math.round((nowMs - lastUsageFetchMs) / 1000) + "s ago (min interval " +
+            MIN_USAGE_FETCH_INTERVAL_MS / 1000 + "s)"
+          )
+        } else {
         // Proactively refresh if token is expired or about to expire
         if (needsRefresh(ctx, creds.oauth, nowMs)) {
           ctx.host.log.info("token needs refresh (expired or expiring soon)")
@@ -737,6 +744,7 @@
           cachedUsageData = data
           rateLimitedUntilMs = 0
         }
+        } // end fetch else-branch
       }
     } else {
       ctx.host.log.info("skipping live usage fetch for inference-only token")
