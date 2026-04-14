@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it, vi } from "vitest"
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import { makeCtx } from "../test-helpers.js"
 
 let plugin = null
