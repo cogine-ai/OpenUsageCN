@@ -875,5 +875,13 @@
     return { plan: plan, lines: lines }
   }
 
-  globalThis.__openusage_plugin = { id: "claude", probe }
+  // _resetState is a testing hook — resets module-scope rate-limit state between tests.
+  // The production host never calls this.
+  function _resetState() {
+    rateLimitedUntilMs = 0
+    lastUsageFetchMs = 0
+    cachedUsageData = null
+  }
+
+  globalThis.__openusage_plugin = { id: "claude", probe, _resetState }
 })()

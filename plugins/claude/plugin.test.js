@@ -8,6 +8,11 @@ beforeAll(async () => {
   plugin = globalThis.__openusage_plugin
 })
 
+beforeEach(() => {
+  // Reset module-scope rate-limit state so tests don't bleed into each other
+  plugin?._resetState()
+})
+
 const loadPlugin = async () => plugin
 
 const SAMPLE_PROMOCLOCK_RESPONSE = {
