@@ -1,5 +1,5 @@
 import { Fragment, useMemo } from "react"
-import { ExternalLink, Hourglass, RefreshCw } from "lucide-react"
+import { AlertCircle, ExternalLink, Hourglass, RefreshCw } from "lucide-react"
 import { openUrl } from "@tauri-apps/plugin-opener"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -27,6 +27,7 @@ interface ProviderCardProps {
   lines?: MetricLine[]
   skeletonLines?: ManifestLine[]
   lastManualRefreshAt?: number | null
+  lastUpdatedAt?: number | null
   onRetry?: () => void
   scopeFilter?: "overview" | "all"
   displayMode: DisplayMode
@@ -79,6 +80,17 @@ function PaceIndicator({
   )
 }
 
+function formatRelativeTime(diffMs: number): string {
+  const seconds = Math.floor(diffMs / 1000)
+  if (seconds < 60) return "just now"
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  return `${days}d ago`
+}
+
 export function ProviderCard({
   name,
   plan,
@@ -89,6 +101,7 @@ export function ProviderCard({
   lines = [],
   skeletonLines = [],
   lastManualRefreshAt,
+  lastUpdatedAt,
   onRetry,
   scopeFilter = "all",
   displayMode,
@@ -118,10 +131,13 @@ export function ProviderCard({
     (line) => line.type === "progress" && Boolean(line.resetsAt)
   )
 
+  const hasStaleData = filteredLines.length > 0
+  const isRefreshingWithData = loading && hasStaleData
+
   const now = useNowTicker({
-    enabled: cooldownRemainingMs > 0 || hasResetCountdown,
+    enabled: cooldownRemainingMs > 0 || hasResetCountdown || Boolean(lastUpdatedAt),
     intervalMs: cooldownRemainingMs > 0 ? 1000 : 30_000,
-    stopAfterMs: cooldownRemainingMs > 0 && !hasResetCountdown ? cooldownRemainingMs : null,
+    stopAfterMs: cooldownRemainingMs > 0 && !hasResetCountdown && !lastUpdatedAt ? cooldownRemainingMs : null,
   })
 
   const inCooldown = lastManualRefreshAt
@@ -242,13 +258,20 @@ export function ProviderCard({
             ))}
           </div>
         )}
-        {error && <PluginError message={error} />}
+        {error && !hasStaleData && <PluginError message={error} />}
 
-        {loading && !error && (
+        {error && hasStaleData && (
+          <div className="flex items-center gap-1.5 mb-2 text-xs text-destructive">
+            <AlertCircle className="h-3 w-3 flex-shrink-0" />
+            <span className="truncate">{error}</span>
+          </div>
+        )}
+
+        {loading && !hasStaleData && !error && (
           <SkeletonLines lines={filteredSkeletonLines} />
         )}
 
-        {!loading && !error && (
+        {hasStaleData && (
           <div className="space-y-4">
             {groupLinesByType(filteredLines).map((group, gi) =>
               group.kind === "text" ? (
@@ -261,6 +284,7 @@ export function ProviderCard({
                       resetTimerDisplayMode={resetTimerDisplayMode}
                       onResetTimerDisplayModeToggle={onResetTimerDisplayModeToggle}
                       now={now}
+                      refreshing={isRefreshingWithData}
                     />
                   ))}
                 </div>
@@ -274,11 +298,23 @@ export function ProviderCard({
                       resetTimerDisplayMode={resetTimerDisplayMode}
                       onResetTimerDisplayModeToggle={onResetTimerDisplayModeToggle}
                       now={now}
+                      refreshing={isRefreshingWithData}
                     />
                   ))}
                 </Fragment>
               )
             )}
+          </div>
+        )}
+
+        {lastUpdatedAt && (
+          <div className="mt-2 text-[10px] text-muted-foreground text-right">
+            <time
+              dateTime={new Date(lastUpdatedAt).toISOString()}
+              title={new Date(lastUpdatedAt).toLocaleString()}
+            >
+              Updated {formatRelativeTime(now - lastUpdatedAt)}
+            </time>
           </div>
         )}
       </div>
@@ -293,12 +329,14 @@ function MetricLineRenderer({
   resetTimerDisplayMode,
   onResetTimerDisplayModeToggle,
   now,
+  refreshing,
 }: {
   line: MetricLine
   displayMode: DisplayMode
   resetTimerDisplayMode: ResetTimerDisplayMode
   onResetTimerDisplayModeToggle?: () => void
   now: number
+  refreshing?: boolean
 }) {
   if (line.type === "text") {
     return (
@@ -441,6 +479,7 @@ function MetricLineRenderer({
           value={percent}
           indicatorColor={line.color}
           markerValue={paceMarkerValue}
+          refreshing={refreshing}
         />
         <div className="flex justify-between items-center mt-1.5">
           <span className="text-xs text-muted-foreground tabular-nums">
