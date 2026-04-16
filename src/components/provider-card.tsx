@@ -81,7 +81,7 @@ function PaceIndicator({
 }
 
 function formatRelativeTime(diffMs: number): string {
-  const seconds = Math.floor(diffMs / 1000)
+  const seconds = Math.floor(Math.max(0, diffMs) / 1000)
   if (seconds < 60) return "just now"
   const minutes = Math.floor(seconds / 60)
   if (minutes < 60) return `${minutes}m ago`
@@ -134,9 +134,26 @@ export function ProviderCard({
   const hasStaleData = filteredLines.length > 0
   const isRefreshingWithData = loading && hasStaleData
 
+  // Pick tick rate for "Updated Xm ago" based on age: minute-granular while <1h,
+  // hourly while <1d, daily beyond. Avoids a per-card 30s interval running forever.
+  const lastUpdatedTickMs = useMemo(() => {
+    if (!lastUpdatedAt) return null
+    const age = Math.max(0, Date.now() - lastUpdatedAt)
+    if (age < 60 * 60 * 1000) return 60_000
+    if (age < 24 * 60 * 60 * 1000) return 60 * 60 * 1000
+    return 24 * 60 * 60 * 1000
+  }, [lastUpdatedAt])
+
+  const tickerIntervalMs =
+    cooldownRemainingMs > 0
+      ? 1000
+      : hasResetCountdown
+        ? 30_000
+        : lastUpdatedTickMs ?? 30_000
+
   const now = useNowTicker({
     enabled: cooldownRemainingMs > 0 || hasResetCountdown || Boolean(lastUpdatedAt),
-    intervalMs: cooldownRemainingMs > 0 ? 1000 : 30_000,
+    intervalMs: tickerIntervalMs,
     stopAfterMs: cooldownRemainingMs > 0 && !hasResetCountdown && !lastUpdatedAt ? cooldownRemainingMs : null,
   })
 
@@ -261,10 +278,22 @@ export function ProviderCard({
         {error && !hasStaleData && <PluginError message={error} />}
 
         {error && hasStaleData && (
-          <div className="flex items-center gap-1.5 mb-2 text-xs text-destructive">
-            <AlertCircle className="h-3 w-3 flex-shrink-0" />
-            <span className="truncate">{error}</span>
-          </div>
+          <Tooltip>
+            <TooltipTrigger
+              render={(props) => (
+                <div
+                  {...props}
+                  className="flex items-center gap-1.5 mb-2 text-xs text-destructive"
+                >
+                  <AlertCircle className="h-3 w-3 flex-shrink-0" />
+                  <span className="truncate">{error}</span>
+                </div>
+              )}
+            />
+            <TooltipContent side="top" className="max-w-xs break-words text-xs">
+              {error}
+            </TooltipContent>
+          </Tooltip>
         )}
 
         {loading && !hasStaleData && !error && (
@@ -309,12 +338,22 @@ export function ProviderCard({
 
         {lastUpdatedAt && (
           <div className="mt-2 text-[10px] text-muted-foreground text-right">
-            <time
-              dateTime={new Date(lastUpdatedAt).toISOString()}
-              title={new Date(lastUpdatedAt).toLocaleString()}
-            >
-              Updated {formatRelativeTime(now - lastUpdatedAt)}
-            </time>
+            <Tooltip>
+              <TooltipTrigger
+                render={(props) => (
+                  <time
+                    {...props}
+                    dateTime={new Date(lastUpdatedAt).toISOString()}
+                    aria-label={`Updated ${formatRelativeTime(now - lastUpdatedAt)} (${new Date(lastUpdatedAt).toLocaleString()})`}
+                  >
+                    Updated {formatRelativeTime(now - lastUpdatedAt)}
+                  </time>
+                )}
+              />
+              <TooltipContent side="top">
+                {new Date(lastUpdatedAt).toLocaleString()}
+              </TooltipContent>
+            </Tooltip>
           </div>
         )}
       </div>
