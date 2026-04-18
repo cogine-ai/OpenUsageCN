@@ -795,6 +795,16 @@
           periodDurationMs: 7 * 24 * 60 * 60 * 1000 // 7 days
         }))
       }
+      if (data.seven_day_omelette && typeof data.seven_day_omelette.utilization === "number") {
+        lines.push(ctx.line.progress({
+          label: "Claude Design",
+          used: data.seven_day_omelette.utilization,
+          limit: 100,
+          format: { kind: "percent" },
+          resetsAt: ctx.util.toIso(data.seven_day_omelette.resets_at),
+          periodDurationMs: 7 * 24 * 60 * 60 * 1000 // 7 days
+        }))
+      }
 
       if (data.extra_usage && data.extra_usage.is_enabled) {
         const used = data.extra_usage.used_credits
