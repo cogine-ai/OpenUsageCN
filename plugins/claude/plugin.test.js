@@ -496,6 +496,59 @@ describe("claude plugin", () => {
     expect(result.lines.find((line) => line.label === "Extra usage spent")).toBeTruthy()
   })
 
+  it("renders Claude Design line from seven_day_omelette with normalized resetsAt", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.readText = () =>
+      JSON.stringify({ claudeAiOauth: { accessToken: "token", subscriptionType: "pro" } })
+    ctx.host.fs.exists = () => true
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify({
+        seven_day_omelette: { utilization: 7, resets_at: "2099-01-01T00:00:00.000Z" },
+      }),
+    })
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    const line = result.lines.find((l) => l.label === "Claude Design")
+    expect(line).toBeTruthy()
+    expect(line.used).toBe(7)
+    expect(line.limit).toBe(100)
+    expect(line.format).toEqual({ kind: "percent" })
+    expect(line.resetsAt).toBe("2099-01-01T00:00:00.000Z")
+  })
+
+  it("omits Claude Design line when seven_day_omelette has no utilization", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.readText = () =>
+      JSON.stringify({ claudeAiOauth: { accessToken: "token", subscriptionType: "pro" } })
+    ctx.host.fs.exists = () => true
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify({
+        seven_day_omelette: {},
+      }),
+    })
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    expect(result.lines.find((l) => l.label === "Claude Design")).toBeUndefined()
+  })
+
+  it("omits Claude Design line when seven_day_omelette utilization is non-numeric", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.readText = () =>
+      JSON.stringify({ claudeAiOauth: { accessToken: "token", subscriptionType: "pro" } })
+    ctx.host.fs.exists = () => true
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify({
+        seven_day_omelette: { utilization: "5", resets_at: "2099-01-01T00:00:00.000Z" },
+      }),
+    })
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    expect(result.lines.find((l) => l.label === "Claude Design")).toBeUndefined()
+  })
+
   it("omits extra usage line when used credits are zero and no limit exists", async () => {
     const ctx = makeCtx()
     ctx.host.fs.readText = () =>
