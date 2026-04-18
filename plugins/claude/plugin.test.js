@@ -504,7 +504,7 @@ describe("claude plugin", () => {
     ctx.host.http.request.mockReturnValue({
       status: 200,
       bodyText: JSON.stringify({
-        seven_day_omelette: { utilization: 7, resets_at: "2099-01-01T00:00:00.000Z" },
+        seven_day_omelette: { utilization: 7, resets_at: "2099-01-01 00:00:00 UTC" },
       }),
     })
     const plugin = await loadPlugin()
