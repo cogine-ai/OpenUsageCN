@@ -225,6 +225,11 @@ body,
 .animate-shimmer {
   animation: shimmer 1.5s ease-in-out infinite;
 }
+@media (prefers-reduced-motion: reduce) {
+  .animate-shimmer {
+    animation: none;
+  }
+}
 
 /* Remove focus rings - this is a menu bar app, not keyboard-navigated */
 *:focus,

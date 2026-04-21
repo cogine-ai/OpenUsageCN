@@ -131,30 +131,17 @@ export function ProviderCard({
     (line) => line.type === "progress" && Boolean(line.resetsAt)
   )
 
-  const hasStaleData = filteredLines.length > 0
+  // "has ever loaded" — true if either we have a prior success timestamp,
+  // or the parent is passing lines directly (tests + legacy state paths).
+  const hasStaleData = lastUpdatedAt != null || filteredLines.length > 0
   const isRefreshingWithData = loading && hasStaleData
 
-  // Pick tick rate for "Updated Xm ago" based on age: minute-granular while <1h,
-  // hourly while <1d, daily beyond. Avoids a per-card 30s interval running forever.
-  const lastUpdatedTickMs = useMemo(() => {
-    if (!lastUpdatedAt) return null
-    const age = Math.max(0, Date.now() - lastUpdatedAt)
-    if (age < 60 * 60 * 1000) return 60_000
-    if (age < 24 * 60 * 60 * 1000) return 60 * 60 * 1000
-    return 24 * 60 * 60 * 1000
-  }, [lastUpdatedAt])
-
-  const tickerIntervalMs =
-    cooldownRemainingMs > 0
-      ? 1000
-      : hasResetCountdown
-        ? 30_000
-        : lastUpdatedTickMs ?? 30_000
+  const tickerIntervalMs = cooldownRemainingMs > 0 ? 1000 : 30_000
 
   const now = useNowTicker({
-    enabled: cooldownRemainingMs > 0 || hasResetCountdown || Boolean(lastUpdatedAt),
+    enabled: cooldownRemainingMs > 0 || hasResetCountdown,
     intervalMs: tickerIntervalMs,
-    stopAfterMs: cooldownRemainingMs > 0 && !hasResetCountdown && !lastUpdatedAt ? cooldownRemainingMs : null,
+    stopAfterMs: cooldownRemainingMs > 0 && !hasResetCountdown ? cooldownRemainingMs : null,
   })
 
   const inCooldown = lastManualRefreshAt
@@ -231,19 +218,32 @@ export function ProviderCard({
                   </TooltipContent>
                 </Tooltip>
               ) : (
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label="Retry"
-                  onClick={(e) => {
-                    e.currentTarget.blur()
-                    onRetry()
-                  }}
-                  className="ml-1 opacity-0 hover:opacity-100 focus-visible:opacity-100"
-                  style={{ transform: "translateZ(0)", backfaceVisibility: "hidden" }}
-                >
-                  <RefreshCw className="h-3 w-3" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger
+                    className="ml-1"
+                    render={(props) => (
+                      <Button
+                        {...props}
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-label="Retry"
+                        onClick={(e) => {
+                          e.currentTarget.blur()
+                          onRetry()
+                        }}
+                        className="opacity-0 hover:opacity-100 focus-visible:opacity-100"
+                        style={{ transform: "translateZ(0)", backfaceVisibility: "hidden" }}
+                      >
+                        <RefreshCw className="h-3 w-3" />
+                      </Button>
+                    )}
+                  />
+                  {lastUpdatedAt != null && (
+                    <TooltipContent side="top">
+                      Updated {formatRelativeTime(Date.now() - lastUpdatedAt)}
+                    </TooltipContent>
+                  )}
+                </Tooltip>
               )
             )}
           </div>
@@ -336,26 +336,6 @@ export function ProviderCard({
           </div>
         )}
 
-        {lastUpdatedAt && (
-          <div className="mt-2 text-[10px] text-muted-foreground text-right">
-            <Tooltip>
-              <TooltipTrigger
-                render={(props) => (
-                  <time
-                    {...props}
-                    dateTime={new Date(lastUpdatedAt).toISOString()}
-                    aria-label={`Updated ${formatRelativeTime(now - lastUpdatedAt)} (${new Date(lastUpdatedAt).toLocaleString()})`}
-                  >
-                    Updated {formatRelativeTime(now - lastUpdatedAt)}
-                  </time>
-                )}
-              />
-              <TooltipContent side="top">
-                {new Date(lastUpdatedAt).toLocaleString()}
-              </TooltipContent>
-            </Tooltip>
-          </div>
-        )}
       </div>
       {showSeparator && <Separator />}
     </div>
