@@ -38,23 +38,56 @@ fn last_non_empty_trimmed_line(text: &str) -> Option<String> {
         .map(|line| line.to_string())
 }
 
-fn read_env_from_process(name: &str) -> Option<String> {
-    let value = std::env::var(name).ok()?;
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        None
+fn sanitize_env_value(text: &str) -> Option<String> {
+    let mut cleaned = if let Ok(ansi_re) = regex_lite::Regex::new(r"\x1B\[[0-?]*[ -/]*[@-~]") {
+        ansi_re.replace_all(text, "").to_string()
     } else {
-        Some(trimmed.to_string())
-    }
+        text.to_string()
+    };
+    cleaned.retain(|ch| ch == '\n' || ch == '\r' || ch == '\t' || !ch.is_control());
+    last_non_empty_trimmed_line(&cleaned)
 }
 
-fn read_env_value_via_command(program: &str, args: &[&str]) -> Option<String> {
+fn extract_marked_value(text: &str, start_marker: &str, end_marker: &str) -> Option<String> {
+    let start = text.find(start_marker)?;
+    let after_start = &text[start + start_marker.len()..];
+    let end = after_start.find(end_marker)?;
+    sanitize_env_value(&after_start[..end])
+}
+
+fn parse_interactive_shell_env_output(
+    text: &str,
+    start_marker: &str,
+    end_marker: &str,
+) -> Option<String> {
+    if let Some(marked) = extract_marked_value(text, start_marker, end_marker) {
+        return Some(marked);
+    }
+
+    let has_complete_markers = text.contains(start_marker) && text.contains(end_marker);
+    if has_complete_markers {
+        return None;
+    }
+
+    sanitize_env_value(text)
+}
+
+fn read_env_from_process(name: &str) -> Option<String> {
+    let value = std::env::var(name).ok()?;
+    sanitize_env_value(&value)
+}
+
+fn read_command_stdout(program: &str, args: &[&str]) -> Option<String> {
     let output = Command::new(program).args(args).output().ok()?;
     if !output.status.success() {
         return None;
     }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    last_non_empty_trimmed_line(&stdout)
+    Some(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+fn read_env_value_via_command(program: &str, args: &[&str]) -> Option<String> {
+    let stdout = read_command_stdout(program, args)?;
+    sanitize_env_value(&stdout)
 }
 
 fn current_macos_keychain_account_from_user_env(user_env: Option<String>) -> String {
@@ -144,8 +177,15 @@ fn shell_from_env() -> Option<String> {
 }
 
 fn read_env_from_interactive_shell(program: &str, name: &str) -> Option<String> {
-    let script = format!("printenv {}", name);
-    read_env_value_via_command(program, &["-ilc", script.as_str()])
+    const START_MARKER: &str = "__OPENUSAGE_ENV_START__";
+    const END_MARKER: &str = "__OPENUSAGE_ENV_END__";
+
+    let script = format!(
+        "printf '{}\\n'; printenv {}; printf '{}\\n'",
+        START_MARKER, name, END_MARKER
+    );
+    let output = read_command_stdout(program, &["-ilc", script.as_str()])?;
+    parse_interactive_shell_env_output(&output, START_MARKER, END_MARKER)
 }
 
 fn read_env_from_interactive_shells(name: &str) -> Option<String> {
@@ -2465,6 +2505,71 @@ mod tests {
         )
         .expect_err("tag length");
         assert!(tag_err.contains("auth tag length"));
+    }
+
+    #[test]
+    fn sanitize_env_value_strips_ansi_and_control_sequences() {
+        let raw = "\u{1b}[?1000l\n  sk-test-key-12345\u{1b}[?2004h\r\n";
+        let value = sanitize_env_value(raw);
+        assert_eq!(value.as_deref(), Some("sk-test-key-12345"));
+    }
+
+    #[test]
+    fn extract_marked_value_ignores_noisy_shell_output() {
+        let stdout = concat!(
+            "startup banner\n",
+            "\u{1b}[31mplugin failed\u{1b}[0m\n",
+            "__OPENUSAGE_ENV_START__\n",
+            "  sk-test-key-12345  \n",
+            "__OPENUSAGE_ENV_END__\n",
+            "\u{1b}[32muser@host\u{1b}[0m\n"
+        );
+        let value =
+            extract_marked_value(stdout, "__OPENUSAGE_ENV_START__", "__OPENUSAGE_ENV_END__");
+        assert_eq!(value.as_deref(), Some("sk-test-key-12345"));
+    }
+
+    #[test]
+    fn extract_marked_value_strips_inline_terminal_sequences_from_marked_value() {
+        let stdout = concat!(
+            "__OPENUSAGE_ENV_START__\n",
+            "\u{1b}[?1000l\n",
+            "  sk-test-key-12345\u{1b}[?2004h\r\n",
+            "__OPENUSAGE_ENV_END__\n"
+        );
+        let value =
+            extract_marked_value(stdout, "__OPENUSAGE_ENV_START__", "__OPENUSAGE_ENV_END__");
+        assert_eq!(value.as_deref(), Some("sk-test-key-12345"));
+    }
+
+    #[test]
+    fn extract_marked_value_returns_none_when_marked_value_is_empty() {
+        let stdout = "__OPENUSAGE_ENV_START__\n  \n__OPENUSAGE_ENV_END__\n";
+        let value =
+            extract_marked_value(stdout, "__OPENUSAGE_ENV_START__", "__OPENUSAGE_ENV_END__");
+        assert!(value.is_none());
+    }
+
+    #[test]
+    fn parse_interactive_shell_env_output_does_not_fallback_to_end_marker_for_empty_value() {
+        let stdout = "__OPENUSAGE_ENV_START__\n  \n__OPENUSAGE_ENV_END__\n";
+        let value = parse_interactive_shell_env_output(
+            stdout,
+            "__OPENUSAGE_ENV_START__",
+            "__OPENUSAGE_ENV_END__",
+        );
+        assert!(value.is_none());
+    }
+
+    #[test]
+    fn parse_interactive_shell_env_output_falls_back_without_markers() {
+        let stdout = "\u{1b}[?1000l\n  sk-test-key-12345\u{1b}[?2004h\r\n";
+        let value = parse_interactive_shell_env_output(
+            stdout,
+            "__OPENUSAGE_ENV_START__",
+            "__OPENUSAGE_ENV_END__",
+        );
+        assert_eq!(value.as_deref(), Some("sk-test-key-12345"));
     }
 
     #[test]
