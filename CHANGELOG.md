@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.6.2
+## v0.6.20
 
 ### New Features
 - feat: preserve usage data during refresh (stale-while-revalidate) ([#386](https://github.com/robinebers/openusage/pull/386)) by @DoozyX
@@ -30,7 +30,7 @@
 
 ### Changelog
 
-**Full Changelog**: [v0.6.15...v0.6.2](https://github.com/robinebers/openusage/compare/v0.6.15...v0.6.2)
+**Full Changelog**: [v0.6.15...v0.6.20](https://github.com/robinebers/openusage/compare/v0.6.15...v0.6.20)
 
 - [722e91b](https://github.com/robinebers/openusage/commit/722e91b5a3a1b2c4db882a5d01e608c8552deea0) fix(factory): retry with GET when usage endpoint returns HTTP 405 by @allensama0403
 - [4625376](https://github.com/robinebers/openusage/commit/4625376c3cc9efb2e97294a3d5d73cff9753a4cb) fix: read OAuth tokens from unified state key by @validatedev
