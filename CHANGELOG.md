@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.6.21
+
+### Bug Fixes
+- fix(codex): lazy-load keychain auth fallback ([#419](https://github.com/robinebers/openusage/pull/419)) by @validatedev
+
+### Chores
+- docs(codex): clarify file-based OAuth credentials description ([#419](https://github.com/robinebers/openusage/pull/419)) by @validatedev
+- docs(agents): replace internal HQ header with OpenUsage title by @robinebers
+
+---
+
+### Changelog
+
+**Full Changelog**: [v0.6.20...v0.6.21](https://github.com/robinebers/openusage/compare/v0.6.20...v0.6.21)
+
+- [6f52da5](https://github.com/robinebers/openusage/commit/6f52da586bef10d97b84e0dfadc9b8ced3e9376e) docs(codex): clarify file-based OAuth credentials description by @validatedev
+- [e7b4072](https://github.com/robinebers/openusage/commit/e7b4072d280dd6cf6cd6d4a626b1c2a4e948da1f) fix(codex): lazy-load keychain auth fallback by @validatedev
+- [1395f20](https://github.com/robinebers/openusage/commit/1395f2083d78a0bac224e095a0265b379410daec) docs(agents): replace internal HQ header with OpenUsage title by @robinebers
+
 ## v0.6.20
 
 ### New Features
