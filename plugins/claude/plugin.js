@@ -211,22 +211,22 @@
   }
 
   function computeKeychainHashSuffix(ctx) {
-    // Mirrors Claude Code's macOsKeychainHelpers.ts:
-    //   expandedConfigDir = process.env.CLAUDE_CONFIG_DIR (raw, NO tilde expansion)
-    //                       || ${HOME}/.claude
-    //   suffix            = sha256(expandedConfigDir).slice(0, 8)
+    // Mirrors upstream Claude Code (decompiled from the binary):
+    //   const suffix = !process.env.CLAUDE_CONFIG_DIR
+    //     ? ""
+    //     : "-" + sha256(CLAUDE_CONFIG_DIR.normalize("NFC")).slice(0, 8)
+    // The hash is ONLY appended when CLAUDE_CONFIG_DIR is explicitly set;
+    // when unset, upstream uses the legacy unhashed service name.
     const explicitConfigDir = readEnvText(ctx, "CLAUDE_CONFIG_DIR")
-    let expandedDir
-    if (explicitConfigDir) {
-      expandedDir = explicitConfigDir
-    } else {
-      const home = readEnvText(ctx, "HOME")
-      if (!home) return null  // can't compute hash; caller will fall back to legacy candidate only
-      expandedDir = home + "/.claude"
-    }
+    if (!explicitConfigDir) return null
     const sha256Hex = ctx.host && ctx.host.crypto && ctx.host.crypto.sha256Hex
     if (typeof sha256Hex !== "function") return null
-    const digest = sha256Hex(expandedDir)
+    // Match upstream's `.normalize("NFC")` exactly.
+    const normalized =
+      typeof explicitConfigDir.normalize === "function"
+        ? explicitConfigDir.normalize("NFC")
+        : explicitConfigDir
+    const digest = sha256Hex(normalized)
     if (typeof digest !== "string" || digest.length < 8) return null
     return digest.slice(0, 8)
   }
@@ -235,8 +235,8 @@
     const base = buildClaudeBaseKeychainService(ctx)
     const candidates = []
     const hash = computeKeychainHashSuffix(ctx)
-    if (hash) candidates.push(base + "-" + hash)  // newer Claude Code (hashed)
-    candidates.push(base)                          // legacy / compatibility
+    if (hash) candidates.push(base + "-" + hash)  // hashed (CLAUDE_CONFIG_DIR set)
+    candidates.push(base)                          // legacy / default
     return candidates
   }
 

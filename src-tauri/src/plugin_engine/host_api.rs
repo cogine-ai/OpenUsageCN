@@ -12,8 +12,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 
-const WHITELISTED_ENV_VARS: [&str; 17] = [
-    "HOME",
+const WHITELISTED_ENV_VARS: [&str; 16] = [
     "CODEX_HOME",
     "CLAUDE_CONFIG_DIR",
     "CLAUDE_CODE_OAUTH_TOKEN",
@@ -2680,7 +2679,6 @@ mod tests {
     #[test]
     fn env_api_respects_allowlist_in_host_and_js() {
         let claude_env_vars = [
-            "HOME",
             "CLAUDE_CONFIG_DIR",
             "CLAUDE_CODE_OAUTH_TOKEN",
             "USER_TYPE",

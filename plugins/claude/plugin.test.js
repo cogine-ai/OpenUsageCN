@@ -2,12 +2,11 @@ import crypto from "node:crypto"
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import { makeCtx } from "../test-helpers.js"
 
-// Default test HOME (set by makeCtx in test-helpers.js).
-const TEST_HOME = "/Users/test"
-const TEST_CLAUDE_DIR = TEST_HOME + "/.claude"
+// Helpers for keychain hash regression tests.
 const expectedHash = (path) =>
   crypto.createHash("sha256").update(path).digest("hex").slice(0, 8)
-const HASHED_DEFAULT_SERVICE = "Claude Code-credentials-" + expectedHash(TEST_CLAUDE_DIR)
+const TEST_CONFIG_DIR = "/Users/test/.claude"
+const HASHED_CONFIG_SERVICE = "Claude Code-credentials-" + expectedHash(TEST_CONFIG_DIR)
 
 let plugin = null
 
@@ -140,9 +139,9 @@ describe("claude plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
     expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
-    // Hashed candidate is tried first; the mock returns valid creds so we never reach legacy.
+    // No CLAUDE_CONFIG_DIR → upstream uses the legacy unhashed service name only.
     expect(ctx.host.keychain.readGenericPasswordForCurrentUser).toHaveBeenCalledWith(
-      HASHED_DEFAULT_SERVICE
+      "Claude Code-credentials"
     )
     expect(ctx.host.keychain.readGenericPassword).not.toHaveBeenCalled()
   })
@@ -166,8 +165,8 @@ describe("claude plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
     expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
-    // Hashed candidate is tried first; the legacy `readGenericPassword` returns valid creds for it.
-    expect(ctx.host.keychain.readGenericPassword).toHaveBeenCalledWith(HASHED_DEFAULT_SERVICE)
+    // No CLAUDE_CONFIG_DIR → upstream uses the legacy unhashed service name only.
+    expect(ctx.host.keychain.readGenericPassword).toHaveBeenCalledWith("Claude Code-credentials")
   })
 
   it("falls back to keychain when credentials file is corrupt", async () => {
@@ -251,11 +250,14 @@ describe("claude plugin", () => {
     )
   })
 
-  it("finds the hashed keychain entry when only the hashed name exists (regression for #423)", async () => {
+  it("finds the hashed keychain entry when CLAUDE_CONFIG_DIR is set (regression for #423)", async () => {
     const ctx = makeCtx()
     ctx.host.fs.exists = () => false
+    ctx.host.env.get.mockImplementation((name) =>
+      name === "CLAUDE_CONFIG_DIR" ? TEST_CONFIG_DIR : null
+    )
     ctx.host.keychain.readGenericPasswordForCurrentUser.mockImplementation((service) => {
-      if (service === HASHED_DEFAULT_SERVICE) {
+      if (service === HASHED_CONFIG_SERVICE) {
         return JSON.stringify({ claudeAiOauth: { accessToken: "tok", subscriptionType: "pro" } })
       }
       return null
@@ -271,13 +273,16 @@ describe("claude plugin", () => {
     const result = plugin.probe(ctx)
     expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
     expect(ctx.host.keychain.readGenericPasswordForCurrentUser).toHaveBeenCalledWith(
-      HASHED_DEFAULT_SERVICE
+      HASHED_CONFIG_SERVICE
     )
   })
 
-  it("falls back to the legacy keychain entry when no hashed entry exists", async () => {
+  it("falls back to legacy unhashed entry when CLAUDE_CONFIG_DIR is set but no hashed entry exists", async () => {
     const ctx = makeCtx()
     ctx.host.fs.exists = () => false
+    ctx.host.env.get.mockImplementation((name) =>
+      name === "CLAUDE_CONFIG_DIR" ? TEST_CONFIG_DIR : null
+    )
     ctx.host.keychain.readGenericPasswordForCurrentUser.mockImplementation((service) => {
       if (service === "Claude Code-credentials") {
         return JSON.stringify({ claudeAiOauth: { accessToken: "tok", subscriptionType: "pro" } })
@@ -295,24 +300,44 @@ describe("claude plugin", () => {
     const result = plugin.probe(ctx)
     expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
     expect(ctx.host.keychain.readGenericPasswordForCurrentUser).toHaveBeenCalledWith(
-      HASHED_DEFAULT_SERVICE
+      HASHED_CONFIG_SERVICE
     )
     expect(ctx.host.keychain.readGenericPasswordForCurrentUser).toHaveBeenCalledWith(
       "Claude Code-credentials"
     )
   })
 
+  it("does NOT compute a hash when CLAUDE_CONFIG_DIR is unset (matches upstream)", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.exists = () => false
+    ctx.host.keychain.readGenericPasswordForCurrentUser.mockReturnValue(
+      JSON.stringify({ claudeAiOauth: { accessToken: "tok", subscriptionType: "pro" } })
+    )
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify({
+        five_hour: { utilization: 10, resets_at: "2099-01-01T00:00:00.000Z" },
+      }),
+    })
+
+    const plugin = await loadPlugin()
+    plugin.probe(ctx)
+    // Only the legacy unhashed service is consulted — no hashed candidate.
+    const calls = ctx.host.keychain.readGenericPasswordForCurrentUser.mock.calls.map((c) => c[0])
+    expect(calls).toEqual(["Claude Code-credentials"])
+  })
+
   it("composes the staging-oauth keychain hash correctly", async () => {
     const ctx = makeCtx()
     ctx.host.fs.exists = () => false
     ctx.host.env.get.mockImplementation((name) => {
-      if (name === "HOME") return TEST_HOME
+      if (name === "CLAUDE_CONFIG_DIR") return TEST_CONFIG_DIR
       if (name === "USER_TYPE") return "ant"
       if (name === "USE_STAGING_OAUTH") return "1"
       return null
     })
     const hashedStagingService =
-      "Claude Code-staging-oauth-credentials-" + expectedHash(TEST_CLAUDE_DIR)
+      "Claude Code-staging-oauth-credentials-" + expectedHash(TEST_CONFIG_DIR)
     ctx.host.keychain.readGenericPasswordForCurrentUser.mockImplementation((service) => {
       if (service === hashedStagingService) {
         return JSON.stringify({ claudeAiOauth: { accessToken: "tok", subscriptionType: "pro" } })
@@ -334,16 +359,15 @@ describe("claude plugin", () => {
     )
   })
 
-  it("hashes CLAUDE_CONFIG_DIR raw without tilde expansion", async () => {
+  it("hashes CLAUDE_CONFIG_DIR verbatim (no tilde expansion, NFC-normalized)", async () => {
     const ctx = makeCtx()
     ctx.host.fs.exists = () => false
-    // Raw, tilde-prefixed value: must be hashed verbatim (matches upstream Claude Code).
+    // Raw, tilde-prefixed value: hashed verbatim. Upstream applies .normalize("NFC"),
+    // which is a no-op for ASCII so the hash matches a plain sha256 of the string.
     const rawConfigDir = "~/some-custom-claude-home"
-    ctx.host.env.get.mockImplementation((name) => {
-      if (name === "CLAUDE_CONFIG_DIR") return rawConfigDir
-      if (name === "HOME") return TEST_HOME
-      return null
-    })
+    ctx.host.env.get.mockImplementation((name) =>
+      name === "CLAUDE_CONFIG_DIR" ? rawConfigDir : null
+    )
     const hashedService = "Claude Code-credentials-" + expectedHash(rawConfigDir)
     ctx.host.keychain.readGenericPasswordForCurrentUser.mockImplementation((service) => {
       if (service === hashedService) {

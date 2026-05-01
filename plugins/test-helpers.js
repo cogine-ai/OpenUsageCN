@@ -39,7 +39,7 @@ export const makeCtx = () => {
         },
       },
       env: {
-        get: vi.fn((name) => (name === "HOME" ? "/Users/test" : null)),
+        get: vi.fn(() => null),
       },
       keychain: {
         readGenericPassword: vi.fn(),
