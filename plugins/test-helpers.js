@@ -39,7 +39,7 @@ export const makeCtx = () => {
         },
       },
       env: {
-        get: vi.fn(() => null),
+        get: vi.fn((name) => (name === "HOME" ? "/Users/test" : null)),
       },
       keychain: {
         readGenericPassword: vi.fn(),
@@ -68,6 +68,7 @@ export const makeCtx = () => {
           const tag = cipher.getAuthTag()
           return `${iv.toString("base64")}:${tag.toString("base64")}:${ciphertext.toString("base64")}`
         }),
+        sha256Hex: vi.fn((text) => crypto.createHash("sha256").update(String(text)).digest("hex")),
       },
       sqlite: {
         query: vi.fn(() => "[]"),

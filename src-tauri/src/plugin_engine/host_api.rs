@@ -5,13 +5,15 @@ use aes_gcm::{
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use rquickjs::{Ctx, Exception, Function, Object};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 
-const WHITELISTED_ENV_VARS: [&str; 16] = [
+const WHITELISTED_ENV_VARS: [&str; 17] = [
+    "HOME",
     "CODEX_HOME",
     "CLAUDE_CONFIG_DIR",
     "CLAUDE_CODE_OAUTH_TOKEN",
@@ -680,6 +682,24 @@ fn inject_crypto<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()
                   -> rquickjs::Result<String> {
                 encrypt_aes_256_gcm_envelope(&plaintext, &key_b64)
                     .map_err(|e| Exception::throw_message(&ctx_inner, &e))
+            },
+        )?,
+    )?;
+
+    crypto_obj.set(
+        "sha256Hex",
+        Function::new(
+            ctx.clone(),
+            move |text: String| -> String {
+                let digest = Sha256::digest(text.as_bytes());
+                // Lowercase hex, matches Node's `crypto.createHash("sha256").update(x).digest("hex")`
+                // and the upstream Claude Code keychain helper.
+                let mut out = String::with_capacity(digest.len() * 2);
+                for byte in digest.iter() {
+                    use std::fmt::Write as _;
+                    let _ = write!(&mut out, "{:02x}", byte);
+                }
+                out
             },
         )?,
     )?;
@@ -2606,6 +2626,32 @@ mod tests {
     }
 
     #[test]
+    fn crypto_api_exposes_sha256_hex() {
+        let rt = Runtime::new().expect("runtime");
+        let ctx = Context::full(&rt).expect("context");
+        ctx.with(|ctx| {
+            let app_data = std::env::temp_dir();
+            inject_host_api(&ctx, "test", &app_data, "0.0.0").expect("inject host api");
+            // Vector: `printf '%s' 'hello' | shasum -a 256`
+            let result: String = ctx
+                .eval(r#"__openusage_ctx.host.crypto.sha256Hex("hello")"#)
+                .expect("js sha256");
+            assert_eq!(
+                result,
+                "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+            );
+
+            let empty: String = ctx
+                .eval(r#"__openusage_ctx.host.crypto.sha256Hex("")"#)
+                .expect("js sha256 empty");
+            assert_eq!(
+                empty,
+                "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            );
+        });
+    }
+
+    #[test]
     fn keychain_api_exposes_write_variants() {
         let rt = Runtime::new().expect("runtime");
         let ctx = Context::full(&rt).expect("context");
@@ -2634,6 +2680,7 @@ mod tests {
     #[test]
     fn env_api_respects_allowlist_in_host_and_js() {
         let claude_env_vars = [
+            "HOME",
             "CLAUDE_CONFIG_DIR",
             "CLAUDE_CODE_OAUTH_TOKEN",
             "USER_TYPE",

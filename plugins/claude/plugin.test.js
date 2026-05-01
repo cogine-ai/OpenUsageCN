@@ -1,5 +1,13 @@
+import crypto from "node:crypto"
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import { makeCtx } from "../test-helpers.js"
+
+// Default test HOME (set by makeCtx in test-helpers.js).
+const TEST_HOME = "/Users/test"
+const TEST_CLAUDE_DIR = TEST_HOME + "/.claude"
+const expectedHash = (path) =>
+  crypto.createHash("sha256").update(path).digest("hex").slice(0, 8)
+const HASHED_DEFAULT_SERVICE = "Claude Code-credentials-" + expectedHash(TEST_CLAUDE_DIR)
 
 let plugin = null
 
@@ -132,8 +140,9 @@ describe("claude plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
     expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
+    // Hashed candidate is tried first; the mock returns valid creds so we never reach legacy.
     expect(ctx.host.keychain.readGenericPasswordForCurrentUser).toHaveBeenCalledWith(
-      "Claude Code-credentials"
+      HASHED_DEFAULT_SERVICE
     )
     expect(ctx.host.keychain.readGenericPassword).not.toHaveBeenCalled()
   })
@@ -157,7 +166,8 @@ describe("claude plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
     expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
-    expect(ctx.host.keychain.readGenericPassword).toHaveBeenCalledWith("Claude Code-credentials")
+    // Hashed candidate is tried first; the legacy `readGenericPassword` returns valid creds for it.
+    expect(ctx.host.keychain.readGenericPassword).toHaveBeenCalledWith(HASHED_DEFAULT_SERVICE)
   })
 
   it("falls back to keychain when credentials file is corrupt", async () => {
@@ -238,6 +248,121 @@ describe("claude plugin", () => {
     expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
     expect(ctx.host.keychain.readGenericPassword).toHaveBeenCalledWith(
       "Claude Code-staging-oauth-credentials"
+    )
+  })
+
+  it("finds the hashed keychain entry when only the hashed name exists (regression for #423)", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.exists = () => false
+    ctx.host.keychain.readGenericPasswordForCurrentUser.mockImplementation((service) => {
+      if (service === HASHED_DEFAULT_SERVICE) {
+        return JSON.stringify({ claudeAiOauth: { accessToken: "tok", subscriptionType: "pro" } })
+      }
+      return null
+    })
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify({
+        five_hour: { utilization: 10, resets_at: "2099-01-01T00:00:00.000Z" },
+      }),
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
+    expect(ctx.host.keychain.readGenericPasswordForCurrentUser).toHaveBeenCalledWith(
+      HASHED_DEFAULT_SERVICE
+    )
+  })
+
+  it("falls back to the legacy keychain entry when no hashed entry exists", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.exists = () => false
+    ctx.host.keychain.readGenericPasswordForCurrentUser.mockImplementation((service) => {
+      if (service === "Claude Code-credentials") {
+        return JSON.stringify({ claudeAiOauth: { accessToken: "tok", subscriptionType: "pro" } })
+      }
+      return null  // hashed lookup misses → legacy candidate is tried next
+    })
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify({
+        five_hour: { utilization: 10, resets_at: "2099-01-01T00:00:00.000Z" },
+      }),
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
+    expect(ctx.host.keychain.readGenericPasswordForCurrentUser).toHaveBeenCalledWith(
+      HASHED_DEFAULT_SERVICE
+    )
+    expect(ctx.host.keychain.readGenericPasswordForCurrentUser).toHaveBeenCalledWith(
+      "Claude Code-credentials"
+    )
+  })
+
+  it("composes the staging-oauth keychain hash correctly", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.exists = () => false
+    ctx.host.env.get.mockImplementation((name) => {
+      if (name === "HOME") return TEST_HOME
+      if (name === "USER_TYPE") return "ant"
+      if (name === "USE_STAGING_OAUTH") return "1"
+      return null
+    })
+    const hashedStagingService =
+      "Claude Code-staging-oauth-credentials-" + expectedHash(TEST_CLAUDE_DIR)
+    ctx.host.keychain.readGenericPasswordForCurrentUser.mockImplementation((service) => {
+      if (service === hashedStagingService) {
+        return JSON.stringify({ claudeAiOauth: { accessToken: "tok", subscriptionType: "pro" } })
+      }
+      return null
+    })
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify({
+        five_hour: { utilization: 10, resets_at: "2099-01-01T00:00:00.000Z" },
+      }),
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
+    expect(ctx.host.keychain.readGenericPasswordForCurrentUser).toHaveBeenCalledWith(
+      hashedStagingService
+    )
+  })
+
+  it("hashes CLAUDE_CONFIG_DIR raw without tilde expansion", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.exists = () => false
+    // Raw, tilde-prefixed value: must be hashed verbatim (matches upstream Claude Code).
+    const rawConfigDir = "~/some-custom-claude-home"
+    ctx.host.env.get.mockImplementation((name) => {
+      if (name === "CLAUDE_CONFIG_DIR") return rawConfigDir
+      if (name === "HOME") return TEST_HOME
+      return null
+    })
+    const hashedService = "Claude Code-credentials-" + expectedHash(rawConfigDir)
+    ctx.host.keychain.readGenericPasswordForCurrentUser.mockImplementation((service) => {
+      if (service === hashedService) {
+        return JSON.stringify({ claudeAiOauth: { accessToken: "tok", subscriptionType: "pro" } })
+      }
+      return null
+    })
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify({
+        five_hour: { utilization: 10, resets_at: "2099-01-01T00:00:00.000Z" },
+      }),
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
+    expect(ctx.host.keychain.readGenericPasswordForCurrentUser).toHaveBeenCalledWith(
+      hashedService
     )
   })
 
