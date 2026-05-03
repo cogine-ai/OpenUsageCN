@@ -5,6 +5,7 @@ use aes_gcm::{
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use rquickjs::{Ctx, Exception, Function, Object};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
@@ -680,6 +681,24 @@ fn inject_crypto<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()
                   -> rquickjs::Result<String> {
                 encrypt_aes_256_gcm_envelope(&plaintext, &key_b64)
                     .map_err(|e| Exception::throw_message(&ctx_inner, &e))
+            },
+        )?,
+    )?;
+
+    crypto_obj.set(
+        "sha256Hex",
+        Function::new(
+            ctx.clone(),
+            move |text: String| -> String {
+                let digest = Sha256::digest(text.as_bytes());
+                // Lowercase hex, matches Node's `crypto.createHash("sha256").update(x).digest("hex")`
+                // and the upstream Claude Code keychain helper.
+                let mut out = String::with_capacity(digest.len() * 2);
+                for byte in digest.iter() {
+                    use std::fmt::Write as _;
+                    let _ = write!(&mut out, "{:02x}", byte);
+                }
+                out
             },
         )?,
     )?;
@@ -2602,6 +2621,32 @@ mod tests {
             );
             let decrypted: String = ctx.eval(js_expr).expect("js decrypt");
             assert_eq!(decrypted, expected_plaintext);
+        });
+    }
+
+    #[test]
+    fn crypto_api_exposes_sha256_hex() {
+        let rt = Runtime::new().expect("runtime");
+        let ctx = Context::full(&rt).expect("context");
+        ctx.with(|ctx| {
+            let app_data = std::env::temp_dir();
+            inject_host_api(&ctx, "test", &app_data, "0.0.0").expect("inject host api");
+            // Vector: `printf '%s' 'hello' | shasum -a 256`
+            let result: String = ctx
+                .eval(r#"__openusage_ctx.host.crypto.sha256Hex("hello")"#)
+                .expect("js sha256");
+            assert_eq!(
+                result,
+                "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+            );
+
+            let empty: String = ctx
+                .eval(r#"__openusage_ctx.host.crypto.sha256Hex("")"#)
+                .expect("js sha256 empty");
+            assert_eq!(
+                empty,
+                "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            );
         });
     }
 
