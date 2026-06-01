@@ -1,11 +1,10 @@
 (function () {
-  const GLOBAL_PRIMARY_USAGE_URL = "https://api.minimax.io/v1/api/openplatform/coding_plan/remains"
+  const GLOBAL_PRIMARY_USAGE_URL = "https://www.minimax.io/v1/token_plan/remains"
   const GLOBAL_FALLBACK_USAGE_URLS = [
-    "https://api.minimax.io/v1/coding_plan/remains",
-    "https://www.minimax.io/v1/api/openplatform/coding_plan/remains",
+    "https://www.minimax.io/v1/token_plan/remains",
   ]
-  const CN_PRIMARY_USAGE_URL = "https://api.minimaxi.com/v1/api/openplatform/coding_plan/remains"
-  const CN_FALLBACK_USAGE_URLS = ["https://api.minimaxi.com/v1/coding_plan/remains"]
+  const CN_PRIMARY_USAGE_URL = "https://api.minimaxi.com/v1/token_plan/remains"
+  const CN_FALLBACK_USAGE_URLS = ["https://api.minimaxi.com/v1/token_plan/remains"]
   const GLOBAL_API_KEY_ENV_VARS = ["MINIMAX_API_KEY", "MINIMAX_API_TOKEN"]
   const CN_API_KEY_ENV_VARS = ["MINIMAX_CN_API_KEY", "MINIMAX_API_KEY", "MINIMAX_API_TOKEN"]
   const CODING_PLAN_WINDOW_MS = 5 * 60 * 60 * 1000
