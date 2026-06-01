@@ -885,4 +885,71 @@ describe("minimax plugin", () => {
     const plugin = await loadPlugin()
     expect(() => plugin.probe(ctx)).toThrow("Could not parse usage data")
   })
+
+  it("handles percentage-based response from Token Plan API", async () => {
+    const ctx = makeCtx()
+    setEnv(ctx, { MINIMAX_API_KEY: "mini-key" })
+    vi.spyOn(Date, "now").mockReturnValue(1700000000000)
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      headers: {},
+      bodyText: JSON.stringify({
+        base_resp: { status_code: 0 },
+        model_remains: [
+          {
+            model_name: "general",
+            current_interval_total_count: 0,
+            current_interval_usage_count: 0,
+            current_interval_remaining_percent: 87,
+            remains_time: 5111151,
+            start_time: 1780326000000,
+            end_time: 1780344000000,
+          },
+        ],
+      }),
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    const line = result.lines[0]
+
+    // 87% remaining = 13% used
+    expect(line.used).toBe(13)
+    expect(line.limit).toBe(100)
+    expect(line.format.kind).toBe("percent")
+    expect(line.resetsAt).toBe(new Date(1780344000000).toISOString())
+  })
+
+  it("handles weekly percentage from Token Plan API", async () => {
+    const ctx = makeCtx()
+    setEnv(ctx, { MINIMAX_API_KEY: "mini-key" })
+    vi.spyOn(Date, "now").mockReturnValue(1700000000000)
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      headers: {},
+      bodyText: JSON.stringify({
+        base_resp: { status_code: 0 },
+        model_remains: [
+          {
+            model_name: "general",
+            current_interval_total_count: 0,
+            current_interval_usage_count: 0,
+            current_interval_remaining_percent: 0,
+            current_weekly_total_count: 0,
+            current_weekly_usage_count: 0,
+            current_weekly_remaining_percent: 100,
+          },
+        ],
+      }),
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    const line = result.lines[0]
+
+    // 0% remaining in interval, but 100% weekly remaining
+    expect(line.used).toBe(100)
+    expect(line.limit).toBe(100)
+    expect(line.format.kind).toBe("percent")
+  })
 })

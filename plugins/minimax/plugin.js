@@ -257,6 +257,53 @@
     if (!chosen || typeof chosen !== "object") return null
 
     const total = readNumber(chosen.current_interval_total_count ?? chosen.currentIntervalTotalCount)
+    const remainingPercent = readNumber(
+      chosen.current_interval_remaining_percent ??
+        chosen.currentIntervalRemainingPercent
+    )
+
+    // Handle percentage-based response (new Token Plan API)
+    // When total_count is 0 but remaining_percent exists, use percentage mode
+    if ((total === null || total === 0) && remainingPercent !== null) {
+      const percentRemaining = remainingPercent
+      const percentUsed = 100 - percentRemaining
+      const startMs = epochToMs(chosen.start_time ?? chosen.startTime)
+      const endMs = epochToMs(chosen.end_time ?? chosen.endTime)
+      const remainsRaw = readNumber(chosen.remains_time ?? chosen.remainsTime)
+      const nowMs = Date.now()
+      const remainsMs = inferRemainsMs(remainsRaw, endMs, nowMs)
+
+      let resetsAt = endMs !== null ? ctx.util.toIso(endMs) : null
+      if (!resetsAt && remainsMs !== null) {
+        resetsAt = ctx.util.toIso(nowMs + remainsMs)
+      }
+
+      let periodDurationMs = null
+      if (startMs !== null && endMs !== null && endMs > startMs) {
+        periodDurationMs = endMs - startMs
+      }
+
+      const explicitPlanName = normalizePlanName(pickFirstString([
+        data.current_subscribe_title,
+        data.plan_name,
+        data.plan,
+        data.current_plan_title,
+        data.combo_title,
+        payload.current_subscribe_title,
+        payload.plan_name,
+        payload.plan,
+      ]))
+
+      return {
+        planName: explicitPlanName || null,
+        used: percentUsed,
+        total: 100,
+        resetsAt,
+        periodDurationMs,
+        isPercent: true,
+      }
+    }
+
     if (total === null || total <= 0) return null
 
     const usageFieldCount = readNumber(chosen.current_interval_usage_count ?? chosen.currentIntervalUsageCount)
@@ -370,7 +417,9 @@
       label: "Session",
       used: Math.round(parsed.used * displayMultiplier),
       limit: Math.round(parsed.total * displayMultiplier),
-      format: { kind: "count", suffix: "prompts" },
+      format: parsed.isPercent
+        ? { kind: "percent" }
+        : { kind: "count", suffix: "prompts" },
     }
     if (parsed.resetsAt) line.resetsAt = parsed.resetsAt
     if (parsed.periodDurationMs !== null) line.periodDurationMs = parsed.periodDurationMs
