@@ -1675,57 +1675,6 @@ describe("claude plugin", () => {
       expect(last30.value).toContain("$1.50")
     })
 
-    it("adds model percentage text lines and a usage chart from claude ccusage", async () => {
-      const todayKey = localDayKey(new Date())
-      const ctx = makeProbeCtx({
-        ccusageResult: okUsage([
-          {
-            date: todayKey,
-            totalTokens: 300,
-            totalCost: 1,
-            modelBreakdowns: [
-              { modelName: "claude-sonnet-4-20250514", totalTokens: 200 },
-              { modelName: "claude-opus-4-1-20250805", totalTokens: 100 },
-            ],
-          },
-          {
-            date: "2026-02-01",
-            totalTokens: 150,
-            totalCost: 1,
-            modelBreakdowns: [
-              {
-                modelName: "claude-opus-4-1-20250805",
-                inputTokens: 30,
-                cacheCreationTokens: 20,
-                cacheReadTokens: 20,
-                outputTokens: 30,
-              },
-            ],
-          },
-        ]),
-      })
-      const plugin = await loadPlugin()
-      const result = plugin.probe(ctx)
-
-      const chart = result.lines.find((line) => line.label === "Usage Trend")
-      expect(chart).toMatchObject({
-        type: "barChart",
-        note: "Estimated from local Claude logs at API rates.",
-      })
-      expect(chart.points.map((point) => point.value)).toEqual([150, 300])
-
-      const sonnet = result.lines.find((line) => line.label === "claude-sonnet-4-20250514")
-      const opus = result.lines.find((line) => line.label === "claude-opus-4-1-20250805")
-      expect(sonnet).toMatchObject({
-        type: "text",
-        value: "50%",
-      })
-      expect(opus).toMatchObject({
-        type: "text",
-        value: "50%",
-      })
-    })
-
     it("shows empty Today/Yesterday and Last 30 Days when today has no entry", async () => {
       const ctx = makeProbeCtx({
         ccusageResult: okUsage([

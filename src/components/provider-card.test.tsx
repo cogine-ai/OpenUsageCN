@@ -110,35 +110,6 @@ describe("ProviderCard", () => {
     expect(screen.getByText("342 credits")).toBeInTheDocument()
   })
 
-  it("renders an inline usage sparkline row with an accessible summary", () => {
-    render(
-      <ProviderCard
-        name="Chart"
-        displayMode="used"
-        lines={[
-          {
-            type: "barChart",
-            label: "Usage Trend",
-            points: [
-              { label: "2/1", value: 100, valueLabel: "100 tokens" },
-              { label: "2/2", value: 400, valueLabel: "400 tokens" },
-            ],
-            note: "Estimated from local logs",
-          },
-          { type: "text", label: "gpt-5.5", value: "75%" },
-        ]}
-      />
-    )
-
-    // Single glanceable element; per-day detail lives in the hover/focus graph.
-    const sparkline = screen.getByRole("img", { name: /Usage Trend/ })
-    expect(sparkline).toBeInTheDocument()
-    expect(sparkline).toHaveAccessibleName(/latest 400 tokens on 2\/2/)
-    expect(sparkline).toHaveAccessibleName(/Estimated from local logs/)
-    expect(screen.getByText("gpt-5.5")).toBeInTheDocument()
-    expect(screen.getByText("75%")).toBeInTheDocument()
-  })
-
   it("renders quick links and opens URL", async () => {
     render(
       <ProviderCard

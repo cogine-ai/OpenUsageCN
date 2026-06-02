@@ -41,12 +41,11 @@ export function UsageSparkline({ label, points, note, color }: UsageSparklinePro
     <Tooltip>
       <TooltipTrigger
         render={(props) => (
-          <div
+          <button
             {...props}
-            role="img"
+            type="button"
             aria-label={summary}
-            tabIndex={0}
-            className="flex h-[18px] items-center justify-between gap-2 rounded-sm outline-none [touch-action:manipulation] focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex h-[18px] w-full items-center justify-between gap-2 rounded-sm border-0 bg-transparent p-0 text-left outline-none [touch-action:manipulation] focus-visible:ring-2 focus-visible:ring-ring"
           >
             <span className="min-w-0 truncate text-xs text-muted-foreground">{label}</span>
             <span
@@ -61,7 +60,7 @@ export function UsageSparkline({ label, points, note, color }: UsageSparklinePro
                 />
               ))}
             </span>
-          </div>
+          </button>
         )}
       />
       <TooltipContent side="top" className="w-56" onMouseLeave={() => setActiveIndex(null)}>
@@ -71,12 +70,17 @@ export function UsageSparkline({ label, points, note, color }: UsageSparklinePro
         </div>
         <div className="mt-1.5 flex h-20 items-end gap-px">
           {valid.map((point, index) => (
-            // Full-height column is the hover target so even short bars are easy to hit.
-            <div
+            // Full-height column is the hover/focus target so even short bars
+            // are easy to hit with a pointer or keyboard.
+            <button
               key={`${point.label}-${index}`}
+              type="button"
               onMouseEnter={() => setActiveIndex(index)}
+              onFocus={() => setActiveIndex(index)}
+              onBlur={() => setActiveIndex(null)}
               title={`${point.label}: ${pointLabel(point)}`}
-              className="flex h-full min-w-[3px] flex-1 items-end [touch-action:manipulation]"
+              aria-label={`${point.label}: ${pointLabel(point)}`}
+              className="flex h-full min-w-[3px] flex-1 items-end border-0 bg-transparent p-0 outline-none [touch-action:manipulation] focus-visible:ring-2 focus-visible:ring-ring"
             >
               <span
                 className={cn(
@@ -85,7 +89,7 @@ export function UsageSparkline({ label, points, note, color }: UsageSparklinePro
                 )}
                 style={barStyle(point, 6)}
               />
-            </div>
+            </button>
           ))}
         </div>
         <div className="mt-1 flex justify-between text-[10px] tabular-nums text-muted-foreground">

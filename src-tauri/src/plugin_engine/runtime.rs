@@ -504,124 +504,13 @@ fn parse_lines(result: &Object) -> Result<Vec<MetricLine>, String> {
                 });
             }
             "barChart" => {
-                let points_array: Array = match line.get("points") {
-                    Ok(points) => points,
-                    Err(_) => {
-                        out.push(error_line(format!(
-                            "barChart line at index {} missing points",
-                            idx
-                        )));
-                        continue;
-                    }
-                };
-                let mut points = Vec::new();
-                for point_idx in 0..points_array.len() {
-                    let point: Object = match points_array.get(point_idx) {
-                        Ok(point) => point,
-                        Err(_) => {
-                            out.push(error_line(format!(
-                                "barChart line at index {} has invalid point at index {}",
-                                idx, point_idx
-                            )));
-                            continue;
-                        }
-                    };
-                    let point_label = point.get::<_, String>("label").unwrap_or_default();
-                    let point_label = point_label.trim().to_string();
-                    if point_label.is_empty() {
-                        out.push(error_line(format!(
-                            "barChart line at index {} has empty point label at index {}",
-                            idx, point_idx
-                        )));
-                        continue;
-                    }
-
-                    let value: Value = match point.get("value") {
-                        Ok(v) => v,
-                        Err(_) => {
-                            out.push(error_line(format!(
-                                "barChart line at index {} point {} missing value",
-                                idx, point_idx
-                            )));
-                            continue;
-                        }
-                    };
-                    let value = match value.as_number() {
-                        Some(n) if n.is_finite() && n >= 0.0 => n,
-                        _ => {
-                            out.push(error_line(format!(
-                                "barChart line at index {} point {} invalid value",
-                                idx, point_idx
-                            )));
-                            continue;
-                        }
-                    };
-
-                    let value_label = match point.get::<_, Value>("valueLabel") {
-                        Ok(v) => {
-                            if v.is_null() || v.is_undefined() {
-                                None
-                            } else if let Some(s) = v.as_string() {
-                                let value = s.to_string().unwrap_or_default();
-                                let trimmed = value.trim().to_string();
-                                if trimmed.is_empty() {
-                                    None
-                                } else {
-                                    Some(trimmed)
-                                }
-                            } else {
-                                log::warn!(
-                                    "invalid barChart valueLabel at line {} point {}, omitting",
-                                    idx,
-                                    point_idx
-                                );
-                                None
-                            }
-                        }
-                        Err(_) => None,
-                    };
-
-                    points.push(BarChartPoint {
-                        label: point_label,
-                        value,
-                        value_label,
-                    });
+                let (chart, errors) = parse_bar_chart_line(&line, idx, label, color);
+                for message in errors {
+                    out.push(error_line(message));
                 }
-
-                if points.is_empty() {
-                    out.push(error_line(format!(
-                        "barChart line at index {} has no valid points",
-                        idx
-                    )));
-                    continue;
+                if let Some(chart) = chart {
+                    out.push(chart);
                 }
-
-                let note = match line.get::<_, Value>("note") {
-                    Ok(v) => {
-                        if v.is_null() || v.is_undefined() {
-                            None
-                        } else if let Some(s) = v.as_string() {
-                            let value = s.to_string().unwrap_or_default();
-                            let trimmed = value.trim().to_string();
-                            if trimmed.is_empty() {
-                                None
-                            } else {
-                                Some(trimmed)
-                            }
-                        } else {
-                            log::warn!("invalid note at index {} (non-string), omitting", idx);
-                            None
-                        }
-                    }
-                    Err(_) => None,
-                };
-
-                out.push(MetricLine::BarChart {
-                    label,
-                    points,
-                    note,
-                    color,
-                });
             }
             _ => {
                 out.push(error_line(format!(
@@ -633,6 +522,135 @@ fn parse_lines(result: &Object) -> Result<Vec<MetricLine>, String> {
     }
 
     Ok(out)
+}
+
+// Parses a barChart line, keeping its point/value/note validation out of
+// parse_lines. Returns the built line (when at least one point is valid) plus
+// any per-point error messages the caller should surface as error lines.
+fn parse_bar_chart_line<'js>(
+    line: &Object<'js>,
+    idx: usize,
+    label: String,
+    color: Option<String>,
+) -> (Option<MetricLine>, Vec<String>) {
+    let mut errors: Vec<String> = Vec::new();
+
+    let points_array: Array = match line.get("points") {
+        Ok(points) => points,
+        Err(_) => {
+            errors.push(format!("barChart line at index {} missing points", idx));
+            return (None, errors);
+        }
+    };
+
+    let mut points = Vec::new();
+    for point_idx in 0..points_array.len() {
+        let point: Object = match points_array.get(point_idx) {
+            Ok(point) => point,
+            Err(_) => {
+                errors.push(format!(
+                    "barChart line at index {} has invalid point at index {}",
+                    idx, point_idx
+                ));
+                continue;
+            }
+        };
+        let point_label = point.get::<_, String>("label").unwrap_or_default();
+        let point_label = point_label.trim().to_string();
+        if point_label.is_empty() {
+            errors.push(format!(
+                "barChart line at index {} has empty point label at index {}",
+                idx, point_idx
+            ));
+            continue;
+        }
+
+        let value: Value = match point.get("value") {
+            Ok(v) => v,
+            Err(_) => {
+                errors.push(format!(
+                    "barChart line at index {} point {} missing value",
+                    idx, point_idx
+                ));
+                continue;
+            }
+        };
+        let value = match value.as_number() {
+            Some(n) if n.is_finite() && n >= 0.0 => n,
+            _ => {
+                errors.push(format!(
+                    "barChart line at index {} point {} invalid value",
+                    idx, point_idx
+                ));
+                continue;
+            }
+        };
+
+        let value_label = match point.get::<_, Value>("valueLabel") {
+            Ok(v) => {
+                if v.is_null() || v.is_undefined() {
+                    None
+                } else if let Some(s) = v.as_string() {
+                    let value = s.to_string().unwrap_or_default();
+                    let trimmed = value.trim().to_string();
+                    if trimmed.is_empty() {
+                        None
+                    } else {
+                        Some(trimmed)
+                    }
+                } else {
+                    log::warn!(
+                        "invalid barChart valueLabel at line {} point {}, omitting",
+                        idx,
+                        point_idx
+                    );
+                    None
+                }
+            }
+            Err(_) => None,
+        };
+
+        points.push(BarChartPoint {
+            label: point_label,
+            value,
+            value_label,
+        });
+    }
+
+    if points.is_empty() {
+        errors.push(format!("barChart line at index {} has no valid points", idx));
+        return (None, errors);
+    }
+
+    let note = match line.get::<_, Value>("note") {
+        Ok(v) => {
+            if v.is_null() || v.is_undefined() {
+                None
+            } else if let Some(s) = v.as_string() {
+                let value = s.to_string().unwrap_or_default();
+                let trimmed = value.trim().to_string();
+                if trimmed.is_empty() {
+                    None
+                } else {
+                    Some(trimmed)
+                }
+            } else {
+                log::warn!("invalid note at index {} (non-string), omitting", idx);
+                None
+            }
+        }
+        Err(_) => None,
+    };
+
+    (
+        Some(MetricLine::BarChart {
+            label,
+            points,
+            note,
+            color,
+        }),
+        errors,
+    )
 }
 
 fn error_output(plugin: &LoadedPlugin, message: String) -> PluginOutput {
