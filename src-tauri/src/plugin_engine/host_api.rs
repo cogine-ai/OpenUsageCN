@@ -1,9 +1,9 @@
 use aes_gcm::{
-    aead::{generic_array::typenum::U16, rand_core::RngCore, Aead, KeyInit, OsRng},
-    aes::Aes256,
     AesGcm, Nonce,
+    aead::{Aead, KeyInit, OsRng, generic_array::typenum::U16, rand_core::RngCore},
+    aes::Aes256,
 };
-use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use rquickjs::{Ctx, Exception, Function, Object};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
@@ -1324,15 +1324,19 @@ fn inject_ls<'js>(ctx: &Ctx<'js>, host: &Object<'js>, plugin_id: &str) -> rquick
 
                 let ps_stdout = String::from_utf8_lossy(&ps_output.stdout);
                 let process_name_lower = opts.process_name.to_lowercase();
-                let markers_lower: Vec<String> =
-                    opts.markers.iter().map(|m| m.to_lowercase()).collect();
+                let markers_lower: Vec<String> = opts
+                    .markers
+                    .iter()
+                    .map(|m| m.trim().to_lowercase())
+                    .filter(|m| !m.is_empty())
+                    .collect();
 
                 // Find the target process. Marker patterns are Codeium-derived.
                 // Matching priority:
                 //   1. Exact --ide_name / --app_data_dir flag value (prevents
                 //      "windsurf" matching "windsurf-next")
                 //   2. Path substring (/<marker>/) as fallback when no flags found
-                let mut found: Option<(i32, String)> = None;
+                let mut candidates: Vec<(u8, i32, String)> = Vec::new();
 
                 for line in ps_stdout.lines() {
                     let trimmed = line.trim();
@@ -1350,134 +1354,116 @@ fn inject_ls<'js>(ctx: &Ctx<'js>, host: &Object<'js>, plugin_id: &str) -> rquick
                         None => continue,
                     };
 
-                    let command_lower = command.to_lowercase();
-
-                    if !command_lower.contains(&process_name_lower) {
+                    if !ls_command_matches_process(command, &process_name_lower) {
                         continue;
                     }
 
-                    let ide_name = ls_extract_flag(command, "--ide_name").map(|v| v.to_lowercase());
-                    let app_data =
-                        ls_extract_flag(command, "--app_data_dir").map(|v| v.to_lowercase());
-
-                    let has_marker = markers_lower.iter().any(|m| {
-                        // Prefer exact flag match; skip path fallback when
-                        // a distinguishing flag exists.
-                        if let Some(ref name) = ide_name {
-                            return *name == *m;
-                        }
-                        if let Some(ref dir) = app_data {
-                            return *dir == *m;
-                        }
-                        // Fallback: path substring
-                        command_lower.contains(&format!("/{}/", m))
-                    });
-                    if !has_marker {
+                    let Some(marker_rank) = ls_marker_rank(command, &markers_lower) else {
                         continue;
-                    }
+                    };
 
                     if let Ok(p) = pid_str.parse::<i32>() {
-                        found = Some((p, command.to_string()));
-                        break;
+                        candidates.push((marker_rank, p, command.to_string()));
                     }
                 }
 
-                let (process_pid, command) = match found {
-                    Some(pair) => pair,
-                    None => {
-                        log::info!("[plugin:{}] LS process not found", pid);
-                        return Ok("null".to_string());
-                    }
-                };
-
-                // Extract CSRF token
-                let csrf = match ls_extract_flag(&command, &opts.csrf_flag) {
-                    Some(c) => c,
-                    None => {
-                        log::warn!("[plugin:{}] CSRF token not found in process args", pid);
-                        return Ok("null".to_string());
-                    }
-                };
-
-                // Extract extension port (optional)
-                let extension_port = opts.port_flag.as_ref().and_then(|flag| {
-                    ls_extract_flag(&command, flag).and_then(|v| v.parse::<i32>().ok())
-                });
-
-                // Extract extra flags (optional)
-                let mut extra = std::collections::HashMap::new();
-                if let Some(ref flags) = opts.extra_flags {
-                    for flag in flags {
-                        if let Some(val) = ls_extract_flag(&command, flag) {
-                            // Use flag name without leading dashes as key
-                            let key = flag.trim_start_matches('-').to_string();
-                            extra.insert(key, val);
-                        }
-                    }
+                if candidates.is_empty() {
+                    log::info!("[plugin:{}] LS process not found", pid);
+                    return Ok("null".to_string());
                 }
 
-                // Find lsof binary
                 let lsof_path = ["/usr/sbin/lsof", "/usr/bin/lsof"]
                     .iter()
                     .find(|p| std::path::Path::new(p).exists())
                     .copied();
 
-                let ports = if let Some(lsof) = lsof_path {
-                    match std::process::Command::new(lsof)
-                        .args([
-                            "-nP",
-                            "-iTCP",
-                            "-sTCP:LISTEN",
-                            "-a",
-                            "-p",
-                            &process_pid.to_string(),
-                        ])
-                        .output()
-                    {
-                        Ok(o) if o.status.success() => {
-                            ls_parse_listening_ports(&String::from_utf8_lossy(&o.stdout))
+                candidates.sort_by_key(|(marker_rank, _, _)| *marker_rank);
+                for (_, process_pid, command) in candidates {
+                    let csrf = if opts.csrf_flag.trim().is_empty() {
+                        String::new()
+                    } else {
+                        match ls_extract_flag(&command, &opts.csrf_flag) {
+                            Some(c) => c,
+                            None => {
+                                log::warn!("[plugin:{}] CSRF token not found in process args", pid);
+                                continue;
+                            }
                         }
-                        Ok(_) => {
-                            log::warn!("[plugin:{}] lsof returned non-zero", pid);
-                            Vec::new()
-                        }
-                        Err(e) => {
-                            log::warn!("[plugin:{}] lsof failed: {}", pid, e);
-                            Vec::new()
+                    };
+
+                    let extension_port = opts.port_flag.as_ref().and_then(|flag| {
+                        ls_extract_flag(&command, flag).and_then(|v| v.parse::<i32>().ok())
+                    });
+
+                    let mut extra = std::collections::HashMap::new();
+                    if let Some(ref flags) = opts.extra_flags {
+                        for flag in flags {
+                            if let Some(val) = ls_extract_flag(&command, flag) {
+                                let key = flag.trim_start_matches('-').to_string();
+                                extra.insert(key, val);
+                            }
                         }
                     }
-                } else {
-                    log::warn!("[plugin:{}] lsof not found", pid);
-                    Vec::new()
-                };
 
-                if ports.is_empty() && extension_port.is_none() {
-                    log::warn!(
-                        "[plugin:{}] no listening ports found for pid {}",
+                    let ports = if let Some(lsof) = lsof_path {
+                        match std::process::Command::new(lsof)
+                            .args([
+                                "-nP",
+                                "-iTCP",
+                                "-sTCP:LISTEN",
+                                "-a",
+                                "-p",
+                                &process_pid.to_string(),
+                            ])
+                            .output()
+                        {
+                            Ok(o) if o.status.success() => {
+                                ls_parse_listening_ports(&String::from_utf8_lossy(&o.stdout))
+                            }
+                            Ok(_) => {
+                                log::warn!("[plugin:{}] lsof returned non-zero", pid);
+                                Vec::new()
+                            }
+                            Err(e) => {
+                                log::warn!("[plugin:{}] lsof failed: {}", pid, e);
+                                Vec::new()
+                            }
+                        }
+                    } else {
+                        log::warn!("[plugin:{}] lsof not found", pid);
+                        Vec::new()
+                    };
+
+                    if ports.is_empty() && extension_port.is_none() {
+                        log::warn!(
+                            "[plugin:{}] no listening ports found for pid {}",
+                            pid,
+                            process_pid
+                        );
+                        continue;
+                    }
+
+                    log::info!(
+                        "[plugin:{}] LS found: pid={}, ports={:?}, csrf=[REDACTED]",
                         pid,
-                        process_pid
+                        process_pid,
+                        ports
                     );
-                    return Ok("null".to_string());
+
+                    let result = LsDiscoverResult {
+                        pid: process_pid,
+                        csrf,
+                        ports,
+                        extra,
+                        extension_port,
+                    };
+
+                    return serde_json::to_string(&result).map_err(|e| {
+                        Exception::throw_message(&ctx_inner, &format!("serialize failed: {}", e))
+                    });
                 }
 
-                log::info!(
-                    "[plugin:{}] LS found: pid={}, ports={:?}, csrf=[REDACTED]",
-                    pid,
-                    process_pid,
-                    ports
-                );
-
-                let result = LsDiscoverResult {
-                    pid: process_pid,
-                    csrf,
-                    ports,
-                    extra,
-                    extension_port,
-                };
-
-                serde_json::to_string(&result).map_err(|e| {
-                    Exception::throw_message(&ctx_inner, &format!("serialize failed: {}", e))
-                })
+                Ok("null".to_string())
             },
         )?,
     )?;
@@ -1519,6 +1505,71 @@ fn ls_extract_flag(command: &str, flag: &str) -> Option<String> {
         }
     }
     None
+}
+
+fn ls_marker_rank(command: &str, markers_lower: &[String]) -> Option<u8> {
+    if markers_lower.is_empty() {
+        return Some(0);
+    }
+
+    let ide_name = ls_extract_flag(command, "--ide_name").map(|v| v.to_lowercase());
+    let app_data = ls_extract_flag(command, "--app_data_dir").map(|v| v.to_lowercase());
+    if ide_name.is_some() || app_data.is_some() {
+        return markers_lower
+            .iter()
+            .any(|m| {
+                ide_name.as_ref().is_some_and(|name| name == m)
+                    || app_data.as_ref().is_some_and(|dir| dir == m)
+            })
+            .then_some(0);
+    }
+
+    let command_lower = command.to_lowercase();
+    markers_lower
+        .iter()
+        .any(|m| command_lower.contains(&format!("/{}/", m)))
+        .then_some(1)
+}
+
+fn ls_argv0(command: &str) -> &str {
+    let trimmed = command.trim_start();
+    let Some(quote) = trimmed.chars().next().filter(|c| *c == '"' || *c == '\'') else {
+        return trimmed.split_whitespace().next().unwrap_or_default();
+    };
+
+    let quote_len = quote.len_utf8();
+    let rest = &trimmed[quote_len..];
+    match rest.find(quote) {
+        Some(end) => &rest[..end],
+        None => trimmed.split_whitespace().next().unwrap_or_default(),
+    }
+}
+
+fn ls_command_matches_process(command: &str, process_name_lower: &str) -> bool {
+    if process_name_lower.is_empty() {
+        return false;
+    }
+
+    let argv0 = ls_argv0(command);
+    let exe_name = Path::new(argv0)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| name.to_lowercase())
+        .unwrap_or_default();
+
+    if exe_name == process_name_lower {
+        return true;
+    }
+
+    if process_name_lower.len() >= 8 {
+        exe_name.starts_with(&format!("{}_", process_name_lower))
+            || command.to_lowercase().contains(process_name_lower)
+    } else {
+        let command_lower = command.to_lowercase();
+        command_lower.ends_with(&format!("/{}", process_name_lower))
+            || command_lower.contains(&format!("/{} ", process_name_lower))
+            || command_lower.contains(&format!("/{}\t", process_name_lower))
+    }
 }
 
 /// Parse listening port numbers from `lsof -nP -iTCP -sTCP:LISTEN` output.
@@ -2387,16 +2438,42 @@ fn inject_keychain<'js>(
         "readGenericPassword",
         Function::new(
             ctx.clone(),
-            move |ctx_inner: Ctx<'_>, service: String| -> rquickjs::Result<String> {
+            move |ctx_inner: Ctx<'_>,
+                  service: String,
+                  account: Option<String>|
+                  -> rquickjs::Result<String> {
                 if !cfg!(target_os = "macos") {
                     return Err(Exception::throw_message(
                         &ctx_inner,
                         "keychain API is only supported on macOS",
                     ));
                 }
-                log::info!("[plugin:{}] keychain read: service={}", pid_read, service);
+                let account = account.and_then(|value| {
+                    let trimmed = value.trim();
+                    if trimmed.is_empty() {
+                        None
+                    } else {
+                        Some(trimmed.to_string())
+                    }
+                });
+                let redacted_account = account.as_ref().map(|value| redact_value(value));
+                if let Some(ref redacted) = redacted_account {
+                    log::info!(
+                        "[plugin:{}] keychain read: service={}, account={}",
+                        pid_read,
+                        service,
+                        redacted
+                    );
+                } else {
+                    log::info!("[plugin:{}] keychain read: service={}", pid_read, service);
+                }
+                let args = if let Some(ref account) = account {
+                    keychain_find_generic_password_args_for_account(&service, account)
+                } else {
+                    keychain_find_generic_password_args(&service)
+                };
                 let output = std::process::Command::new("security")
-                    .args(keychain_find_generic_password_args(&service))
+                    .args(args)
                     .output()
                     .map_err(|e| {
                         Exception::throw_message(
@@ -2408,23 +2485,42 @@ fn inject_keychain<'js>(
                 if !output.status.success() {
                     let stderr = String::from_utf8_lossy(&output.stderr);
                     let first_line = stderr.lines().next().unwrap_or("").trim();
-                    log::warn!(
-                        "[plugin:{}] keychain read miss: service={}, error={}",
-                        pid_read,
-                        service,
-                        first_line
-                    );
+                    if let Some(ref redacted) = redacted_account {
+                        log::warn!(
+                            "[plugin:{}] keychain read miss: service={}, account={}, error={}",
+                            pid_read,
+                            service,
+                            redacted,
+                            first_line
+                        );
+                    } else {
+                        log::warn!(
+                            "[plugin:{}] keychain read miss: service={}, error={}",
+                            pid_read,
+                            service,
+                            first_line
+                        );
+                    }
                     return Err(Exception::throw_message(
                         &ctx_inner,
                         &format!("keychain item not found: {}", first_line),
                     ));
                 }
 
-                log::info!(
-                    "[plugin:{}] keychain read hit: service={}",
-                    pid_read,
-                    service
-                );
+                if let Some(ref redacted) = redacted_account {
+                    log::info!(
+                        "[plugin:{}] keychain read hit: service={}, account={}",
+                        pid_read,
+                        service,
+                        redacted
+                    );
+                } else {
+                    log::info!(
+                        "[plugin:{}] keychain read hit: service={}",
+                        pid_read,
+                        service
+                    );
+                }
                 Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
             },
         )?,
@@ -2998,6 +3094,62 @@ mod tests {
                 .get("writeGenericPasswordForCurrentUser")
                 .expect("writeGenericPasswordForCurrentUser");
         });
+    }
+
+    #[test]
+    fn ls_command_matches_language_server_variants() {
+        assert!(ls_command_matches_process(
+            "/Applications/Antigravity IDE.app/Contents/Resources/language_server_macos_arm --app_data_dir antigravity-ide",
+            "language_server"
+        ));
+        assert!(ls_command_matches_process(
+            "/tmp/language_server --app_data_dir antigravity-ide",
+            "language_server"
+        ));
+    }
+
+    #[test]
+    fn ls_command_matches_short_process_names_exactly() {
+        assert!(ls_command_matches_process(
+            "/opt/homebrew/bin/agy --some-flag",
+            "agy"
+        ));
+        assert!(ls_command_matches_process(
+            "/Applications/Antigravity IDE.app/Contents/Resources/agy --some-flag",
+            "agy"
+        ));
+        assert!(ls_command_matches_process(
+            "\"/Applications/Antigravity IDE.app/Contents/Resources/agy\" --some-flag",
+            "agy"
+        ));
+        assert!(!ls_command_matches_process(
+            "/opt/homebrew/bin/not-agy-helper --some-flag agy",
+            "agy"
+        ));
+    }
+
+    #[test]
+    fn ls_marker_rank_prefers_exact_flags_over_path_fallback() {
+        let markers = vec!["antigravity".to_string()];
+
+        assert_eq!(
+            ls_marker_rank(
+                "/tmp/windsurf/language_server --ide_name antigravity",
+                &markers
+            ),
+            Some(0)
+        );
+        assert_eq!(
+            ls_marker_rank("/tmp/antigravity/language_server", &markers),
+            Some(1)
+        );
+        assert_eq!(
+            ls_marker_rank(
+                "/tmp/antigravity/language_server --ide_name windsurf",
+                &markers
+            ),
+            None
+        );
     }
 
     #[test]
