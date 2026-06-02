@@ -16,6 +16,15 @@ pub enum ProgressFormat {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BarChartPoint {
+    label: String,
+    value: f64,
+    #[serde(rename = "valueLabel")]
+    value_label: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum MetricLine {
     Text {
@@ -40,6 +49,13 @@ pub enum MetricLine {
         text: String,
         color: Option<String>,
         subtitle: Option<String>,
+    },
+    #[serde(rename = "barChart")]
+    BarChart {
+        label: String,
+        points: Vec<BarChartPoint>,
+        note: Option<String>,
+        color: Option<String>,
     },
 }
 
@@ -487,6 +503,126 @@ fn parse_lines(result: &Object) -> Result<Vec<MetricLine>, String> {
                     subtitle,
                 });
             }
+            "barChart" => {
+                let points_array: Array = match line.get("points") {
+                    Ok(points) => points,
+                    Err(_) => {
+                        out.push(error_line(format!(
+                            "barChart line at index {} missing points",
+                            idx
+                        )));
+                        continue;
+                    }
+                };
+                let mut points = Vec::new();
+                for point_idx in 0..points_array.len() {
+                    let point: Object = match points_array.get(point_idx) {
+                        Ok(point) => point,
+                        Err(_) => {
+                            out.push(error_line(format!(
+                                "barChart line at index {} has invalid point at index {}",
+                                idx, point_idx
+                            )));
+                            continue;
+                        }
+                    };
+                    let point_label = point.get::<_, String>("label").unwrap_or_default();
+                    let point_label = point_label.trim().to_string();
+                    if point_label.is_empty() {
+                        out.push(error_line(format!(
+                            "barChart line at index {} has empty point label at index {}",
+                            idx, point_idx
+                        )));
+                        continue;
+                    }
+
+                    let value: Value = match point.get("value") {
+                        Ok(v) => v,
+                        Err(_) => {
+                            out.push(error_line(format!(
+                                "barChart line at index {} point {} missing value",
+                                idx, point_idx
+                            )));
+                            continue;
+                        }
+                    };
+                    let value = match value.as_number() {
+                        Some(n) if n.is_finite() && n >= 0.0 => n,
+                        _ => {
+                            out.push(error_line(format!(
+                                "barChart line at index {} point {} invalid value",
+                                idx, point_idx
+                            )));
+                            continue;
+                        }
+                    };
+
+                    let value_label = match point.get::<_, Value>("valueLabel") {
+                        Ok(v) => {
+                            if v.is_null() || v.is_undefined() {
+                                None
+                            } else if let Some(s) = v.as_string() {
+                                let value = s.to_string().unwrap_or_default();
+                                let trimmed = value.trim().to_string();
+                                if trimmed.is_empty() {
+                                    None
+                                } else {
+                                    Some(trimmed)
+                                }
+                            } else {
+                                log::warn!(
+                                    "invalid barChart valueLabel at line {} point {}, omitting",
+                                    idx,
+                                    point_idx
+                                );
+                                None
+                            }
+                        }
+                        Err(_) => None,
+                    };
+
+                    points.push(BarChartPoint {
+                        label: point_label,
+                        value,
+                        value_label,
+                    });
+                }
+
+                if points.is_empty() {
+                    out.push(error_line(format!(
+                        "barChart line at index {} has no valid points",
+                        idx
+                    )));
+                    continue;
+                }
+
+                let note = match line.get::<_, Value>("note") {
+                    Ok(v) => {
+                        if v.is_null() || v.is_undefined() {
+                            None
+                        } else if let Some(s) = v.as_string() {
+                            let value = s.to_string().unwrap_or_default();
+                            let trimmed = value.trim().to_string();
+                            if trimmed.is_empty() {
+                                None
+                            } else {
+                                Some(trimmed)
+                            }
+                        } else {
+                            log::warn!("invalid note at index {} (non-string), omitting", idx);
+                            None
+                        }
+                    }
+                    Err(_) => None,
+                };
+
+                out.push(MetricLine::BarChart {
+                    label,
+                    points,
+                    note,
+                    color,
+                });
+            }
             _ => {
                 out.push(error_line(format!(
                     "unknown line type at index {}: {}",
@@ -656,5 +792,33 @@ mod tests {
             obj.get("resets_at").is_none(),
             "did not expect resets_at key"
         );
+    }
+
+    #[test]
+    fn bar_chart_line_round_trips_from_builder() {
+        let plugin = test_plugin(
+            r#"
+            globalThis.__openusage_plugin = {
+                probe(ctx) {
+                    return {
+                        lines: [
+                            ctx.line.barChart({
+                                label: "Usage Trend",
+                                points: [{ label: "Today", value: 42, valueLabel: "42 tokens" }],
+                                note: "Estimated from local logs"
+                            })
+                        ]
+                    };
+                }
+            };
+            "#,
+        );
+
+        let output = run_probe(&plugin, &temp_app_dir("bar-chart"), "0.0.0");
+        let json: JsonValue = serde_json::to_value(&output.lines[0]).expect("serialize");
+        assert_eq!(json["type"], "barChart");
+        assert_eq!(json["label"], "Usage Trend");
+        assert_eq!(json["points"][0]["valueLabel"], "42 tokens");
+        assert_eq!(json["note"], "Estimated from local logs");
     }
 }

@@ -426,6 +426,36 @@ ctx.line.badge({ label: "Plan", text: "Pro", color: "#000000" })
 ctx.line.badge({ label: "Status", text: "Connected", color: "#22c55e" })
 ```
 
+### `ctx.line.barChart(opts)`
+
+Creates a compact vertical bar chart line for usage history.
+
+```typescript
+ctx.line.barChart({
+  label: string,                    // Required: chart label
+  points: Array<{
+    label: string,                  // Required: point label, e.g. day
+    value: number,                  // Required: non-negative chart value
+    valueLabel?: string             // Optional: displayed value, e.g. "1.2M tokens"
+  }>,
+  note?: string,                    // Optional: small muted note below chart
+  color?: string,                   // Optional: hex color for bars
+}): MetricLine
+```
+
+**Example:**
+
+```javascript
+ctx.line.barChart({
+  label: "Usage Trend",
+  points: [
+    { label: "2/1", value: 1200, valueLabel: "1.2K tokens" },
+    { label: "2/2", value: 2400, valueLabel: "2.4K tokens" },
+  ],
+  note: "Estimated from local logs",
+})
+```
+
 ## Formatters
 
 Helper functions for formatting values.

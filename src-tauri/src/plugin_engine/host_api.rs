@@ -989,6 +989,12 @@ pub fn inject_utils(ctx: &rquickjs::Ctx<'_>) -> rquickjs::Result<()> {
                     if (opts.color) line.color = opts.color;
                     if (opts.subtitle) line.subtitle = opts.subtitle;
                     return line;
+                },
+                barChart: function(opts) {
+                    var line = { type: "barChart", label: opts.label, points: opts.points || [] };
+                    if (opts.note) line.note = opts.note;
+                    if (opts.color) line.color = opts.color;
+                    return line;
                 }
             };
 
