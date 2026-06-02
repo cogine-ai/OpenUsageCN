@@ -39,6 +39,7 @@ describe("claude plugin ccusage usage trend", () => {
 
   it("adds model percentage text lines and a usage chart from claude ccusage", async () => {
     const todayKey = localDayKey(new Date())
+    const yesterdayKey = localDayKey(new Date(Date.now() - 24 * 60 * 60 * 1000))
     const ctx = makeProbeCtx({
       ccusageResult: okUsage([
         {
@@ -51,7 +52,7 @@ describe("claude plugin ccusage usage trend", () => {
           ],
         },
         {
-          date: "2026-02-01",
+          date: yesterdayKey,
           totalTokens: 150,
           totalCost: 1,
           modelBreakdowns: [

@@ -524,6 +524,12 @@ fn parse_lines(result: &Object) -> Result<Vec<MetricLine>, String> {
     Ok(out)
 }
 
+// Upper bound on barChart points parsed from a plugin. The chart is daily
+// history (plugins emit ~31), so a year of points is generous headroom while
+// keeping the loop and allocations bounded — parse_lines runs natively after
+// the JS returns, so the probe's interrupt-based timeout can't cap it here.
+const MAX_BAR_CHART_POINTS: usize = 366;
+
 // Parses a barChart line, keeping its point/value/note validation out of
 // parse_lines. Returns the built line (when at least one point is valid) plus
 // any per-point error messages the caller should surface as error lines.
@@ -543,8 +549,21 @@ fn parse_bar_chart_line<'js>(
         }
     };
 
+    // Bound the loop to a plugin-independent maximum so a huge points array
+    // can't exhaust CPU/memory in this native (non-interruptible) path.
+    let total_points = points_array.len();
+    let scan_count = total_points.min(MAX_BAR_CHART_POINTS);
+    if total_points > MAX_BAR_CHART_POINTS {
+        log::warn!(
+            "barChart line at index {} has {} points; capping at {}",
+            idx,
+            total_points,
+            MAX_BAR_CHART_POINTS
+        );
+    }
+
     let mut points = Vec::new();
-    for point_idx in 0..points_array.len() {
+    for point_idx in 0..scan_count {
         let point: Object = match points_array.get(point_idx) {
             Ok(point) => point,
             Err(_) => {
@@ -838,5 +857,32 @@ mod tests {
         assert_eq!(json["label"], "Usage Trend");
         assert_eq!(json["points"][0]["valueLabel"], "42 tokens");
         assert_eq!(json["note"], "Estimated from local logs");
+    }
+
+    #[test]
+    fn bar_chart_caps_excessive_points() {
+        // A plugin-controlled points array must not parse unbounded: this path
+        // is native and runs after the JS deadline interrupt can fire.
+        let plugin = test_plugin(
+            r#"
+            globalThis.__openusage_plugin = {
+                probe(ctx) {
+                    var points = [];
+                    for (var i = 0; i < 5000; i++) {
+                        points.push({ label: "d" + i, value: i });
+                    }
+                    return { lines: [ctx.line.barChart({ label: "Big", points: points })] };
+                }
+            };
+            "#,
+        );
+
+        let output = run_probe(&plugin, &temp_app_dir("bar-chart-cap"), "0.0.0");
+        let json: JsonValue = serde_json::to_value(&output.lines[0]).expect("serialize");
+        assert_eq!(json["type"], "barChart");
+        assert_eq!(
+            json["points"].as_array().expect("points array").len(),
+            MAX_BAR_CHART_POINTS
+        );
     }
 }

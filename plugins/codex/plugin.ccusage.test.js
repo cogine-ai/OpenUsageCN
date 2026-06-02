@@ -6,6 +6,16 @@ const loadPlugin = async () => {
   return globalThis.__openusage_plugin
 }
 
+// Relative local day key so fixtures stay inside the rolling trend window.
+function dayKey(daysAgo) {
+  const d = new Date()
+  d.setDate(d.getDate() - daysAgo)
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, "0")
+  const day = String(d.getDate()).padStart(2, "0")
+  return year + "-" + month + "-" + day
+}
+
 describe("codex plugin ccusage usage trend", () => {
   beforeEach(() => {
     delete globalThis.__openusage_plugin
@@ -28,7 +38,7 @@ describe("codex plugin ccusage usage trend", () => {
       data: {
         daily: [
           {
-            date: "2026-02-02",
+            date: dayKey(0),
             totalTokens: 300,
             models: {
               "gpt-5.5": { totalTokens: 200 },
@@ -36,7 +46,7 @@ describe("codex plugin ccusage usage trend", () => {
             },
           },
           {
-            date: "2026-02-01",
+            date: dayKey(1),
             totalTokens: 150,
             models: {
               "gpt-5": { inputTokens: 30, cachedInputTokens: 20, outputTokens: 50 },
