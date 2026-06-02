@@ -948,6 +948,77 @@ describe("minimax plugin", () => {
     expect(line.format.kind).toBe("percent")
   })
 
+  it("falls back to CN remaining percent when count totals are unavailable", async () => {
+    const ctx = makeCtx()
+    setEnv(ctx, { MINIMAX_CN_API_KEY: "cn-key" })
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      headers: {},
+      bodyText: JSON.stringify({
+        base_resp: { status_code: 0 },
+        model_remains: [
+          {
+            model_name: "general",
+            current_interval_total_count: 0,
+            current_interval_usage_count: 0,
+            current_interval_remaining_percent: 94,
+            start_time: 1780279200000,
+            end_time: 1780297200000,
+          },
+          {
+            model_name: "video",
+            current_interval_total_count: 3,
+            current_interval_usage_count: 3,
+            current_interval_remaining_percent: 100,
+          },
+        ],
+      }),
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    const line = result.lines[0]
+
+    expect(line.used).toBe(6)
+    expect(line.limit).toBe(100)
+    expect(line.format.kind).toBe("percent")
+    expect(line.resetsAt).toBe(new Date(1780297200000).toISOString())
+  })
+
+  it("falls back to CN remaining percent when small count rows come first", async () => {
+    const ctx = makeCtx()
+    setEnv(ctx, { MINIMAX_CN_API_KEY: "cn-key" })
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      headers: {},
+      bodyText: JSON.stringify({
+        base_resp: { status_code: 0 },
+        model_remains: [
+          {
+            model_name: "video",
+            current_interval_total_count: 3,
+            current_interval_usage_count: 3,
+            current_interval_remaining_percent: 100,
+          },
+          {
+            model_name: "general",
+            current_interval_total_count: 0,
+            current_interval_usage_count: 0,
+            current_interval_remaining_percent: 94,
+          },
+        ],
+      }),
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    const line = result.lines[0]
+
+    expect(line.used).toBe(6)
+    expect(line.limit).toBe(100)
+    expect(line.format.kind).toBe("percent")
+  })
+
   it("handles weekly percentage from Token Plan API", async () => {
     const ctx = makeCtx()
     setEnv(ctx, { MINIMAX_API_KEY: "mini-key" })
