@@ -2,6 +2,7 @@
 mod app_nap;
 mod config;
 mod local_http_api;
+mod log_path;
 mod panel;
 mod plugin_engine;
 mod tray;
@@ -380,12 +381,7 @@ async fn start_probe_batch(
 
 #[tauri::command]
 fn get_log_path(app_handle: tauri::AppHandle) -> Result<String, String> {
-    // macOS log directory: ~/Library/Logs/{bundleIdentifier}
-    let home = dirs::home_dir().ok_or("no home dir")?;
-    let bundle_id = app_handle.config().identifier.clone();
-    let log_dir = home.join("Library").join("Logs").join(&bundle_id);
-    let log_file = log_dir.join(format!("{}.log", app_handle.package_info().name));
-    Ok(log_file.to_string_lossy().to_string())
+    log_path::for_app(&app_handle).map(|path| path.to_string_lossy().to_string())
 }
 
 /// Update the global shortcut registration.
@@ -507,6 +503,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_aptabase::Builder::new("A-US-6435241436").build())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_nspanel::init())
         .plugin(
