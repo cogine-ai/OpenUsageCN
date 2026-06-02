@@ -302,5 +302,80 @@ describe("getTrayPrimaryBars", () => {
     })
     expect(bars).toEqual([])
   })
+
+  it("handles Claude fallback from Session to Weekly to Extra usage spent", () => {
+    const pluginsMeta = [
+      {
+        id: "claude",
+        name: "Claude",
+        iconUrl: "",
+        primaryCandidates: ["Session", "Weekly", "Extra usage spent"],
+        lines: [],
+      },
+    ]
+
+    // Case 1: Only Extra usage spent is available (e.g. Claude Enterprise/Team account overage)
+    const barsExtraOnly = getTrayPrimaryBars({
+      displayMode: "used",
+      pluginsMeta,
+      pluginSettings: { order: ["claude"], disabled: [] },
+      pluginStates: {
+        claude: {
+          data: {
+            providerId: "claude",
+            displayName: "Claude",
+            iconUrl: "",
+            lines: [
+              {
+                type: "progress",
+                label: "Extra usage spent",
+                used: 30,
+                limit: 100,
+                format: { kind: "dollars" },
+              },
+            ],
+          },
+          loading: false,
+          error: null,
+        },
+      },
+    })
+    expect(barsExtraOnly).toEqual([{ id: "claude", fraction: 0.3 }])
+
+    // Case 2: Weekly is available (but Session is not)
+    const barsWeeklyOnly = getTrayPrimaryBars({
+      displayMode: "used",
+      pluginsMeta,
+      pluginSettings: { order: ["claude"], disabled: [] },
+      pluginStates: {
+        claude: {
+          data: {
+            providerId: "claude",
+            displayName: "Claude",
+            iconUrl: "",
+            lines: [
+              {
+                type: "progress",
+                label: "Weekly",
+                used: 40,
+                limit: 100,
+                format: { kind: "percent" },
+              },
+              {
+                type: "progress",
+                label: "Extra usage spent",
+                used: 30,
+                limit: 100,
+                format: { kind: "dollars" },
+              },
+            ],
+          },
+          loading: false,
+          error: null,
+        },
+      },
+    })
+    expect(barsWeeklyOnly).toEqual([{ id: "claude", fraction: 0.4 }])
+  })
 })
 
