@@ -457,7 +457,12 @@
         }
         if (ctx.util.isAuthStatus(resp.status)) return { _authFailed: true }
         if (resp.status >= 200 && resp.status < 300) {
-          return ctx.util.tryParseJson(resp.bodyText)
+          var json = ctx.util.tryParseJson(resp.bodyText)
+          if (!json || typeof json !== "object") {
+            ctx.host.log.warn("Cloud Code returned invalid JSON (" + CLOUD_CODE_URLS[i] + ")")
+            continue
+          }
+          return json
         }
       } catch (e) {
         ctx.host.log.warn("Cloud Code request failed (" + CLOUD_CODE_URLS[i] + "): " + String(e))
@@ -687,7 +692,7 @@
 
     if (!ccData || ccData._authFailed) {
       var agyToken = loadAgyKeychainToken(ctx)
-      if (agyToken && tokens.indexOf(agyToken) === -1) {
+      if (agyToken) {
         var agyResult = probeAgyCloudCode(ctx, agyToken)
         if (agyResult && !agyResult._authFailed) return agyResult
         if (agyResult && agyResult._authFailed) ccData = agyResult

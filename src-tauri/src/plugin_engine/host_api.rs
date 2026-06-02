@@ -1,9 +1,9 @@
 use aes_gcm::{
-    aead::{generic_array::typenum::U16, rand_core::RngCore, Aead, KeyInit, OsRng},
-    aes::Aes256,
     AesGcm, Nonce,
+    aead::{Aead, KeyInit, OsRng, generic_array::typenum::U16, rand_core::RngCore},
+    aes::Aes256,
 };
-use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use rquickjs::{Ctx, Exception, Function, Object};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
@@ -1336,7 +1336,7 @@ fn inject_ls<'js>(ctx: &Ctx<'js>, host: &Object<'js>, plugin_id: &str) -> rquick
                 //   1. Exact --ide_name / --app_data_dir flag value (prevents
                 //      "windsurf" matching "windsurf-next")
                 //   2. Path substring (/<marker>/) as fallback when no flags found
-                let mut candidates: Vec<(i32, String)> = Vec::new();
+                let mut candidates: Vec<(u8, i32, String)> = Vec::new();
 
                 for line in ps_stdout.lines() {
                     let trimmed = line.trim();
@@ -1358,23 +1358,12 @@ fn inject_ls<'js>(ctx: &Ctx<'js>, host: &Object<'js>, plugin_id: &str) -> rquick
                         continue;
                     }
 
-                    let command_lower = command.to_lowercase();
-                    let ide_name = ls_extract_flag(command, "--ide_name").map(|v| v.to_lowercase());
-                    let app_data =
-                        ls_extract_flag(command, "--app_data_dir").map(|v| v.to_lowercase());
-
-                    let has_marker = markers_lower.is_empty()
-                        || markers_lower.iter().any(|m| {
-                            ide_name.as_ref().is_some_and(|name| name == m)
-                                || app_data.as_ref().is_some_and(|dir| dir == m)
-                                || command_lower.contains(&format!("/{}/", m))
-                        });
-                    if !has_marker {
+                    let Some(marker_rank) = ls_marker_rank(command, &markers_lower) else {
                         continue;
-                    }
+                    };
 
                     if let Ok(p) = pid_str.parse::<i32>() {
-                        candidates.push((p, command.to_string()));
+                        candidates.push((marker_rank, p, command.to_string()));
                     }
                 }
 
@@ -1388,17 +1377,15 @@ fn inject_ls<'js>(ctx: &Ctx<'js>, host: &Object<'js>, plugin_id: &str) -> rquick
                     .find(|p| std::path::Path::new(p).exists())
                     .copied();
 
-                for (process_pid, command) in candidates {
+                candidates.sort_by_key(|(marker_rank, _, _)| *marker_rank);
+                for (_, process_pid, command) in candidates {
                     let csrf = if opts.csrf_flag.trim().is_empty() {
                         String::new()
                     } else {
                         match ls_extract_flag(&command, &opts.csrf_flag) {
                             Some(c) => c,
                             None => {
-                                log::warn!(
-                                    "[plugin:{}] CSRF token not found in process args",
-                                    pid
-                                );
+                                log::warn!("[plugin:{}] CSRF token not found in process args", pid);
                                 continue;
                             }
                         }
@@ -1520,12 +1507,50 @@ fn ls_extract_flag(command: &str, flag: &str) -> Option<String> {
     None
 }
 
+fn ls_marker_rank(command: &str, markers_lower: &[String]) -> Option<u8> {
+    if markers_lower.is_empty() {
+        return Some(0);
+    }
+
+    let ide_name = ls_extract_flag(command, "--ide_name").map(|v| v.to_lowercase());
+    let app_data = ls_extract_flag(command, "--app_data_dir").map(|v| v.to_lowercase());
+    if ide_name.is_some() || app_data.is_some() {
+        return markers_lower
+            .iter()
+            .any(|m| {
+                ide_name.as_ref().is_some_and(|name| name == m)
+                    || app_data.as_ref().is_some_and(|dir| dir == m)
+            })
+            .then_some(0);
+    }
+
+    let command_lower = command.to_lowercase();
+    markers_lower
+        .iter()
+        .any(|m| command_lower.contains(&format!("/{}/", m)))
+        .then_some(1)
+}
+
+fn ls_argv0(command: &str) -> &str {
+    let trimmed = command.trim_start();
+    let Some(quote) = trimmed.chars().next().filter(|c| *c == '"' || *c == '\'') else {
+        return trimmed.split_whitespace().next().unwrap_or_default();
+    };
+
+    let quote_len = quote.len_utf8();
+    let rest = &trimmed[quote_len..];
+    match rest.find(quote) {
+        Some(end) => &rest[..end],
+        None => trimmed.split_whitespace().next().unwrap_or_default(),
+    }
+}
+
 fn ls_command_matches_process(command: &str, process_name_lower: &str) -> bool {
     if process_name_lower.is_empty() {
         return false;
     }
 
-    let argv0 = command.split_whitespace().next().unwrap_or_default();
+    let argv0 = ls_argv0(command);
     let exe_name = Path::new(argv0)
         .file_name()
         .and_then(|name| name.to_str())
@@ -1540,7 +1565,10 @@ fn ls_command_matches_process(command: &str, process_name_lower: &str) -> bool {
         exe_name.starts_with(&format!("{}_", process_name_lower))
             || command.to_lowercase().contains(process_name_lower)
     } else {
-        false
+        let command_lower = command.to_lowercase();
+        command_lower.ends_with(&format!("/{}", process_name_lower))
+            || command_lower.contains(&format!("/{} ", process_name_lower))
+            || command_lower.contains(&format!("/{}\t", process_name_lower))
     }
 }
 
@@ -3086,10 +3114,42 @@ mod tests {
             "/opt/homebrew/bin/agy --some-flag",
             "agy"
         ));
+        assert!(ls_command_matches_process(
+            "/Applications/Antigravity IDE.app/Contents/Resources/agy --some-flag",
+            "agy"
+        ));
+        assert!(ls_command_matches_process(
+            "\"/Applications/Antigravity IDE.app/Contents/Resources/agy\" --some-flag",
+            "agy"
+        ));
         assert!(!ls_command_matches_process(
             "/opt/homebrew/bin/not-agy-helper --some-flag agy",
             "agy"
         ));
+    }
+
+    #[test]
+    fn ls_marker_rank_prefers_exact_flags_over_path_fallback() {
+        let markers = vec!["antigravity".to_string()];
+
+        assert_eq!(
+            ls_marker_rank(
+                "/tmp/windsurf/language_server --ide_name antigravity",
+                &markers
+            ),
+            Some(0)
+        );
+        assert_eq!(
+            ls_marker_rank("/tmp/antigravity/language_server", &markers),
+            Some(1)
+        );
+        assert_eq!(
+            ls_marker_rank(
+                "/tmp/antigravity/language_server --ide_name windsurf",
+                &markers
+            ),
+            None
+        );
     }
 
     #[test]

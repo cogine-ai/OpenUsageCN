@@ -679,6 +679,42 @@ describe("antigravity plugin", () => {
     expect(result.lines.map((l) => l.label)).toEqual(["Gemini Pro", "Gemini Flash", "Claude"])
   })
 
+  it("tries agy Cloud Code even when the keychain token matches a SQLite token", async () => {
+    const ctx = makeCtx()
+    const futureExpiry = Math.floor(Date.now() / 1000) + 3600
+    setupSqliteMock(ctx, makeOAuthSentinelB64(ctx, { accessToken: "same-token", expirySeconds: futureExpiry }))
+    ctx.host.ls.discover.mockReturnValue(null)
+    ctx.host.keychain.readGenericPassword.mockImplementation((service, account) => {
+      if (service === "gemini" && account === "antigravity") {
+        return "go-keyring-base64:" + ctx.base64.encode(JSON.stringify({
+          tokens: { access_token: "same-token" },
+        }))
+      }
+      return null
+    })
+
+    let agyCalls = 0
+    ctx.host.http.request.mockImplementation((opts) => {
+      const url = String(opts.url)
+      if (url.includes("fetchAvailableModels")) return { status: 500, bodyText: "" }
+      if (url.includes("loadCodeAssist")) {
+        agyCalls += 1
+        return { status: 200, bodyText: JSON.stringify(makeAgyLoadResponse()) }
+      }
+      if (url.includes("retrieveUserQuota")) {
+        agyCalls += 1
+        return { status: 200, bodyText: JSON.stringify(makeAgyQuotaResponse()) }
+      }
+      return { status: 500, bodyText: "" }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBe("Google AI Pro")
+    expect(agyCalls).toBe(2)
+  })
+
   it("Cloud Code sends correct Authorization header with DB token", async () => {
     const ctx = makeCtx()
     const futureExpiry = Math.floor(Date.now() / 1000) + 3600
@@ -1458,6 +1494,28 @@ describe("antigravity plugin", () => {
       if (String(opts.url).includes("fetchAvailableModels")) {
         ccCalls += 1
         if (ccCalls === 1) return { status: 500, bodyText: "{}" }
+        return { status: 200, bodyText: JSON.stringify(makeCloudCodeResponse()) }
+      }
+      return { status: 500, bodyText: "" }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    expect(result.lines.length).toBeGreaterThan(0)
+    expect(ccCalls).toBe(2)
+  })
+
+  it("continues to next Cloud Code base URL after a 200 with invalid JSON", async () => {
+    const ctx = makeCtx()
+    const futureExpiry = Math.floor(Date.now() / 1000) + 3600
+    setupSqliteMock(ctx, makeOAuthSentinelB64(ctx, { accessToken: "ya29.test-token", refreshToken: "1//refresh", expirySeconds: futureExpiry }))
+    ctx.host.ls.discover.mockReturnValue(null)
+
+    let ccCalls = 0
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("fetchAvailableModels")) {
+        ccCalls += 1
+        if (ccCalls === 1) return { status: 200, bodyText: "{bad json" }
         return { status: 200, bodyText: JSON.stringify(makeCloudCodeResponse()) }
       }
       return { status: 500, bodyText: "" }
