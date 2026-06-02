@@ -243,16 +243,31 @@
 
     if (!modelRemains || modelRemains.length === 0) return null
 
-    let chosen = modelRemains[0]
+    const displayMultiplierForSelection = endpointSelection === "CN" ? 1 / MODEL_CALLS_PER_PROMPT : 1
+    let chosen = null
+    let percentFallbackCandidate = null
+    let generalPercentFallbackCandidate = null
     for (let i = 0; i < modelRemains.length; i += 1) {
       const item = modelRemains[i]
       if (!item || typeof item !== "object") continue
       const total = readNumber(item.current_interval_total_count ?? item.currentIntervalTotalCount)
-      if (total !== null && total > 0) {
+      if (total !== null && total > 0 && Math.round(total * displayMultiplierForSelection) > 0) {
         chosen = item
         break
       }
+      const remainingPercent = readNumber(
+        item.current_interval_remaining_percent ??
+          item.currentIntervalRemainingPercent
+      )
+      if (remainingPercent !== null && remainingPercent >= 0 && remainingPercent <= 100) {
+        const modelName = readString(item.model_name ?? item.modelName)
+        if (!percentFallbackCandidate) percentFallbackCandidate = item
+        if (!generalPercentFallbackCandidate && modelName === "general") {
+          generalPercentFallbackCandidate = item
+        }
+      }
     }
+    if (!chosen) chosen = generalPercentFallbackCandidate || percentFallbackCandidate
 
     if (!chosen || typeof chosen !== "object") return null
 
@@ -264,7 +279,10 @@
 
     // Handle percentage-based response (new Token Plan API)
     // When total_count is 0 but remaining_percent exists, use percentage mode
-    if ((total === null || total === 0) && remainingPercent !== null) {
+    const hasDisplayableCount =
+      total !== null && total > 0 && Math.round(total * displayMultiplierForSelection) > 0
+
+    if (!hasDisplayableCount && remainingPercent !== null) {
       const percentRemaining = remainingPercent
       const percentUsed = 100 - percentRemaining
       const startMs = epochToMs(chosen.start_time ?? chosen.startTime)
@@ -304,7 +322,7 @@
       }
     }
 
-    if (total === null || total <= 0) return null
+    if (!hasDisplayableCount) return null
 
     const usageFieldCount = readNumber(chosen.current_interval_usage_count ?? chosen.currentIntervalUsageCount)
     const remainingCount = readNumber(
