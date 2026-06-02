@@ -197,7 +197,7 @@ describe("antigravity plugin", () => {
     const ctx = makeCtx()
     ctx.host.ls.discover.mockReturnValue(null)
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Start Antigravity or run `agy` and try again.")
+    expect(() => plugin.probe(ctx)).toThrow(LOGIN_MESSAGE)
   })
 
   it("throws when no working port found and no DB credentials", async () => {
@@ -207,7 +207,7 @@ describe("antigravity plugin", () => {
       throw new Error("connection refused")
     })
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Start Antigravity or run `agy` and try again.")
+    expect(() => plugin.probe(ctx)).toThrow(LOGIN_MESSAGE)
   })
 
   it("throws when both GetUserStatus and GetCommandModelConfigs fail", async () => {
@@ -754,7 +754,7 @@ describe("antigravity plugin", () => {
     })
 
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Start Antigravity or run `agy` and try again.")
+    expect(() => plugin.probe(ctx)).toThrow(LOGIN_MESSAGE)
   })
 
   it("Cloud Code tries multiple base URLs", async () => {
@@ -825,7 +825,7 @@ describe("antigravity plugin", () => {
     ctx.host.ls.discover.mockReturnValue(null)
 
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Start Antigravity or run `agy` and try again.")
+    expect(() => plugin.probe(ctx)).toThrow(LOGIN_MESSAGE)
     expect(ctx.host.http.request).not.toHaveBeenCalled()
   })
 
@@ -915,7 +915,7 @@ describe("antigravity plugin", () => {
     ctx.host.ls.discover.mockReturnValue(null)
 
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Start Antigravity or run `agy` and try again.")
+    expect(() => plugin.probe(ctx)).toThrow(LOGIN_MESSAGE)
     expect(ctx.host.http.request).not.toHaveBeenCalled()
   })
 
@@ -925,7 +925,7 @@ describe("antigravity plugin", () => {
     ctx.host.ls.discover.mockReturnValue(null)
 
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Start Antigravity or run `agy` and try again.")
+    expect(() => plugin.probe(ctx)).toThrow(LOGIN_MESSAGE)
     expect(ctx.host.http.request).not.toHaveBeenCalled()
   })
 
@@ -1004,7 +1004,7 @@ describe("antigravity plugin", () => {
     })
 
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Start Antigravity or run `agy` and try again.")
+    expect(() => plugin.probe(ctx)).toThrow(LOGIN_MESSAGE)
   })
 
   it("tries DB token first, then cached on auth failure", async () => {
@@ -1188,7 +1188,7 @@ describe("antigravity plugin", () => {
     }))
 
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Start Antigravity or run `agy` and try again.")
+    expect(() => plugin.probe(ctx)).toThrow(LOGIN_MESSAGE)
     expect(ctx.host.http.request).not.toHaveBeenCalled()
   })
 
@@ -1228,7 +1228,7 @@ describe("antigravity plugin", () => {
     ctx.host.fs.writeText(cachePath, "{bad json")
 
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Start Antigravity or run `agy` and try again.")
+    expect(() => plugin.probe(ctx)).toThrow(LOGIN_MESSAGE)
     expect(ctx.host.http.request).not.toHaveBeenCalled()
   })
 
@@ -1456,7 +1456,7 @@ describe("antigravity plugin", () => {
     })
 
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Start Antigravity or run `agy` and try again.")
+    expect(() => plugin.probe(ctx)).toThrow(LOGIN_MESSAGE)
   })
 
   it("handles refresh response missing access_token", async () => {
@@ -1479,7 +1479,7 @@ describe("antigravity plugin", () => {
     })
 
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Start Antigravity or run `agy` and try again.")
+    expect(() => plugin.probe(ctx)).toThrow(LOGIN_MESSAGE)
     expect(oauthCalls).toBe(1)
   })
 
@@ -1686,7 +1686,7 @@ describe("antigravity plugin", () => {
     })
 
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Start Antigravity or run `agy` and try again.")
+    expect(() => plugin.probe(ctx)).toThrow(LOGIN_MESSAGE)
     expect(refreshCalls).toBe(0)
   })
 
@@ -1716,7 +1716,7 @@ describe("antigravity plugin", () => {
     })
 
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Start Antigravity or run `agy` and try again.")
+    expect(() => plugin.probe(ctx)).toThrow(LOGIN_MESSAGE)
     expect(refreshCalls).toBe(0)
   })
 })
