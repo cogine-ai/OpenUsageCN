@@ -920,6 +920,34 @@ describe("minimax plugin", () => {
     expect(line.resetsAt).toBe(new Date(1780344000000).toISOString())
   })
 
+  it("does not scale CN percentage-based Token Plan responses", async () => {
+    const ctx = makeCtx()
+    setEnv(ctx, { MINIMAX_CN_API_KEY: "cn-key" })
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      headers: {},
+      bodyText: JSON.stringify({
+        base_resp: { status_code: 0 },
+        model_remains: [
+          {
+            model_name: "general",
+            current_interval_total_count: 0,
+            current_interval_usage_count: 0,
+            current_interval_remaining_percent: 87,
+          },
+        ],
+      }),
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    const line = result.lines[0]
+
+    expect(line.used).toBe(13)
+    expect(line.limit).toBe(100)
+    expect(line.format.kind).toBe("percent")
+  })
+
   it("handles weekly percentage from Token Plan API", async () => {
     const ctx = makeCtx()
     setEnv(ctx, { MINIMAX_API_KEY: "mini-key" })

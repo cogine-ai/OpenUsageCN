@@ -412,11 +412,12 @@
     // GLOBAL API returns prompt counts directly
     const isCnEndpoint = successfulEndpoint === "CN"
     const displayMultiplier = isCnEndpoint ? 1 / MODEL_CALLS_PER_PROMPT : 1
+    const valueMultiplier = parsed.isPercent ? 1 : displayMultiplier
 
     const line = {
       label: "Session",
-      used: Math.round(parsed.used * displayMultiplier),
-      limit: Math.round(parsed.total * displayMultiplier),
+      used: Math.round(parsed.used * valueMultiplier),
+      limit: Math.round(parsed.total * valueMultiplier),
       format: parsed.isPercent
         ? { kind: "percent" }
         : { kind: "count", suffix: "prompts" },
