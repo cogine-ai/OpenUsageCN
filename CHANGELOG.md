@@ -1,5 +1,68 @@
 # Changelog
 
+## v0.6.25
+
+### New Features
+- Replace Gemini CLI with agy Antigravity support ([#538](https://github.com/robinebers/openusage/pull/538)) by @robinebers
+- Add tray action to copy log path ([#541](https://github.com/robinebers/openusage/pull/541)) by @robinebers
+
+### Bug Fixes
+- fix(grok): refresh expired auth tokens ([#540](https://github.com/robinebers/openusage/pull/540)) by @robinebers
+- fix(minimax): prefer displayable CN usage rows ([#539](https://github.com/robinebers/openusage/pull/539)) by @robinebers
+- Update MiniMax API endpoint from coding_plan to token_plan ([#534](https://github.com/robinebers/openusage/pull/534)) by @doublezz10
+- fix: patch critical/high vulnerabilities ([#537](https://github.com/robinebers/openusage/pull/537)) by @devin-ai-integration
+
+### Refactor
+- Debounce usage API cache writes ([#503](https://github.com/robinebers/openusage/pull/503)) by @zergzorg
+- Bound local HTTP API concurrency ([#502](https://github.com/robinebers/openusage/pull/502)) by @zergzorg
+- Cap concurrent plugin probes per batch ([#499](https://github.com/robinebers/openusage/pull/499)) by @zergzorg
+- Add per-probe runtime deadline ([#500](https://github.com/robinebers/openusage/pull/500)) by @zergzorg
+- Skip auto-update probes already in flight ([#498](https://github.com/robinebers/openusage/pull/498)) by @zergzorg
+- Pause ticker while panel is hidden ([#490](https://github.com/robinebers/openusage/pull/490)) by @zergzorg
+
+### Chores
+- Stabilize ccusage timeout cleanup test ([#501](https://github.com/robinebers/openusage/pull/501)) by @zergzorg
+- chore(deps): bump rquickjs from 0.11.0 to 0.12.0 in /src-tauri by @dependabot
+- chore(deps): bump tauri-plugin-global-shortcut from 2.3.1 to 2.3.2 in /src-tauri by @dependabot
+- chore(deps): bump reqwest from 0.13.3 to 0.13.4 in /src-tauri by @dependabot
+- chore(deps): bump uuid from 1.23.1 to 1.23.2 in /src-tauri by @dependabot
+- chore(deps): bump log from 0.4.29 to 0.4.30 in /src-tauri by @dependabot
+- chore(deps): bump tokio from 1.52.1 to 1.52.3 in /src-tauri by @dependabot
+- chore(deps): bump tauri from 2.11.1 to 2.11.2 in /src-tauri by @dependabot
+- chore(deps): bump serde_json from 1.0.149 to 1.0.150 in /src-tauri by @dependabot
+- chore(deps): bump tauri-plugin-opener from 2.5.3 to 2.5.4 in /src-tauri by @dependabot
+- chore(deps): bump tauri-build from 2.6.1 to 2.6.2 in /src-tauri by @dependabot
+
+---
+
+### Changelog
+
+**Full Changelog**: [v0.6.24...v0.6.25](https://github.com/robinebers/openusage/compare/v0.6.24...v0.6.25)
+
+- [2fa079a](https://github.com/robinebers/openusage/commit/2fa079a700a14a67736f254084813af3ca7c7922) Replace Gemini CLI with agy Antigravity support by @robinebers
+- [f33e6c0](https://github.com/robinebers/openusage/commit/f33e6c09943677f03831777e289117226ea9cb1a) Add tray action to copy log path by @robinebers
+- [c063e54](https://github.com/robinebers/openusage/commit/c063e54f4a4f5c88de7d050dcf5dcf670dba7272) fix(grok): refresh expired auth tokens by @robinebers
+- [8fc2165](https://github.com/robinebers/openusage/commit/8fc21651c75e5581523e2764ef245480d9d691ed) fix(minimax): prefer displayable CN usage rows by @robinebers
+- [94ddf1a](https://github.com/robinebers/openusage/commit/94ddf1a7a226d65a6fdefebb6f53427d1a3f4e8b) Update MiniMax API endpoints from coding_plan to token_plan by @doublezz10
+- [41d6716](https://github.com/robinebers/openusage/commit/41d67161883392dcb25a5e0010068ec3976f5ee8) chore(deps): bump rquickjs from 0.11.0 to 0.12.0 in /src-tauri by @dependabot
+- [84b99e0](https://github.com/robinebers/openusage/commit/84b99e0a531a4150846a329fdd930946b6887c0e) chore(deps): bump tauri-plugin-global-shortcut from 2.3.1 to 2.3.2 in /src-tauri by @dependabot
+- [dd8f8b1](https://github.com/robinebers/openusage/commit/dd8f8b1d5cb5d508da6b7f9c8b94443c8fb12c85) chore(deps): bump reqwest from 0.13.3 to 0.13.4 in /src-tauri by @dependabot
+- [bf277f8](https://github.com/robinebers/openusage/commit/bf277f861c3a8067c3455d233135884628696e8c) chore(deps): bump uuid from 1.23.1 to 1.23.2 in /src-tauri by @dependabot
+- [c6adbcc](https://github.com/robinebers/openusage/commit/c6adbcce3ab69b89bc18f81499f956663f8083b0) chore(deps): bump log from 0.4.29 to 0.4.30 in /src-tauri by @dependabot
+- [52f5588](https://github.com/robinebers/openusage/commit/52f5588d7a8169f46e3e4d90bdfe93c7140f6d0c) fix: patch critical/high vulnerabilities by @devin-ai-integration
+- [810b122](https://github.com/robinebers/openusage/commit/810b1226119c5ee66ac1d479e2a98ee70cce2cda) Debounce usage API cache writes by @zergzorg
+- [ce7f682](https://github.com/robinebers/openusage/commit/ce7f68248a1b91e3c32756d2c3d58aa5c6579372) Bound local HTTP API concurrency by @zergzorg
+- [d44008f](https://github.com/robinebers/openusage/commit/d44008f32a068494274bb400e4b95d333c7b2775) Pause ticker while panel is hidden by @zergzorg
+- [a291696](https://github.com/robinebers/openusage/commit/a2916962c7c4a4dcd473d45b9449095e1aae3b3e) Skip auto-update probes already in flight by @zergzorg
+- [f0e2914](https://github.com/robinebers/openusage/commit/f0e2914ff7cd03058b5debc1d1b6f949160dde9a) Stabilize ccusage timeout cleanup test by @zergzorg
+- [9a9f01d](https://github.com/robinebers/openusage/commit/9a9f01df604d1da3625467c7c6c2f9551dcda46f) Add per-probe runtime deadline by @zergzorg
+- [abc68e8](https://github.com/robinebers/openusage/commit/abc68e85e9a35fcbb552cf5491c930da184247c2) Cap concurrent plugin probes per batch by @zergzorg
+- [5de48f1](https://github.com/robinebers/openusage/commit/5de48f1c187f72f3542432270899b614ac38fa8a) chore(deps): bump tokio from 1.52.1 to 1.52.3 in /src-tauri by @dependabot
+- [ba0c01d](https://github.com/robinebers/openusage/commit/ba0c01d043652bcf6a6841757bc7a02937176888) chore(deps): bump tauri from 2.11.1 to 2.11.2 in /src-tauri by @dependabot
+- [e523c7b](https://github.com/robinebers/openusage/commit/e523c7b2b74b3883c84d7b5809815506a59b8dd6) chore(deps): bump serde_json from 1.0.149 to 1.0.150 in /src-tauri by @dependabot
+- [d61df10](https://github.com/robinebers/openusage/commit/d61df10e9eae37fa8e4b82ed5e8a491a54922ed2) chore(deps): bump tauri-plugin-opener from 2.5.3 to 2.5.4 in /src-tauri by @dependabot
+- [6257fc9](https://github.com/robinebers/openusage/commit/6257fc9cd3c4142a371f716c2760c5b43e28f32c) chore(deps): bump tauri-build from 2.6.1 to 2.6.2 in /src-tauri by @dependabot
+
 ## v0.6.24
 
 ### New Features
