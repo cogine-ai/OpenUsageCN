@@ -314,68 +314,93 @@ describe("getTrayPrimaryBars", () => {
       },
     ]
 
-    // Case 1: Only Extra usage spent is available (e.g. Claude Enterprise/Team account overage)
-    const barsExtraOnly = getTrayPrimaryBars({
-      displayMode: "used",
-      pluginsMeta,
-      pluginSettings: { order: ["claude"], disabled: [] },
-      pluginStates: {
-        claude: {
-          data: {
-            providerId: "claude",
-            displayName: "Claude",
-            iconUrl: "",
-            lines: [
-              {
-                type: "progress",
-                label: "Extra usage spent",
-                used: 30,
-                limit: 100,
-                format: { kind: "dollars" },
-              },
-            ],
+    const runTest = (
+      lines: Array<{
+        type: "progress"
+        label: string
+        used: number
+        limit: number
+        format: { kind: "dollars" | "percent" }
+      }>
+    ) => {
+      return getTrayPrimaryBars({
+        displayMode: "used",
+        pluginsMeta,
+        pluginSettings: { order: ["claude"], disabled: [] },
+        pluginStates: {
+          claude: {
+            data: {
+              providerId: "claude",
+              displayName: "Claude",
+              iconUrl: "",
+              lines,
+            },
+            loading: false,
+            error: null,
           },
-          loading: false,
-          error: null,
         },
-      },
-    })
-    expect(barsExtraOnly).toEqual([{ id: "claude", fraction: 0.3 }])
+      })
+    }
+
+    // Case 1: Only Extra usage spent is available (e.g. Claude Enterprise/Team account overage)
+    expect(
+      runTest([
+        {
+          type: "progress",
+          label: "Extra usage spent",
+          used: 30,
+          limit: 100,
+          format: { kind: "dollars" },
+        },
+      ])
+    ).toEqual([{ id: "claude", fraction: 0.3 }])
 
     // Case 2: Weekly is available (but Session is not)
-    const barsWeeklyOnly = getTrayPrimaryBars({
-      displayMode: "used",
-      pluginsMeta,
-      pluginSettings: { order: ["claude"], disabled: [] },
-      pluginStates: {
-        claude: {
-          data: {
-            providerId: "claude",
-            displayName: "Claude",
-            iconUrl: "",
-            lines: [
-              {
-                type: "progress",
-                label: "Weekly",
-                used: 40,
-                limit: 100,
-                format: { kind: "percent" },
-              },
-              {
-                type: "progress",
-                label: "Extra usage spent",
-                used: 30,
-                limit: 100,
-                format: { kind: "dollars" },
-              },
-            ],
-          },
-          loading: false,
-          error: null,
+    expect(
+      runTest([
+        {
+          type: "progress",
+          label: "Weekly",
+          used: 40,
+          limit: 100,
+          format: { kind: "percent" },
         },
-      },
-    })
-    expect(barsWeeklyOnly).toEqual([{ id: "claude", fraction: 0.4 }])
+        {
+          type: "progress",
+          label: "Extra usage spent",
+          used: 30,
+          limit: 100,
+          format: { kind: "dollars" },
+        },
+      ])
+    ).toEqual([{ id: "claude", fraction: 0.4 }])
+
+    // Case 3: Session is available alongside Weekly and Extra usage spent (Session should win)
+    expect(
+      runTest([
+        {
+          type: "progress",
+          label: "Session",
+          used: 50,
+          limit: 100,
+          format: { kind: "percent" },
+        },
+        {
+          type: "progress",
+          label: "Weekly",
+          used: 40,
+          limit: 100,
+          format: { kind: "percent" },
+        },
+        {
+          type: "progress",
+          label: "Extra usage spent",
+          used: 30,
+          limit: 100,
+          format: { kind: "dollars" },
+        },
+      ])
+    ).toEqual([{ id: "claude", fraction: 0.5 }])
   })
 })
 
