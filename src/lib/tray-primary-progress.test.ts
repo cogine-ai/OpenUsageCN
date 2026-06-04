@@ -302,5 +302,105 @@ describe("getTrayPrimaryBars", () => {
     })
     expect(bars).toEqual([])
   })
+
+  it("handles Claude fallback from Session to Weekly to Extra usage spent", () => {
+    const pluginsMeta = [
+      {
+        id: "claude",
+        name: "Claude",
+        iconUrl: "",
+        primaryCandidates: ["Session", "Weekly", "Extra usage spent"],
+        lines: [],
+      },
+    ]
+
+    const runTest = (
+      lines: Array<{
+        type: "progress"
+        label: string
+        used: number
+        limit: number
+        format: { kind: "dollars" | "percent" }
+      }>
+    ) => {
+      return getTrayPrimaryBars({
+        displayMode: "used",
+        pluginsMeta,
+        pluginSettings: { order: ["claude"], disabled: [] },
+        pluginStates: {
+          claude: {
+            data: {
+              providerId: "claude",
+              displayName: "Claude",
+              iconUrl: "",
+              lines,
+            },
+            loading: false,
+            error: null,
+          },
+        },
+      })
+    }
+
+    // Case 1: Only Extra usage spent is available (e.g. Claude Enterprise/Team account overage)
+    expect(
+      runTest([
+        {
+          type: "progress",
+          label: "Extra usage spent",
+          used: 30,
+          limit: 100,
+          format: { kind: "dollars" },
+        },
+      ])
+    ).toEqual([{ id: "claude", fraction: 0.3 }])
+
+    // Case 2: Weekly is available (but Session is not)
+    expect(
+      runTest([
+        {
+          type: "progress",
+          label: "Weekly",
+          used: 40,
+          limit: 100,
+          format: { kind: "percent" },
+        },
+        {
+          type: "progress",
+          label: "Extra usage spent",
+          used: 30,
+          limit: 100,
+          format: { kind: "dollars" },
+        },
+      ])
+    ).toEqual([{ id: "claude", fraction: 0.4 }])
+
+    // Case 3: Session is available alongside Weekly and Extra usage spent (Session should win)
+    expect(
+      runTest([
+        {
+          type: "progress",
+          label: "Session",
+          used: 50,
+          limit: 100,
+          format: { kind: "percent" },
+        },
+        {
+          type: "progress",
+          label: "Weekly",
+          used: 40,
+          limit: 100,
+          format: { kind: "percent" },
+        },
+        {
+          type: "progress",
+          label: "Extra usage spent",
+          used: 30,
+          limit: 100,
+          format: { kind: "dollars" },
+        },
+      ])
+    ).toEqual([{ id: "claude", fraction: 0.5 }])
+  })
 })
 
