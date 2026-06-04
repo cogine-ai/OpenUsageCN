@@ -255,9 +255,9 @@
       ? buildQuotaLine(ctx, "Daily quota", dailyRemaining, dailyReset, DAY_MS)
       : null
     var weeklyLine = weeklyRemaining !== null
-      ? buildQuotaLine(ctx, "Weekly quota usage", weeklyRemaining, weeklyReset, WEEK_MS)
+      ? buildQuotaLine(ctx, "Weekly quota", weeklyRemaining, weeklyReset, WEEK_MS)
       : hideDailyQuota
-        ? buildUsedQuotaLine(ctx, "Weekly quota usage", dailyRemaining, weeklyReset, WEEK_MS)
+        ? buildUsedQuotaLine(ctx, "Weekly quota", dailyRemaining, weeklyReset, WEEK_MS)
         : null
 
     var lines = []

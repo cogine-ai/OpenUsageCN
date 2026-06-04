@@ -94,7 +94,7 @@ describe("devin plugin", () => {
       },
       {
         type: "progress",
-        label: "Weekly quota usage",
+        label: "Weekly quota",
         used: 60,
         limit: 100,
         format: { kind: "percent" },
@@ -269,7 +269,7 @@ describe("devin plugin", () => {
     const result = plugin.probe(ctx)
 
     expect(result.lines.find((line) => line.label === "Daily quota")).toBeUndefined()
-    expect(result.lines.find((line) => line.label === "Weekly quota usage")).toMatchObject({
+    expect(result.lines.find((line) => line.label === "Weekly quota")).toMatchObject({
       type: "progress",
       used: 100,
       limit: 100,
@@ -303,7 +303,7 @@ describe("devin plugin", () => {
     const result = plugin.probe(ctx)
 
     const dailyLine = result.lines.find((line) => line.label === "Daily quota")
-    const weeklyLine = result.lines.find((line) => line.label === "Weekly quota usage")
+    const weeklyLine = result.lines.find((line) => line.label === "Weekly quota")
     expect(dailyLine).toMatchObject({
       type: "progress",
       used: 0,
@@ -358,7 +358,7 @@ describe("devin plugin", () => {
     const result = plugin.probe(ctx)
 
     expect(result.lines.find((line) => line.label === "Daily quota")).toBeUndefined()
-    expect(result.lines.find((line) => line.label === "Weekly quota usage")?.used).toBe(60)
+    expect(result.lines.find((line) => line.label === "Weekly quota")?.used).toBe(60)
   })
 
   it("renders quota lines when Devin omits extra usage balance", async () => {
