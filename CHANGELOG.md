@@ -1,5 +1,36 @@
 # Changelog
 
+## v0.6.26
+
+### New Features
+- Add local usage trend chart and per-model usage percentages ([#542](https://github.com/robinebers/openusage/pull/542)) by @rohithgoud30
+- Replace Windsurf provider with Devin ([#551](https://github.com/robinebers/openusage/pull/551)) by @robinebers
+
+### Bug Fixes
+- Fix tray percentage fallback and Claude extra usage metric scope ([#548](https://github.com/robinebers/openusage/pull/548)) by @krismolendyke
+- Handle Cursor free account pooled limit ([#544](https://github.com/robinebers/openusage/pull/544)) by @rohithgoud30
+- Make provider rail scrollable ([#543](https://github.com/robinebers/openusage/pull/543)) by @rohithgoud30
+
+### Chores
+- Rename Devin weekly quota label by @robinebers
+
+---
+
+### Changelog
+
+**Full Changelog**: [v0.6.25...v0.6.26](https://github.com/robinebers/openusage/compare/v0.6.25...v0.6.26)
+
+- [fdee2b2](https://github.com/robinebers/openusage/commit/fdee2b2478b44a15c894cee75bd854018075a6fa) Rename Devin weekly quota label by @robinebers
+- [4848fce](https://github.com/robinebers/openusage/commit/4848fcee864cd42716f34a550db0cdf7b8571060) Replace Windsurf provider with Devin by @robinebers
+- [455f721](https://github.com/robinebers/openusage/commit/455f72111664d71336f935c46becf2fa96767ba9) test(tray): refactor and expand fallback tests for tray primary progress by @krismolendyke
+- [8a801cc](https://github.com/robinebers/openusage/commit/8a801cc6061b366a0c641a74a57cd2efe671700c) fix(plugins/claude): change extra usage spent metric scope to overview by @krismolendyke
+- [83911d8](https://github.com/robinebers/openusage/commit/83911d8a905f40d06ce6cf4ac57a3235bc2ee4cd) fix(plugins/claude): add fallback primary candidates for tray percentage by @krismolendyke
+- [219c4b8](https://github.com/robinebers/openusage/commit/219c4b8f4314445b9ee2db0d556ed031d25a5405) fix(cursor): handle free account pooled limit by @rohithgoud30
+- [1c2e113](https://github.com/robinebers/openusage/commit/1c2e11304f5cb676d2e60a7d2f3c36d757e50db3) fix(side-nav): make provider rail scrollable by @rohithgoud30
+- [3cb8a75](https://github.com/robinebers/openusage/commit/3cb8a75c0a198a6110c683458fb92e25b258ef59) fix: bound barChart point parsing and de-flake usage trend tests by @rohithgoud30
+- [4b5a38f](https://github.com/robinebers/openusage/commit/4b5a38fb7ea999b355311e2efa1a69ba3650244b) refactor: address review feedback on usage trend feature by @rohithgoud30
+- [a6b581f](https://github.com/robinebers/openusage/commit/a6b581fbc17d763ab5d46a18c4e099f6a962cfce) feat: add local usage trend chart and per-model usage percentages by @rohithgoud30
+
 ## v0.6.25
 
 ### New Features
