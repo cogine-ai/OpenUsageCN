@@ -378,6 +378,16 @@ fn redact_body(body: &str) -> String {
         })
         .to_string();
 
+    if let Ok(devin_session_re) =
+        regex_lite::Regex::new(r#"devin-session-token\$[^\s"',}\]]+"#)
+    {
+        result = devin_session_re
+            .replace_all(&result, |caps: &regex_lite::Captures| {
+                redact_value(&caps[0])
+            })
+            .to_string();
+    }
+
     // Redact JSON values for sensitive keys
     let sensitive_keys = [
         "name",
@@ -405,6 +415,10 @@ fn redact_body(body: &str) -> String {
         "accountId",
         "team_id",
         "teamId",
+        "org_id",
+        "orgId",
+        "account_display_name",
+        "accountDisplayName",
         "payment_id",
         "paymentId",
         "profile_arn",
@@ -448,6 +462,15 @@ pub(crate) fn redact_log_message(msg: &str) -> String {
     }
     if let Ok(api_re) = regex_lite::Regex::new(r#"(sk-|pk-|api_|key_|secret_)[A-Za-z0-9_-]{12,}"#) {
         result = api_re
+            .replace_all(&result, |caps: &regex_lite::Captures| {
+                redact_value(&caps[0])
+            })
+            .to_string();
+    }
+    if let Ok(devin_session_re) =
+        regex_lite::Regex::new(r#"devin-session-token\$[^\s"',}\]]+"#)
+    {
+        result = devin_session_re
             .replace_all(&result, |caps: &regex_lite::Captures| {
                 redact_value(&caps[0])
             })
@@ -3448,6 +3471,22 @@ mod tests {
     }
 
     #[test]
+    fn redact_body_redacts_devin_session_token() {
+        let body = r#"metadata apiKey=devin-session-token$abcdefghijklmnopqrstuvwxyz123456"#;
+        let redacted = redact_body(body);
+        assert!(
+            !redacted.contains("devin-session-token$abcdefghijklmnopqrstuvwxyz123456"),
+            "Devin session token should be redacted, got: {}",
+            redacted
+        );
+        assert!(
+            redacted.contains("devi...3456"),
+            "Devin session token should use first4...last4 redaction, got: {}",
+            redacted
+        );
+    }
+
+    #[test]
     fn redact_body_redacts_json_password_field() {
         let body = r#"{"password": "supersecretpassword123"}"#;
         let redacted = redact_body(body);
@@ -3512,6 +3551,42 @@ mod tests {
     }
 
     #[test]
+    fn redact_body_redacts_devin_org_and_account_display_name() {
+        let body = r#"{"orgId":"org-6b6e9de248db472bb25b296599ea3dc0","accountDisplayName":"rob@sunstory.com","devinInfo":{"org_id":"org-abcdef1234567890","account_display_name":"team@example.com"}}"#;
+        let redacted = redact_body(body);
+        assert!(
+            !redacted.contains("org-6b6e9de248db472bb25b296599ea3dc0"),
+            "orgId should be redacted, got: {}",
+            redacted
+        );
+        assert!(
+            !redacted.contains("rob@sunstory.com"),
+            "accountDisplayName should be redacted, got: {}",
+            redacted
+        );
+        assert!(
+            !redacted.contains("org-abcdef1234567890"),
+            "org_id should be redacted, got: {}",
+            redacted
+        );
+        assert!(
+            !redacted.contains("team@example.com"),
+            "account_display_name should be redacted, got: {}",
+            redacted
+        );
+        assert!(
+            redacted.contains("org-...3dc0"),
+            "orgId should show first4...last4, got: {}",
+            redacted
+        );
+        assert!(
+            redacted.contains("rob@....com"),
+            "accountDisplayName should show first4...last4, got: {}",
+            redacted
+        );
+    }
+
+    #[test]
     fn redact_body_redacts_team_id_payment_id_and_paths() {
         let body = r#"{"teamId":"cc1ac023-9ff5-4c1f-a5a4-ae2a82df4243","paymentId":"cus_S5m1PGxjLWoc1c","binaryPath":"/opt/homebrew/bin/bunx","homePath":"/Users/rebers/.claude"}"#;
         let redacted = redact_body(body);
@@ -3569,6 +3644,22 @@ mod tests {
         assert!(
             !redacted.contains("sk-1234567890abcdef"),
             "API key should be redacted"
+        );
+    }
+
+    #[test]
+    fn redact_log_message_redacts_devin_session_token() {
+        let msg = "auth=devin-session-token$abcdefghijklmnopqrstuvwxyz123456";
+        let redacted = redact_log_message(msg);
+        assert!(
+            !redacted.contains("devin-session-token$abcdefghijklmnopqrstuvwxyz123456"),
+            "Devin session token should be redacted, got: {}",
+            redacted
+        );
+        assert!(
+            redacted.contains("devi...3456"),
+            "Devin session token should use first4...last4 redaction, got: {}",
+            redacted
         );
     }
 

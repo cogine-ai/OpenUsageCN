@@ -22,6 +22,7 @@ import {
   loadGlobalShortcut,
   loadMenubarIconStyle,
   migrateLegacyTraySettings,
+  migrateWindsurfToDevin,
   loadPluginSettings,
   loadResetTimerDisplayMode,
   loadStartOnLogin,
@@ -93,7 +94,8 @@ export function useSettingsBootstrap({
         setPluginsMeta(availablePlugins)
 
         const storedSettings = await loadPluginSettings()
-        const normalized = normalizePluginSettings(storedSettings, availablePlugins)
+        const migratedSettings = migrateWindsurfToDevin(storedSettings)
+        const normalized = normalizePluginSettings(migratedSettings, availablePlugins)
         if (!arePluginSettingsEqual(storedSettings, normalized)) {
           await savePluginSettings(normalized)
         }
@@ -205,6 +207,7 @@ export function useSettingsBootstrap({
     setGlobalShortcut,
     setLoadingForPlugins,
     setMenubarIconStyle,
+    migrateWindsurfToDevin,
     migrateLegacyTraySettings,
     setPluginSettings,
     setPluginsMeta,
