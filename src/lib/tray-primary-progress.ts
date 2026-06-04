@@ -12,6 +12,10 @@ type PluginState = {
 export type TrayPrimaryBar = {
   id: string
   fraction?: number
+  /** Label of the metric line that produced this bar (when data is available). */
+  label?: string
+  /** True when the value came from the provider's declared weekly line. */
+  weekly?: boolean
 }
 
 type ProgressLine = Extract<
@@ -30,6 +34,7 @@ export function getTrayPrimaryBars(args: {
   maxBars?: number
   displayMode?: DisplayMode
   pluginId?: string
+  preferWeekly?: boolean
 }): TrayPrimaryBar[] {
   const {
     pluginsMeta,
@@ -38,6 +43,7 @@ export function getTrayPrimaryBars(args: {
     maxBars = 4,
     displayMode = DEFAULT_DISPLAY_MODE,
     pluginId,
+    preferWeekly = false,
   } = args
   if (!pluginSettings) return []
 
@@ -53,34 +59,50 @@ export function getTrayPrimaryBars(args: {
     const meta = metaById.get(id)
     if (!meta) continue
     
-    // Skip if no primary candidates defined
+    // Skip plugins with no primary metric. Weekly mode is an override of the
+    // primary (see preferWeekly below), not a standalone mode — so a provider
+    // must define primaryCandidates to appear in the menubar; a weekly-only
+    // provider is intentionally skipped.
     if (!meta.primaryCandidates || meta.primaryCandidates.length === 0) continue
 
     const state = pluginStates[id]
     const data = state?.data ?? null
 
     let fraction: number | undefined
+    let label: string | undefined
+    let weekly: true | undefined
     if (data) {
-      // Find first candidate that exists in runtime data
-      const primaryLabel = meta.primaryCandidates.find((label) =>
-        data.lines.some((line) => isProgressLine(line) && line.label === label)
-      )
-      if (primaryLabel) {
-        const primaryLine = data.lines.find(
+      // Prefer the declared weekly line when requested and present in data.
+      const weeklyLabel = preferWeekly ? meta.weeklyCandidate : undefined
+      const usesWeekly =
+        weeklyLabel !== undefined &&
+        data.lines.some((line) => isProgressLine(line) && line.label === weeklyLabel)
+
+      // Otherwise fall back to the first primary candidate that exists in data.
+      const metricLabel = usesWeekly
+        ? weeklyLabel
+        : meta.primaryCandidates.find((candidate) =>
+            data.lines.some((line) => isProgressLine(line) && line.label === candidate)
+          )
+
+      if (metricLabel) {
+        label = metricLabel
+        weekly = usesWeekly || undefined
+        const metricLine = data.lines.find(
           (line): line is ProgressLine =>
-            isProgressLine(line) && line.label === primaryLabel
+            isProgressLine(line) && line.label === metricLabel
         )
-        if (primaryLine && primaryLine.limit > 0) {
+        if (metricLine && metricLine.limit > 0) {
           const shownAmount =
             displayMode === "used"
-              ? primaryLine.used
-              : primaryLine.limit - primaryLine.used
-          fraction = clamp01(shownAmount / primaryLine.limit)
+              ? metricLine.used
+              : metricLine.limit - metricLine.used
+          fraction = clamp01(shownAmount / metricLine.limit)
         }
       }
     }
 
-    out.push({ id, fraction })
+    out.push({ id, fraction, label, weekly })
     if (out.length >= maxBars) break
   }
 

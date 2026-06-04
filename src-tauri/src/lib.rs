@@ -156,6 +156,9 @@ pub struct PluginMeta {
     /// Ordered list of primary metric candidates (sorted by primaryOrder).
     /// Frontend picks the first one that exists in runtime data.
     pub primary_candidates: Vec<String>,
+    /// Label of the progress line marked `"period": "weekly"`, if any.
+    /// Drives the menubar weekly-metric preference.
+    pub weekly_candidate: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -465,6 +468,11 @@ fn list_plugins(state: tauri::State<'_, Mutex<AppState>>) -> Vec<PluginMeta> {
             let primary_candidates: Vec<String> =
                 candidates.iter().map(|line| line.label.clone()).collect();
 
+            // The weekly metric is the progress line declared `"period": "weekly"`.
+            let weekly_candidate: Option<String> =
+                plugin_engine::manifest::weekly_candidate(&plugin.manifest.lines)
+                    .map(str::to_string);
+
             PluginMeta {
                 id: plugin.manifest.id,
                 name: plugin.manifest.name,
@@ -490,6 +498,7 @@ fn list_plugins(state: tauri::State<'_, Mutex<AppState>>) -> Vec<PluginMeta> {
                     })
                     .collect(),
                 primary_candidates,
+                weekly_candidate,
             }
         })
         .collect()
