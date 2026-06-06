@@ -51,4 +51,4 @@ objc2-app-kit = { version = "0.3", features = ["NSEvent", "NSScreen", "NSGraphic
 objc2-web-kit = { version = "0.3", features = ["WKPreferences", "WKWebView", "WKWebViewConfiguration"] }
 
 [dev-dependencies]
-serial_test = "3.4.0"
+serial_test = "3.5.0"
