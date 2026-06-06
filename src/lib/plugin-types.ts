@@ -52,6 +52,8 @@ export type PluginMeta = {
   links?: PluginLink[]
   /** Ordered list of primary metric candidates. Frontend picks first available. */
   primaryCandidates: string[]
+  /** Label of the line marked `"period": "weekly"`, if the provider has one. */
+  weeklyCandidate?: string
 }
 
 export type PluginDisplayState = {

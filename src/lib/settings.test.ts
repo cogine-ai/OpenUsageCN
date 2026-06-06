@@ -4,6 +4,7 @@ import {
   DEFAULT_DISPLAY_MODE,
   DEFAULT_GLOBAL_SHORTCUT,
   DEFAULT_MENUBAR_ICON_STYLE,
+  DEFAULT_MENUBAR_METRIC,
   DEFAULT_PLUGIN_SETTINGS,
   DEFAULT_RESET_TIMER_DISPLAY_MODE,
   DEFAULT_START_ON_LOGIN,
@@ -15,6 +16,7 @@ import {
   loadDisplayMode,
   loadGlobalShortcut,
   loadMenubarIconStyle,
+  loadMenubarMetric,
   loadPluginSettings,
   loadResetTimerDisplayMode,
   loadStartOnLogin,
@@ -27,6 +29,7 @@ import {
   saveDisplayMode,
   saveGlobalShortcut,
   saveMenubarIconStyle,
+  saveMenubarMetric,
   savePluginSettings,
   saveResetTimerDisplayMode,
   saveStartOnLogin,
@@ -330,6 +333,25 @@ describe("settings", () => {
   it("falls back to default for invalid menubar icon style", async () => {
     storeState.set("menubarIconStyle", "invalid")
     await expect(loadMenubarIconStyle()).resolves.toBe(DEFAULT_MENUBAR_ICON_STYLE)
+  })
+
+  it("loads default menubar metric when missing", async () => {
+    await expect(loadMenubarMetric()).resolves.toBe(DEFAULT_MENUBAR_METRIC)
+  })
+
+  it("loads stored menubar metric", async () => {
+    storeState.set("menubarMetric", "weekly")
+    await expect(loadMenubarMetric()).resolves.toBe("weekly")
+  })
+
+  it("saves menubar metric", async () => {
+    await saveMenubarMetric("weekly")
+    await expect(loadMenubarMetric()).resolves.toBe("weekly")
+  })
+
+  it("falls back to default for invalid menubar metric", async () => {
+    storeState.set("menubarMetric", "invalid")
+    await expect(loadMenubarMetric()).resolves.toBe(DEFAULT_MENUBAR_METRIC)
   })
 
   it("skips legacy tray migration when keys are absent", async () => {

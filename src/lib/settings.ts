@@ -22,6 +22,8 @@ export type TimeFormatMode = "auto" | "12h" | "24h";
 
 export type MenubarIconStyle = "provider" | "bars" | "donut";
 
+export type MenubarMetric = "default" | "weekly";
+
 export type GlobalShortcut = string | null;
 
 const SETTINGS_STORE_PATH = "settings.json";
@@ -32,6 +34,7 @@ const DISPLAY_MODE_KEY = "displayMode";
 const RESET_TIMER_DISPLAY_MODE_KEY = "resetTimerDisplayMode";
 const TIME_FORMAT_MODE_KEY = "timeFormatMode";
 const MENUBAR_ICON_STYLE_KEY = "menubarIconStyle";
+const MENUBAR_METRIC_KEY = "menubarMetric";
 const LEGACY_TRAY_ICON_STYLE_KEY = "trayIconStyle";
 const LEGACY_TRAY_SHOW_PERCENTAGE_KEY = "trayShowPercentage";
 const GLOBAL_SHORTCUT_KEY = "globalShortcut";
@@ -43,6 +46,7 @@ export const DEFAULT_DISPLAY_MODE: DisplayMode = "left";
 export const DEFAULT_RESET_TIMER_DISPLAY_MODE: ResetTimerDisplayMode = "relative";
 export const DEFAULT_TIME_FORMAT_MODE: TimeFormatMode = "auto";
 export const DEFAULT_MENUBAR_ICON_STYLE: MenubarIconStyle = "provider";
+export const DEFAULT_MENUBAR_METRIC: MenubarMetric = "default";
 export const DEFAULT_GLOBAL_SHORTCUT: GlobalShortcut = null;
 export const DEFAULT_START_ON_LOGIN = false;
 
@@ -52,11 +56,17 @@ const DISPLAY_MODES: DisplayMode[] = ["used", "left"];
 const RESET_TIMER_DISPLAY_MODES: ResetTimerDisplayMode[] = ["relative", "absolute"];
 const TIME_FORMAT_MODES: TimeFormatMode[] = ["auto", "12h", "24h"];
 const MENUBAR_ICON_STYLES: MenubarIconStyle[] = ["provider", "donut", "bars"];
+const MENUBAR_METRICS: MenubarMetric[] = ["default", "weekly"];
 
 export const MENUBAR_ICON_STYLE_OPTIONS: { value: MenubarIconStyle; label: string }[] = [
   { value: "provider", label: "Plugin" },
   { value: "donut", label: "Donut" },
   { value: "bars", label: "Bars" },
+];
+
+export const MENUBAR_METRIC_OPTIONS: { value: MenubarMetric; label: string }[] = [
+  { value: "default", label: "Default" },
+  { value: "weekly", label: "Weekly" },
 ];
 
 export const AUTO_UPDATE_OPTIONS: { value: AutoUpdateIntervalMinutes; label: string }[] =
@@ -282,6 +292,21 @@ export async function loadMenubarIconStyle(): Promise<MenubarIconStyle> {
 
 export async function saveMenubarIconStyle(style: MenubarIconStyle): Promise<void> {
   await store.set(MENUBAR_ICON_STYLE_KEY, style);
+  await store.save();
+}
+
+function isMenubarMetric(value: unknown): value is MenubarMetric {
+  return typeof value === "string" && MENUBAR_METRICS.includes(value as MenubarMetric);
+}
+
+export async function loadMenubarMetric(): Promise<MenubarMetric> {
+  const stored = await store.get<unknown>(MENUBAR_METRIC_KEY);
+  if (isMenubarMetric(stored)) return stored;
+  return DEFAULT_MENUBAR_METRIC;
+}
+
+export async function saveMenubarMetric(metric: MenubarMetric): Promise<void> {
+  await store.set(MENUBAR_METRIC_KEY, metric);
   await store.save();
 }
 

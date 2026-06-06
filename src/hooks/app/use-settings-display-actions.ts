@@ -2,11 +2,13 @@ import { useCallback } from "react"
 import {
   saveDisplayMode,
   saveMenubarIconStyle,
+  saveMenubarMetric,
   saveResetTimerDisplayMode,
   saveThemeMode,
   saveTimeFormatMode,
   type DisplayMode,
   type MenubarIconStyle,
+  type MenubarMetric,
   type ResetTimerDisplayMode,
   type ThemeMode,
   type TimeFormatMode,
@@ -21,6 +23,7 @@ type UseSettingsDisplayActionsArgs = {
   setResetTimerDisplayMode: (value: ResetTimerDisplayMode) => void
   setTimeFormatMode: (value: TimeFormatMode) => void
   setMenubarIconStyle: (value: MenubarIconStyle) => void
+  setMenubarMetric: (value: MenubarMetric) => void
   scheduleTrayIconUpdate: ScheduleTrayIconUpdate
 }
 
@@ -31,6 +34,7 @@ export function useSettingsDisplayActions({
   setResetTimerDisplayMode,
   setTimeFormatMode,
   setMenubarIconStyle,
+  setMenubarMetric,
   scheduleTrayIconUpdate,
 }: UseSettingsDisplayActionsArgs) {
   const handleThemeModeChange = useCallback((mode: ThemeMode) => {
@@ -75,6 +79,14 @@ export function useSettingsDisplayActions({
     })
   }, [scheduleTrayIconUpdate, setMenubarIconStyle])
 
+  const handleMenubarMetricChange = useCallback((metric: MenubarMetric) => {
+    setMenubarMetric(metric)
+    scheduleTrayIconUpdate("settings", 0)
+    void saveMenubarMetric(metric).catch((error) => {
+      console.error("Failed to save menubar metric:", error)
+    })
+  }, [scheduleTrayIconUpdate, setMenubarMetric])
+
   return {
     handleThemeModeChange,
     handleDisplayModeChange,
@@ -82,5 +94,6 @@ export function useSettingsDisplayActions({
     handleResetTimerDisplayModeToggle,
     handleTimeFormatModeChange,
     handleMenubarIconStyleChange,
+    handleMenubarMetricChange,
   }
 }

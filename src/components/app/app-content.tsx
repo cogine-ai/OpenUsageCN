@@ -12,6 +12,7 @@ import type {
   DisplayMode,
   GlobalShortcut,
   MenubarIconStyle,
+  MenubarMetric,
   ResetTimerDisplayMode,
   ThemeMode,
   TimeFormatMode,
@@ -34,6 +35,7 @@ export type AppContentActionProps = {
   onResetTimerDisplayModeToggle: () => void
   onTimeFormatModeChange: (mode: TimeFormatMode) => void
   onMenubarIconStyleChange: (value: MenubarIconStyle) => void
+  onMenubarMetricChange: (value: MenubarMetric) => void
   traySettingsPreview: TraySettingsPreview
   onGlobalShortcutChange: (value: GlobalShortcut) => void
   onStartOnLoginChange: (value: boolean) => void
@@ -55,6 +57,7 @@ export function AppContent({
   onResetTimerDisplayModeToggle,
   onTimeFormatModeChange,
   onMenubarIconStyleChange,
+  onMenubarMetricChange,
   traySettingsPreview,
   onGlobalShortcutChange,
   onStartOnLoginChange,
@@ -70,6 +73,7 @@ export function AppContent({
     resetTimerDisplayMode,
     timeFormatMode,
     menubarIconStyle,
+    menubarMetric,
     autoUpdateInterval,
     globalShortcut,
     themeMode,
@@ -80,6 +84,7 @@ export function AppContent({
       resetTimerDisplayMode: state.resetTimerDisplayMode,
       timeFormatMode: state.timeFormatMode,
       menubarIconStyle: state.menubarIconStyle,
+      menubarMetric: state.menubarMetric,
       autoUpdateInterval: state.autoUpdateInterval,
       globalShortcut: state.globalShortcut,
       themeMode: state.themeMode,
@@ -118,6 +123,8 @@ export function AppContent({
         onTimeFormatModeChange={onTimeFormatModeChange}
         menubarIconStyle={menubarIconStyle}
         onMenubarIconStyleChange={onMenubarIconStyleChange}
+        menubarMetric={menubarMetric}
+        onMenubarMetricChange={onMenubarMetricChange}
         traySettingsPreview={traySettingsPreview}
         globalShortcut={globalShortcut}
         onGlobalShortcutChange={onGlobalShortcutChange}
