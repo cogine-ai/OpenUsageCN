@@ -3,7 +3,16 @@
   var DEFAULT_API_SERVER_URL = "https://server.codeium.com"
   var CLOUD_COMPAT_VERSION = "1.108.2"
   var CREDENTIALS_PATH = "~/.local/share/devin/credentials.toml"
-  var STATE_DB = "~/Library/Application Support/Devin/User/globalStorage/state.vscdb"
+  var APP_AUTH_SOURCES = [
+    {
+      source: "Devin app",
+      stateDb: "~/Library/Application Support/Devin/User/globalStorage/state.vscdb",
+    },
+    {
+      source: "Devin - Next app",
+      stateDb: "~/Library/Application Support/Devin - Next/User/globalStorage/state.vscdb",
+    },
+  ]
   var LOGIN_HINT = "Run devin auth login or sign in to Devin and try again."
   var QUOTA_HINT = "Devin quota data unavailable. Try again later."
   var DAY_MS = 24 * 60 * 60 * 1000
@@ -128,10 +137,10 @@
     }
   }
 
-  function loadAppAuth(ctx) {
+  function readAppAuth(ctx, variant) {
     try {
       var rows = ctx.host.sqlite.query(
-        STATE_DB,
+        variant.stateDb,
         "SELECT value FROM ItemTable WHERE key = 'windsurfAuthStatus' LIMIT 1"
       )
       var parsed = ctx.util.tryParseJson(rows)
@@ -141,10 +150,10 @@
       return {
         apiKey: auth.apiKey,
         apiServerUrl: null,
-        source: "Devin app",
+        source: variant.source,
       }
     } catch (e) {
-      ctx.host.log.warn("failed to read Devin app auth: " + String(e))
+      ctx.host.log.warn("failed to read " + variant.source + " auth: " + String(e))
       return null
     }
   }
@@ -278,23 +287,27 @@
   function probe(ctx) {
     var sawApiKey = false
     var sawAuthFailure = false
-    var credentials = loadCredentialsFile(ctx)
+    var attempts = []
 
+    var credentials = loadCredentialsFile(ctx)
     if (credentials) {
       sawApiKey = true
+      attempts.push(authFingerprint(credentials))
       var credentialsAttempt = tryAuth(ctx, credentials)
       if (credentialsAttempt.output) return credentialsAttempt.output
       if (credentialsAttempt.authFailure) sawAuthFailure = true
     }
 
-    var appAuth = loadAppAuth(ctx)
-    if (
-      appAuth &&
-      (!credentials ||
-        appAuth.apiKey !== credentials.apiKey ||
-        effectiveApiServerUrl(appAuth) !== effectiveApiServerUrl(credentials))
-    ) {
+    // Walk every app install (stable, then "- Next") and try each token the cloud
+    // hasn't already rejected, so a stale token in one install doesn't mask a
+    // valid one in another. Read each state DB only when we reach it, so a working
+    // earlier source short-circuits before we touch a later install's DB.
+    for (var i = 0; i < APP_AUTH_SOURCES.length; i++) {
+      var appAuth = readAppAuth(ctx, APP_AUTH_SOURCES[i])
+      if (!appAuth) continue
+      if (alreadyAttempted(attempts, appAuth)) continue
       sawApiKey = true
+      attempts.push(authFingerprint(appAuth))
       var appAttempt = tryAuth(ctx, appAuth)
       if (appAttempt.output) return appAttempt.output
       if (appAttempt.authFailure) sawAuthFailure = true
@@ -303,6 +316,18 @@
     if (sawAuthFailure) throw LOGIN_HINT
     if (sawApiKey) throw QUOTA_HINT
     throw LOGIN_HINT
+  }
+
+  function authFingerprint(auth) {
+    return auth.apiKey + "\n" + effectiveApiServerUrl(auth)
+  }
+
+  function alreadyAttempted(attempts, auth) {
+    var fingerprint = authFingerprint(auth)
+    for (var i = 0; i < attempts.length; i++) {
+      if (attempts[i] === fingerprint) return true
+    }
+    return false
   }
 
   globalThis.__openusage_plugin = { id: "devin", probe: probe }
