@@ -806,6 +806,162 @@ describe("codex plugin", () => {
     }
   })
 
+  it("reloads newer auth after a proactive refresh error and usage 401", async () => {
+    const ctx = makeCtx()
+    const authPath = "~/.codex/auth.json"
+    const staleAuth = {
+      tokens: {
+        access_token: "stale-access",
+        refresh_token: "used-refresh",
+        account_id: "account",
+      },
+      last_refresh: "2000-01-01T00:00:00.000Z",
+    }
+    const freshAuth = {
+      tokens: {
+        access_token: "fresh-access",
+        refresh_token: "fresh-refresh",
+        account_id: "account",
+      },
+      last_refresh: new Date().toISOString(),
+    }
+    ctx.host.fs.writeText(authPath, JSON.stringify(staleAuth))
+    let refreshCalls = 0
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("oauth/token")) {
+        refreshCalls += 1
+        return {
+          status: 401,
+          headers: {},
+          bodyText: JSON.stringify({ error: { code: "refresh_token_reused" } }),
+        }
+      }
+      if (opts.headers.Authorization === "Bearer stale-access") {
+        ctx.host.fs.writeText(authPath, JSON.stringify(freshAuth))
+        return { status: 401, headers: {}, bodyText: "" }
+      }
+      expect(opts.headers.Authorization).toBe("Bearer fresh-access")
+      return {
+        status: 200,
+        headers: { "x-codex-primary-used-percent": "17" },
+        bodyText: JSON.stringify({}),
+      }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
+    expect(refreshCalls).toBe(1)
+  })
+
+  it("refreshes reloaded auth when its access token is also unauthorized", async () => {
+    const ctx = makeCtx()
+    const authPath = "~/.codex/auth.json"
+    const staleAuth = {
+      tokens: {
+        access_token: "stale-access",
+        refresh_token: "used-refresh",
+        account_id: "account",
+      },
+      last_refresh: "2000-01-01T00:00:00.000Z",
+    }
+    const freshAuth = {
+      tokens: {
+        access_token: "fresh-access",
+        refresh_token: "fresh-refresh",
+        account_id: "account",
+      },
+      last_refresh: new Date().toISOString(),
+    }
+    ctx.host.fs.writeText(authPath, JSON.stringify(staleAuth))
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.bodyText).includes("used-refresh")) {
+        return {
+          status: 401,
+          headers: {},
+          bodyText: JSON.stringify({ error: { code: "refresh_token_reused" } }),
+        }
+      }
+      if (String(opts.bodyText).includes("fresh-refresh")) {
+        return {
+          status: 200,
+          headers: {},
+          bodyText: JSON.stringify({ access_token: "refreshed-access" }),
+        }
+      }
+      if (opts.headers.Authorization === "Bearer stale-access") {
+        ctx.host.fs.writeText(authPath, JSON.stringify(freshAuth))
+        return { status: 401, headers: {}, bodyText: "" }
+      }
+      if (opts.headers.Authorization === "Bearer fresh-access") {
+        return { status: 401, headers: {}, bodyText: "" }
+      }
+      expect(opts.headers.Authorization).toBe("Bearer refreshed-access")
+      return {
+        status: 200,
+        headers: { "x-codex-primary-used-percent": "18" },
+        bodyText: JSON.stringify({}),
+      }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
+  })
+
+  it("fails cleanly when guarded reload switches to API-key auth", async () => {
+    const ctx = makeCtx()
+    const authPath = "~/.codex/auth.json"
+    const staleAuth = JSON.stringify({
+      tokens: {
+        access_token: "stale-access",
+        refresh_token: "stale-refresh",
+        account_id: "account",
+      },
+      last_refresh: "2000-01-01T00:00:00.000Z",
+    })
+    ctx.host.fs.writeText(authPath, staleAuth)
+    ctx.host.fs.readText = vi.fn()
+      .mockReturnValueOnce(staleAuth)
+      .mockReturnValue(JSON.stringify({ OPENAI_API_KEY: "sk-test" }))
+
+    const plugin = await loadPlugin()
+
+    expect(() => plugin.probe(ctx)).toThrow("Token conflict")
+    expect(ctx.host.http.request).not.toHaveBeenCalled()
+  })
+
+  it("fails cleanly when guarded reload switches accounts", async () => {
+    const ctx = makeCtx()
+    const authPath = "~/.codex/auth.json"
+    const staleAuth = JSON.stringify({
+      tokens: {
+        access_token: "stale-access",
+        refresh_token: "stale-refresh",
+        account_id: "account",
+      },
+      last_refresh: "2000-01-01T00:00:00.000Z",
+    })
+    ctx.host.fs.writeText(authPath, staleAuth)
+    ctx.host.fs.readText = vi.fn()
+      .mockReturnValueOnce(staleAuth)
+      .mockReturnValue(JSON.stringify({
+        tokens: {
+          access_token: "other-access",
+          refresh_token: "other-refresh",
+          account_id: "other-account",
+        },
+        last_refresh: new Date().toISOString(),
+      }))
+
+    const plugin = await loadPlugin()
+
+    expect(() => plugin.probe(ctx)).toThrow("Token conflict")
+    expect(ctx.host.http.request).not.toHaveBeenCalled()
+  })
+
   it("throws token conflict when refresh token is reused", async () => {
     const ctx = makeCtx()
     ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
@@ -832,8 +988,10 @@ describe("codex plugin", () => {
       tokens: { access_token: "still-valid", refresh_token: "used-refresh" },
       last_refresh: "2000-01-01T00:00:00.000Z",
     }))
+    let refreshCalls = 0
     ctx.host.http.request.mockImplementation((opts) => {
       if (String(opts.url).includes("oauth/token")) {
+        refreshCalls += 1
         return {
           status: 401,
           headers: {},
@@ -853,6 +1011,7 @@ describe("codex plugin", () => {
 
     expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
     expect(ctx.host.keychain.readGenericPassword).not.toHaveBeenCalled()
+    expect(refreshCalls).toBe(1)
   })
 
   it("uses the first valid file access token before later auth candidates", async () => {
