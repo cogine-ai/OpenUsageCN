@@ -6,6 +6,7 @@
   const REFRESH_URL = "https://auth.openai.com/oauth/token"
   const USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
   const REFRESH_AGE_MS = 8 * 24 * 60 * 60 * 1000
+  const ACCESS_TOKEN_REFRESH_WINDOW_MS = 5 * 60 * 1000
   const ERR_NOT_LOGGED_IN = "Not logged in. Run `codex` to authenticate."
   const ERR_SESSION_EXPIRED = "Session expired. Run `codex` to log in again."
   const ERR_TOKEN_CONFLICT = "Token conflict. Run `codex` to log in again."
@@ -173,10 +174,49 @@
   }
 
   function needsRefresh(ctx, auth, nowMs) {
-    if (!auth.last_refresh) return true
+    const accessToken = auth.tokens && auth.tokens.access_token
+    if (accessToken && ctx.jwt && typeof ctx.jwt.decodePayload === "function") {
+      const payload = ctx.jwt.decodePayload(accessToken)
+      const expiresAtSeconds = payload && payload.exp
+      if (typeof expiresAtSeconds === "number" && Number.isFinite(expiresAtSeconds)) {
+        const expiresAtMs = expiresAtSeconds * 1000
+        return expiresAtMs <= nowMs + ACCESS_TOKEN_REFRESH_WINDOW_MS
+      }
+    }
+
+    if (!auth.last_refresh) return false
     const lastMs = ctx.util.parseDateMs(auth.last_refresh)
-    if (lastMs === null) return true
+    if (lastMs === null) return false
     return nowMs - lastMs > REFRESH_AGE_MS
+  }
+
+  function reloadAuthState(ctx, authState) {
+    let reloaded = null
+    if (authState.source === "file" && authState.authPath) {
+      try {
+        const auth = tryParseAuthJson(ctx, ctx.host.fs.readText(authState.authPath))
+        if (hasTokenLikeAuth(auth)) {
+          reloaded = { auth, authPath: authState.authPath, source: "file" }
+        }
+      } catch (e) {
+        ctx.host.log.warn("auth reload failed for file " + authState.authPath + ": " + String(e))
+      }
+    } else if (authState.source === "keychain") {
+      reloaded = loadAuthFromKeychain(ctx)
+    }
+
+    if (!reloaded) return authState
+
+    const expectedAccountId = authState.auth.tokens && authState.auth.tokens.account_id
+    const reloadedAccountId = reloaded.auth.tokens && reloaded.auth.tokens.account_id
+    if (expectedAccountId && reloadedAccountId !== expectedAccountId) {
+      throw ERR_TOKEN_CONFLICT
+    }
+
+    if (JSON.stringify(reloaded.auth) !== JSON.stringify(authState.auth)) {
+      ctx.host.log.info("auth changed during guarded reload, using updated credentials")
+    }
+    return reloaded
   }
 
   function refreshToken(ctx, authState) {
@@ -566,25 +606,29 @@
     }))
   }
 
-  function probeWithAuthState(ctx, authState, opts) {
-    const auth = authState.auth
+  function probeWithAuthState(ctx, initialAuthState) {
+    let authState = initialAuthState
+    let auth = authState.auth
 
     if (auth.tokens && auth.tokens.access_token) {
       const nowMs = Date.now()
       let accessToken = auth.tokens.access_token
-      const accountId = auth.tokens.account_id
       let proactiveRefreshAuthError = null
 
       if (needsRefresh(ctx, auth, nowMs)) {
-        ctx.host.log.info("token needs refresh (age > " + (REFRESH_AGE_MS / 1000 / 60 / 60 / 24) + " days)")
+        ctx.host.log.info("token needs refresh")
+        authState = reloadAuthState(ctx, authState)
+        auth = authState.auth
+        accessToken = auth.tokens.access_token
         let refreshed = null
-        try {
-          refreshed = refreshToken(ctx, authState)
-        } catch (e) {
-          if (!isAuthFallbackError(e)) throw e
-          if (!opts || !opts.tryExistingTokenAfterProactiveAuthError) throw e
-          proactiveRefreshAuthError = e
-          ctx.host.log.warn("proactive refresh failed, trying existing token: " + String(e))
+        if (needsRefresh(ctx, auth, nowMs)) {
+          try {
+            refreshed = refreshToken(ctx, authState)
+          } catch (e) {
+            if (!isAuthFallbackError(e)) throw e
+            proactiveRefreshAuthError = e
+            ctx.host.log.warn("proactive refresh failed, trying existing token: " + String(e))
+          }
         }
         if (refreshed) {
           accessToken = refreshed
@@ -595,6 +639,7 @@
 
       let resp
       let didRefresh = false
+      const accountId = auth.tokens.account_id
       try {
         resp = ctx.util.retryOnceOnAuth({
           request: (token) => {
@@ -834,7 +879,6 @@
   function probe(ctx) {
     const fileAuth = loadFileAuthCandidates(ctx)
     let lastAuthFallbackError = null
-    let tokenConflictAuthState = null
     for (let i = 0; i < fileAuth.candidates.length; i++) {
       const authState = fileAuth.candidates[i]
       try {
@@ -844,9 +888,6 @@
           throw e
         }
         lastAuthFallbackError = e
-        if (e === ERR_TOKEN_CONFLICT && !tokenConflictAuthState) {
-          tokenConflictAuthState = authState
-        }
         ctx.host.log.warn("auth failed for file " + authState.authPath + ", trying next auth source: " + String(e))
       }
     }
@@ -858,14 +899,8 @@
       } catch (e) {
         if (!isAuthFallbackError(e)) throw e
         lastAuthFallbackError = e
-        ctx.host.log.warn("keychain auth failed, trying final auth fallback: " + String(e))
+        ctx.host.log.warn("keychain auth failed: " + String(e))
       }
-    }
-
-    if (tokenConflictAuthState) {
-      return probeWithAuthState(ctx, tokenConflictAuthState, {
-        tryExistingTokenAfterProactiveAuthError: true,
-      })
     }
 
     if (lastAuthFallbackError) throw lastAuthFallbackError
