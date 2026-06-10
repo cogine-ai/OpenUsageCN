@@ -220,7 +220,13 @@ describe("codex plugin", () => {
     expect(result.lines.find((line) => line.label === "Weekly")).toBeTruthy()
     const credits = result.lines.find((line) => line.label === "Credits")
     expect(credits).toBeTruthy()
-    expect(credits.used).toBe(900)
+    expect(credits).toEqual({
+      type: "text",
+      label: "Credits",
+      value: "$4.00 · 100 credits",
+    })
+    expect(credits).not.toHaveProperty("used")
+    expect(credits).not.toHaveProperty("limit")
   })
 
   it("maps prolite plan to Pro 5x", async () => {
@@ -252,7 +258,7 @@ describe("codex plugin", () => {
     expect(result.lines.find((line) => line.label === "Weekly")).toBeTruthy()
     const credits = result.lines.find((line) => line.label === "Credits")
     expect(credits).toBeTruthy()
-    expect(credits.used).toBe(900)
+    expect(credits.value).toBe("$4.00 · 100 credits")
   })
 
   it("uses zero credits from the response body when the account has no credits", async () => {
@@ -296,8 +302,31 @@ describe("codex plugin", () => {
     const result = plugin.probe(ctx)
     const credits = result.lines.find((line) => line.label === "Credits")
     expect(credits).toBeTruthy()
-    expect(credits.used).toBe(1000)
-    expect(credits.limit).toBe(1000)
+    expect(credits.value).toBe("$0.00 · 0 credits")
+  })
+
+  it("shows credit balances above 1000 without a fake cap", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
+      tokens: { access_token: "token" },
+      last_refresh: new Date().toISOString(),
+    }))
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      headers: {
+        "x-codex-credits-balance": "1250",
+      },
+      bodyText: JSON.stringify({}),
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    const credits = result.lines.find((line) => line.label === "Credits")
+    expect(credits).toEqual({
+      type: "text",
+      label: "Credits",
+      value: "$50.00 · 1250 credits",
+    })
   })
 
   it("refreshes keychain auth and writes back to keychain", async () => {
@@ -927,7 +956,7 @@ describe("codex plugin", () => {
         code_review_rate_limit: {
           primary_window: { used_percent: 15, reset_after_seconds: 90 },
         },
-        credits: { balance: 500 },
+        credits: { balance: 820.6969075 },
       }),
     })
     const plugin = await loadPlugin()
@@ -936,7 +965,7 @@ describe("codex plugin", () => {
     expect(result.lines.find((line) => line.label === "Reviews")).toBeTruthy()
     const credits = result.lines.find((line) => line.label === "Credits")
     expect(credits).toBeTruthy()
-    expect(credits.used).toBe(500)
+    expect(credits.value).toBe("$32.80 · 820 credits")
   })
 
   it("omits resetsAt when window lacks reset info", async () => {
