@@ -1397,6 +1397,72 @@ describe("codex plugin", () => {
     expect(credits.value).toBe("$32.80 · 820 credits")
   })
 
+  it("shows available rate limit resets as the first text line", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
+      tokens: { access_token: "token" },
+      last_refresh: new Date().toISOString(),
+    }))
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      headers: {},
+      bodyText: JSON.stringify({
+        rate_limit_reset_credits: { available_count: 1 },
+        credits: { balance: 100 },
+      }),
+    })
+    ctx.host.ccusage.query.mockReturnValue({
+      status: "ok",
+      data: { daily: [] },
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    const resetIndex = result.lines.findIndex((line) => line.label === "Rate Limit Resets")
+    const creditsIndex = result.lines.findIndex((line) => line.label === "Credits")
+    const firstTextIndex = result.lines.findIndex((line) => line.type === "text")
+
+    expect(result.lines[resetIndex]).toEqual({
+      type: "text",
+      label: "Rate Limit Resets",
+      value: "1 available",
+    })
+    expect(resetIndex).toBeGreaterThanOrEqual(0)
+    expect(resetIndex).toBe(firstTextIndex)
+    expect(creditsIndex).toBe(resetIndex + 1)
+  })
+
+  it("shows zero available rate limit resets and omits malformed counts", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
+      tokens: { access_token: "token" },
+      last_refresh: new Date().toISOString(),
+    }))
+    const plugin = await loadPlugin()
+
+    ctx.host.http.request.mockReturnValueOnce({
+      status: 200,
+      headers: {},
+      bodyText: JSON.stringify({
+        rate_limit_reset_credits: { available_count: 0 },
+      }),
+    })
+    const zeroResult = plugin.probe(ctx)
+    expect(zeroResult.lines.find((line) => line.label === "Rate Limit Resets")?.value)
+      .toBe("0 available")
+
+    ctx.host.http.request.mockReturnValueOnce({
+      status: 200,
+      headers: {},
+      bodyText: JSON.stringify({
+        rate_limit_reset_credits: { available_count: null },
+      }),
+    })
+    const malformedResult = plugin.probe(ctx)
+    expect(malformedResult.lines.find((line) => line.label === "Rate Limit Resets"))
+      .toBeUndefined()
+  })
+
   it("omits resetsAt when window lacks reset info", async () => {
     const ctx = makeCtx()
     ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({

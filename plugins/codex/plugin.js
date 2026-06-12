@@ -827,6 +827,19 @@
         }
       }
 
+      const resetCredits =
+        data.rate_limit_reset_credits &&
+        typeof data.rate_limit_reset_credits === "object" &&
+        data.rate_limit_reset_credits.available_count != null
+          ? readNumber(data.rate_limit_reset_credits.available_count)
+          : null
+      if (resetCredits !== null && resetCredits >= 0) {
+        lines.push(ctx.line.text({
+          label: "Rate Limit Resets",
+          value: Math.floor(resetCredits) + " available",
+        }))
+      }
+
       const creditsRemaining = readCreditsRemaining(resp, data)
       if (creditsRemaining !== null) {
         const remaining = Math.max(0, Math.floor(creditsRemaining))
