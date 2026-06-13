@@ -356,7 +356,7 @@ mod tests {
 
     fn temp_dir(label: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
-            "openusage-test-{}-{}",
+            "openusagecn-test-{}-{}",
             label,
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

@@ -546,17 +546,18 @@ export function SettingsPage({
         onGlobalShortcutChange={onGlobalShortcutChange}
       />
       <section>
-        <h3 className="text-lg font-semibold mb-0">Start on Login</h3>
+        <h3 className="text-lg font-semibold mb-0">Start On Login</h3>
         <p className="text-sm text-muted-foreground mb-2">
-          OpenUsage starts when you sign in
+          OpenUsageCN Starts When You Sign In
         </p>
         <label className="flex items-center gap-2 text-sm select-none text-foreground">
           <Checkbox
+            aria-label="Start On Login"
             key={`start-on-login-${startOnLogin}`}
             checked={startOnLogin}
             onCheckedChange={(checked) => onStartOnLoginChange(checked === true)}
           />
-          Start on login
+          Start On Login
         </label>
       </section>
       <section>

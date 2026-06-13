@@ -1,48 +1,32 @@
 # Security Policy
 
-## Reporting a Vulnerability
+## Reporting A Vulnerability
 
-If you find a security vulnerability in OpenUsage, please report it responsibly. Do not open a public issue.
+If you find a security vulnerability in OpenUsageCN, report it privately. Do not open a public issue for security-sensitive reports.
 
-### Preferred: GitHub Security Advisories
+Use [GitHub Security Advisories](https://github.com/cogine-ai/OpenUsageCN/security/advisories/new). Include enough detail for maintainers to reproduce and assess the issue.
 
-1. Go to the [Security Advisories page](https://github.com/robinebers/openusage/security/advisories/new)
-2. Click "Report a vulnerability"
-3. Fill in the details
-
-This keeps the report private until a fix is released.
-
-### Alternative: Email
-
-Send details to [rob@robinebers.com](mailto:rob@robinebers.com) with the subject line "OpenUsage Security Report".
-
-## What to Include
+## What To Include
 
 - Description of the vulnerability
 - Steps to reproduce
 - Affected versions
-- Impact assessment (what can an attacker do?)
-
-## Response Timeline
-
-- Acknowledgment within 48 hours
-- Assessment and plan within 7 days
-- Fix released as soon as practical, depending on severity
+- Impact assessment
 
 ## Scope
 
 The following are in scope:
 
-- The OpenUsage desktop application
-- Provider plugins shipped with OpenUsage
+- The OpenUsageCN desktop application
+- Provider plugins shipped with OpenUsageCN
 - Build and release infrastructure
 
 The following are out of scope:
 
-- Third-party provider APIs (report to the provider directly)
+- Third-party provider APIs
 - Social engineering attacks
 - Denial of service attacks
 
 ## Supported Versions
 
-Only the latest release is supported with security updates.
+Only the latest OpenUsageCN release is supported with security updates.

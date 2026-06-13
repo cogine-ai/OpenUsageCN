@@ -164,7 +164,7 @@ export function useTrayIcon({
             tray.setIcon(gaugePath),
             tray.setIconAsTemplate(true),
             setTrayTitle(""),
-            setTrayTooltip("OpenUsage"),
+            setTrayTooltip("OpenUsageCN"),
           ])
             .catch((e) => {
               console.error("Failed to restore tray gauge icon:", e)

@@ -22,11 +22,11 @@ mod tests {
 
     #[test]
     fn builds_log_file_path_from_log_dir() {
-        let path = log_file_path(&PathBuf::from("/logs/openusage"), "OpenUsage");
+        let path = log_file_path(&PathBuf::from("/logs/openusagecn"), "OpenUsageCN");
 
         assert_eq!(
             path,
-            PathBuf::from("/logs/openusage/OpenUsage.log")
+            PathBuf::from("/logs/openusagecn/OpenUsageCN.log")
         );
     }
 }

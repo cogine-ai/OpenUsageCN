@@ -3313,7 +3313,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "openusage"
+name = "openusagecn"
 version = "0.6.27"
 dependencies = [
  "aes-gcm",

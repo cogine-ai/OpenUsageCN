@@ -22,9 +22,9 @@ Tracks Grok Build credit usage from the local Grok CLI login.
 grok login
 ```
 
-2. Enable the Grok plugin in OpenUsage settings.
+2. Enable the Grok plugin in OpenUsageCN settings.
 
-OpenUsage reads the same local auth file that the Grok CLI uses. Access tokens are refreshed automatically before expiry when a `refresh_token` is present. If refresh fails, run `grok login` again.
+OpenUsageCN reads the same local auth file that the Grok CLI uses. Access tokens are refreshed automatically before expiry when a `refresh_token` is present. If refresh fails, run `grok login` again.
 
 ## Endpoint
 
@@ -64,7 +64,7 @@ Returns the current Grok Build billing period, credit usage, and pay-as-you-go c
 
 ### GET /settings
 
-Returns remote CLI settings. OpenUsage reads `subscription_tier_display` from this response and shows it as the provider plan label, for example `SuperGrok Heavy`.
+Returns remote CLI settings. OpenUsageCN reads `subscription_tier_display` from this response and shows it as the provider plan label, for example `SuperGrok Heavy`.
 
 Used fields:
 

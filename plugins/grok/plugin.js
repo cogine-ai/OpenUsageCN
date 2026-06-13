@@ -200,7 +200,7 @@
           Authorization: "Bearer " + token,
           "X-XAI-Token-Auth": TOKEN_AUTH_HEADER,
           Accept: "application/json",
-          "User-Agent": "OpenUsage",
+          "User-Agent": "OpenUsageCN",
         },
         timeoutMs: 10000,
       })
@@ -233,7 +233,7 @@
           Authorization: "Bearer " + token,
           "X-XAI-Token-Auth": TOKEN_AUTH_HEADER,
           Accept: "application/json",
-          "User-Agent": "OpenUsage",
+          "User-Agent": "OpenUsageCN",
         },
         timeoutMs: 10000,
       })

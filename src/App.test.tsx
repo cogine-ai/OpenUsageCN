@@ -667,13 +667,13 @@ describe("App", () => {
     render(<App />)
 
     // Open about via version button in footer
-    await userEvent.click(await screen.findByRole("button", { name: /OpenUsage/i }))
-    await screen.findByText("Built by")
+    await userEvent.click(await screen.findByRole("button", { name: /OpenUsageCN/i }))
+    await screen.findByText("Maintained By OpenUsageCN Contributors")
 
     // Close about via ESC key
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))
     await waitFor(() => {
-      expect(screen.queryByText("Built by")).not.toBeInTheDocument()
+      expect(screen.queryByText("Maintained By OpenUsageCN Contributors")).not.toBeInTheDocument()
     })
   })
 
@@ -824,7 +824,7 @@ describe("App", () => {
     // and every line gets a metric tag.
     await waitFor(() =>
       expect(state.traySetTooltipMock).toHaveBeenCalledWith(
-        "OpenUsage\nClaude: 42% · Weekly\nCursor: 55% · Credits"
+        "OpenUsageCN\nClaude: 42% · Weekly\nCursor: 55% · Credits"
       )
     )
   })
@@ -912,7 +912,7 @@ describe("App", () => {
     render(<App />)
     const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
     await userEvent.click(settingsButtons[0])
-    await userEvent.click(await screen.findByText("Start on login"))
+    await userEvent.click(await screen.findByRole("checkbox", { name: "Start On Login" }))
     expect(state.saveStartOnLoginMock).toHaveBeenCalledWith(true)
   })
 
@@ -935,7 +935,7 @@ describe("App", () => {
     render(<App />)
     const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
     await userEvent.click(settingsButtons[0])
-    await userEvent.click(await screen.findByText("Start on login"))
+    await userEvent.click(await screen.findByRole("checkbox", { name: "Start On Login" }))
 
     await waitFor(() =>
       expect(errorSpy).toHaveBeenCalledWith("Failed to save start on login:", expect.any(Error))
@@ -968,7 +968,7 @@ describe("App", () => {
     render(<App />)
     const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
     await userEvent.click(settingsButtons[0])
-    await userEvent.click(await screen.findByText("Start on login"))
+    await userEvent.click(await screen.findByRole("checkbox", { name: "Start On Login" }))
 
     await waitFor(() =>
       expect(errorSpy).toHaveBeenCalledWith("Failed to update start on login:", expect.any(Error))

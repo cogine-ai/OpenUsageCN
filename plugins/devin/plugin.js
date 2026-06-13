@@ -183,7 +183,7 @@
       if (resp.status < 200 || resp.status >= 300) {
         ctx.host.log.warn("cloud request returned status " + resp.status + " for " + auth.source)
         if (ctx.util && typeof ctx.util.isAuthStatus === "function" && ctx.util.isAuthStatus(resp.status)) {
-          return { __openusageAuthError: true }
+          return { __openusagecnAuthError: true }
         }
         return null
       }
@@ -196,7 +196,7 @@
 
   function tryAuth(ctx, auth) {
     var data = callCloud(ctx, auth)
-    if (data && data.__openusageAuthError) {
+    if (data && data.__openusagecnAuthError) {
       return { authFailure: true }
     }
     if (!data || !data.userStatus) return {}

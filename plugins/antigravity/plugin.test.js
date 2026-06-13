@@ -104,7 +104,7 @@ function makeAgyLoadResponse(overrides) {
   return Object.assign(
     {
       paidTier: { name: "Google AI Pro" },
-      cloudaicompanionProject: "projects/openusage-agy",
+      cloudaicompanionProject: "projects/openusagecn-agy",
     },
     overrides
   )

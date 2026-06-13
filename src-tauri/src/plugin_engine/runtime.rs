@@ -748,7 +748,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_nanos();
-        std::env::temp_dir().join(format!("openusage-test-{}-{}", label, nanos))
+        std::env::temp_dir().join(format!("openusagecn-test-{}-{}", label, nanos))
     }
 
     fn error_text(output: PluginOutput) -> String {

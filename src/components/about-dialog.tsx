@@ -87,11 +87,11 @@ export function AboutDialog({ version, onClose }: AboutDialogProps) {
       <div className="bg-card rounded-lg border shadow-xl p-6 max-w-xs w-full mx-4 text-center animate-in fade-in zoom-in-95 duration-200">
         <img
           src="/icon.png"
-          alt="OpenUsage"
+          alt="OpenUsageCN"
           className="w-16 h-16 mx-auto mb-3 rounded-xl"
         />
 
-        <h2 className="text-xl font-semibold mb-1">OpenUsage</h2>
+        <h2 className="text-xl font-semibold mb-1">OpenUsageCN</h2>
 
         <div className="flex flex-col items-center gap-2 mb-4">
           <span className="inline-block text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
@@ -108,29 +108,18 @@ export function AboutDialog({ version, onClose }: AboutDialogProps) {
         </div>
 
         <div className="text-sm text-muted-foreground space-y-1">
+          <p>Maintained By OpenUsageCN Contributors</p>
           <p>
-            Built by{" "}
-            <ExternalLink href="https://itsbyrob.in/x">Robin Ebers</ExternalLink>
-          </p>
-          <p>
-            Open source on{" "}
-            <ExternalLink href="https://github.com/robinebers/openusage">
+            Open Source On{" "}
+            <ExternalLink href="https://github.com/cogine-ai/OpenUsageCN">
               GitHub
             </ExternalLink>
           </p>
           <p className="text-xs pt-1">
-            Maintainers:{" "}
-            <ExternalLink href="https://github.com/validatedev">
-              validatedev
-            </ExternalLink>
-            ,{" "}
-            <ExternalLink href="https://github.com/davidarny">
-              davidarny
-            </ExternalLink>
+            Forked From OpenUsage
           </p>
         </div>
       </div>
     </div>
   );
 }
-

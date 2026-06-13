@@ -150,7 +150,7 @@ fn current_macos_keychain_account_from_user_env(user_env: Option<String>) -> Str
             }
         })
         .or_else(|| read_env_value_via_command("id", &["-un"]))
-        .unwrap_or_else(|| "openusage-user".to_string())
+        .unwrap_or_else(|| "openusagecn-user".to_string())
 }
 
 fn current_macos_keychain_account() -> String {
@@ -226,8 +226,8 @@ fn shell_from_env() -> Option<String> {
 }
 
 fn read_env_from_interactive_shell(program: &str, name: &str) -> Option<String> {
-    const START_MARKER: &str = "__OPENUSAGE_ENV_START__";
-    const END_MARKER: &str = "__OPENUSAGE_ENV_END__";
+    const START_MARKER: &str = "__OPENUSAGECN_ENV_START__";
+    const END_MARKER: &str = "__OPENUSAGECN_ENV_END__";
 
     let script = format!(
         "printf '{}\\n'; printenv {}; printf '{}\\n'",
@@ -2992,44 +2992,44 @@ mod tests {
         let stdout = concat!(
             "startup banner\n",
             "\u{1b}[31mplugin failed\u{1b}[0m\n",
-            "__OPENUSAGE_ENV_START__\n",
+            "__OPENUSAGECN_ENV_START__\n",
             "  sk-test-key-12345  \n",
-            "__OPENUSAGE_ENV_END__\n",
+            "__OPENUSAGECN_ENV_END__\n",
             "\u{1b}[32muser@host\u{1b}[0m\n"
         );
         let value =
-            extract_marked_value(stdout, "__OPENUSAGE_ENV_START__", "__OPENUSAGE_ENV_END__");
+            extract_marked_value(stdout, "__OPENUSAGECN_ENV_START__", "__OPENUSAGECN_ENV_END__");
         assert_eq!(value.as_deref(), Some("sk-test-key-12345"));
     }
 
     #[test]
     fn extract_marked_value_strips_inline_terminal_sequences_from_marked_value() {
         let stdout = concat!(
-            "__OPENUSAGE_ENV_START__\n",
+            "__OPENUSAGECN_ENV_START__\n",
             "\u{1b}[?1000l\n",
             "  sk-test-key-12345\u{1b}[?2004h\r\n",
-            "__OPENUSAGE_ENV_END__\n"
+            "__OPENUSAGECN_ENV_END__\n"
         );
         let value =
-            extract_marked_value(stdout, "__OPENUSAGE_ENV_START__", "__OPENUSAGE_ENV_END__");
+            extract_marked_value(stdout, "__OPENUSAGECN_ENV_START__", "__OPENUSAGECN_ENV_END__");
         assert_eq!(value.as_deref(), Some("sk-test-key-12345"));
     }
 
     #[test]
     fn extract_marked_value_returns_none_when_marked_value_is_empty() {
-        let stdout = "__OPENUSAGE_ENV_START__\n  \n__OPENUSAGE_ENV_END__\n";
+        let stdout = "__OPENUSAGECN_ENV_START__\n  \n__OPENUSAGECN_ENV_END__\n";
         let value =
-            extract_marked_value(stdout, "__OPENUSAGE_ENV_START__", "__OPENUSAGE_ENV_END__");
+            extract_marked_value(stdout, "__OPENUSAGECN_ENV_START__", "__OPENUSAGECN_ENV_END__");
         assert!(value.is_none());
     }
 
     #[test]
     fn parse_interactive_shell_env_output_does_not_fallback_to_end_marker_for_empty_value() {
-        let stdout = "__OPENUSAGE_ENV_START__\n  \n__OPENUSAGE_ENV_END__\n";
+        let stdout = "__OPENUSAGECN_ENV_START__\n  \n__OPENUSAGECN_ENV_END__\n";
         let value = parse_interactive_shell_env_output(
             stdout,
-            "__OPENUSAGE_ENV_START__",
-            "__OPENUSAGE_ENV_END__",
+            "__OPENUSAGECN_ENV_START__",
+            "__OPENUSAGECN_ENV_END__",
         );
         assert!(value.is_none());
     }
@@ -3039,8 +3039,8 @@ mod tests {
         let stdout = "\u{1b}[?1000l\n  sk-test-key-12345\u{1b}[?2004h\r\n";
         let value = parse_interactive_shell_env_output(
             stdout,
-            "__OPENUSAGE_ENV_START__",
-            "__OPENUSAGE_ENV_END__",
+            "__OPENUSAGECN_ENV_START__",
+            "__OPENUSAGECN_ENV_END__",
         );
         assert_eq!(value.as_deref(), Some("sk-test-key-12345"));
     }
@@ -3261,7 +3261,7 @@ mod tests {
             }
 
             let blocked: Option<String> = get
-                .call(("__OPENUSAGE_TEST_NOT_WHITELISTED__".to_string(),))
+                .call(("__OPENUSAGECN_TEST_NOT_WHITELISTED__".to_string(),))
                 .expect("get blocked var");
             assert!(
                 blocked.is_none(),
@@ -3269,7 +3269,7 @@ mod tests {
             );
 
             let js_blocked: Option<String> = ctx
-                .eval(r#"__openusage_ctx.host.env.get("__OPENUSAGE_TEST_NOT_WHITELISTED__")"#)
+                .eval(r#"__openusage_ctx.host.env.get("__OPENUSAGECN_TEST_NOT_WHITELISTED__")"#)
                 .expect("js get blocked var");
             assert!(
                 js_blocked.is_none(),
@@ -3335,8 +3335,8 @@ mod tests {
     #[test]
     fn current_macos_keychain_account_prefers_explicit_user_value() {
         assert_eq!(
-            current_macos_keychain_account_from_user_env(Some("openusage-test-user".to_string())),
-            "openusage-test-user"
+            current_macos_keychain_account_from_user_env(Some("openusagecn-test-user".to_string())),
+            "openusagecn-test-user"
         );
     }
 
@@ -3371,7 +3371,7 @@ mod tests {
     fn keychain_find_generic_password_args_for_account_include_account_and_service() {
         let args = keychain_find_generic_password_args_for_account(
             "Claude Code-credentials",
-            "openusage-test-user",
+            "openusagecn-test-user",
         );
         let rendered: Vec<String> = args
             .into_iter()
@@ -3383,7 +3383,7 @@ mod tests {
             vec![
                 "find-generic-password",
                 "-a",
-                "openusage-test-user",
+                "openusagecn-test-user",
                 "-s",
                 "Claude Code-credentials",
                 "-w",
@@ -3416,7 +3416,7 @@ mod tests {
     fn keychain_add_generic_password_args_for_account_include_update_account_service_and_value() {
         let args = keychain_add_generic_password_args_for_account(
             "Claude Code-credentials",
-            "openusage-test-user",
+            "openusagecn-test-user",
             "secret-value",
         );
         let rendered: Vec<String> = args
@@ -3430,7 +3430,7 @@ mod tests {
                 "add-generic-password",
                 "-U",
                 "-a",
-                "openusage-test-user",
+                "openusagecn-test-user",
                 "-s",
                 "Claude Code-credentials",
                 "-w",
@@ -4078,7 +4078,7 @@ mod tests {
 
     #[test]
     fn ccusage_path_entries_with_home_and_existing_path_preserves_order() {
-        let home = std::path::PathBuf::from("/tmp/openusage-home");
+        let home = std::path::PathBuf::from("/tmp/openusagecn-home");
         let existing = std::env::join_paths([
             std::path::PathBuf::from("/usr/bin"),
             std::path::PathBuf::from("/bin"),
@@ -4137,7 +4137,7 @@ mod tests {
 
     #[test]
     fn ccusage_enriched_path_with_preserves_entries_after_join_and_split() {
-        let home = std::path::PathBuf::from("/tmp/openusage-home");
+        let home = std::path::PathBuf::from("/tmp/openusagecn-home");
         let existing = std::env::join_paths([
             std::path::PathBuf::from("/usr/bin"),
             std::path::PathBuf::from("/bin"),
@@ -4165,7 +4165,7 @@ mod tests {
 
     #[test]
     fn nvm_default_bin_path_resolves_version_with_v_prefix() {
-        let home = std::env::temp_dir().join("openusage-test-nvm-v-prefix");
+        let home = std::env::temp_dir().join("openusagecn-test-nvm-v-prefix");
         let alias_dir = home.join(".nvm/alias");
         std::fs::create_dir_all(&alias_dir).expect("create alias dir");
         std::fs::write(alias_dir.join("default"), "v22.16.0").expect("write alias");
@@ -4176,7 +4176,7 @@ mod tests {
 
     #[test]
     fn nvm_default_bin_path_resolves_version_without_v_prefix() {
-        let home = std::env::temp_dir().join("openusage-test-nvm-no-v-prefix");
+        let home = std::env::temp_dir().join("openusagecn-test-nvm-no-v-prefix");
         let alias_dir = home.join(".nvm/alias");
         std::fs::create_dir_all(&alias_dir).expect("create alias dir");
         std::fs::write(alias_dir.join("default"), "22.16.0").expect("write alias");
@@ -4187,7 +4187,7 @@ mod tests {
 
     #[test]
     fn nvm_default_bin_path_returns_none_when_alias_missing() {
-        let home = std::env::temp_dir().join("openusage-test-nvm-no-alias");
+        let home = std::env::temp_dir().join("openusagecn-test-nvm-no-alias");
         let _ = std::fs::remove_dir_all(&home);
         let result = nvm_default_bin_path(&home);
         assert_eq!(result, None);
@@ -4195,7 +4195,7 @@ mod tests {
 
     #[test]
     fn ccusage_path_entries_with_includes_nvm_default_version() {
-        let home = std::env::temp_dir().join("openusage-test-nvm-entries");
+        let home = std::env::temp_dir().join("openusagecn-test-nvm-entries");
         let alias_dir = home.join(".nvm/alias");
         std::fs::create_dir_all(&alias_dir).expect("create alias dir");
         std::fs::write(alias_dir.join("default"), "22.16.0").expect("write alias");
@@ -4419,7 +4419,7 @@ Saved lockfile
         use std::os::unix::fs::PermissionsExt;
 
         let test_id = format!(
-            "openusage-ccusage-legacy-fallback-{}",
+            "openusagecn-ccusage-legacy-fallback-{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .expect("system time")
@@ -4544,7 +4544,7 @@ esac
         }
 
         let test_id = format!(
-            "openusage-ccusage-timeout-{}",
+            "openusagecn-ccusage-timeout-{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .expect("system time")

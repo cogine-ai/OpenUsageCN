@@ -9,8 +9,8 @@ export const makeCtx = () => {
     app: {
       version: "0.0.0",
       platform: "darwin",
-      appDataDir: "/tmp/openusage-test",
-      pluginDataDir: "/tmp/openusage-test/plugin",
+      appDataDir: "/tmp/openusagecn-test",
+      pluginDataDir: "/tmp/openusagecn-test/plugin",
     },
     host: {
       fs: {

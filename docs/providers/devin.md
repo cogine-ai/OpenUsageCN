@@ -12,7 +12,7 @@
 - **Extra:** overage balance in micros
 - **Requires:** `devin auth login` or a signed-in Devin app
 
-OpenUsage does not use `api.devin.ai` for this provider. Devin's public API usage and consumption endpoints are enterprise/admin APIs and do not expose the same local account quota shown in the app.
+OpenUsageCN does not use `api.devin.ai` for this provider. Devin's public API usage and consumption endpoints are enterprise/admin APIs and do not expose the same local account quota shown in the app.
 
 ## Auth Sources
 
@@ -112,7 +112,7 @@ Response fields used:
 | `userStatus.planStatus.overageBalanceMicros` | Extra usage balance |
 | `userStatus.planStatus.planInfo.hideDailyQuota` | Hide daily quota line when `true` |
 
-Devin currently returns no `weeklyQuotaRemainingPercent` field in the observed payload. When `hideDailyQuota` is `true`, OpenUsage maps `dailyQuotaRemainingPercent` as a used percentage on the visible weekly line and uses `weeklyQuotaResetAtUnix` for the reset timer. Despite the field name, `100` matches Devin's `Weekly quota: 100%` UI, not `100% left`.
+Devin currently returns no `weeklyQuotaRemainingPercent` field in the observed payload. When `hideDailyQuota` is `true`, OpenUsageCN maps `dailyQuotaRemainingPercent` as a used percentage on the visible weekly line and uses `weeklyQuotaResetAtUnix` for the reset timer. Despite the field name, `100` matches Devin's `Weekly quota: 100%` UI, not `100% left`.
 
 ## Plugin Strategy
 

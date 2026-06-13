@@ -206,7 +206,7 @@ client_id=GOOGLE_OAUTH_CLIENT_ID_REDACTED
 
 Response: `{ "access_token": "ya29...", "expires_in": 3599 }`
 
-Same client_id/secret is there in the Antigravity app bundle, used for the Google OAuth refresh token.
+The Google OAuth client id/secret belong to the Antigravity app bundle. OpenUsageCN does not commit those credentials; the open-source tree keeps placeholders so GitHub Push Protection does not block publishing.
 
 ## Cloud Code API (fallback)
 
@@ -227,9 +227,9 @@ Base URLs tried in order:
 
 ### agy keychain fallback
 
-`agy` stores its auth in the macOS Keychain under service `gemini`, account `antigravity`. OpenUsage reads that exact account only; it does not use legacy Gemini CLI files.
+`agy` stores its auth in the macOS Keychain under service `gemini`, account `antigravity`. OpenUsageCN reads that exact account only; it does not use legacy Gemini CLI files.
 
-For `agy`, OpenUsage calls:
+For `agy`, OpenUsageCN calls:
 
 1. `POST /v1internal:loadCodeAssist`
 2. `POST /v1internal:retrieveUserQuota`

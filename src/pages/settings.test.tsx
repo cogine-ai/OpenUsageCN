@@ -288,7 +288,7 @@ describe("SettingsPage", () => {
         onStartOnLoginChange={onStartOnLoginChange}
       />
     )
-    await userEvent.click(screen.getByText("Start on login"))
+    await userEvent.click(screen.getByRole("checkbox", { name: "Start On Login" }))
     expect(onStartOnLoginChange).toHaveBeenCalledWith(true)
   })
 })

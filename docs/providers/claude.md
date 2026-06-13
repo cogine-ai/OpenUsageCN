@@ -63,13 +63,13 @@ All windows are enforced simultaneously — hitting any limit throttles the user
 
 ### Token Location
 
-On macOS, OpenUsage reads Claude Code credentials from Keychain first. The default service name is:
+On macOS, OpenUsageCN reads Claude Code credentials from Keychain first. The default service name is:
 
 ```text
 Claude Code-credentials
 ```
 
-When `CLAUDE_CONFIG_DIR` is set, Claude Code may use a config-specific service name instead. OpenUsage checks this hashed name before the default service:
+When `CLAUDE_CONFIG_DIR` is set, Claude Code may use a config-specific service name instead. OpenUsageCN checks this hashed name before the default service:
 
 ```text
 Claude Code-credentials-<sha256(CLAUDE_CONFIG_DIR).slice(0, 8)>

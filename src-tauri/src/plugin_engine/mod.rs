@@ -180,7 +180,7 @@ mod tests {
                 .expect("system clock before unix epoch")
                 .as_nanos();
             let path = std::env::temp_dir().join(format!(
-                "openusage-plugin-engine-{}-{}-{}",
+                "openusagecn-plugin-engine-{}-{}-{}",
                 name,
                 std::process::id(),
                 suffix

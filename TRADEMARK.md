@@ -1,30 +1,11 @@
-# Trademark Policy
+# Brand Notice
 
-## The OpenUsage Brand
+OpenUsageCN is a fork and rebrand of OpenUsage.
 
-The "OpenUsage" name, logo, and associated visual identity are trademarks of Robin Ebers. The MIT license covers the source code, not the brand.
+The original OpenUsage name, logo, and visual identity belong to the original project owners. OpenUsageCN uses its own product name, bundle identifier, package name, config directory, and release channel.
 
-## What You Can Do
-
-- Use "OpenUsage" to refer to this project in articles, blog posts, and discussions
-- Say your project is "compatible with OpenUsage" or "built for OpenUsage"
-- Use the name in community contexts when referring to the official project
-
-## What You Cannot Do
-
-- Use "OpenUsage" as the name of a fork or derivative work
-- Use the OpenUsage logo in your own project, product, or service
-- Imply that your project is endorsed by, affiliated with, or an official part of OpenUsage
-- Register domain names or social media accounts using "OpenUsage"
+Do not present OpenUsageCN as the official OpenUsage project. Do not present the original OpenUsage project as maintained by OpenUsageCN.
 
 ## Forks
 
-If you fork OpenUsage, you must:
-
-1. Choose a different name for your fork
-2. Remove the OpenUsage logo and branding
-3. Clearly state that your project is a fork and not the official OpenUsage
-
-## Questions
-
-If you are unsure whether your use of the OpenUsage brand is allowed, contact [rob@robinebers.com](mailto:rob@robinebers.com).
+If you fork OpenUsageCN, choose a distinct name and branding for your fork.
