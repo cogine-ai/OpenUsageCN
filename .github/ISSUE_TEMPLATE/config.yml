@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 一般问题
+    url: https://github.com/cogine-ai/OpenUsageCN/discussions
+    about: 在 GitHub Discussions 提问或讨论想法
