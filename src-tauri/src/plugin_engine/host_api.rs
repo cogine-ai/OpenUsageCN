@@ -13,7 +13,7 @@ use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-const WHITELISTED_ENV_VARS: [&str; 16] = [
+const WHITELISTED_ENV_VARS: [&str; 18] = [
     "CODEX_HOME",
     "CLAUDE_CONFIG_DIR",
     "CLAUDE_CODE_OAUTH_TOKEN",
@@ -25,6 +25,8 @@ const WHITELISTED_ENV_VARS: [&str; 16] = [
     "CLAUDE_LOCAL_OAUTH_API_BASE",
     "ZAI_API_KEY",
     "GLM_API_KEY",
+    "BIGMODEL_API_KEY",
+    "ZHIPUAI_API_KEY",
     "MINIMAX_API_KEY",
     "MINIMAX_API_TOKEN",
     "MINIMAX_CN_API_KEY",
@@ -3274,6 +3276,43 @@ mod tests {
             assert!(
                 js_blocked.is_none(),
                 "non-whitelisted vars must not be exposed from JS"
+            );
+        });
+    }
+
+    #[test]
+    fn env_api_allows_bigmodel_keys_and_blocks_unlisted_keys() {
+        for name in ["BIGMODEL_API_KEY", "ZHIPUAI_API_KEY"] {
+            assert!(
+                WHITELISTED_ENV_VARS.contains(&name),
+                "{name} must be whitelisted for BigModel CN plugin auth"
+            );
+        }
+
+        let rt = Runtime::new().expect("runtime");
+        let ctx = Context::full(&rt).expect("context");
+        ctx.with(|ctx| {
+            let app_data = std::env::temp_dir();
+            inject_host_api(&ctx, "bigmodel-cn", &app_data, "0.0.0").expect("inject host api");
+            let globals = ctx.globals();
+            let probe_ctx: Object = globals.get("__openusage_ctx").expect("probe ctx");
+            let host: Object = probe_ctx.get("host").expect("host");
+            let env: Object = host.get("env").expect("env");
+            let get: Function = env.get("get").expect("get");
+
+            for name in ["BIGMODEL_API_KEY", "ZHIPUAI_API_KEY"] {
+                let expected = resolve_env_value(name);
+                let value: Option<String> =
+                    get.call((name.to_string(),)).expect("get BigModel env var");
+                assert_eq!(value, expected, "{name} should match host env resolver");
+            }
+
+            let blocked: Option<String> = get
+                .call(("BIGMODEL_CN_TEST_NOT_ALLOWED".to_string(),))
+                .expect("get blocked var");
+            assert!(
+                blocked.is_none(),
+                "non-whitelisted vars must not be exposed"
             );
         });
     }
