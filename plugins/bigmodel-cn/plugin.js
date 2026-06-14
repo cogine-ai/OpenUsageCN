@@ -1,4 +1,7 @@
 (function () {
+  // BigModel CN and Z.ai use the same Zhipu quota shape. Keep quota parsing in
+  // sync with plugins/zai/plugin.js while preserving separate provider identity
+  // and credentials so users can enable both providers side by side.
   const QUOTA_URL = "https://open.bigmodel.cn/api/monitor/usage/quota/limit"
   const PERIOD_MS = 5 * 60 * 60 * 1000
   const WEEK_MS = 7 * 24 * 60 * 60 * 1000
@@ -66,7 +69,7 @@
     return fallback
   }
 
-  function extractPlan(container, quota) {
+  function extractPlan(ctx, container, quota) {
     const sources = [container, quota]
     const keys = ["planName", "plan", "plan_type", "packageName"]
     for (let i = 0; i < sources.length; i++) {
@@ -75,7 +78,7 @@
       for (let j = 0; j < keys.length; j++) {
         const value = source[keys[j]]
         if (typeof value === "string" && value.trim()) {
-          return value.trim()
+          return ctx.fmt.planLabel(value)
         }
       }
     }
@@ -94,7 +97,7 @@
 
     const quota = fetchQuota(ctx, apiKey)
     const container = quota.data || quota
-    const plan = extractPlan(container, quota)
+    const plan = extractPlan(ctx, container, quota)
     const limits = container.limits || container
     if (!Array.isArray(limits) || limits.length === 0) {
       return { plan, lines: [noUsageLine(ctx)] }

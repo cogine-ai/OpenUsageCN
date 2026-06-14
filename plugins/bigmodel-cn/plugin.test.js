@@ -189,6 +189,39 @@ describe("bigmodel-cn plugin", () => {
     expect(plugin.probe(ctx).plan).toBeNull()
   })
 
+  it("normalizes plan label casing when quota includes a plan field", async () => {
+    const ctx = makeCtx()
+    mockEnv(ctx, { BIGMODEL_API_KEY: "test-key" })
+    mockQuota(ctx, {
+      data: {
+        planName: "glm coding pro",
+        limits: [{ type: "TOKENS_LIMIT", unit: 3, number: 5, percentage: 1 }],
+      },
+    })
+
+    const plugin = await loadPlugin()
+    expect(plugin.probe(ctx).plan).toBe("Glm Coding Pro")
+  })
+
+  it("renders usage without plan when quota omits plan fields", async () => {
+    const ctx = makeCtx()
+    mockEnv(ctx, { BIGMODEL_API_KEY: "test-key" })
+    mockQuota(ctx, {
+      data: {
+        limits: [
+          { type: "TOKENS_LIMIT", unit: 3, number: 5, percentage: 25 },
+          { type: "TOKENS_LIMIT", unit: 6, number: 1, percentage: 9 },
+          { type: "TIME_LIMIT", unit: 5, number: 1, usage: 4000, currentValue: 224 },
+        ],
+      },
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    expect(result.plan).toBeNull()
+    expect(result.lines.map((line) => line.label)).toEqual(["Session", "Weekly", "Web Searches"])
+  })
+
   it("throws on 401 and 403 auth responses", async () => {
     for (const status of [401, 403]) {
       delete globalThis.__openusage_plugin
