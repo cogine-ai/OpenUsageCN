@@ -4573,6 +4573,7 @@ wait
         std::fs::set_permissions(&script_path, permissions).expect("make script executable");
 
         let opts = CcusageQueryOpts::default();
+        let timeout = Duration::from_secs(5);
         let start = Instant::now();
         let result = run_ccusage_with_runner_timeout(
             CcusageRunnerKind::Bunx,
@@ -4581,12 +4582,12 @@ wait
             CcusageProvider::Codex,
             "codex",
             CcusageCommandFlavor::Current,
-            Duration::from_secs(1),
+            timeout,
         );
 
         assert_eq!(result, CcusageRunnerResult::TimedOut);
         assert!(
-            start.elapsed() < Duration::from_secs(3),
+            start.elapsed() < timeout + Duration::from_secs(2),
             "timeout cleanup should not hang on inherited stdout/stderr pipes"
         );
 
