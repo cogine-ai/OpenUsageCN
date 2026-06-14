@@ -9,6 +9,7 @@
     "build:release": "./scripts/build-release.sh",
     "ccusage:bump": "bun ./scripts/bump-ccusage-version.mjs",
     "bundle:plugins": "bun copy-bundled.cjs",
+    "verify:updater-signature": "bun scripts/verify-updater-signature.mjs",
     "preview": "vite preview",
     "test": "vitest",
     "test:watch": "vitest --watch",

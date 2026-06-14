@@ -10,6 +10,8 @@
 - GitHub 仓库：`https://github.com/cogine-ai/OpenUsageCN`
 - 更新地址：`https://github.com/cogine-ai/OpenUsageCN/releases/latest/download/latest.json`
 
+`ai.cogine.openusagecn` 是 OpenUsageCN 的新 macOS 应用身份。旧的 `com.sunstory.openusagecn` 构建不会自动升级到这个新身份，也不会和新版本共用 macOS 级别的应用身份。
+
 Tauri updater 公钥写在 `src-tauri/tauri.conf.json`。对应私钥保存在本机：
 
 ```text
@@ -45,7 +47,9 @@ APPLE_TEAM_ID
 3. 运行 `bun run test --run`。
 4. 运行 `bun run build`。
 5. 运行 `CARGO_NET_GIT_FETCH_WITH_CLI=true cargo test --manifest-path src-tauri/Cargo.toml`。
-6. 打包运行应用后，替换 `README.md` 使用的 `screenshot.png`。
+6. 运行 `bun run build:release` 或 `bun run build:release -- --skip-stapling`。
+7. 运行 `bun run verify:updater-signature`，确认 updater 包能被 `src-tauri/tauri.conf.json` 里的公钥验签。
+8. 打包运行应用后，替换 `README.md` 使用的 `screenshot.png`。
 
 ## 发布方式
 

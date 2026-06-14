@@ -148,6 +148,9 @@ jobs:
           includeUpdaterJson: true
           args: ${{ matrix.args }}
 
+      - name: Verify updater signatures
+        run: bun run verify:updater-signature
+
       - name: Verify updater assets uploaded
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
