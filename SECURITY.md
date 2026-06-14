@@ -1,32 +1,32 @@
-# Security Policy
+# 安全政策
 
-## Reporting A Vulnerability
+## 报告安全问题
 
-If you find a security vulnerability in OpenUsageCN, report it privately. Do not open a public issue for security-sensitive reports.
+如果你发现 OpenUsageCN 的安全问题，请私下报告。不要为安全敏感问题创建公开 Issue。
 
-Use [GitHub Security Advisories](https://github.com/cogine-ai/OpenUsageCN/security/advisories/new). Include enough detail for maintainers to reproduce and assess the issue.
+请使用 [GitHub Security Advisories](https://github.com/cogine-ai/OpenUsageCN/security/advisories/new)，并提供足够信息，方便维护者复现和评估。
 
-## What To Include
+## 建议包含的信息
 
-- Description of the vulnerability
-- Steps to reproduce
-- Affected versions
-- Impact assessment
+- 问题描述
+- 复现步骤
+- 受影响版本
+- 影响范围
 
-## Scope
+## 范围
 
-The following are in scope:
+以下内容在范围内：
 
-- The OpenUsageCN desktop application
-- Provider plugins shipped with OpenUsageCN
-- Build and release infrastructure
+- OpenUsageCN 桌面应用
+- OpenUsageCN 内置服务商插件
+- 构建和发布基础设施
 
-The following are out of scope:
+以下内容不在范围内：
 
-- Third-party provider APIs
-- Social engineering attacks
-- Denial of service attacks
+- 第三方服务商 API
+- 社会工程攻击
+- 拒绝服务攻击
 
-## Supported Versions
+## 支持版本
 
-Only the latest OpenUsageCN release is supported with security updates.
+OpenUsageCN 只为最新发布版本提供安全更新。

@@ -76,4 +76,8 @@ bun run build
 bun tauri build
 ```
 
+### 发布
+
+维护自用发布版本时，参考 [发布与更新](docs/release.md)。
+
 </details>

@@ -1,48 +1,48 @@
-name: New Provider Request
-description: Request or propose a new AI provider plugin
+name: 新服务商请求
+description: 请求或提议新增一个 AI 服务商插件
 labels: ["provider"]
 body:
   - type: markdown
     attributes:
       value: |
-        Want to add a new AI provider to OpenUsage? Fill in the details below.
-        You can submit just a request, or build the plugin yourself and open a PR.
+        想为 OpenUsageCN 增加新的 AI 服务商？请填写下面的信息。
+        你可以只提交请求，也可以自己实现插件后提交 PR。
   - type: input
     id: provider_name
     attributes:
-      label: Provider Name
-      placeholder: "e.g. Gemini, Windsurf, Devin"
+      label: 服务商名称
+      placeholder: "例如 Gemini、Windsurf、Devin"
     validations:
       required: true
   - type: input
     id: provider_url
     attributes:
-      label: Provider Website
+      label: 服务商网站
       placeholder: "https://..."
     validations:
       required: true
   - type: textarea
     id: data
     attributes:
-      label: What usage data does this provider expose?
-      description: Describe the usage metrics, limits, and how they are accessed (API, dashboard scraping, etc.)
+      label: 这个服务商能提供哪些用量数据？
+      description: 请说明用量指标、额度类型，以及数据获取方式（API、控制台、CLI、本地文件等）。
       placeholder: |
-        - Monthly request limit: 500
-        - Accessible via: dashboard at provider.com/usage
-        - Auth method: session cookie
+        - 月度请求额度：500
+        - 获取方式：provider.com/usage 控制台
+        - 认证方式：session cookie
     validations:
       required: true
   - type: dropdown
     id: will_build
     attributes:
-      label: Will you build the plugin?
+      label: 你会实现这个插件吗？
       options:
-        - "Yes, I will submit a PR"
-        - "No, I am just requesting it"
+        - "会，我会提交 PR"
+        - "不会，我只是提交需求"
     validations:
       required: true
   - type: textarea
     id: additional
     attributes:
-      label: Additional Context
-      description: Links to API docs, screenshots of the usage dashboard, or anything else that helps.
+      label: 补充信息
+      description: API 文档、用量页面截图或其他有帮助的信息。

@@ -1,32 +1,32 @@
-## Description
+## 说明
 
-<!-- What does this PR do and why? -->
+<!-- 这个 PR 做了什么？为什么需要这个改动？ -->
 
-## Related Issue
+## 相关 Issue
 
-<!-- Link to the issue this PR addresses: Fixes #123 -->
+<!-- 如果有关联 Issue，请填写，例如 Fixes #123 -->
 
-## Type of Change
+## 改动类型
 
-- [ ] Bug fix
-- [ ] New feature
-- [ ] New provider plugin
-- [ ] Documentation
-- [ ] Performance improvement
-- [ ] Other (describe below)
+- [ ] Bug 修复
+- [ ] 新功能
+- [ ] 新服务商插件
+- [ ] 文档
+- [ ] 性能优化
+- [ ] 其他（请说明）
 
-## Testing
+## 测试
 
-- [ ] I ran `bun run build` and it succeeded
-- [ ] I ran `bun run test` and all tests pass
-- [ ] I tested the change locally with `bun tauri dev`
+- [ ] 已运行 `bun run build` 且通过
+- [ ] 已运行 `bun run test` 且通过
+- [ ] 已用 `bun tauri dev` 本地测试
 
-## Screenshots
+## 截图
 
-<!-- Required for UI changes. Remove this section if not applicable. -->
+<!-- UI 改动必须提供前后截图；不适用时可删除本节。 -->
 
-## Checklist
+## 检查清单
 
-- [ ] I read [CONTRIBUTING.md](../CONTRIBUTING.md)
-- [ ] My PR targets the `main` branch
-- [ ] I did not introduce new dependencies without justification
+- [ ] 已阅读 [CONTRIBUTING.md](../CONTRIBUTING.md)
+- [ ] PR 目标分支是 `main`
+- [ ] 没有无说明地新增依赖
