@@ -34,8 +34,8 @@ function VersionDisplay({
       return (
         <span className="text-xs text-muted-foreground">
           {updateStatus.progress >= 0
-            ? `Downloading update ${updateStatus.progress}%`
-            : "Downloading update..."}
+            ? `正在下载更新 ${updateStatus.progress}%`
+            : "正在下载更新..."}
         </span>
       );
     case "ready":
@@ -46,15 +46,15 @@ function VersionDisplay({
           className="update-border-beam"
           onClick={onUpdateInstall}
         >
-          Restart to update
+          重启更新
         </Button>
       );
     case "installing":
       return (
-        <span className="text-xs text-muted-foreground">Installing...</span>
+        <span className="text-xs text-muted-foreground">正在安装...</span>
       );
     case "error":
-      if (updateStatus.message === "Update check failed") {
+      if (updateStatus.kind === "check-failed") {
         return (
           <button
             type="button"
@@ -62,13 +62,13 @@ function VersionDisplay({
             className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
             title={updateStatus.message}
           >
-            Updates soon
+            重新检查
           </button>
         );
       }
       return (
         <span className="text-xs text-destructive" title={updateStatus.message}>
-          Update failed
+          更新失败
         </span>
       );
     default:
@@ -101,14 +101,14 @@ export function PanelFooter({
   });
 
   const countdownLabel = useMemo(() => {
-    if (!autoUpdateNextAt) return "Paused";
+    if (!autoUpdateNextAt) return "已暂停";
     const remainingMs = Math.max(0, autoUpdateNextAt - now);
     const totalSeconds = Math.ceil(remainingMs / 1000);
     if (totalSeconds >= 60) {
       const minutes = Math.ceil(totalSeconds / 60);
-      return `Next update in ${minutes}m`;
+      return `${minutes} 分钟后刷新`;
     }
-    return `Next update in ${totalSeconds}s`;
+    return `${totalSeconds} 秒后刷新`;
   }, [autoUpdateNextAt, now]);
 
   return (
@@ -129,7 +129,7 @@ export function PanelFooter({
               onRefreshAll()
             }}
             className="text-xs text-muted-foreground tabular-nums hover:text-foreground transition-colors cursor-pointer"
-            title="Refresh now"
+            title="立即刷新"
           >
             {countdownLabel}
           </button>

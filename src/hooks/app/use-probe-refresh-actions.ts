@@ -34,7 +34,7 @@ export function useProbeRefreshActions({
           manualRefreshIdsRef.current.delete(id)
         }
         console.error(errorMessage, error)
-        setErrorForPlugins(ids, "Failed to start probe")
+        setErrorForPlugins(ids, "无法开始刷新")
       })
     },
     [manualRefreshIdsRef, setLoadingForPlugins, setErrorForPlugins, startBatch]

@@ -64,7 +64,7 @@ export function useSettingsPluginActions({
       setLoadingForPlugins([id])
       startBatch([id]).catch((error) => {
         console.error("Failed to start probe for enabled plugin:", error)
-        setErrorForPlugins([id], "Failed to start probe")
+        setErrorForPlugins([id], "无法开始刷新")
       })
     } else {
       disabled.add(id)

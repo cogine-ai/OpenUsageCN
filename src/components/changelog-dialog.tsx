@@ -199,11 +199,11 @@ export function ChangelogDialog({ currentVersion, onBack, onClose }: ChangelogDi
             <button
               onClick={onBack}
               className="p-1.5 hover:bg-muted rounded-md transition-colors text-muted-foreground hover:text-foreground"
-              title="Back"
+              title="返回"
             >
               <ChevronRight className="w-5 h-5 rotate-180" />
             </button>
-            <h2 className="font-semibold text-sm tracking-tight">Release Notes</h2>
+            <h2 className="font-semibold text-sm tracking-tight">更新说明</h2>
           </div>
         </div>
 
@@ -211,14 +211,14 @@ export function ChangelogDialog({ currentVersion, onBack, onClose }: ChangelogDi
           {loading ? (
             <div className="h-full flex flex-col items-center justify-center text-muted-foreground gap-2">
               <Loader2 className="w-6 h-6 animate-spin" />
-              <span className="text-xs">Fetching release info...</span>
+              <span className="text-xs">正在获取更新说明...</span>
             </div>
           ) : error ? (
             <div className="h-full flex flex-col items-center justify-center text-center p-4">
-              <span className="text-destructive text-sm font-medium mb-1">Failed to load release notes</span>
+              <span className="text-destructive text-sm font-medium mb-1">更新说明加载失败</span>
               <span className="text-xs text-muted-foreground mb-4">{error}</span>
               <Button size="xs" variant="outline" onClick={() => window.location.reload()}>
-                Try again
+                重试
               </Button>
             </div>
           ) : currentRelease ? (
@@ -233,9 +233,9 @@ export function ChangelogDialog({ currentVersion, onBack, onClose }: ChangelogDi
                           const year = d.getUTCFullYear()
                           const month = String(d.getUTCMonth() + 1).padStart(2, "0")
                           const day = String(d.getUTCDate()).padStart(2, "0")
-                          return `Released on ${year}/${month}/${day}`
+                          return `发布于 ${year}/${month}/${day}`
                         })()
-                      : "Unpublished release"}
+                      : "未发布版本"}
                   </p>
                 </div>
                 <button
@@ -253,12 +253,12 @@ export function ChangelogDialog({ currentVersion, onBack, onClose }: ChangelogDi
               {releases.length >= 1 && (
                 <div className="mt-8 pt-6 border-t border-dashed">
                   <p className="text-[10px] text-muted-foreground text-center">
-                    Looking for older versions? Check the{" "}
+                    查看旧版本请打开{" "}
                     <button 
                       onClick={() => openUrl("https://github.com/cogine-ai/OpenUsageCN/releases").catch(console.error)}
                       className="text-[#58a6ff] hover:underline"
                     >
-                      full changelog
+                      完整更新记录
                     </button>
                   </p>
                 </div>
@@ -266,13 +266,13 @@ export function ChangelogDialog({ currentVersion, onBack, onClose }: ChangelogDi
             </div>
           ) : (
             <div className="h-full flex flex-col items-center justify-center text-center p-4 opacity-60">
-              <span className="text-sm font-medium mb-1">No specific notes for v{currentVersion}</span>
-              <span className="text-xs mb-4">This version might be a pre-release or local build.</span>
+              <span className="text-sm font-medium mb-1">没有 v{currentVersion} 的单独说明</span>
+              <span className="text-xs mb-4">这可能是预发布版本或本地构建。</span>
               <button 
                 onClick={() => openUrl("https://github.com/cogine-ai/OpenUsageCN/releases").catch(console.error)}
                 className="text-xs text-[#58a6ff] hover:underline"
               >
-                View all releases on GitHub
+                在 GitHub 查看所有版本
               </button>
             </div>
           )}

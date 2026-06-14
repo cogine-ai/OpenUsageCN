@@ -4,7 +4,7 @@ import type { DisplayMode } from "@/lib/settings"
 import { formatCountNumber, formatFixedPrecisionNumber } from "@/lib/utils"
 
 export function getPaceStatusText(status: PaceStatus): string {
-  return status === "ahead" ? "Plenty of room" : status === "on-track" ? "Right on target" : "Will run out"
+  return status === "ahead" ? "余量充足" : status === "on-track" ? "节奏正常" : "可能用完"
 }
 
 export function formatCompactDuration(deltaMs: number): string | null {
@@ -16,10 +16,10 @@ export function formatCompactDuration(deltaMs: number): string | null {
   const hours = totalHours % 24
   const minutes = totalMinutes % 60
 
-  if (days > 0) return `${days}d ${hours}h`
-  if (totalHours > 0) return `${totalHours}h ${minutes}m`
-  if (totalMinutes > 0) return `${totalMinutes}m`
-  return "<1m"
+  if (days > 0) return hours > 0 ? `${days} 天 ${hours} 小时` : `${days} 天`
+  if (totalHours > 0) return minutes > 0 ? `${totalHours} 小时 ${minutes} 分钟` : `${totalHours} 小时`
+  if (totalMinutes > 0) return `${totalMinutes} 分钟`
+  return "< 1 分钟"
 }
 
 function getRunsOutDurationText({
@@ -47,7 +47,7 @@ function getRunsOutDurationText({
 }
 
 /**
- * ETA text for when usage will hit the limit, e.g. "Runs out in 4d 5h".
+ * ETA text for when usage will hit the limit.
  * Returns null if not behind pace or ETA can't be computed.
  */
 export function formatRunsOutText({
@@ -66,7 +66,7 @@ export function formatRunsOutText({
   nowMs: number
 }): string | null {
   const durationText = getRunsOutDurationText({ paceResult, used, limit, periodDurationMs, resetsAtMs, nowMs })
-  return durationText ? `Runs out in ${durationText}` : null
+  return durationText ? `预计 ${durationText}后用完` : null
 }
 
 export function buildPaceDetailText({
@@ -90,14 +90,15 @@ export function buildPaceDetailText({
 
   if (paceResult.status === "behind") {
     const durationText = getRunsOutDurationText({ paceResult, used, limit, periodDurationMs, resetsAtMs, nowMs })
-    if (durationText) return `Limit in ${durationText}`
+    if (durationText) return `${durationText}后达上限`
   }
 
   // Show projected % at reset (clamped to 100%)
   const projectedPercent = Math.min(100, Math.round((paceResult.projectedUsage / limit) * 100))
   const shownPercent = displayMode === "left" ? 100 - projectedPercent : projectedPercent
-  const suffix = displayMode === "left" ? "left at reset" : "used at reset"
-  return `${shownPercent}% ${suffix}`
+  return displayMode === "left"
+    ? `重置时剩余 ${shownPercent}%`
+    : `重置时已用 ${shownPercent}%`
 }
 
 export function formatDeficitText(
@@ -107,7 +108,7 @@ export function formatDeficitText(
 ): string | null {
   if (!Number.isFinite(deficit) || deficit <= 0) return null
 
-  const suffix = displayMode === "left" ? "short" : "in deficit"
+  const suffix = displayMode === "left" ? "缺口" : "超节奏"
   if (format.kind === "percent") {
     const roundedPercent = Math.round(deficit)
     return roundedPercent > 0 ? `${roundedPercent}% ${suffix}` : null

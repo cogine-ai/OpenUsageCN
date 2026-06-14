@@ -14,8 +14,9 @@ describe("UsageSparkline", () => {
   it("renders an inline row with an accessible summary", () => {
     render(<UsageSparkline label="Usage Trend" points={POINTS} note="Estimated from local logs" />)
     const sparkline = screen.getByRole("button", { name: /Usage Trend/ })
-    expect(sparkline).toHaveAccessibleName(/latest 50 tokens on 6\/2/)
-    expect(sparkline).toHaveAccessibleName(/peak 500 tokens/)
+    expect(sparkline).toHaveAccessibleName(/共 3 天/)
+    expect(sparkline).toHaveAccessibleName(/最近 50 tokens（6\/2）/)
+    expect(sparkline).toHaveAccessibleName(/峰值 500 tokens/)
     expect(sparkline).toHaveAccessibleName(/Estimated from local logs/)
   })
 
@@ -25,7 +26,7 @@ describe("UsageSparkline", () => {
 
     // Hovering the row opens the larger graph; default readout is the peak.
     await user.hover(screen.getByRole("button", { name: /Usage Trend/ }))
-    expect(await screen.findByText("peak 500 tokens")).toBeInTheDocument()
+    expect(await screen.findByText("峰值 500 tokens")).toBeInTheDocument()
 
     // The hoverable popup stays open; hovering a day's column shows that day.
     // (fireEvent drives the handler directly — userEvent blocks on the
@@ -46,7 +47,7 @@ describe("UsageSparkline", () => {
     expect(await screen.findByText("5/16 · 100 tokens")).toBeInTheDocument()
 
     fireEvent.blur(dayBar)
-    expect(await screen.findByText("peak 500 tokens")).toBeInTheDocument()
+    expect(await screen.findByText("峰值 500 tokens")).toBeInTheDocument()
   })
 
   it("returns nothing when there are no valid points", () => {
@@ -76,7 +77,7 @@ describe("UsageSparkline", () => {
 
     // Single glanceable element; per-day detail lives in the hover/focus graph.
     const sparkline = screen.getByRole("button", { name: /Usage Trend/ })
-    expect(sparkline).toHaveAccessibleName(/latest 400 tokens on 2\/2/)
+    expect(sparkline).toHaveAccessibleName(/最近 400 tokens（2\/2）/)
     expect(sparkline).toHaveAccessibleName(/Estimated from local logs/)
     expect(screen.getByText("gpt-5.5")).toBeInTheDocument()
     expect(screen.getByText("75%")).toBeInTheDocument()

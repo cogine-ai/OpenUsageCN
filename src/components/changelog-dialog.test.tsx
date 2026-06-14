@@ -41,7 +41,7 @@ describe("ChangelogDialog", () => {
       />,
     )
 
-    expect(screen.getByText("Fetching release info...")).toBeInTheDocument()
+    expect(screen.getByText("正在获取更新说明...")).toBeInTheDocument()
   })
 
   it("renders error state and shows retry button", async () => {
@@ -55,10 +55,10 @@ describe("ChangelogDialog", () => {
       />,
     )
 
-    expect(screen.getByText("Failed to load release notes")).toBeInTheDocument()
+    expect(screen.getByText("更新说明加载失败")).toBeInTheDocument()
     expect(screen.getByText("something went wrong")).toBeInTheDocument()
 
-    const retryButton = screen.getByRole("button", { name: "Try again" })
+    const retryButton = screen.getByRole("button", { name: "重试" })
     expect(retryButton).toBeInTheDocument()
   })
 
@@ -177,7 +177,7 @@ describe("ChangelogDialog", () => {
     )
 
     expect(screen.getByText("v1.0.1")).toBeInTheDocument()
-    expect(screen.getByText("Unpublished release")).toBeInTheDocument()
+    expect(screen.getByText("未发布版本")).toBeInTheDocument()
   })
 
   it("shows link to full changelog when multiple releases exist", async () => {
@@ -208,7 +208,7 @@ describe("ChangelogDialog", () => {
       />,
     )
 
-    const fullChangelogButton = screen.getByRole("button", { name: "full changelog" })
+    const fullChangelogButton = screen.getByRole("button", { name: "完整更新记录" })
     await userEvent.click(fullChangelogButton)
 
     expect(openerState.openUrlMock).toHaveBeenCalledWith(
@@ -237,11 +237,11 @@ describe("ChangelogDialog", () => {
     )
 
     expect(
-      screen.getByText("No specific notes for v9.9.9"),
+      screen.getByText("没有 v9.9.9 的单独说明"),
     ).toBeInTheDocument()
 
     await userEvent.click(
-      screen.getByRole("button", { name: "View all releases on GitHub" }),
+      screen.getByRole("button", { name: "在 GitHub 查看所有版本" }),
     )
 
     expect(openerState.openUrlMock).toHaveBeenCalledWith(
@@ -273,7 +273,7 @@ describe("ChangelogDialog", () => {
     )
 
     // Back goes to previous view
-    await userEvent.click(screen.getByRole("button", { name: "Back" }))
+    await userEvent.click(screen.getByRole("button", { name: "返回" }))
     expect(onBack).toHaveBeenCalled()
 
     // Escape should trigger onClose once
@@ -281,4 +281,3 @@ describe("ChangelogDialog", () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 })
-

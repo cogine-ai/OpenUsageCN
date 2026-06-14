@@ -103,7 +103,7 @@ export function AboutDialog({ version, onClose }: AboutDialogProps) {
             onClick={() => setView("changelog")}
             className="text-[10px] h-5 px-1.5"
           >
-            View Changelog
+            更新说明
           </Button>
         </div>
 
@@ -116,7 +116,7 @@ export function AboutDialog({ version, onClose }: AboutDialogProps) {
             </ExternalLink>
           </p>
           <p className="text-xs pt-1">
-            基于 OpenUsage Fork 并本地化
+            基于 OpenUsage 二次开发并本地化
           </p>
         </div>
       </div>

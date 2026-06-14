@@ -15,8 +15,8 @@ function renderSection(globalShortcut: string | null = null) {
 }
 
 async function startRecording() {
-  await userEvent.click(screen.getByRole("button", { name: /Click to set/i }))
-  return screen.getByRole("textbox", { name: /Press keys to record shortcut/i })
+  await userEvent.click(screen.getByRole("button", { name: /点击设置/ }))
+  return screen.getByRole("textbox", { name: /按下要设置的快捷键/ })
 }
 
 describe("GlobalShortcutSection", () => {
@@ -43,7 +43,7 @@ describe("GlobalShortcutSection", () => {
     fireEvent.keyUp(textbox, { key: "Meta", code: "MetaLeft" })
 
     expect(onGlobalShortcutChange).toHaveBeenCalledWith("CommandOrControl+Shift+U")
-    expect(screen.queryByRole("textbox", { name: /Press keys/i })).toBeNull()
+    expect(screen.queryByRole("textbox", { name: /按下要设置的快捷键/ })).toBeNull()
   })
 
   it("maps Enter to Return and Numpad keys for display", async () => {
@@ -104,7 +104,7 @@ describe("GlobalShortcutSection", () => {
     fireEvent.keyUp(textbox, { key: "Meta", code: "MetaLeft" })
 
     expect(onGlobalShortcutChange).not.toHaveBeenCalled()
-    expect(screen.getByRole("textbox", { name: /Press keys/i })).toBeInTheDocument()
+    expect(screen.getByRole("textbox", { name: /按下要设置的快捷键/ })).toBeInTheDocument()
   })
 
   it("clears and exits recording on Escape", async () => {
@@ -112,41 +112,41 @@ describe("GlobalShortcutSection", () => {
     const trigger = screen.getByRole("button", { name: /Cmd \+ Shift \+ U/i })
     await userEvent.click(trigger)
 
-    const textbox = screen.getByRole("textbox", { name: /Press keys/i })
+    const textbox = screen.getByRole("textbox", { name: /按下要设置的快捷键/ })
     fireEvent.keyDown(textbox, { key: "Escape", code: "Escape" })
 
     expect(onGlobalShortcutChange).toHaveBeenCalledWith(null)
-    expect(screen.queryByRole("textbox", { name: /Press keys/i })).toBeNull()
+    expect(screen.queryByRole("textbox", { name: /按下要设置的快捷键/ })).toBeNull()
   })
 
   it("clears existing shortcut from clear button without starting recording", async () => {
     const { onGlobalShortcutChange } = renderSection("CommandOrControl+Shift+U")
-    await userEvent.click(screen.getByRole("button", { name: /Clear shortcut/i }))
+    await userEvent.click(screen.getByRole("button", { name: /清除快捷键/ }))
 
     expect(onGlobalShortcutChange).toHaveBeenCalledWith(null)
-    expect(screen.queryByRole("textbox", { name: /Press keys/i })).toBeNull()
+    expect(screen.queryByRole("textbox", { name: /按下要设置的快捷键/ })).toBeNull()
   })
 
   it("starts recording from keyboard activation keys", () => {
     renderSection()
-    const trigger = screen.getByRole("button", { name: /Click to set/i })
+    const trigger = screen.getByRole("button", { name: /点击设置/ })
 
     fireEvent.keyDown(trigger, { key: "Enter" })
-    expect(screen.getByRole("textbox", { name: /Press keys/i })).toBeInTheDocument()
+    expect(screen.getByRole("textbox", { name: /按下要设置的快捷键/ })).toBeInTheDocument()
 
-    fireEvent.blur(screen.getByRole("textbox", { name: /Press keys/i }))
-    expect(screen.queryByRole("textbox", { name: /Press keys/i })).toBeNull()
+    fireEvent.blur(screen.getByRole("textbox", { name: /按下要设置的快捷键/ }))
+    expect(screen.queryByRole("textbox", { name: /按下要设置的快捷键/ })).toBeNull()
 
     fireEvent.keyDown(trigger, { key: " " })
-    expect(screen.getByRole("textbox", { name: /Press keys/i })).toBeInTheDocument()
+    expect(screen.getByRole("textbox", { name: /按下要设置的快捷键/ })).toBeInTheDocument()
   })
 
   it("focuses the recording textbox after starting", async () => {
     vi.useFakeTimers()
     renderSection()
 
-    fireEvent.click(screen.getByRole("button", { name: /Click to set/i }))
-    const textbox = screen.getByRole("textbox", { name: /Press keys/i })
+    fireEvent.click(screen.getByRole("button", { name: /点击设置/ }))
+    const textbox = screen.getByRole("textbox", { name: /按下要设置的快捷键/ })
 
     await act(async () => {
       vi.advanceTimersByTime(10)
@@ -165,6 +165,6 @@ describe("GlobalShortcutSection", () => {
 
     fireEvent.blur(textbox)
     expect(onGlobalShortcutChange).not.toHaveBeenCalled()
-    expect(screen.queryByRole("textbox", { name: /Press keys/i })).toBeNull()
+    expect(screen.queryByRole("textbox", { name: /按下要设置的快捷键/ })).toBeNull()
   })
 })

@@ -51,7 +51,7 @@ export function useProbeAutoUpdate({
       setLoadingForPlugins(idleIds)
       startBatch(idleIds).catch((error) => {
         console.error("Failed to start auto-update batch:", error)
-        setErrorForPlugins(idleIds, "Failed to start probe")
+        setErrorForPlugins(idleIds, "无法开始刷新")
       })
       scheduleNext()
     }, intervalMs)

@@ -16,11 +16,11 @@ OpenUsageCN 常驻菜单栏，用一个轻量面板展示各类 AI 编程工具�
 - **自动刷新。** 按你设置的间隔自动更新。
 - **全局快捷键。** 可以用快捷键从任何地方打开或关闭面板。
 - **轻量常驻。** 启动快，不打断当前工作流。
-- **插件化 Provider。** 新服务通过插件接入，主程序保持稳定。
+- **插件化服务商。** 新服务通过插件接入，主程序保持稳定。
 - **[本地 HTTP API](docs/local-http-api.md)。** 其他本地工具可以从 `127.0.0.1:6736` 读取同一份用量数据。
-- **[代理支持](docs/proxy.md)。** Provider 请求可以走 SOCKS5 或 HTTP 代理。
+- **[代理支持](docs/proxy.md)。** 服务商请求可以走 SOCKS5 或 HTTP 代理。
 
-## 支持的 Provider
+## 支持的服务商
 
 - [**Amp**](docs/providers/amp.md)：免费额度、奖励额度、credits
 - [**Antigravity**](docs/providers/antigravity.md)：全部模型用量
@@ -40,15 +40,15 @@ OpenUsageCN 常驻菜单栏，用一个轻量面板展示各类 AI 编程工具�
 
 ## 参与项目
 
-OpenUsageCN 的 Provider 通过插件接入。新增或调整 Provider 时，优先查看 [Plugin API](docs/plugins/api.md)，并保持改动聚焦。
+OpenUsageCN 的服务商通过插件接入。新增或调整服务商时，优先查看 [Plugin API](docs/plugins/api.md)，并保持改动聚焦。
 
-- **新增 Provider。** 参考现有插件和 [Plugin API](docs/plugins/api.md)。
+- **新增服务商。** 参考现有插件和 [Plugin API](docs/plugins/api.md)。
 - **修复问题。** 尽量说明问题原因，并在适合时补充回归测试。
 - **提出需求。** 可以在 [GitHub Issues](https://github.com/cogine-ai/OpenUsageCN/issues/new) 描述你的使用场景。
 
 ## 项目来源
 
-OpenUsageCN 基于 OpenUsage fork 并面向中文本地化使用场景调整。项目也参考了 [CodexBar](https://github.com/steipete/CodexBar) 的产品方向。
+OpenUsageCN 基于 OpenUsage 二次开发，并面向中文本地化使用场景调整。项目也参考了 [CodexBar](https://github.com/steipete/CodexBar) 的产品方向。
 
 ## 许可证
 

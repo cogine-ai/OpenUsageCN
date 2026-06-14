@@ -20,7 +20,7 @@ async function fetchReleaseByTag(tag: string): Promise<Release | null> {
   }
 
   if (!res.ok) {
-    throw new Error("Failed to fetch releases")
+    throw new Error("无法获取更新说明")
   }
 
   const data = (await res.json()) as Release
@@ -57,10 +57,9 @@ export function useChangelog(currentVersion: string) {
           setError(null)
         }
       } catch (err) {
+        console.error("Failed to load changelog:", err)
         if (mounted) {
-          const message =
-            err instanceof Error ? err.message : "Failed to fetch releases"
-          setError(message)
+          setError("无法获取更新说明")
         }
       } finally {
         if (mounted) {

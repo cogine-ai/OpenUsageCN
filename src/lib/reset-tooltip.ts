@@ -40,9 +40,9 @@ export function formatResetRelativeLabel(nowMs: number, resetsAtIso: string): st
   const resetsAtMs = parseResetTimestamp(resetsAtIso)
   if (resetsAtMs === null) return null
   const deltaMs = resetsAtMs - nowMs
-  if (deltaMs < RESET_SOON_THRESHOLD_MS) return "Resets soon"
+  if (deltaMs < RESET_SOON_THRESHOLD_MS) return "即将重置"
   const durationText = formatCompactDuration(deltaMs)
-  return durationText ? `Resets in ${durationText}` : null
+  return durationText ? `${durationText}后重置` : null
 }
 
 export function formatResetAbsoluteLabel(
@@ -52,13 +52,13 @@ export function formatResetAbsoluteLabel(
 ): string | null {
   const resetsAtMs = parseResetTimestamp(resetsAtIso)
   if (resetsAtMs === null) return null
-  if (resetsAtMs - nowMs <= 0) return "Resets soon"
+  if (resetsAtMs - nowMs <= 0) return "即将重置"
   const dayDiff = getLocalDayIndex(resetsAtMs) - getLocalDayIndex(nowMs)
   const timeText = getTimeFormatter(timeFormatMode).format(resetsAtMs)
-  if (dayDiff <= 0) return `Resets today at ${timeText}`
-  if (dayDiff === 1) return `Resets tomorrow at ${timeText}`
+  if (dayDiff <= 0) return `今日 ${timeText} 重置`
+  if (dayDiff === 1) return `明日 ${timeText} 重置`
   const dateText = formatMonthDay(resetsAtMs)
-  return `Resets ${dateText} at ${timeText}`
+  return `${dateText} ${timeText} 重置`
 }
 
 export function formatResetTooltipText({
