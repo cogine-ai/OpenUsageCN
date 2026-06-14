@@ -56,11 +56,11 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
     let current_level = get_stored_log_level(app_handle);
     log::set_max_level(current_level);
 
-    let show_stats = MenuItem::with_id(app_handle, "show_stats", "Show Stats", true, None::<&str>)?;
+    let show_stats = MenuItem::with_id(app_handle, "show_stats", "显示用量", true, None::<&str>)?;
     let go_to_settings = MenuItem::with_id(
         app_handle,
         "go_to_settings",
-        "Go to Settings",
+        "打开设置",
         true,
         None::<&str>,
     )?;
@@ -69,7 +69,7 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
     let log_error = CheckMenuItem::with_id(
         app_handle,
         "log_error",
-        "Error",
+        "错误",
         true,
         current_level == log::LevelFilter::Error,
         None::<&str>,
@@ -77,7 +77,7 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
     let log_warn = CheckMenuItem::with_id(
         app_handle,
         "log_warn",
-        "Warn",
+        "警告",
         true,
         current_level == log::LevelFilter::Warn,
         None::<&str>,
@@ -85,7 +85,7 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
     let log_info = CheckMenuItem::with_id(
         app_handle,
         "log_info",
-        "Info",
+        "信息",
         true,
         current_level == log::LevelFilter::Info,
         None::<&str>,
@@ -93,7 +93,7 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
     let log_debug = CheckMenuItem::with_id(
         app_handle,
         "log_debug",
-        "Debug",
+        "调试",
         true,
         current_level == log::LevelFilter::Debug,
         None::<&str>,
@@ -101,7 +101,7 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
     let log_trace = CheckMenuItem::with_id(
         app_handle,
         "log_trace",
-        "Trace",
+        "跟踪",
         true,
         current_level == log::LevelFilter::Trace,
         None::<&str>,
@@ -110,13 +110,13 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
     let copy_log_path = MenuItem::with_id(
         app_handle,
         "copy_log_path",
-        "Copy Log Path",
+        "复制日志路径",
         true,
         None::<&str>,
     )?;
     let log_level_submenu = Submenu::with_items(
         app_handle,
-        "Debug Level",
+        "日志级别",
         true,
         &[
             &log_error,
@@ -139,8 +139,8 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
     ];
 
     let separator = PredefinedMenuItem::separator(app_handle)?;
-    let about = MenuItem::with_id(app_handle, "about", "About OpenUsageCN", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app_handle, "quit", "Quit", true, None::<&str>)?;
+    let about = MenuItem::with_id(app_handle, "about", "关于 OpenUsageCN", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app_handle, "quit", "退出", true, None::<&str>)?;
 
     let menu = Menu::with_items(
         app_handle,

@@ -59,42 +59,42 @@ const MENUBAR_ICON_STYLES: MenubarIconStyle[] = ["provider", "donut", "bars"];
 const MENUBAR_METRICS: MenubarMetric[] = ["default", "weekly"];
 
 export const MENUBAR_ICON_STYLE_OPTIONS: { value: MenubarIconStyle; label: string }[] = [
-  { value: "provider", label: "Plugin" },
-  { value: "donut", label: "Donut" },
-  { value: "bars", label: "Bars" },
+  { value: "provider", label: "服务商" },
+  { value: "donut", label: "圆环" },
+  { value: "bars", label: "条形" },
 ];
 
 export const MENUBAR_METRIC_OPTIONS: { value: MenubarMetric; label: string }[] = [
-  { value: "default", label: "Default" },
-  { value: "weekly", label: "Weekly" },
+  { value: "default", label: "默认" },
+  { value: "weekly", label: "每周" },
 ];
 
 export const AUTO_UPDATE_OPTIONS: { value: AutoUpdateIntervalMinutes; label: string }[] =
   AUTO_UPDATE_INTERVALS.map((value) => ({
     value,
-    label: value === 60 ? "1 hour" : `${value} min`,
+    label: value === 60 ? "1 小时" : `${value} 分钟`,
   }));
 
-export const THEME_OPTIONS: { value: ThemeMode; label: string }[] =
-  THEME_MODES.map((value) => ({
-    value,
-    label: value.charAt(0).toUpperCase() + value.slice(1),
-  }));
+export const THEME_OPTIONS: { value: ThemeMode; label: string }[] = [
+  { value: "system", label: "跟随系统" },
+  { value: "light", label: "浅色" },
+  { value: "dark", label: "深色" },
+];
 
 export const DISPLAY_MODE_OPTIONS: { value: DisplayMode; label: string }[] = [
-  { value: "left", label: "Left" },
-  { value: "used", label: "Used" },
+  { value: "left", label: "剩余" },
+  { value: "used", label: "已用" },
 ];
 
 export const RESET_TIMER_DISPLAY_OPTIONS: { value: ResetTimerDisplayMode; label: string }[] = [
-  { value: "relative", label: "Relative" },
-  { value: "absolute", label: "Absolute" },
+  { value: "relative", label: "倒计时" },
+  { value: "absolute", label: "具体时间" },
 ];
 
 export const TIME_FORMAT_OPTIONS: { value: TimeFormatMode; label: string }[] = [
-  { value: "auto", label: "Auto" },
-  { value: "12h", label: "12-hour" },
-  { value: "24h", label: "24-hour" },
+  { value: "auto", label: "自动" },
+  { value: "12h", label: "12 小时" },
+  { value: "24h", label: "24 小时" },
 ];
 
 const store = new LazyStore(SETTINGS_STORE_PATH);

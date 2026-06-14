@@ -234,18 +234,18 @@ export function GlobalShortcutSection({
   const getDisplayValue = (): string => {
     if (isRecording) {
       if (pendingDisplay) return pendingDisplay
-      return "Press keys..."
+      return "请按快捷键..."
     }
-    return globalShortcut ? formatShortcutForDisplay(globalShortcut) : "Click to set"
+    return globalShortcut ? formatShortcutForDisplay(globalShortcut) : "点击设置"
   }
 
   const hasShortcut = globalShortcut !== null
 
   return (
     <section>
-      <h3 className="text-lg font-semibold mb-0">Global Shortcut</h3>
+      <h3 className="text-lg font-semibold mb-0">全局快捷键</h3>
       <p className="text-sm text-muted-foreground mb-2">
-        Show panel from anywhere
+        随时打开面板
       </p>
       <div className="space-y-2">
         {isRecording ? (
@@ -253,7 +253,7 @@ export function GlobalShortcutSection({
             ref={recordingRef}
             tabIndex={0}
             role="textbox"
-            aria-label="Press keys to record shortcut"
+            aria-label="按下要设置的快捷键"
             onKeyDown={handleKeyDown}
             onKeyUp={handleKeyUp}
             onBlur={handleBlur}
@@ -283,18 +283,18 @@ export function GlobalShortcutSection({
                 type="button"
                 onClick={handleClear}
                 className="ml-auto p-0.5 rounded hover:bg-background/50 text-muted-foreground hover:text-foreground transition-colors"
-                aria-label="Clear shortcut"
+                aria-label="清除快捷键"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
             ) : (
-              <span className="ml-auto text-xs text-muted-foreground">Click to set</span>
+              <span className="ml-auto text-xs text-muted-foreground">点击设置</span>
             )}
           </div>
         )}
       </div>
       <p className="mt-2 text-xs text-muted-foreground">
-        Press Escape while recording to clear.
+        录制时按 Escape 可清除。
       </p>
     </section>
   )

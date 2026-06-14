@@ -28,6 +28,7 @@ describe("AboutDialog", () => {
     expect(screen.getByText("OpenUsageCN")).toBeInTheDocument()
     expect(screen.getByText("v1.2.3")).toBeInTheDocument()
     expect(screen.getByText("由 Cogine AI 维护")).toBeInTheDocument()
+    expect(screen.getByText("基于 OpenUsage 二次开发并本地化")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "GitHub" })).toBeInTheDocument()
   })
 
@@ -50,7 +51,7 @@ describe("AboutDialog", () => {
     render(<AboutDialog version="1.2.3" onClose={onClose} />)
 
     // Switch to changelog view.
-    await userEvent.click(screen.getByRole("button", { name: "View Changelog" }))
+    await userEvent.click(screen.getByRole("button", { name: "更新说明" }))
 
     // Press Escape; should go back to About view, not close.
     await userEvent.keyboard("{Escape}")

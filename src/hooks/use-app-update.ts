@@ -10,7 +10,7 @@ export type UpdateStatus =
   | { status: "downloading"; progress: number } // 0-100, or -1 if indeterminate
   | { status: "installing" }
   | { status: "ready" }
-  | { status: "error"; message: string }
+  | { status: "error"; kind: "check-failed" | "download-failed" | "install-failed"; message: string }
 
 interface UseAppUpdateReturn {
   updateStatus: UpdateStatus
@@ -87,7 +87,7 @@ export function useAppUpdate(): UseAppUpdateReturn {
           setStatus({ status: "ready" })
         } catch (err) {
           console.error("Update download failed:", err)
-          setStatus({ status: "error", message: "Download failed" })
+          setStatus({ status: "error", kind: "download-failed", message: "下载失败" })
         } finally {
           inFlightRef.current.downloading = false
         }
@@ -96,7 +96,7 @@ export function useAppUpdate(): UseAppUpdateReturn {
       inFlightRef.current.checking = false
       if (!mountedRef.current) return
       console.error("Update check failed:", err)
-      setStatus({ status: "error", message: "Update check failed" })
+      setStatus({ status: "error", kind: "check-failed", message: "更新检查失败" })
     }
   }, [setStatus])
 
@@ -132,7 +132,7 @@ export function useAppUpdate(): UseAppUpdateReturn {
       setStatus({ status: "idle" })
     } catch (err) {
       console.error("Update install failed:", err)
-      setStatus({ status: "error", message: "Install failed" })
+      setStatus({ status: "error", kind: "install-failed", message: "安装失败" })
     } finally {
       inFlightRef.current.installing = false
     }

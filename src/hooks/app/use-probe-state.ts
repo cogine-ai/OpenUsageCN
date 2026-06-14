@@ -33,7 +33,7 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
     if (output.lines.length !== 1) return null
     const line = output.lines[0]
     if (line.type === "badge" && line.label === "Error") {
-      return line.text || "Couldn't update data. Try again?"
+      return line.text || "无法更新数据，请重试。"
     }
     return null
   }, [])

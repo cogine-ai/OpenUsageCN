@@ -22,7 +22,7 @@ export function ProviderDetailPage({
   if (!plugin) {
     return (
       <div className="text-center text-muted-foreground py-8">
-        Provider not found
+        未找到服务商
       </div>
     )
   }

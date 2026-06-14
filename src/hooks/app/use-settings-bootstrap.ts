@@ -198,7 +198,7 @@ export function useSettingsBootstrap({
           } catch (error) {
             console.error("Failed to start probe batch:", error)
             if (isMounted) {
-              setErrorForPlugins(enabledIds, "Failed to start probe")
+              setErrorForPlugins(enabledIds, "无法开始刷新")
             }
           }
         }

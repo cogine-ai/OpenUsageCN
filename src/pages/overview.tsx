@@ -22,7 +22,7 @@ export function OverviewPage({
   if (plugins.length === 0) {
     return (
       <div className="text-center text-muted-foreground py-8">
-        No providers enabled
+        尚未启用服务商
       </div>
     )
   }

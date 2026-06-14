@@ -120,6 +120,7 @@ describe("useChangelog", () => {
   })
 
   it("sets error when fetch fails with non-404", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
     const badResponse = {
       ok: false,
       status: 500,
@@ -134,8 +135,9 @@ describe("useChangelog", () => {
     await waitFor(() => {
       expect(result.current.loading).toBe(false)
       expect(result.current.releases).toHaveLength(0)
-      expect(result.current.error).toBe("Failed to fetch releases")
+      expect(result.current.error).toBe("无法获取更新说明")
     })
+    expect(errorSpy).toHaveBeenCalled()
+    errorSpy.mockRestore()
   })
 })
-

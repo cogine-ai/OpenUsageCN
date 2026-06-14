@@ -159,7 +159,7 @@ describe("useAppUpdate", () => {
     const { result } = renderHook(() => useAppUpdate())
     await act(() => Promise.resolve())
     await act(() => Promise.resolve())
-    expect(result.current.updateStatus).toEqual({ status: "error", message: "Update check failed" })
+    expect(result.current.updateStatus).toEqual({ status: "error", kind: "check-failed", message: "更新检查失败" })
   })
 
   it("reports indeterminate progress when content length is unknown", async () => {
@@ -204,7 +204,7 @@ describe("useAppUpdate", () => {
     await act(() => Promise.resolve())
     await act(() => Promise.resolve()) // extra tick for error to propagate
 
-    expect(result.current.updateStatus).toEqual({ status: "error", message: "Download failed" })
+    expect(result.current.updateStatus).toEqual({ status: "error", kind: "download-failed", message: "下载失败" })
   })
 
   it("installs and relaunches when ready", async () => {
@@ -238,7 +238,7 @@ describe("useAppUpdate", () => {
     await act(() => Promise.resolve()) // wait for download
 
     await act(() => result.current.triggerInstall())
-    expect(result.current.updateStatus).toEqual({ status: "error", message: "Install failed" })
+    expect(result.current.updateStatus).toEqual({ status: "error", kind: "install-failed", message: "安装失败" })
   })
 
   it("does not update state after unmount during check", async () => {

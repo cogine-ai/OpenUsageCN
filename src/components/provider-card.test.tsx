@@ -56,7 +56,7 @@ describe("ProviderCard", () => {
       />
     )
     expect(screen.getByText("Nope")).toBeInTheDocument()
-    await userEvent.click(screen.getByRole("button", { name: "Retry" }))
+    await userEvent.click(screen.getByRole("button", { name: "刷新" }))
     expect(onRetry).toHaveBeenCalledTimes(1)
   })
 
@@ -157,7 +157,7 @@ describe("ProviderCard", () => {
         onRetry={() => {}}
       />
     )
-    expect(screen.getByText("Available in 1m 5s")).toBeInTheDocument()
+    expect(screen.getByText("1 分 5 秒后可刷新")).toBeInTheDocument()
   })
 
   it("shows seconds-only cooldown", () => {
@@ -173,7 +173,7 @@ describe("ProviderCard", () => {
         onRetry={() => {}}
       />
     )
-    expect(screen.getByText("Available in 30s")).toBeInTheDocument()
+    expect(screen.getByText("30 秒后可刷新")).toBeInTheDocument()
     vi.useRealTimers()
   })
 
@@ -198,7 +198,7 @@ describe("ProviderCard", () => {
         ]}
       />
     )
-    expect(screen.getByText("58% left")).toBeInTheDocument()
+    expect(screen.getByText("剩余 58%")).toBeInTheDocument()
     expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "58")
   })
 
@@ -249,7 +249,7 @@ describe("ProviderCard", () => {
         ]}
       />
     )
-    expect(screen.getByText("Resets in 1h 5m")).toBeInTheDocument()
+    expect(screen.getByText("1 小时 5 分钟后重置")).toBeInTheDocument()
     expect(
       screen.getByText(
         formatResetTooltipText({
@@ -280,11 +280,11 @@ describe("ProviderCard", () => {
       />
     )
 
-    expect(screen.getByText("100% cap")).toBeInTheDocument()
+    expect(screen.getByText("100% 上限")).toBeInTheDocument()
     expect(screen.queryByText(/^Next reset:/)).not.toBeInTheDocument()
   })
 
-  it("shows 'Resets soon' when reset is under 5 minutes away", () => {
+  it("shows '即将重置' when reset is under 5 minutes away", () => {
     vi.useFakeTimers()
     const now = new Date("2026-02-02T00:00:00.000Z")
     vi.setSystemTime(now)
@@ -304,7 +304,7 @@ describe("ProviderCard", () => {
         ]}
       />
     )
-    expect(screen.getByText("Resets soon")).toBeInTheDocument()
+    expect(screen.getByText("即将重置")).toBeInTheDocument()
     vi.useRealTimers()
   })
 
@@ -328,11 +328,11 @@ describe("ProviderCard", () => {
         ]}
       />
     )
-    expect(screen.getByText("Resets in 5m")).toBeInTheDocument()
+    expect(screen.getByText("5 分钟后重置")).toBeInTheDocument()
     vi.useRealTimers()
   })
 
-  it("shows 'Resets soon' for stale reset timestamps in relative mode", () => {
+  it("shows '即将重置' for stale reset timestamps in relative mode", () => {
     vi.useFakeTimers()
     const now = new Date("2026-02-02T00:06:00.000Z")
     vi.setSystemTime(now)
@@ -352,11 +352,11 @@ describe("ProviderCard", () => {
         ]}
       />
     )
-    expect(screen.getAllByText("Resets soon")).toHaveLength(2)
+    expect(screen.getAllByText("即将重置")).toHaveLength(2)
     vi.useRealTimers()
   })
 
-  it("shows 'Resets soon' for stale reset timestamps in absolute mode", () => {
+  it("shows '即将重置' for stale reset timestamps in absolute mode", () => {
     vi.useFakeTimers()
     const now = new Date("2026-02-02T00:06:00.000Z")
     vi.setSystemTime(now)
@@ -377,7 +377,7 @@ describe("ProviderCard", () => {
         ]}
       />
     )
-    expect(screen.getAllByText("Resets soon")).toHaveLength(2)
+    expect(screen.getAllByText("即将重置")).toHaveLength(2)
     vi.useRealTimers()
   })
 
@@ -405,7 +405,7 @@ describe("ProviderCard", () => {
         ]}
       />
     )
-    const resetButton = screen.getByRole("button", { name: /^Resets today at / })
+    const resetButton = screen.getByRole("button", { name: /^今日 .* 重置$/ })
     expect(resetButton).toBeInTheDocument()
     expect(
       screen.getByText(
@@ -443,7 +443,7 @@ describe("ProviderCard", () => {
         ]}
       />
     )
-    expect(screen.getByText(/^Resets tomorrow at /)).toBeInTheDocument()
+    expect(screen.getByText(/^明日 .* 重置$/)).toBeInTheDocument()
     vi.useRealTimers()
   })
 
@@ -471,7 +471,7 @@ describe("ProviderCard", () => {
       />
     )
     expect(
-      screen.getByText((content) => content.startsWith(`Resets ${dateText} at `))
+      screen.getByText((content) => content.startsWith(`${dateText} `) && content.endsWith(" 重置"))
     ).toBeInTheDocument()
     vi.useRealTimers()
   })
@@ -500,7 +500,7 @@ describe("ProviderCard", () => {
       />
     )
     expect(
-      screen.getByText((content) => content.startsWith(`Resets ${dateText} at `))
+      screen.getByText((content) => content.startsWith(`${dateText} `) && content.endsWith(" 重置"))
     ).toBeInTheDocument()
     vi.useRealTimers()
   })
@@ -544,12 +544,12 @@ describe("ProviderCard", () => {
         ]}
       />
     )
-    expect(screen.getByLabelText("Plenty of room")).toBeInTheDocument()
-    expect(screen.getByLabelText("Right on target")).toBeInTheDocument()
-    expect(screen.getByLabelText("Will run out")).toBeInTheDocument()
-    expect(screen.getByText("60% used at reset")).toBeInTheDocument()
-    expect(screen.getByText("90% used at reset")).toBeInTheDocument()
-    expect(screen.getByText("Limit in 8h 0m")).toBeInTheDocument()
+    expect(screen.getByLabelText("余量充足")).toBeInTheDocument()
+    expect(screen.getByLabelText("节奏正常")).toBeInTheDocument()
+    expect(screen.getByLabelText("可能用完")).toBeInTheDocument()
+    expect(screen.getByText("重置时已用 60%")).toBeInTheDocument()
+    expect(screen.getByText("重置时已用 90%")).toBeInTheDocument()
+    expect(screen.getByText("8 小时后达上限")).toBeInTheDocument()
 
     // On-track hides the marker (like CodexBar); only ahead + behind show it
     const markers = document.querySelectorAll<HTMLElement>('[data-slot="progress-marker"]')
@@ -582,10 +582,10 @@ describe("ProviderCard", () => {
         ]}
       />
     )
-    expect(screen.getByLabelText("Limit reached")).toBeInTheDocument()
-    expect(screen.getByText("Limit reached")).toBeInTheDocument()
-    expect(screen.queryByText(/in deficit/i)).not.toBeInTheDocument()
-    expect(screen.queryByText(/runs out in/i)).not.toBeInTheDocument()
+    expect(screen.getByLabelText("已达上限")).toBeInTheDocument()
+    expect(screen.getByText("已达上限")).toBeInTheDocument()
+    expect(screen.queryByText(/超节奏/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/预计 .*后用完/)).not.toBeInTheDocument()
     vi.useRealTimers()
   })
 
@@ -610,11 +610,11 @@ describe("ProviderCard", () => {
         ]}
       />
     )
-    expect(screen.getByLabelText("Will run out")).toBeInTheDocument()
-    expect(screen.getByText(/^Runs out in /)).toBeInTheDocument()
-    expect(screen.queryByText("0% in deficit")).not.toBeInTheDocument()
-    expect(screen.queryByText("0% short")).not.toBeInTheDocument()
-    expect(screen.queryByText(/in deficit/i)).not.toBeInTheDocument()
+    expect(screen.getByLabelText("可能用完")).toBeInTheDocument()
+    expect(screen.getByText(/^预计 .*后用完$/)).toBeInTheDocument()
+    expect(screen.queryByText("0% 超节奏")).not.toBeInTheDocument()
+    expect(screen.queryByText("0% 缺口")).not.toBeInTheDocument()
+    expect(screen.queryByText(/超节奏/)).not.toBeInTheDocument()
     vi.useRealTimers()
   })
 
@@ -639,8 +639,8 @@ describe("ProviderCard", () => {
         ]}
       />
     )
-    expect(screen.getByText("Plenty of room")).toBeInTheDocument()
-    expect(screen.queryByText(/at reset/)).not.toBeInTheDocument()
+    expect(screen.getByText("余量充足")).toBeInTheDocument()
+    expect(screen.queryByText(/重置时/)).not.toBeInTheDocument()
     vi.useRealTimers()
   })
 
@@ -665,7 +665,7 @@ describe("ProviderCard", () => {
         ]}
       />
     )
-    expect(screen.queryByLabelText("Plenty of room")).not.toBeInTheDocument()
+    expect(screen.queryByLabelText("余量充足")).not.toBeInTheDocument()
     expect(document.querySelector('[data-slot="progress-marker"]')).toBeNull()
     vi.useRealTimers()
   })
@@ -914,11 +914,11 @@ describe("ProviderCard", () => {
         lines={[{ type: "text", label: "Label", value: "Value" }]}
       />
     )
-    expect(screen.getByText(/Updated 2m ago/)).toBeInTheDocument()
+    expect(screen.getByText(/2 分钟前更新/)).toBeInTheDocument()
     vi.useRealTimers()
   })
 
-  it("shows 'just now' for very recent last-updated timestamps", () => {
+  it("shows '刚刚' for very recent last-updated timestamps", () => {
     vi.useFakeTimers()
     const now = new Date("2026-02-02T00:05:00.000Z")
     vi.setSystemTime(now)
@@ -931,7 +931,7 @@ describe("ProviderCard", () => {
         lines={[{ type: "text", label: "Label", value: "Value" }]}
       />
     )
-    expect(screen.getByText(/Updated just now/)).toBeInTheDocument()
+    expect(screen.getByText(/刚刚更新/)).toBeInTheDocument()
     vi.useRealTimers()
   })
 
@@ -948,7 +948,7 @@ describe("ProviderCard", () => {
         lines={[{ type: "text", label: "Label", value: "Value" }]}
       />
     )
-    expect(screen.getByText(/Updated just now/)).toBeInTheDocument()
+    expect(screen.getByText(/刚刚更新/)).toBeInTheDocument()
     vi.useRealTimers()
   })
 
@@ -961,7 +961,7 @@ describe("ProviderCard", () => {
         lines={[{ type: "text", label: "Label", value: "Value" }]}
       />
     )
-    expect(screen.queryByText(/Updated/)).toBeNull()
+    expect(screen.queryByText(/更新/)).toBeNull()
   })
 })
 

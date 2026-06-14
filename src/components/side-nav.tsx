@@ -178,19 +178,19 @@ export function SideNav({
       ;(async () => {
         const reloadItem = await MenuItem.new({
           id: `ctx-reload-${pluginId}`,
-          text: "Refresh usage",
+          text: "刷新用量",
           enabled: isPluginRefreshAvailable ? isPluginRefreshAvailable(pluginId) : true,
           action: () => onPluginContextAction(pluginId, "reload"),
         })
         const removeItem = await MenuItem.new({
           id: `ctx-remove-${pluginId}`,
-          text: "Disable plugin",
+          text: "停用服务商",
           action: () => onPluginContextAction(pluginId, "remove"),
         })
         const bottomSeparator = await PredefinedMenuItem.new({ item: "Separator" })
         const inspectItem = await MenuItem.new({
           id: `ctx-inspect-${pluginId}`,
-          text: "Inspect Element",
+          text: "检查元素",
           action: () => {
             invoke("open_devtools").catch(console.error)
           },
@@ -220,7 +220,7 @@ export function SideNav({
       <NavButton
         isActive={activeView === "home"}
         onClick={() => onViewChange("home")}
-        aria-label="Home"
+        aria-label="总览"
       >
         <GaugeIcon className="size-6 dark:text-page-accent" />
       </NavButton>
@@ -257,7 +257,7 @@ export function SideNav({
           openUrl("https://github.com/cogine-ai/OpenUsageCN/issues").catch(console.error)
           invoke("hide_panel").catch(console.error)
         }}
-        aria-label="Help"
+        aria-label="帮助"
       >
         <CircleHelp className="size-6" />
       </NavButton>
@@ -266,7 +266,7 @@ export function SideNav({
       <NavButton
         isActive={activeView === "settings"}
         onClick={() => onViewChange("settings")}
-        aria-label="Settings"
+        aria-label="设置"
       >
         <Settings className="size-6" />
       </NavButton>

@@ -137,7 +137,7 @@ describe("useProbeRefreshActions", () => {
     })
 
     await waitFor(() => {
-      expect(setErrorForPlugins).toHaveBeenCalledWith(["codex"], "Failed to start probe")
+      expect(setErrorForPlugins).toHaveBeenCalledWith(["codex"], "无法开始刷新")
       expect(errorSpy).toHaveBeenCalledWith("Failed to retry plugin:", failure)
     })
 

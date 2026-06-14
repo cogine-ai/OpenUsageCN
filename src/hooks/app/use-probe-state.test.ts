@@ -16,4 +16,19 @@ describe("useProbeState", () => {
     expect(loadingImmediatelyAfterSet).toBe(true)
     expect(result.current.pluginStates.codex?.loading).toBe(true)
   })
+
+  it("uses Chinese fallback text for empty plugin error output", () => {
+    const { result } = renderHook(() => useProbeState({}))
+
+    act(() => {
+      result.current.handleProbeResult({
+        providerId: "codex",
+        displayName: "Codex",
+        iconUrl: "",
+        lines: [{ type: "badge", label: "Error", text: "" }],
+      })
+    })
+
+    expect(result.current.pluginStates.codex?.error).toBe("无法更新数据，请重试。")
+  })
 })

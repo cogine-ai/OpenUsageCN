@@ -242,7 +242,7 @@ describe("useSettingsPluginActions", () => {
     })
 
     await waitFor(() => {
-      expect(setErrorForPlugins).toHaveBeenCalledWith(["a"], "Failed to start probe")
+      expect(setErrorForPlugins).toHaveBeenCalledWith(["a"], "无法开始刷新")
       expect(errorSpy).toHaveBeenCalledWith("Failed to start probe for enabled plugin:", startError)
       expect(errorSpy).toHaveBeenCalledWith("Failed to save plugin toggle:", saveError)
     })

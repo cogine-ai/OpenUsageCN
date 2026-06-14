@@ -64,13 +64,13 @@ function PaceIndicator({
           <span
             {...props}
             className={`inline-block w-2 h-2 rounded-full ${colorClass}`}
-            aria-label={isLimitReached ? "Limit reached" : statusText}
+            aria-label={isLimitReached ? "已达上限" : statusText}
           />
         )}
       />
       <TooltipContent side="top" className="text-xs text-center">
         {isLimitReached ? (
-          "Limit reached"
+          "已达上限"
         ) : (
           <>
             <div>{statusText}</div>
@@ -84,13 +84,13 @@ function PaceIndicator({
 
 function formatRelativeTime(diffMs: number): string {
   const seconds = Math.floor(Math.max(0, diffMs) / 1000)
-  if (seconds < 60) return "just now"
+  if (seconds < 60) return "刚刚"
   const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes}m ago`
+  if (minutes < 60) return `${minutes} 分钟前`
   const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
+  if (hours < 24) return `${hours} 小时前`
   const days = Math.floor(hours / 24)
-  return `${days}d ago`
+  return `${days} 天前`
 }
 
 export function ProviderCard({
@@ -176,9 +176,9 @@ export function ProviderCard({
     const minutes = Math.floor(totalSeconds / 60)
     const seconds = totalSeconds % 60
     if (minutes > 0) {
-      return `Available in ${minutes}m ${seconds}s`
+      return seconds > 0 ? `${minutes} 分 ${seconds} 秒后可刷新` : `${minutes} 分钟后可刷新`
     }
-    return `Available in ${seconds}s`
+    return `${seconds} 秒后可刷新`
   }
 
   return (
@@ -229,7 +229,7 @@ export function ProviderCard({
                         {...props}
                         variant="ghost"
                         size="icon-xs"
-                        aria-label="Retry"
+                        aria-label="刷新"
                         onClick={(e) => {
                           e.currentTarget.blur()
                           onRetry()
@@ -243,7 +243,7 @@ export function ProviderCard({
                   />
                   {lastUpdatedAt != null && (
                     <TooltipContent side="top">
-                      Updated {formatRelativeTime(Date.now() - lastUpdatedAt)}
+                      {formatRelativeTime(Date.now() - lastUpdatedAt)}更新
                     </TooltipContent>
                   )}
                 </Tooltip>
@@ -427,14 +427,18 @@ function MetricLineRenderer({
         ? line.used
         : Math.max(0, line.limit - line.used)
     const percent = Math.round(clamp01(shownAmount / line.limit) * 10000) / 100
-    const leftSuffix = displayMode === "left" ? " left" : ""
-
     const primaryText =
-      line.format.kind === "percent"
-        ? `${Math.round(shownAmount)}%${leftSuffix}`
-        : line.format.kind === "dollars"
-          ? `$${formatFixedPrecisionNumber(shownAmount)}${leftSuffix}`
-          : `${formatCountNumber(shownAmount)} ${line.format.suffix}${leftSuffix}`
+      displayMode === "left"
+        ? line.format.kind === "percent"
+          ? `剩余 ${Math.round(shownAmount)}%`
+          : line.format.kind === "dollars"
+            ? `剩余 $${formatFixedPrecisionNumber(shownAmount)}`
+            : `剩余 ${formatCountNumber(shownAmount)} ${line.format.suffix}`
+        : line.format.kind === "percent"
+          ? `${Math.round(shownAmount)}%`
+          : line.format.kind === "dollars"
+            ? `$${formatFixedPrecisionNumber(shownAmount)}`
+            : `${formatCountNumber(shownAmount)} ${line.format.suffix}`
 
     const resetLabel = line.resetsAt
       ? resetTimerDisplayMode === "absolute"
@@ -453,10 +457,10 @@ function MetricLineRenderer({
     const secondaryText =
       resetLabel ??
       (line.format.kind === "percent"
-        ? `${line.limit}% cap`
+        ? `${line.limit}% 上限`
         : line.format.kind === "dollars"
-          ? `$${formatFixedPrecisionNumber(line.limit)} limit`
-          : `${formatCountNumber(line.limit)} ${line.format.suffix}`)
+          ? `$${formatFixedPrecisionNumber(line.limit)} 上限`
+          : `${formatCountNumber(line.limit)} ${line.format.suffix} 上限`)
 
     // Calculate pace status if we have reset time and period duration
     const paceResult = hasPaceContext
