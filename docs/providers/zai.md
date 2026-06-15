@@ -25,7 +25,7 @@ Tracks [Z.ai](https://z.ai) (Zhipu AI) usage quotas for GLM coding plans.
 The Settings value is used first. If the field is empty, `ZAI_API_KEY` is supported as an environment fallback.
 `GLM_API_KEY` is also supported as a second fallback.
 
-API keys entered in Settings are stored as plaintext in `~/.openusagecn/providers.json`, protected only by best-effort private file permissions (`0600` on macOS/Linux).
+API keys entered in Settings are stored as plaintext in `~/.openusagecn/providers.json`, protected only by best-effort private file permissions (`0600` on macOS/Linux). Windows stores the same plaintext JSON with the platform's default file permissions.
 
 If you use environment variables, remember that OpenUsageCN is a GUI app. A one-off `export ...` in a terminal session will not be visible when you launch OpenUsageCN from
 Spotlight/Launchpad. Persist it, then restart OpenUsageCN.
@@ -177,7 +177,7 @@ Returns session token usage and web search quotas.
 
 | Condition     | Message                                                    |
 |---------------|------------------------------------------------------------|
-| No API key    | "No Z.ai API key found. Add it in Settings or set ZAI_API_KEY." |
+| No API key    | "No Z.ai API key found. Add it in Settings or set ZAI_API_KEY/GLM_API_KEY." |
 | 401/403       | "API key invalid. Check your Z.ai API key."                |
 | HTTP error    | "Usage request failed (HTTP {status}). Try again later."   |
 | Network error | "Usage request failed. Check your connection."             |

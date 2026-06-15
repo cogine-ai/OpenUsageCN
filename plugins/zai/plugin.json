@@ -12,7 +12,7 @@
         "id": "apiKey",
         "type": "secret",
         "label": "API Key",
-        "placeholder": "zai-...",
+        "placeholder": "key.secret",
         "help": "留空则使用 ZAI_API_KEY 或 GLM_API_KEY 环境变量"
       }
     ]

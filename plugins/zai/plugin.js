@@ -106,7 +106,7 @@
   function probe(ctx) {
     const apiKey = loadApiKey(ctx)
     if (!apiKey) {
-      throw "No Z.ai API key found. Add it in Settings or set ZAI_API_KEY."
+      throw "No Z.ai API key found. Add it in Settings or set ZAI_API_KEY/GLM_API_KEY."
     }
 
     const sub = fetchSubscription(ctx, apiKey)

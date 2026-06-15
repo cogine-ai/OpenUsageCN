@@ -120,7 +120,7 @@ describe("zai plugin", () => {
   it("throws when no env vars set", async () => {
     const ctx = makeCtx()
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("No Z.ai API key found. Add it in Settings or set ZAI_API_KEY.")
+    expect(() => plugin.probe(ctx)).toThrow("No Z.ai API key found. Add it in Settings or set ZAI_API_KEY/GLM_API_KEY.")
   })
 
   it("uses ZAI_API_KEY when set", async () => {
