@@ -7,6 +7,11 @@
   const MONTH_MS = 30 * 24 * 60 * 60 * 1000
 
   function loadApiKey(ctx) {
+    const configured = ctx.host.config && ctx.host.config.get
+      ? ctx.host.config.get("apiKey")
+      : null
+    if (typeof configured === "string" && configured.trim()) return configured.trim()
+
     const zai = ctx.host.env.get("ZAI_API_KEY")
     if (typeof zai === "string" && zai.trim()) return zai.trim()
 
@@ -101,7 +106,7 @@
   function probe(ctx) {
     const apiKey = loadApiKey(ctx)
     if (!apiKey) {
-      throw "No ZAI_API_KEY found. Set up environment variable first."
+      throw "No Z.ai API key found. Add it in Settings or set ZAI_API_KEY/GLM_API_KEY."
     }
 
     const sub = fetchSubscription(ctx, apiKey)

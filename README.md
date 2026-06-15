@@ -37,7 +37,7 @@ OpenUsageCN 常驻菜单栏，用一个轻量面板展示各类 AI 编程工具�
 - [**MiniMax**](docs/providers/minimax.md)：coding plan session
 - [**OpenCode Go**](docs/providers/opencode-go.md)：5h、weekly、monthly spend limits
 - [**Devin**](docs/providers/devin.md)：weekly quota、extra usage
-- [**Z.ai**](docs/providers/zai.md)：session、weekly、web searches
+- [**Z.ai**](docs/providers/zai.md)：session、weekly、web searches、设置页 API Key
 
 ## 参与项目
 

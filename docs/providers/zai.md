@@ -9,7 +9,7 @@ Tracks [Z.ai](https://z.ai) (Zhipu AI) usage quotas for GLM coding plans.
 
 - **Protocol:** REST (plain JSON)
 - **Base URL:** `https://api.z.ai/`
-- **Auth:** API key via environment variable (`ZAI_API_KEY`, fallback `GLM_API_KEY`)
+- **Auth:** API key from Settings, or environment variable fallback (`ZAI_API_KEY`, fallback `GLM_API_KEY`)
 - **Session utilization:** percentage (0-100)
 - **Weekly utilization:** percentage (0-100)
 - **Web searches:** count-based (used / limit)
@@ -19,9 +19,15 @@ Tracks [Z.ai](https://z.ai) (Zhipu AI) usage quotas for GLM coding plans.
 
 1. [Subscribe to a GLM Coding plan](https://z.ai/subscribe) and get your API key from
    the [Z.ai console](https://z.ai/manage-apikey/apikey-list)
-2. Set `ZAI_API_KEY` (fallback: `GLM_API_KEY`)
+2. Open OpenUsageCN Settings and paste it into the Z.ai `API Key` field.
+3. Enable the Z.ai plugin in OpenUsageCN settings.
 
-OpenUsageCN is a GUI app. A one-off `export ...` in a terminal session will not be visible when you launch OpenUsageCN from
+The Settings value is used first. If the field is empty, `ZAI_API_KEY` is supported as an environment fallback.
+`GLM_API_KEY` is also supported as a second fallback.
+
+API keys entered in Settings are stored as plaintext in `~/.openusagecn/providers.json`, protected only by best-effort private file permissions (`0600` on macOS/Linux). Windows stores the same plaintext JSON with the platform's default file permissions.
+
+If you use environment variables, remember that OpenUsageCN is a GUI app. A one-off `export ...` in a terminal session will not be visible when you launch OpenUsageCN from
 Spotlight/Launchpad. Persist it, then restart OpenUsageCN.
 
 zsh (`~/.zshrc`):
@@ -35,8 +41,6 @@ fish (universal var):
 ```fish
 set -Ux ZAI_API_KEY "YOUR_API_KEY"
 ```
-
-3. Enable the Z.ai plugin in OpenUsageCN settings
 
 ## Endpoints
 
@@ -173,7 +177,7 @@ Returns session token usage and web search quotas.
 
 | Condition     | Message                                                    |
 |---------------|------------------------------------------------------------|
-| No API key    | "No ZAI_API_KEY found. Set up environment variable first." |
+| No API key    | "No Z.ai API key found. Add it in Settings or set ZAI_API_KEY/GLM_API_KEY." |
 | 401/403       | "API key invalid. Check your Z.ai API key."                |
 | HTTP error    | "Usage request failed (HTTP {status}). Try again later."   |
 | Network error | "Usage request failed. Check your connection."             |

@@ -120,7 +120,7 @@ describe("zai plugin", () => {
   it("throws when no env vars set", async () => {
     const ctx = makeCtx()
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("No ZAI_API_KEY found. Set up environment variable first.")
+    expect(() => plugin.probe(ctx)).toThrow("No Z.ai API key found. Add it in Settings or set ZAI_API_KEY/GLM_API_KEY.")
   })
 
   it("uses ZAI_API_KEY when set", async () => {
@@ -157,6 +157,25 @@ describe("zai plugin", () => {
     expect(result.lines.find((l) => l.label === "Session")).toBeTruthy()
     const authHeader = ctx.host.http.request.mock.calls[0][0].headers.Authorization
     expect(authHeader).toBe("Bearer zai-key")
+  })
+
+  it("prefers configured API key over environment variables", async () => {
+    const ctx = makeCtx()
+    ctx.host.config.get.mockImplementation((name) => name === "apiKey" ? "configured-key" : null)
+    ctx.host.env.get.mockImplementation((name) => {
+      if (name === "ZAI_API_KEY") return "zai-key"
+      if (name === "GLM_API_KEY") return "glm-key"
+      return null
+    })
+    mockHttp(ctx)
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.lines.find((l) => l.label === "Session")).toBeTruthy()
+    expect(ctx.host.config.get).toHaveBeenCalledWith("apiKey")
+    const authHeader = ctx.host.http.request.mock.calls[0][0].headers.Authorization
+    expect(authHeader).toBe("Bearer configured-key")
   })
 
   it("renders session usage as percent from quota response", async () => {
