@@ -1,57 +1,57 @@
-name: Bug Report
-description: Report a bug in OpenUsage
+name: 问题反馈
+description: 反馈 OpenUsageCN 的问题
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting a bug. Please fill in the details below.
+        感谢反馈。请尽量补充复现步骤、版本和日志，方便维护者定位问题。
   - type: textarea
     id: description
     attributes:
-      label: Description
-      description: What happened?
-      placeholder: A clear description of the bug.
+      label: 问题描述
+      description: 发生了什么？
+      placeholder: 简要说明你遇到的问题。
     validations:
       required: true
   - type: textarea
     id: steps
     attributes:
-      label: Steps to Reproduce
-      description: How can we reproduce this?
+      label: 复现步骤
+      description: 我们应该如何复现？
       placeholder: |
-        1. Open OpenUsage
-        2. Go to ...
-        3. Click on ...
-        4. See error
+        1. 打开 OpenUsageCN
+        2. 进入 ...
+        3. 点击 ...
+        4. 看到错误 ...
     validations:
       required: true
   - type: textarea
     id: expected
     attributes:
-      label: Expected Behavior
-      description: What should have happened?
+      label: 预期结果
+      description: 你原本预期会发生什么？
     validations:
       required: true
   - type: textarea
     id: actual
     attributes:
-      label: Actual Behavior
-      description: What actually happened?
+      label: 实际结果
+      description: 实际发生了什么？
     validations:
       required: true
   - type: input
     id: version
     attributes:
-      label: OpenUsage Version
-      description: Which version are you running? (Check Settings or About)
-      placeholder: "e.g. 0.4.2"
+      label: OpenUsageCN 版本
+      description: 你正在使用哪个版本？可以在设置或关于里查看。
+      placeholder: "例如 0.6.27"
     validations:
       required: true
   - type: dropdown
     id: os
     attributes:
-      label: Operating System
+      label: 操作系统
       options:
         - macOS (Apple Silicon)
         - macOS (Intel)
@@ -60,10 +60,10 @@ body:
   - type: textarea
     id: screenshots
     attributes:
-      label: Screenshots
-      description: If applicable, drag and drop or paste screenshots here.
+      label: 截图
+      description: 如果方便，请拖入或粘贴截图。
   - type: textarea
     id: additional
     attributes:
-      label: Additional Context
-      description: Any other information that might be helpful.
+      label: 补充信息
+      description: 其他可能有帮助的信息。

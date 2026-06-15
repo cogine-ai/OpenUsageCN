@@ -16,14 +16,13 @@ jobs:
       - uses: actions/stale@v9
         with:
           stale-issue-message: >
-            This issue has been inactive for 30 days. It will be closed in 7 days
-            unless there is new activity. If this is still relevant, please comment.
+            这个 Issue 已经 30 天没有新动态。如果 7 天内仍没有新的评论或更新，
+            它会被自动关闭。如果问题仍然存在，请补充信息。
           stale-pr-message: >
-            This PR has been inactive for 30 days. It will be closed in 7 days
-            unless there is new activity. If this is still relevant, please comment
-            or push an update.
-          close-issue-message: Closed due to inactivity.
-          close-pr-message: Closed due to inactivity.
+            这个 PR 已经 30 天没有新动态。如果 7 天内仍没有新的评论或提交，
+            它会被自动关闭。如果仍需继续，请评论或推送更新。
+          close-issue-message: 因长期没有新动态，自动关闭。
+          close-pr-message: 因长期没有新动态，自动关闭。
           days-before-stale: 30
           days-before-close: 7
           stale-issue-label: stale

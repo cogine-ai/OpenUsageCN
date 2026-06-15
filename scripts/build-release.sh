@@ -10,6 +10,17 @@ if [ -f .env ]; then
   set +a
 fi
 
+for optional_var in \
+  TAURI_SIGNING_PRIVATE_KEY_PASSWORD \
+  APPLE_CERTIFICATE \
+  APPLE_CERTIFICATE_PASSWORD \
+  KEYCHAIN_PASSWORD
+do
+  if [ -z "${!optional_var}" ]; then
+    unset "$optional_var"
+  fi
+done
+
 # Read key contents from file path
 if [ -f "$TAURI_SIGNING_PRIVATE_KEY" ]; then
   export TAURI_SIGNING_PRIVATE_KEY="$(cat "$TAURI_SIGNING_PRIVATE_KEY")"

@@ -28,7 +28,7 @@
 3. 粘贴这个路径：
 
 ```text
-~/Library/Logs/com.sunstory.openusagecn
+~/Library/Logs/ai.cogine.openusagecn
 ```
 
 4. 按 `Enter`。
