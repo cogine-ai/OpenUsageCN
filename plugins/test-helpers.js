@@ -41,6 +41,10 @@ export const makeCtx = () => {
       env: {
         get: vi.fn(() => null),
       },
+      config: {
+        get: vi.fn(() => null),
+        all: vi.fn(() => ({})),
+      },
       keychain: {
         readGenericPassword: vi.fn(),
         readGenericPasswordForCurrentUser: vi.fn(),

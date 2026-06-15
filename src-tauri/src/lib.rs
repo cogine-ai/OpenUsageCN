@@ -5,6 +5,7 @@ mod local_http_api;
 mod log_path;
 mod panel;
 mod plugin_engine;
+mod provider_config;
 mod tray;
 #[cfg(target_os = "macos")]
 mod webkit_config;
@@ -153,6 +154,7 @@ pub struct PluginMeta {
     pub brand_color: Option<String>,
     pub lines: Vec<ManifestLineDto>,
     pub links: Vec<PluginLinkDto>,
+    pub config: Option<PluginConfigDto>,
     /// Ordered list of primary metric candidates (sorted by primaryOrder).
     /// Frontend picks the first one that exists in runtime data.
     pub primary_candidates: Vec<String>,
@@ -175,6 +177,32 @@ pub struct ManifestLineDto {
 pub struct PluginLinkDto {
     pub label: String,
     pub url: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginConfigDto {
+    pub fields: Vec<ConfigFieldDto>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigFieldDto {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub field_type: String,
+    pub label: String,
+    pub placeholder: Option<String>,
+    pub help: Option<String>,
+    pub options: Vec<ConfigOptionDto>,
+    pub default: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigOptionDto {
+    pub value: String,
+    pub label: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -382,6 +410,87 @@ async fn start_probe_batch(
     })
 }
 
+fn plugin_config_fields(
+    state: tauri::State<'_, Mutex<AppState>>,
+    plugin_id: &str,
+) -> Result<Vec<plugin_engine::manifest::PluginConfigField>, String> {
+    let locked = state.lock().map_err(|e| e.to_string())?;
+    let plugin = locked
+        .plugins
+        .iter()
+        .find(|plugin| plugin.manifest.id == plugin_id)
+        .ok_or_else(|| format!("Unknown plugin '{plugin_id}'"))?;
+    Ok(plugin
+        .manifest
+        .config
+        .as_ref()
+        .map(|config| config.fields.clone())
+        .unwrap_or_default())
+}
+
+fn plugin_config_dto(config: &plugin_engine::manifest::PluginConfig) -> PluginConfigDto {
+    PluginConfigDto {
+        fields: config
+            .fields
+            .iter()
+            .map(|field| ConfigFieldDto {
+                id: field.id.clone(),
+                field_type: match field.field_type {
+                    plugin_engine::manifest::PluginConfigFieldType::Secret => "secret",
+                    plugin_engine::manifest::PluginConfigFieldType::Text => "text",
+                    plugin_engine::manifest::PluginConfigFieldType::Select => "select",
+                    plugin_engine::manifest::PluginConfigFieldType::Toggle => "toggle",
+                }
+                .to_string(),
+                label: field.label.clone(),
+                placeholder: field.placeholder.clone(),
+                help: field.help.clone(),
+                options: field
+                    .options
+                    .iter()
+                    .map(|option| ConfigOptionDto {
+                        value: option.value.clone(),
+                        label: option.label.clone(),
+                    })
+                    .collect(),
+                default: field.default.clone(),
+            })
+            .collect(),
+    }
+}
+
+#[tauri::command]
+fn get_provider_config(
+    plugin_id: String,
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<provider_config::ProviderConfigView, String> {
+    let fields = plugin_config_fields(state, &plugin_id)?;
+    Ok(provider_config::view_for_plugin(&plugin_id, &fields))
+}
+
+#[tauri::command]
+fn save_provider_config(
+    plugin_id: String,
+    values: HashMap<String, serde_json::Value>,
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<(), String> {
+    let fields = plugin_config_fields(state, &plugin_id)?;
+    if fields.is_empty() && !values.is_empty() {
+        return Err(format!("Plugin '{plugin_id}' has no configurable fields"));
+    }
+    provider_config::save_plugin_values(&plugin_id, &fields, values)
+}
+
+#[tauri::command]
+fn delete_provider_config_field(
+    plugin_id: String,
+    field_id: String,
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<(), String> {
+    let fields = plugin_config_fields(state, &plugin_id)?;
+    provider_config::delete_plugin_field(&plugin_id, &fields, &field_id)
+}
+
 #[tauri::command]
 fn get_log_path(app_handle: tauri::AppHandle) -> Result<String, String> {
     log_path::for_app(&app_handle).map(|path| path.to_string_lossy().to_string())
@@ -497,6 +606,7 @@ fn list_plugins(state: tauri::State<'_, Mutex<AppState>>) -> Vec<PluginMeta> {
                         url: link.url.clone(),
                     })
                     .collect(),
+                config: plugin.manifest.config.as_ref().map(plugin_config_dto),
                 primary_candidates,
                 weekly_candidate,
             }
@@ -538,6 +648,9 @@ pub fn run() {
             open_devtools,
             start_probe_batch,
             list_plugins,
+            get_provider_config,
+            save_provider_config,
+            delete_provider_config_field,
             get_log_path,
             update_global_shortcut
         ])
@@ -580,6 +693,7 @@ pub fn run() {
             let (_, plugins) = plugin_engine::initialize_plugins(&app_data_dir, &resource_dir);
             let known_plugin_ids: Vec<String> =
                 plugins.iter().map(|p| p.manifest.id.clone()).collect();
+            provider_config::register_existing_secrets(&plugins);
             app.manage(Mutex::new(AppState {
                 plugins,
                 app_data_dir: app_data_dir.clone(),
@@ -641,9 +755,13 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::{
-        DAILY_ACTIVE_TRACKED_DAY_KEY, MAX_CONCURRENT_PROBES, probe_worker_count,
+        DAILY_ACTIVE_TRACKED_DAY_KEY, MAX_CONCURRENT_PROBES, plugin_config_dto, probe_worker_count,
         seconds_until_next_utc_day, should_track_daily_active,
     };
+    use crate::plugin_engine::manifest::{
+        PluginConfig, PluginConfigField, PluginConfigFieldType, PluginConfigOption,
+    };
+    use serde_json::json;
     use time::{Date, Month, PrimitiveDateTime, Time};
 
     #[test]
@@ -691,5 +809,32 @@ mod tests {
             probe_worker_count(MAX_CONCURRENT_PROBES + 1),
             MAX_CONCURRENT_PROBES
         );
+    }
+
+    #[test]
+    fn plugin_config_dto_includes_field_declarations() {
+        let dto = plugin_config_dto(&PluginConfig {
+            fields: vec![PluginConfigField {
+                id: "region".to_string(),
+                field_type: PluginConfigFieldType::Select,
+                label: "Region".to_string(),
+                placeholder: Some("Choose Region".to_string()),
+                help: Some("Select an API region".to_string()),
+                options: vec![PluginConfigOption {
+                    value: "cn".to_string(),
+                    label: "China".to_string(),
+                }],
+                default: Some(json!("cn")),
+            }],
+        });
+
+        assert_eq!(dto.fields.len(), 1);
+        assert_eq!(dto.fields[0].id, "region");
+        assert_eq!(dto.fields[0].field_type, "select");
+        assert_eq!(dto.fields[0].label, "Region");
+        assert_eq!(dto.fields[0].placeholder.as_deref(), Some("Choose Region"));
+        assert_eq!(dto.fields[0].help.as_deref(), Some("Select an API region"));
+        assert_eq!(dto.fields[0].options[0].value, "cn");
+        assert_eq!(dto.fields[0].default, Some(json!("cn")));
     }
 }

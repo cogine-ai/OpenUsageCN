@@ -15,10 +15,11 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { GlobalShortcutSection } from "@/components/global-shortcut-section";
+import { ProviderConfigFields } from "@/components/provider-config-fields";
+import type { PluginConfig as ManifestPluginConfig } from "@/lib/plugin-types";
 import { getBarFillLayout, getTrayIconSizePx } from "@/lib/tray-bars-icon";
 import {
   AUTO_UPDATE_OPTIONS,
@@ -45,6 +46,7 @@ interface PluginConfig {
   id: string;
   name: string;
   enabled: boolean;
+  config?: ManifestPluginConfig;
 }
 
 const TRAY_PREVIEW_SIZE_PX = getTrayIconSizePx(1);
@@ -201,9 +203,11 @@ function MenubarIconStylePreview({
 function SortablePluginItem({
   plugin,
   onToggle,
+  onProviderConfigSaved,
 }: {
   plugin: PluginConfig;
   onToggle: (id: string) => void;
+  onProviderConfigSaved: (id: string) => void;
 }) {
   const {
     attributes,
@@ -223,40 +227,63 @@ function SortablePluginItem({
     <div
       ref={setNodeRef}
       style={style}
-      onClick={() => onToggle(plugin.id)}
       className={cn(
-        "flex items-center gap-3 px-3 py-2 rounded-md bg-card cursor-pointer",
+        "rounded-md bg-card",
         "border border-transparent",
         isDragging && "opacity-50 border-border"
       )}
     >
-      <button
-        type="button"
-        onClick={(e) => e.stopPropagation()}
-        className="touch-none cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground transition-colors"
-        {...attributes}
-        {...listeners}
+      <div
+        onClick={() => onToggle(plugin.id)}
+        className="flex cursor-pointer items-center gap-3 px-3 py-2"
       >
-        <GripVertical className="h-4 w-4" />
-      </button>
+        <button
+          type="button"
+          aria-label="拖拽排序"
+          onClick={(e) => e.stopPropagation()}
+          className="touch-none cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground transition-colors"
+          {...attributes}
+          {...listeners}
+        >
+          <span aria-hidden className="grid h-4 w-4 grid-cols-2 gap-0.5 p-0.5">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <span key={index} className="h-1 w-1 rounded-full bg-current" />
+            ))}
+          </span>
+        </button>
 
-      <span
-        className={cn(
-          "flex-1 text-sm",
-          !plugin.enabled && "text-muted-foreground"
-        )}
-      >
-        {plugin.name}
-      </span>
+        <span
+          className={cn(
+            "flex-1 text-sm",
+            !plugin.enabled && "text-muted-foreground"
+          )}
+        >
+          {plugin.name}
+        </span>
 
-      {/* Wrap to stop Base UI's internal input.click() from bubbling to the row div */}
-      <span onClick={(e) => e.stopPropagation()}>
-        <Checkbox
-          key={`${plugin.id}-${plugin.enabled}`}
-          checked={plugin.enabled}
-          onCheckedChange={() => onToggle(plugin.id)}
-        />
-      </span>
+        {/* Wrap to stop Base UI's internal input.click() from bubbling to the row div */}
+        <span onClick={(e) => e.stopPropagation()}>
+          <Checkbox
+            key={`${plugin.id}-${plugin.enabled}`}
+            checked={plugin.enabled}
+            onCheckedChange={() => onToggle(plugin.id)}
+          />
+        </span>
+      </div>
+
+      {plugin.config?.fields.length ? (
+        <div
+          className="px-3 pb-3"
+          onClick={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <ProviderConfigFields
+            pluginId={plugin.id}
+            fields={plugin.config.fields}
+            onSaved={onProviderConfigSaved}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -265,6 +292,7 @@ interface SettingsPageProps {
   plugins: PluginConfig[];
   onReorder: (orderedIds: string[]) => void;
   onToggle: (id: string) => void;
+  onProviderConfigSaved: (id: string) => void;
   autoUpdateInterval: AutoUpdateIntervalMinutes;
   onAutoUpdateIntervalChange: (value: AutoUpdateIntervalMinutes) => void;
   themeMode: ThemeMode;
@@ -290,6 +318,7 @@ export function SettingsPage({
   plugins,
   onReorder,
   onToggle,
+  onProviderConfigSaved,
   autoUpdateInterval,
   onAutoUpdateIntervalChange,
   themeMode,
@@ -580,6 +609,7 @@ export function SettingsPage({
                   key={plugin.id}
                   plugin={plugin}
                   onToggle={onToggle}
+                  onProviderConfigSaved={onProviderConfigSaved}
                 />
               ))}
             </SortableContext>

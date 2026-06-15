@@ -1,10 +1,12 @@
+use crate::plugin_engine::manifest::PluginConfigField;
+use crate::provider_config;
 use aes_gcm::{
     AesGcm, Nonce,
     aead::{Aead, KeyInit, OsRng, generic_array::typenum::U16, rand_core::RngCore},
     aes::Aes256,
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
-use rquickjs::{function::Rest, Ctx, Exception, Function, Object};
+use rquickjs::{Ctx, Exception, Function, Object, function::Rest};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::ffi::{OsStr, OsString};
@@ -305,6 +307,21 @@ fn redact_value(value: &str) -> String {
     }
 }
 
+fn dynamic_secret_values() -> &'static Mutex<HashSet<String>> {
+    static SECRETS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+    SECRETS.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+pub(crate) fn register_secret_for_redaction(value: &str) {
+    let trimmed = value.trim();
+    if trimmed.chars().count() < 8 {
+        return;
+    }
+    if let Ok(mut secrets) = dynamic_secret_values().lock() {
+        secrets.insert(trimmed.to_string());
+    }
+}
+
 /// Redact sensitive query parameters in URL
 fn redact_url(url: &str) -> String {
     let sensitive_params = [
@@ -380,9 +397,7 @@ fn redact_body(body: &str) -> String {
         })
         .to_string();
 
-    if let Ok(devin_session_re) =
-        regex_lite::Regex::new(r#"devin-session-token\$[^\s"',}\]]+"#)
-    {
+    if let Ok(devin_session_re) = regex_lite::Regex::new(r#"devin-session-token\$[^\s"',}\]]+"#) {
         result = devin_session_re
             .replace_all(&result, |caps: &regex_lite::Captures| {
                 redact_value(&caps[0])
@@ -454,6 +469,15 @@ fn redact_body(body: &str) -> String {
 /// Lightweight redaction for log messages.
 pub(crate) fn redact_log_message(msg: &str) -> String {
     let mut result = msg.to_string();
+    if let Ok(secrets) = dynamic_secret_values().lock() {
+        let mut values: Vec<String> = secrets.iter().cloned().collect();
+        values.sort_by_key(|value| std::cmp::Reverse(value.len()));
+        for secret in values {
+            if result.contains(&secret) {
+                result = result.replace(&secret, &redact_value(&secret));
+            }
+        }
+    }
     if let Ok(jwt_re) = regex_lite::Regex::new(r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+")
     {
         result = jwt_re
@@ -469,9 +493,7 @@ pub(crate) fn redact_log_message(msg: &str) -> String {
             })
             .to_string();
     }
-    if let Ok(devin_session_re) =
-        regex_lite::Regex::new(r#"devin-session-token\$[^\s"',}\]]+"#)
-    {
+    if let Ok(devin_session_re) = regex_lite::Regex::new(r#"devin-session-token\$[^\s"',}\]]+"#) {
         result = devin_session_re
             .replace_all(&result, |caps: &regex_lite::Captures| {
                 redact_value(&caps[0])
@@ -596,6 +618,7 @@ pub(crate) fn inject_host_api<'js>(
         plugin_id,
         app_data_dir,
         app_version,
+        &[],
         ProbeDeadline::none(),
     )
 }
@@ -605,6 +628,7 @@ pub(crate) fn inject_host_api_with_deadline<'js>(
     plugin_id: &str,
     app_data_dir: &PathBuf,
     app_version: &str,
+    config_fields: &[PluginConfigField],
     deadline: ProbeDeadline,
 ) -> rquickjs::Result<()> {
     let globals = ctx.globals();
@@ -634,6 +658,7 @@ pub(crate) fn inject_host_api_with_deadline<'js>(
     inject_log(ctx, &host, plugin_id)?;
     inject_fs(ctx, &host)?;
     inject_crypto(ctx, &host)?;
+    inject_config(ctx, &host, plugin_id, config_fields)?;
     inject_env(ctx, &host, plugin_id)?;
     inject_http(ctx, &host, plugin_id, deadline)?;
     inject_keychain(ctx, &host, plugin_id)?;
@@ -643,8 +668,56 @@ pub(crate) fn inject_host_api_with_deadline<'js>(
 
     probe_ctx.set("host", host)?;
     globals.set("__openusage_ctx", probe_ctx)?;
+    patch_config_wrapper(ctx)?;
 
     Ok(())
+}
+
+fn inject_config<'js>(
+    ctx: &Ctx<'js>,
+    host: &Object<'js>,
+    plugin_id: &str,
+    config_fields: &[PluginConfigField],
+) -> rquickjs::Result<()> {
+    let values = provider_config::resolved_values(plugin_id, config_fields);
+    let values_json = serde_json::to_string(&values)
+        .map_err(|e| Exception::throw_message(ctx, &format!("config encode failed: {}", e)))?;
+    let config_obj = Object::new(ctx.clone())?;
+    config_obj.set("_valuesJson", values_json)?;
+    host.set("config", config_obj)?;
+    Ok(())
+}
+
+fn patch_config_wrapper(ctx: &rquickjs::Ctx<'_>) -> rquickjs::Result<()> {
+    ctx.eval::<(), _>(
+        r#"
+        (function() {
+            var raw = __openusage_ctx.host.config._valuesJson || "{}";
+            var values = {};
+            try {
+                values = JSON.parse(raw) || {};
+            } catch (e) {
+                values = {};
+            }
+            __openusage_ctx.host.config = {
+                get: function(name) {
+                    if (typeof name !== "string") return null;
+                    return Object.prototype.hasOwnProperty.call(values, name) ? values[name] : null;
+                },
+                all: function() {
+                    var copy = {};
+                    for (var key in values) {
+                        if (Object.prototype.hasOwnProperty.call(values, key)) {
+                            copy[key] = values[key];
+                        }
+                    }
+                    return copy;
+                }
+            };
+        })();
+        "#
+        .as_bytes(),
+    )
 }
 
 fn inject_log<'js>(ctx: &Ctx<'js>, host: &Object<'js>, plugin_id: &str) -> rquickjs::Result<()> {
@@ -2999,8 +3072,11 @@ mod tests {
             "__OPENUSAGECN_ENV_END__\n",
             "\u{1b}[32muser@host\u{1b}[0m\n"
         );
-        let value =
-            extract_marked_value(stdout, "__OPENUSAGECN_ENV_START__", "__OPENUSAGECN_ENV_END__");
+        let value = extract_marked_value(
+            stdout,
+            "__OPENUSAGECN_ENV_START__",
+            "__OPENUSAGECN_ENV_END__",
+        );
         assert_eq!(value.as_deref(), Some("sk-test-key-12345"));
     }
 
@@ -3012,16 +3088,22 @@ mod tests {
             "  sk-test-key-12345\u{1b}[?2004h\r\n",
             "__OPENUSAGECN_ENV_END__\n"
         );
-        let value =
-            extract_marked_value(stdout, "__OPENUSAGECN_ENV_START__", "__OPENUSAGECN_ENV_END__");
+        let value = extract_marked_value(
+            stdout,
+            "__OPENUSAGECN_ENV_START__",
+            "__OPENUSAGECN_ENV_END__",
+        );
         assert_eq!(value.as_deref(), Some("sk-test-key-12345"));
     }
 
     #[test]
     fn extract_marked_value_returns_none_when_marked_value_is_empty() {
         let stdout = "__OPENUSAGECN_ENV_START__\n  \n__OPENUSAGECN_ENV_END__\n";
-        let value =
-            extract_marked_value(stdout, "__OPENUSAGECN_ENV_START__", "__OPENUSAGECN_ENV_END__");
+        let value = extract_marked_value(
+            stdout,
+            "__OPENUSAGECN_ENV_START__",
+            "__OPENUSAGECN_ENV_END__",
+        );
         assert!(value.is_none());
     }
 
@@ -3724,6 +3806,29 @@ mod tests {
             !redacted.contains("sk-1234567890abcdef"),
             "API key should be redacted"
         );
+    }
+
+    #[test]
+    fn redact_log_message_redacts_dynamic_secret_as_literal_text() {
+        let secret = "id.part+token/secret=20260615";
+        register_secret_for_redaction(secret);
+        let redacted = redact_log_message(&format!("configured api key: {secret}"));
+
+        assert!(
+            !redacted.contains(secret),
+            "dynamic secret should be redacted literally, got: {}",
+            redacted
+        );
+        assert!(redacted.contains("id.p...0615"));
+    }
+
+    #[test]
+    fn redact_log_message_ignores_short_dynamic_secrets() {
+        let secret = "a.b+c";
+        register_secret_for_redaction(secret);
+        let msg = format!("short token remains visible for diagnostics: {secret}");
+
+        assert_eq!(redact_log_message(&msg), msg);
     }
 
     #[test]

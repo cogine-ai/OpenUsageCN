@@ -1,9 +1,15 @@
 import { cleanup, render, screen } from "@testing-library/react"
 import type { ReactNode } from "react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 let latestOnDragEnd: ((event: any) => void) | undefined
+
+const providerConfigMocks = vi.hoisted(() => ({
+  getProviderConfig: vi.fn(),
+  saveProviderConfig: vi.fn(),
+  deleteProviderConfigField: vi.fn(),
+}))
 
 vi.mock("@dnd-kit/core", () => ({
   DndContext: ({ children, onDragEnd }: { children: ReactNode; onDragEnd?: (event: any) => void }) => {
@@ -41,12 +47,19 @@ vi.mock("@dnd-kit/utilities", () => ({
   CSS: { Transform: { toString: () => "" } },
 }))
 
+vi.mock("@/lib/provider-config", () => ({
+  getProviderConfig: providerConfigMocks.getProviderConfig,
+  saveProviderConfig: providerConfigMocks.saveProviderConfig,
+  deleteProviderConfigField: providerConfigMocks.deleteProviderConfigField,
+}))
+
 import { SettingsPage } from "@/pages/settings"
 
 const defaultProps = {
   plugins: [{ id: "a", name: "Alpha", enabled: true }],
   onReorder: vi.fn(),
   onToggle: vi.fn(),
+  onProviderConfigSaved: vi.fn(),
   autoUpdateInterval: 15 as const,
   onAutoUpdateIntervalChange: vi.fn(),
   themeMode: "system" as const,
@@ -72,6 +85,15 @@ const defaultProps = {
   startOnLogin: false,
   onStartOnLoginChange: vi.fn(),
 }
+
+beforeEach(() => {
+  providerConfigMocks.getProviderConfig.mockReset()
+  providerConfigMocks.getProviderConfig.mockResolvedValue({ values: {} })
+  providerConfigMocks.saveProviderConfig.mockReset()
+  providerConfigMocks.saveProviderConfig.mockResolvedValue(undefined)
+  providerConfigMocks.deleteProviderConfigField.mockReset()
+  providerConfigMocks.deleteProviderConfigField.mockResolvedValue(undefined)
+})
 
 afterEach(() => {
   cleanup()
@@ -138,6 +160,36 @@ describe("SettingsPage", () => {
   it("shows auto-update helper text", () => {
     render(<SettingsPage {...defaultProps} />)
     expect(screen.getByText("选择刷新频率")).toBeInTheDocument()
+  })
+
+  it("renders provider config fields", async () => {
+    render(
+      <SettingsPage
+        {...defaultProps}
+        plugins={[
+          {
+            id: "bigmodel-cn",
+            name: "BigModel CN",
+            enabled: true,
+            config: {
+              fields: [
+                {
+                  id: "apiKey",
+                  type: "secret",
+                  label: "API Key",
+                  placeholder: "key.secret",
+                  help: "留空则使用 BIGMODEL_API_KEY 或 ZHIPUAI_API_KEY 环境变量",
+                  options: [],
+                },
+              ],
+            },
+          },
+        ]}
+      />
+    )
+
+    expect(await screen.findByLabelText("API Key")).toBeInTheDocument()
+    expect(screen.getByText("留空则使用 BIGMODEL_API_KEY 或 ZHIPUAI_API_KEY 环境变量")).toBeInTheDocument()
   })
 
   it("renders app theme section with theme options", () => {

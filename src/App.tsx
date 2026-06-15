@@ -167,6 +167,11 @@ function App() {
     applyStartOnLogin,
   })
 
+  const pluginSettingsRef = useRef(pluginSettings)
+  useEffect(() => {
+    pluginSettingsRef.current = pluginSettings
+  }, [pluginSettings])
+
   const {
     handleReorder,
     handleToggle,
@@ -178,6 +183,19 @@ function App() {
     startBatch,
     scheduleTrayIconUpdate,
   })
+
+  const handleProviderConfigSaved = useCallback(
+    (pluginId: string) => {
+      const currentSettings = pluginSettingsRef.current
+      if (currentSettings?.disabled.includes(pluginId)) return
+      setLoadingForPlugins([pluginId])
+      startBatch([pluginId]).catch((error) => {
+        console.error("Failed to refresh plugin after config save:", error)
+        setErrorForPlugins([pluginId], "无法开始刷新")
+      })
+    },
+    [setErrorForPlugins, setLoadingForPlugins, startBatch]
+  )
 
   const settingsPlugins = useSettingsPluginList({
     pluginSettings,
@@ -191,11 +209,6 @@ function App() {
     pluginsMeta,
     pluginStates,
   })
-
-  const pluginSettingsRef = useRef(pluginSettings)
-  useEffect(() => {
-    pluginSettingsRef.current = pluginSettings
-  }, [pluginSettings])
 
   const handlePluginContextAction = useCallback(
     (pluginId: string, action: PluginContextAction) => {
@@ -252,6 +265,7 @@ function App() {
         onRetryPlugin: handleRetryPlugin,
         onReorder: handleReorder,
         onToggle: handleToggle,
+        onProviderConfigSaved: handleProviderConfigSaved,
         onAutoUpdateIntervalChange: handleAutoUpdateIntervalChange,
         onThemeModeChange: handleThemeModeChange,
         onDisplayModeChange: handleDisplayModeChange,
