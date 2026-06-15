@@ -166,6 +166,37 @@ const authPath = codexHome
   : "~/.config/codex/auth.json"
 ```
 
+## Provider Config
+
+```typescript
+host.config.get(name: string): string | boolean | null
+host.config.all(): Record<string, string | boolean>
+```
+
+Reads values saved from the plugin's Settings fields. A plugin declares those fields in `plugin.json` under `config.fields`.
+
+### Behavior
+
+- `secret` and `text` fields return a string or `null`
+- `select` fields return a valid option value
+- `toggle` fields return a boolean
+- Missing `toggle` values return `false`
+- Missing `select` values return the field default, or the first option
+- Plugins without config still get `host.config`; `get()` returns `null` and `all()` returns `{}`
+
+### Example
+
+```javascript
+const configured = ctx.host.config.get("apiKey")
+const apiKey = typeof configured === "string" && configured.trim()
+  ? configured.trim()
+  : ctx.host.env.get("MY_PROVIDER_API_KEY")
+
+if (!apiKey) {
+  throw "API key required. Add it in Settings or set MY_PROVIDER_API_KEY."
+}
+```
+
 ## HTTP
 
 ```typescript

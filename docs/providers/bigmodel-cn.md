@@ -12,12 +12,15 @@ remain separate.
 ## Setup
 
 1. Get your BigModel API key from the BigModel console.
-2. Set `BIGMODEL_API_KEY`.
+2. Open OpenUsageCN Settings and paste it into the BigModel CN `API Key` field.
+3. Enable the BigModel CN plugin in OpenUsageCN settings.
 
-`ZHIPUAI_API_KEY` is also supported as a fallback. This plugin does not read `ZAI_API_KEY` or `GLM_API_KEY`.
+The Settings value is used first. If the field is empty, `BIGMODEL_API_KEY` is supported as an environment fallback.
+`ZHIPUAI_API_KEY` is also supported as a second fallback. This plugin does not read `ZAI_API_KEY` or `GLM_API_KEY`.
 
-OpenUsageCN is a GUI app. A one-off `export ...` in a terminal session will not be visible when you launch OpenUsageCN
-from Spotlight or Launchpad. Persist it, then restart OpenUsageCN.
+API keys entered in Settings are stored as plaintext in `~/.openusagecn/providers.json`, protected only by best-effort private file permissions (`0600` on macOS/Linux).
+
+If you use environment variables, remember that OpenUsageCN is a GUI app. A one-off `export ...` in a terminal session will not be visible when you launch OpenUsageCN from Spotlight or Launchpad. Persist it, then restart OpenUsageCN.
 
 zsh (`~/.zshrc`):
 
@@ -30,8 +33,6 @@ fish (universal var):
 ```fish
 set -Ux BIGMODEL_API_KEY "YOUR_API_KEY"
 ```
-
-3. Enable the BigModel CN plugin in OpenUsageCN settings.
 
 ## Displayed Lines
 
@@ -65,7 +66,7 @@ Expected quota fields:
 
 | Condition     | Message                                                           |
 |---------------|-------------------------------------------------------------------|
-| No API key    | "No BIGMODEL_API_KEY found. Set up environment variable first."   |
+| No API key    | "No BigModel CN API key found. Add it in Settings or set BIGMODEL_API_KEY." |
 | 401/403       | "API key invalid. Check your BigModel CN API key."                |
 | HTTP error    | "Usage request failed (HTTP {status}). Try again later."          |
 | Network error | "Usage request failed. Check your connection."                    |

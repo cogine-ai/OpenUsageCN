@@ -24,7 +24,7 @@ OpenUsageCN 常驻菜单栏，用一个轻量面板展示各类 AI 编程工具�
 
 - [**Amp**](docs/providers/amp.md)：免费额度、奖励额度、credits
 - [**Antigravity**](docs/providers/antigravity.md)：全部模型用量
-- [**BigModel CN**](docs/providers/bigmodel-cn.md)：session、weekly、web searches
+- [**BigModel CN**](docs/providers/bigmodel-cn.md)：session、weekly、web searches、设置页 API Key
 - [**Claude**](docs/providers/claude.md)：session、weekly、extra usage、本地 token 用量（ccusage）
 - [**Codex**](docs/providers/codex.md)：session、weekly、reviews、credits
 - [**Copilot**](docs/providers/copilot.md)：premium、chat、completions

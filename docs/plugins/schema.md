@@ -49,6 +49,17 @@ Bundled plugins live under `src-tauri/resources/bundled_plugins/<id>/`.
   "entry": "plugin.js",
   "icon": "icon.svg",
   "links": [{ "label": "Status", "url": "https://status.example.com" }],
+  "config": {
+    "fields": [
+      {
+        "id": "apiKey",
+        "type": "secret",
+        "label": "API Key",
+        "placeholder": "key.secret",
+        "help": "留空则使用环境变量"
+      }
+    ]
+  },
   "lines": [
     { "type": "badge", "label": "Plan", "scope": "overview" },
     { "type": "progress", "label": "Usage", "scope": "overview", "primaryOrder": 1 },
@@ -66,6 +77,7 @@ Bundled plugins live under `src-tauri/resources/bundled_plugins/<id>/`.
 | `entry`         | string | Yes      | Relative path to JS entry file             |
 | `icon`          | string | Yes      | Relative path to SVG icon file             |
 | `links`         | array  | No       | Optional quick links shown on detail page  |
+| `config`        | object | No       | Optional Settings fields for this plugin   |
 | `lines`         | array  | Yes      | Output shape used for loading skeletons    |
 
 Validation rules:
@@ -82,6 +94,39 @@ Validation rules:
 |---------|--------|----------|-------------|
 | `label` | string | Yes      | Link text shown in the provider detail quick-actions row |
 | `url`   | string | Yes      | External destination opened in the browser (`http/https` only) |
+
+### Config Fields (Optional)
+
+Plugins can declare Settings fields under `config.fields`. OpenUsageCN renders the form, saves the values, and injects them into `ctx.host.config` during probes.
+
+Supported field types:
+
+| Type     | Value passed to plugin                  | Notes                                      |
+|----------|------------------------------------------|--------------------------------------------|
+| `secret` | `string \| null`                         | Used for API keys. UI never returns plaintext after save. |
+| `text`   | `string \| null`                         | Generic text input.                         |
+| `select` | `string`                                 | Must have at least one option.              |
+| `toggle` | `boolean`                                | Defaults to `false` when unset.             |
+
+Field properties:
+
+| Field         | Type   | Required | Description |
+|---------------|--------|----------|-------------|
+| `id`          | string | Yes      | Unique field id within this plugin. |
+| `type`        | string | Yes      | One of `secret`, `text`, `select`, `toggle`. |
+| `label`       | string | Yes      | Label shown in Settings. |
+| `placeholder` | string | No       | Placeholder shown in text-like inputs. |
+| `help`        | string | No       | Short help text shown below the field. |
+| `options`     | array  | Select only | Select options: `{ "value": "...", "label": "..." }`. |
+| `default`     | any    | No       | Default value used when no saved value exists. |
+
+Validation rules:
+
+- Field ids must be unique within a plugin.
+- Select fields must have non-empty options and unique option values.
+- If a saved select value is no longer valid after a plugin update, OpenUsageCN falls back to the field default or the first option.
+
+Saved provider values live in `~/.openusagecn/providers.json`, outside the plugin directory. Secret fields such as API keys are stored as plaintext in that local file, protected only by best-effort private file permissions (`0600` on macOS/Linux). Bundled plugins are copied into the app data plugin directory on startup and may overwrite plugin files, so user-provided config must not be stored inside `plugins/<id>/`.
 
 ## Output Shape Declaration
 

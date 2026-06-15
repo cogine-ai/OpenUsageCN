@@ -68,7 +68,7 @@ describe("bigmodel-cn plugin", () => {
     })
 
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("No BIGMODEL_API_KEY found. Set up environment variable first.")
+    expect(() => plugin.probe(ctx)).toThrow("No BigModel CN API key found. Add it in Settings or set BIGMODEL_API_KEY.")
     expect(ctx.host.env.get).toHaveBeenCalledWith("BIGMODEL_API_KEY")
     expect(ctx.host.env.get).toHaveBeenCalledWith("ZHIPUAI_API_KEY")
     expect(ctx.host.env.get).not.toHaveBeenCalledWith("ZAI_API_KEY")
@@ -88,6 +88,22 @@ describe("bigmodel-cn plugin", () => {
 
     expect(ctx.host.http.request).toHaveBeenCalledTimes(1)
     expect(ctx.host.http.request.mock.calls[0][0].headers.Authorization).toBe("Bearer bigmodel-key")
+  })
+
+  it("prefers configured API key over environment variables", async () => {
+    const ctx = makeCtx()
+    ctx.host.config.get.mockImplementation((name) => name === "apiKey" ? "configured-key" : null)
+    mockEnv(ctx, {
+      BIGMODEL_API_KEY: "bigmodel-key",
+      ZHIPUAI_API_KEY: "zhipu-key",
+    })
+    mockQuota(ctx)
+
+    const plugin = await loadPlugin()
+    plugin.probe(ctx)
+
+    expect(ctx.host.config.get).toHaveBeenCalledWith("apiKey")
+    expect(ctx.host.http.request.mock.calls[0][0].headers.Authorization).toBe("Bearer configured-key")
   })
 
   it("falls back to ZHIPUAI_API_KEY when BIGMODEL_API_KEY is missing", async () => {

@@ -28,6 +28,7 @@ export type AppContentActionProps = {
   onRetryPlugin: (id: string) => void
   onReorder: (orderedIds: string[]) => void
   onToggle: (id: string) => void
+  onProviderConfigSaved: (id: string) => void
   onAutoUpdateIntervalChange: (value: AutoUpdateIntervalMinutes) => void
   onThemeModeChange: (mode: ThemeMode) => void
   onDisplayModeChange: (mode: DisplayMode) => void
@@ -50,6 +51,7 @@ export function AppContent({
   onRetryPlugin,
   onReorder,
   onToggle,
+  onProviderConfigSaved,
   onAutoUpdateIntervalChange,
   onThemeModeChange,
   onDisplayModeChange,
@@ -111,6 +113,7 @@ export function AppContent({
         plugins={settingsPlugins}
         onReorder={onReorder}
         onToggle={onToggle}
+        onProviderConfigSaved={onProviderConfigSaved}
         autoUpdateInterval={autoUpdateInterval}
         onAutoUpdateIntervalChange={onAutoUpdateIntervalChange}
         themeMode={themeMode}

@@ -58,6 +58,7 @@ function createProps(): AppContentProps {
     onRetryPlugin: vi.fn(),
     onReorder: vi.fn(),
     onToggle: vi.fn(),
+    onProviderConfigSaved: vi.fn(),
     onAutoUpdateIntervalChange: vi.fn(),
     onThemeModeChange: vi.fn(),
     onDisplayModeChange: vi.fn(),

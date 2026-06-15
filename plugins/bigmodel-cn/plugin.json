@@ -6,6 +6,17 @@
   "entry": "plugin.js",
   "icon": "icon.svg",
   "brandColor": "#E85A6A",
+  "config": {
+    "fields": [
+      {
+        "id": "apiKey",
+        "type": "secret",
+        "label": "API Key",
+        "placeholder": "key.secret",
+        "help": "留空则使用 BIGMODEL_API_KEY 或 ZHIPUAI_API_KEY 环境变量"
+      }
+    ]
+  },
   "lines": [
     { "type": "progress", "label": "Session", "scope": "overview", "primaryOrder": 1 },
     { "type": "progress", "label": "Weekly", "scope": "overview", "period": "weekly" },

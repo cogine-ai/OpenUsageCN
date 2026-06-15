@@ -35,6 +35,27 @@ export type PluginLink = {
   url: string
 }
 
+export type PluginConfigFieldType = "secret" | "text" | "select" | "toggle"
+
+export type PluginConfigOption = {
+  value: string
+  label: string
+}
+
+export type PluginConfigField = {
+  id: string
+  type: PluginConfigFieldType
+  label: string
+  placeholder?: string
+  help?: string
+  options: PluginConfigOption[]
+  default?: unknown
+}
+
+export type PluginConfig = {
+  fields: PluginConfigField[]
+}
+
 export type PluginOutput = {
   providerId: string
   displayName: string
@@ -50,6 +71,7 @@ export type PluginMeta = {
   brandColor?: string
   lines: ManifestLine[]
   links?: PluginLink[]
+  config?: PluginConfig
   /** Ordered list of primary metric candidates. Frontend picks first available. */
   primaryCandidates: string[]
   /** Label of the line marked `"period": "weekly"`, if the provider has one. */

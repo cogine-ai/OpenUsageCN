@@ -6,6 +6,7 @@ export type SettingsPluginState = {
   id: string
   name: string
   enabled: boolean
+  config?: PluginMeta["config"]
 }
 
 type UseSettingsPluginListArgs = {
@@ -22,11 +23,13 @@ export function useSettingsPluginList({ pluginSettings, pluginsMeta }: UseSettin
       .map((id) => {
         const meta = pluginMap.get(id)
         if (!meta) return null
-        return {
+        const plugin: SettingsPluginState = {
           id,
           name: meta.name,
           enabled: !pluginSettings.disabled.includes(id),
         }
+        if (meta.config) plugin.config = meta.config
+        return plugin
       })
       .filter((plugin): plugin is SettingsPluginState => Boolean(plugin))
   }, [pluginSettings, pluginsMeta])

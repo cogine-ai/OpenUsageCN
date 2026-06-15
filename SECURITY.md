@@ -21,6 +21,10 @@
 - OpenUsageCN 内置服务商插件
 - 构建和发布基础设施
 
+## 本地 Provider 配置
+
+通过设置页填写的 Provider API Key 会以明文保存在 `~/.openusagecn/providers.json`。OpenUsageCN 会尽量使用私有文件权限保护该文件（macOS/Linux 为 `0600`），但不会加密这些值。
+
 以下内容不在范围内：
 
 - 第三方服务商 API

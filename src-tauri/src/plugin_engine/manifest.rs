@@ -1,5 +1,6 @@
 use base64::{Engine, engine::general_purpose::STANDARD};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Deserialize)]
@@ -24,6 +25,43 @@ pub struct PluginLink {
     pub url: String,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginConfig {
+    #[serde(default)]
+    pub fields: Vec<PluginConfigField>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginConfigField {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub field_type: PluginConfigFieldType,
+    pub label: String,
+    pub placeholder: Option<String>,
+    pub help: Option<String>,
+    #[serde(default)]
+    pub options: Vec<PluginConfigOption>,
+    pub default: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum PluginConfigFieldType {
+    Secret,
+    Text,
+    Select,
+    Toggle,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginConfigOption {
+    pub value: String,
+    pub label: String,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginManifest {
@@ -37,6 +75,8 @@ pub struct PluginManifest {
     pub lines: Vec<ManifestLine>,
     #[serde(default)]
     pub links: Vec<PluginLink>,
+    #[serde(default)]
+    pub config: Option<PluginConfig>,
 }
 
 #[derive(Debug, Clone)]
@@ -88,6 +128,7 @@ fn load_single_plugin(
     let manifest_text = std::fs::read_to_string(&manifest_path)?;
     let mut manifest: PluginManifest = serde_json::from_str(&manifest_text)?;
     manifest.links = sanitize_plugin_links(&manifest.id, std::mem::take(&mut manifest.links));
+    validate_plugin_config(&manifest)?;
 
     // Validate primary_order / period: only progress lines can carry them,
     // and period currently only recognizes "weekly".
@@ -148,6 +189,64 @@ fn load_single_plugin(
         entry_script,
         icon_data_url,
     })
+}
+
+fn validate_plugin_config(manifest: &PluginManifest) -> Result<(), Box<dyn std::error::Error>> {
+    let Some(config) = manifest.config.as_ref() else {
+        return Ok(());
+    };
+    let mut seen = HashSet::new();
+    for field in config.fields.iter() {
+        let id = field.id.trim();
+        if id.is_empty() {
+            return Err(format!("plugin {} config field id cannot be empty", manifest.id).into());
+        }
+        if !seen.insert(id.to_string()) {
+            return Err(
+                format!("plugin {} config field '{}' is duplicated", manifest.id, id).into(),
+            );
+        }
+        if field.label.trim().is_empty() {
+            return Err(format!(
+                "plugin {} config field '{}' label cannot be empty",
+                manifest.id, id
+            )
+            .into());
+        }
+        if field.field_type == PluginConfigFieldType::Select {
+            if field.options.is_empty() {
+                return Err(
+                    format!("plugin {} select field '{}' needs options", manifest.id, id).into(),
+                );
+            }
+            let mut option_values = HashSet::new();
+            for option in field.options.iter() {
+                let value = option.value.trim();
+                if value.is_empty() {
+                    return Err(format!(
+                        "plugin {} select field '{}' has empty option value",
+                        manifest.id, id
+                    )
+                    .into());
+                }
+                if option.label.trim().is_empty() {
+                    return Err(format!(
+                        "plugin {} select field '{}' option '{}' label cannot be empty",
+                        manifest.id, id, value
+                    )
+                    .into());
+                }
+                if !option_values.insert(value.to_string()) {
+                    return Err(format!(
+                        "plugin {} select field '{}' option '{}' is duplicated",
+                        manifest.id, id, value
+                    )
+                    .into());
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 fn sanitize_plugin_links(plugin_id: &str, links: Vec<PluginLink>) -> Vec<PluginLink> {
