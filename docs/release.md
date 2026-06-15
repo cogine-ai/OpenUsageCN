@@ -53,6 +53,6 @@ APPLE_TEAM_ID
 
 ## 发布方式
 
-推送 `vMAJOR.MINOR.PATCH` tag 后，`Publish` workflow 会构建 Apple Silicon 和 Intel 两个 macOS 包，并上传 updater 所需的 `latest.json` 和 `.sig` 文件。
+推送 `vMAJOR.MINOR.PATCH` tag 后，`Publish` workflow 会先构建 Apple Silicon 和 Intel 两个 macOS 包，并把 updater 所需的 `latest.json` 和 `.sig` 文件上传到草稿 release。两个架构都通过本地 updater 验签后，workflow 才会发布正式 release。
 
 发布失败时，先看 workflow 里的 `Validate release secrets` 和 `Validate app version matches tag` 两步。它们会直接指出缺少的 Secret 或版本不一致问题。

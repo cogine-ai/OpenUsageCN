@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  publish:
+  build:
     if: startsWith(github.ref, 'refs/tags/v')
     strategy:
       fail-fast: false
@@ -143,7 +143,7 @@ jobs:
         with:
           tagName: ${{ env.RELEASE_TAG }}
           releaseName: ${{ env.RELEASE_TAG }}
-          releaseDraft: false
+          releaseDraft: true
           prerelease: false
           includeUpdaterJson: true
           args: ${{ matrix.args }}
@@ -151,11 +151,26 @@ jobs:
       - name: Verify updater signatures
         run: bun run verify:updater-signature
 
-      - name: Verify updater assets uploaded
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - name: Verify draft release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ASSETS=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | tr -d '\r')
+          ARCHIVE_COUNT=$(printf '%s\n' "$ASSETS" | grep -Ec '\.app\.tar\.gz$' || true)
+          SIGNATURE_COUNT=$(printf '%s\n' "$ASSETS" | grep -Ec '\.sig$' || true)
 
           printf '%s\n' "$ASSETS" | grep -Fxq 'latest.json' || { echo "Missing updater manifest: latest.json"; exit 1; }
-          printf '%s\n' "$ASSETS" | grep -Eq '\.sig$' || { echo "Missing updater signatures (.sig)"; exit 1; }
+          [[ "$ARCHIVE_COUNT" -ge 2 ]] || { echo "Missing updater archives for both macOS architectures."; exit 1; }
+          [[ "$SIGNATURE_COUNT" -ge 2 ]] || { echo "Missing updater signatures for both macOS architectures."; exit 1; }
+
+      - name: Publish verified release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=false --latest
