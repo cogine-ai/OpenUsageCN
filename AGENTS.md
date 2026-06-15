@@ -33,7 +33,7 @@ Always fail loudly into error logging (e.g., Sentry) and but show friendly error
 
 Always use titlecase any hardcoded copy for titles.
 
-Strictly use `@hugeicons-pro/core-solid-rounded`. Nothing else. If you come across `lucide-react` or similar, replace it. Pattern: `<HugeiconsIcon icon={FooIcon} className="size-4" />`. Never pass `strokeWidth` (paints an unwanted outline on filled glyphs).
+Use `lucide-react` as the single UI icon library. It is public, MIT-licensed, and installs with no private registry or license key — keep it that way so forks, CI, and outside contributors can build. Do not add other icon packages (including Hugeicons Pro or Free) for UI control glyphs. Pattern: `<Settings className="size-4" />`; size with Tailwind `size-*` and rely on lucide's default stroke. Hand-authored inline `<svg>` is allowed only for assets no icon library provides — the rendered tray/menubar icon, its style previews, and brand glyphs — never as a substitute for an existing lucide icon.
 
 ## Automated Testing
 
