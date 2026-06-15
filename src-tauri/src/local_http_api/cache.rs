@@ -40,6 +40,7 @@ pub(super) struct CacheState {
     pub snapshots: HashMap<String, CachedPluginSnapshot>,
     pub app_data_dir: PathBuf,
     pub known_plugin_ids: Vec<String>,
+    pub app_version: String,
     dirty_generation: u64,
     flushed_generation: u64,
     flush_scheduled: bool,
@@ -50,6 +51,29 @@ enum CacheFlushResult {
     Idle,
     Flushed,
     Failed(String),
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct HealthProvidersSummary {
+    pub(super) known: usize,
+    pub(super) enabled: usize,
+    pub(super) cached: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct HealthCacheSummary {
+    pub(super) ready: bool,
+    pub(super) last_successful_fetch_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct HealthCacheState {
+    pub(super) version: String,
+    pub(super) providers: HealthProvidersSummary,
+    pub(super) cache: HealthCacheSummary,
 }
 
 // ---------------------------------------------------------------------------
@@ -63,6 +87,7 @@ pub(super) fn cache_state() -> &'static Mutex<CacheState> {
             snapshots: HashMap::new(),
             app_data_dir: PathBuf::new(),
             known_plugin_ids: Vec::new(),
+            app_version: String::new(),
             dirty_generation: 0,
             flushed_generation: 0,
             flush_scheduled: false,
@@ -215,12 +240,13 @@ fn flush_pending_cache_once() -> CacheFlushResult {
 // Public API: initialise + update cache
 // ---------------------------------------------------------------------------
 
-pub fn init(app_data_dir: &Path, known_plugin_ids: Vec<String>) {
+pub fn init(app_data_dir: &Path, known_plugin_ids: Vec<String>, app_version: String) {
     let snapshots = load_cache(app_data_dir);
     let mut state = cache_state().lock().expect("cache state poisoned");
     state.snapshots = snapshots;
     state.app_data_dir = app_data_dir.to_path_buf();
     state.known_plugin_ids = known_plugin_ids;
+    state.app_version = app_version;
     state.dirty_generation = 0;
     state.flushed_generation = 0;
     state.flush_scheduled = false;
@@ -287,8 +313,7 @@ fn read_plugin_settings(app_data_dir: &Path) -> (Vec<String>, HashSet<String>, b
     }
 }
 
-/// Build the ordered list of enabled cached snapshots for GET /v1/usage.
-pub(super) fn enabled_snapshots_ordered(state: &CacheState) -> Vec<CachedPluginSnapshot> {
+fn enabled_plugin_ids_ordered(state: &CacheState) -> Vec<String> {
     let (settings_order, disabled, has_settings) = read_plugin_settings(&state.app_data_dir);
 
     let default_enabled: HashSet<&str> = DEFAULT_ENABLED_PLUGINS.iter().copied().collect();
@@ -315,11 +340,45 @@ pub(super) fn enabled_snapshots_ordered(state: &CacheState) -> Vec<CachedPluginS
         }
     }
 
-    ordered
+    ordered.into_iter().filter(|id| is_enabled(id)).collect()
+}
+
+/// Build the ordered list of enabled cached snapshots for GET /v1/usage.
+pub(super) fn enabled_snapshots_ordered(state: &CacheState) -> Vec<CachedPluginSnapshot> {
+    enabled_plugin_ids_ordered(state)
         .into_iter()
-        .filter(|id| is_enabled(id))
         .filter_map(|id| state.snapshots.get(&id).cloned())
         .collect()
+}
+
+pub(super) fn health_cache_state() -> HealthCacheState {
+    let state = cache_state().lock().expect("cache state poisoned");
+    let enabled = enabled_plugin_ids_ordered(&state).len();
+    let last_successful_fetch_at = state
+        .snapshots
+        .values()
+        .filter_map(|snapshot| {
+            let fetched_at = snapshot.fetched_at.trim();
+            if fetched_at.is_empty() {
+                None
+            } else {
+                Some(fetched_at.to_string())
+            }
+        })
+        .max();
+
+    HealthCacheState {
+        version: state.app_version.clone(),
+        providers: HealthProvidersSummary {
+            known: state.known_plugin_ids.len(),
+            enabled,
+            cached: state.snapshots.len(),
+        },
+        cache: HealthCacheSummary {
+            ready: last_successful_fetch_at.is_some(),
+            last_successful_fetch_at,
+        },
+    }
 }
 
 #[cfg(test)]
@@ -474,7 +533,11 @@ mod tests {
         let dir = temp_dir("debounced-cache");
         std::fs::create_dir_all(&dir).unwrap();
 
-        init(&dir, vec!["claude".to_string(), "codex".to_string()]);
+        init(
+            &dir,
+            vec!["claude".to_string(), "codex".to_string()],
+            "test".to_string(),
+        );
         cache_successful_output(&make_output("claude", "Claude"));
         cache_successful_output(&make_output("codex", "Codex"));
 
@@ -504,7 +567,7 @@ mod tests {
         let dir = temp_dir("flush-cache");
         std::fs::create_dir_all(&dir).unwrap();
 
-        init(&dir, vec!["claude".to_string()]);
+        init(&dir, vec!["claude".to_string()], "test".to_string());
         cache_successful_output(&make_output("claude", "Claude"));
         assert!(
             !dir.join(CACHE_FILE_NAME).exists(),
@@ -527,7 +590,7 @@ mod tests {
     fn failed_cache_write_stays_pending_for_retry() {
         let dir = temp_dir("cache-write-retry");
 
-        init(&dir, vec!["claude".to_string()]);
+        init(&dir, vec!["claude".to_string()], "test".to_string());
         {
             let mut state = cache_state().lock().unwrap();
             state

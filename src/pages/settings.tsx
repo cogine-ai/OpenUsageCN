@@ -18,6 +18,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { GlobalShortcutSection } from "@/components/global-shortcut-section";
+import { LocalHttpApiSection } from "@/components/local-http-api-section";
 import { ProviderConfigFields } from "@/components/provider-config-fields";
 import type { PluginConfig as ManifestPluginConfig } from "@/lib/plugin-types";
 import { getBarFillLayout, getTrayIconSizePx } from "@/lib/tray-bars-icon";
@@ -574,6 +575,7 @@ export function SettingsPage({
         globalShortcut={globalShortcut}
         onGlobalShortcutChange={onGlobalShortcutChange}
       />
+      <LocalHttpApiSection />
       <section>
         <h3 className="text-lg font-semibold mb-0">登录时启动</h3>
         <p className="text-sm text-muted-foreground mb-2">

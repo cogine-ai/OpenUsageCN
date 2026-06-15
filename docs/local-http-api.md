@@ -4,9 +4,41 @@ OpenUsageCN exposes a read-only HTTP API on the loopback interface so other loca
 
 **Base URL:** `http://127.0.0.1:6736`
 
-The server starts automatically with the app. If the port is already in use, the feature is silently disabled for that session.
+The server starts automatically with the app. If the port is already in use, the API is disabled for that session and Settings shows the bind failure.
 
 ## Routes
+
+### `GET /health`
+
+Returns local API service and cache readiness information.
+
+- **200 OK** — The local HTTP service is running. Cached usage data may still be empty while OpenUsageCN waits for the first successful refresh.
+
+Example:
+
+```json
+{
+  "status": "ok",
+  "apiVersion": "v1",
+  "version": "0.6.28",
+  "service": {
+    "state": "running",
+    "bind": "127.0.0.1:6736",
+    "startedAt": "2026-06-16T10:00:00Z"
+  },
+  "providers": {
+    "known": 18,
+    "enabled": 3,
+    "cached": 2
+  },
+  "cache": {
+    "ready": true,
+    "lastSuccessfulFetchAt": "2026-06-16T11:30:00Z"
+  }
+}
+```
+
+`cache.ready` is `false` on a clean launch until at least one provider has refreshed successfully. That is not a service failure.
 
 ### `GET /v1/usage`
 
@@ -102,6 +134,33 @@ Error responses use this shape:
 }
 ```
 
-Possible error codes: `provider_not_found`, `not_found`, `method_not_allowed`, `server_busy`.
+Possible error codes: `provider_not_found`, `not_found`, `method_not_allowed`, `server_busy`, `forbidden_host`, `internal_error`.
 
 `server_busy` returns **503 Service Unavailable** when the local API is already handling the maximum number of concurrent connections. Clients should back off and retry later.
+
+Requests with a non-loopback `Host` header return **403 Forbidden**:
+
+```json
+{
+  "error": "forbidden_host"
+}
+```
+
+Accepted hosts are `127.0.0.1`, `127.0.0.1:6736`, `localhost`, `localhost:6736`, `[::1]`, and `[::1]:6736`.
+
+## Settings Status
+
+Settings separates two states:
+
+- **Service status** — whether the local HTTP server is starting, running, or failed to bind the port.
+- **Data status** — whether any successful provider snapshot is cached yet.
+
+While the service is starting or data is not ready, Settings refreshes this status automatically.
+
+If the service is running but `GET /v1/usage` returns `[]`, check `GET /health`. An empty usage array usually means there is no cached provider data yet, not that the API is down.
+
+## Security
+
+The API is read-only and binds only to loopback. It does not expose secrets; responses contain cached provider snapshots with `providerId`, `displayName`, optional `plan`, metric `lines`, and `fetchedAt`.
+
+OpenUsageCN rejects non-loopback `Host` headers to reduce DNS rebinding exposure from browser pages. Keep local integrations pointed at `http://127.0.0.1:6736` or `http://localhost:6736`.

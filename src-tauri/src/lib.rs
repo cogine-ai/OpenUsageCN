@@ -496,6 +496,11 @@ fn get_log_path(app_handle: tauri::AppHandle) -> Result<String, String> {
     log_path::for_app(&app_handle).map(|path| path.to_string_lossy().to_string())
 }
 
+#[tauri::command]
+fn get_local_http_api_status() -> local_http_api::LocalHttpApiServiceStatus {
+    local_http_api::get_status()
+}
+
 /// Update the global shortcut registration.
 /// Pass `null` to disable the shortcut, or a shortcut string like "CommandOrControl+Shift+U".
 #[cfg(desktop)]
@@ -652,6 +657,7 @@ pub fn run() {
             save_provider_config,
             delete_provider_config_field,
             get_log_path,
+            get_local_http_api_status,
             update_global_shortcut
         ])
         .setup(|app| {
@@ -700,7 +706,7 @@ pub fn run() {
                 app_version: app.package_info().version.to_string(),
             }));
 
-            local_http_api::init(&app_data_dir, known_plugin_ids);
+            local_http_api::init(&app_data_dir, known_plugin_ids, version.clone());
             local_http_api::start_server();
 
             tray::create(app.handle())?;

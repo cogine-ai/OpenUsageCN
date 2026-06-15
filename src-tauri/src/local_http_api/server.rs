@@ -1,4 +1,8 @@
-use super::cache::{cache_state, enabled_snapshots_ordered};
+use super::cache::{cache_state, enabled_snapshots_ordered, health_cache_state};
+use super::status::{
+    get_status, mark_bind_failed, mark_running, mark_starting, LocalHttpApiServiceStatus,
+};
+use serde::Serialize;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -61,13 +65,16 @@ impl Drop for ConnectionPermit {
 // ---------------------------------------------------------------------------
 
 pub fn start_server() {
+    mark_starting(BIND_ADDR);
     std::thread::spawn(|| {
         let listener = match TcpListener::bind(BIND_ADDR) {
             Ok(l) => {
+                mark_running(BIND_ADDR);
                 log::info!("local HTTP API listening on {}", BIND_ADDR);
                 l
             }
             Err(e) => {
+                mark_bind_failed(BIND_ADDR, &e.to_string());
                 log::warn!(
                     "failed to bind local HTTP API on {}: {} — feature disabled for this session",
                     BIND_ADDR,
@@ -125,12 +132,25 @@ fn handle_connection(mut stream: TcpStream, _permit: ConnectionPermit) {
         path
     };
 
-    let response = route(method, path);
+    let host = header_value(&request, "host");
+    let response = route(method, path, host.as_deref());
     let _ = stream.write_all(response.as_bytes());
     let _ = stream.flush();
 }
 
-fn route(method: &str, path: &str) -> String {
+fn route(method: &str, path: &str, host: Option<&str>) -> String {
+    if !is_allowed_host(host) {
+        return response_forbidden_host();
+    }
+
+    if path == "/health" {
+        return match method {
+            "GET" => handle_get_health(),
+            "OPTIONS" => response_no_content(),
+            _ => response_method_not_allowed(),
+        };
+    }
+
     // Match routes
     if path == "/v1/usage" {
         return match method {
@@ -151,6 +171,58 @@ fn route(method: &str, path: &str) -> String {
     }
 
     response_not_found("not_found")
+}
+
+fn header_value(request: &str, name: &str) -> Option<String> {
+    request.lines().skip(1).find_map(|line| {
+        let (key, value) = line.split_once(':')?;
+        if key.trim().eq_ignore_ascii_case(name) {
+            Some(value.trim().to_string())
+        } else {
+            None
+        }
+    })
+}
+
+fn is_allowed_host(host: Option<&str>) -> bool {
+    let Some(host) = host else {
+        return true;
+    };
+    let normalized = host.trim().trim_end_matches('.').to_ascii_lowercase();
+    matches!(
+        normalized.as_str(),
+        "127.0.0.1" | "127.0.0.1:6736" | "localhost" | "localhost:6736" | "[::1]" | "[::1]:6736"
+    )
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HealthResponse {
+    status: &'static str,
+    api_version: &'static str,
+    version: String,
+    service: LocalHttpApiServiceStatus,
+    providers: super::cache::HealthProvidersSummary,
+    cache: super::cache::HealthCacheSummary,
+}
+
+fn handle_get_health() -> String {
+    let cache_state = health_cache_state();
+    let body = HealthResponse {
+        status: "ok",
+        api_version: "v1",
+        version: cache_state.version,
+        service: get_status(),
+        providers: cache_state.providers,
+        cache: cache_state.cache,
+    };
+    match serde_json::to_string(&body) {
+        Ok(body) => response_json(200, "OK", &body),
+        Err(e) => {
+            log::error!("failed to serialize local HTTP API health response: {e}");
+            response_internal_error()
+        }
+    }
 }
 
 fn handle_get_usage_collection() -> String {
@@ -217,6 +289,16 @@ fn response_method_not_allowed() -> String {
     response_json(405, "Method Not Allowed", body)
 }
 
+fn response_forbidden_host() -> String {
+    let body = r#"{"error":"forbidden_host"}"#;
+    response_json(403, "Forbidden", body)
+}
+
+fn response_internal_error() -> String {
+    let body = r#"{"error":"internal_error"}"#;
+    response_json(500, "Internal Server Error", body)
+}
+
 fn response_service_unavailable() -> String {
     let body = r#"{"error":"server_busy"}"#;
     response_json(503, "Service Unavailable", body)
@@ -239,26 +321,60 @@ mod tests {
     }
 
     #[test]
+    #[serial]
+    fn route_health_returns_service_and_cache_state() {
+        {
+            let mut state = cache_state().lock().unwrap();
+            state.known_plugin_ids = vec!["claude".to_string(), "codex".to_string()];
+            state.snapshots.clear();
+        }
+
+        let resp = route("GET", "/health", None);
+
+        assert!(resp.starts_with("HTTP/1.1 200"));
+        assert!(resp.contains(r#""status":"ok""#));
+        assert!(resp.contains(r#""apiVersion":"v1""#));
+        assert!(resp.contains(r#""known":2"#));
+        assert!(resp.contains(r#""cached":0"#));
+        assert!(resp.contains(r#""ready":false"#));
+    }
+
+    #[test]
+    fn route_rejects_non_loopback_host() {
+        let resp = route("GET", "/v1/usage", Some("evil.example"));
+
+        assert!(resp.starts_with("HTTP/1.1 403"));
+        assert!(resp.contains(r#""error":"forbidden_host""#));
+    }
+
+    #[test]
+    fn route_allows_loopback_hosts() {
+        let resp = route("GET", "/v1/usage", Some("127.0.0.1:6736"));
+
+        assert!(resp.starts_with("HTTP/1.1 200"));
+    }
+
+    #[test]
     fn route_get_usage_returns_200() {
-        let resp = route("GET", "/v1/usage");
+        let resp = route("GET", "/v1/usage", None);
         assert!(resp.starts_with("HTTP/1.1 200"));
     }
 
     #[test]
     fn route_unknown_path_returns_404() {
-        let resp = route("GET", "/v2/something");
+        let resp = route("GET", "/v2/something", None);
         assert!(resp.starts_with("HTTP/1.1 404"));
     }
 
     #[test]
     fn route_post_returns_405() {
-        let resp = route("POST", "/v1/usage");
+        let resp = route("POST", "/v1/usage", None);
         assert!(resp.starts_with("HTTP/1.1 405"));
     }
 
     #[test]
     fn route_options_returns_204_with_cors() {
-        let resp = route("OPTIONS", "/v1/usage");
+        let resp = route("OPTIONS", "/v1/usage", None);
         assert!(resp.starts_with("HTTP/1.1 204"));
         assert!(resp.contains("Access-Control-Allow-Origin: *"));
     }
@@ -272,7 +388,7 @@ mod tests {
             state.snapshots.clear();
         }
 
-        let resp = route("GET", "/v1/usage/nonexistent");
+        let resp = route("GET", "/v1/usage/nonexistent", None);
         assert!(resp.starts_with("HTTP/1.1 404"));
         assert!(resp.contains("provider_not_found"));
     }
@@ -286,7 +402,7 @@ mod tests {
             state.snapshots.clear();
         }
 
-        let resp = route("GET", "/v1/usage/claude");
+        let resp = route("GET", "/v1/usage/claude", None);
         assert!(resp.starts_with("HTTP/1.1 204"));
     }
 
@@ -301,14 +417,14 @@ mod tests {
                 .insert("claude".to_string(), make_snapshot("claude", "Claude"));
         }
 
-        let resp = route("GET", "/v1/usage/claude");
+        let resp = route("GET", "/v1/usage/claude", None);
         assert!(resp.starts_with("HTTP/1.1 200"));
         assert!(resp.contains("fetchedAt"));
     }
 
     #[test]
     fn route_options_on_provider_returns_204() {
-        let resp = route("OPTIONS", "/v1/usage/claude");
+        let resp = route("OPTIONS", "/v1/usage/claude", None);
         assert!(resp.starts_with("HTTP/1.1 204"));
         assert!(resp.contains("Access-Control-Allow-Methods: GET, OPTIONS"));
     }
