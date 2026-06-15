@@ -11,6 +11,7 @@ const CONFIG_VERSION: u32 = 1;
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 struct ProviderConfigFile {
+    #[serde(default)]
     version: u32,
     #[serde(default)]
     providers: HashMap<String, HashMap<String, Value>>,
@@ -43,6 +44,11 @@ pub enum ProviderConfigViewValue {
 fn store() -> &'static Mutex<ProviderConfigFile> {
     static STORE: OnceLock<Mutex<ProviderConfigFile>> = OnceLock::new();
     STORE.get_or_init(|| Mutex::new(load_from_default_path()))
+}
+
+fn save_lock() -> &'static Mutex<()> {
+    static SAVE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    SAVE_LOCK.get_or_init(|| Mutex::new(()))
 }
 
 fn default_file() -> ProviderConfigFile {
@@ -231,6 +237,7 @@ fn save_plugin_values_to_path(
     fields: &[PluginConfigField],
     input: HashMap<String, Value>,
 ) -> Result<(), String> {
+    let _writer = save_lock().lock().expect("provider config save lock poisoned");
     let mut next_config = {
         let locked = store().lock().expect("provider config store poisoned");
         locked.clone()
@@ -266,11 +273,22 @@ pub fn delete_plugin_field(
     fields: &[PluginConfigField],
     field_id: &str,
 ) -> Result<(), String> {
+    let path = config_path()?;
+    delete_plugin_field_from_path(&path, plugin_id, fields, field_id)
+}
+
+fn delete_plugin_field_from_path(
+    path: &Path,
+    plugin_id: &str,
+    fields: &[PluginConfigField],
+    field_id: &str,
+) -> Result<(), String> {
     if !fields.iter().any(|field| field.id == field_id) {
         return Err(format!(
             "Unknown config field '{field_id}' for plugin {plugin_id}"
         ));
     }
+    let _writer = save_lock().lock().expect("provider config save lock poisoned");
     let mut next_config = {
         let locked = store().lock().expect("provider config store poisoned");
         locked.clone()
@@ -283,8 +301,7 @@ pub fn delete_plugin_field(
     }
     next_config.version = CONFIG_VERSION;
 
-    let path = config_path()?;
-    save_to_path(&path, &next_config)?;
+    save_to_path(path, &next_config)?;
     let mut locked = store().lock().expect("provider config store poisoned");
     *locked = next_config;
     Ok(())

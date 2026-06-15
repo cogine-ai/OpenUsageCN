@@ -18,6 +18,8 @@ remain separate.
 The Settings value is used first. If the field is empty, `BIGMODEL_API_KEY` is supported as an environment fallback.
 `ZHIPUAI_API_KEY` is also supported as a second fallback. This plugin does not read `ZAI_API_KEY` or `GLM_API_KEY`.
 
+API keys entered in Settings are stored as plaintext in `~/.openusagecn/providers.json`, protected only by best-effort private file permissions (`0600` on macOS/Linux).
+
 If you use environment variables, remember that OpenUsageCN is a GUI app. A one-off `export ...` in a terminal session will not be visible when you launch OpenUsageCN from Spotlight or Launchpad. Persist it, then restart OpenUsageCN.
 
 zsh (`~/.zshrc`):

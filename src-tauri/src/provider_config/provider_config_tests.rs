@@ -1,6 +1,8 @@
 use super::*;
 use crate::plugin_engine::manifest::{PluginConfigFieldType, PluginConfigOption};
 use serial_test::serial;
+use std::sync::{Arc, Barrier};
+use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn field(id: &str, field_type: PluginConfigFieldType) -> PluginConfigField {
@@ -47,6 +49,10 @@ fn temp_path(label: &str) -> PathBuf {
 fn replace_store_for_test(config: ProviderConfigFile) {
     let mut locked = store().lock().expect("provider config store poisoned");
     *locked = config;
+}
+
+fn secret_input(value: &str) -> HashMap<String, Value> {
+    HashMap::from([("apiKey".to_string(), Value::String(value.to_string()))])
 }
 
 #[cfg(unix)]
@@ -159,4 +165,155 @@ fn save_write_failure_keeps_memory_cache_unchanged() {
 
     assert!(result.is_err());
     assert_eq!(cached, Some(old_values));
+}
+
+#[test]
+fn load_missing_version_uses_current_version() {
+    let dir = temp_path("missing-version");
+    let path = dir.join("providers.json");
+    std::fs::create_dir_all(&dir).expect("create temp dir");
+    std::fs::write(
+        &path,
+        r#"{"providers":{"bigmodel-cn":{"apiKey":"secret-key"}}}"#,
+    )
+    .expect("write config");
+
+    let loaded = load_from_path(&path);
+    let _ = std::fs::remove_dir_all(&dir);
+
+    assert_eq!(loaded.version, CONFIG_VERSION);
+    assert_eq!(
+        loaded
+            .providers
+            .get("bigmodel-cn")
+            .and_then(|values| values.get("apiKey"))
+            .and_then(Value::as_str),
+        Some("secret-key")
+    );
+}
+
+#[test]
+fn damaged_config_is_backed_up_before_fallback() {
+    let dir = temp_path("damaged-backup");
+    let path = dir.join("providers.json");
+    std::fs::create_dir_all(&dir).expect("create temp dir");
+    std::fs::write(&path, "{bad json").expect("write damaged config");
+
+    let loaded = load_from_path(&path);
+    let backup = path.with_extension("json.bak");
+    let backup_text = std::fs::read_to_string(&backup).expect("read backup");
+    let _ = std::fs::remove_dir_all(&dir);
+
+    assert!(loaded.providers.is_empty());
+    assert_eq!(backup_text, "{bad json");
+}
+
+#[test]
+#[serial]
+fn save_round_trip_persists_values() {
+    replace_store_for_test(default_file());
+    let fields = vec![field("apiKey", PluginConfigFieldType::Secret)];
+    let dir = temp_path("round-trip");
+    let path = dir.join("providers.json");
+
+    save_plugin_values_to_path(&path, "bigmodel-cn", &fields, secret_input("secret-key"))
+        .expect("save provider config");
+    let loaded = load_from_path(&path);
+    let _ = std::fs::remove_dir_all(&dir);
+    replace_store_for_test(default_file());
+
+    assert_eq!(
+        loaded
+            .providers
+            .get("bigmodel-cn")
+            .and_then(|values| values.get("apiKey"))
+            .and_then(Value::as_str),
+        Some("secret-key")
+    );
+}
+
+#[test]
+#[serial]
+fn delete_plugin_field_removes_value_from_cache_and_disk() {
+    let fields = vec![field("apiKey", PluginConfigFieldType::Secret)];
+    replace_store_for_test(ProviderConfigFile {
+        version: CONFIG_VERSION,
+        providers: HashMap::from([(
+            "bigmodel-cn".to_string(),
+            secret_input("secret-key"),
+        )]),
+    });
+    let dir = temp_path("delete-field");
+    let path = dir.join("providers.json");
+
+    delete_plugin_field_from_path(&path, "bigmodel-cn", &fields, "apiKey")
+        .expect("delete provider config field");
+    let cached = {
+        let locked = store().lock().expect("provider config store poisoned");
+        locked.providers.get("bigmodel-cn").cloned()
+    };
+    let loaded = load_from_path(&path);
+    let _ = std::fs::remove_dir_all(&dir);
+    replace_store_for_test(default_file());
+
+    assert!(cached.is_none());
+    assert!(loaded.providers.get("bigmodel-cn").is_none());
+}
+
+#[test]
+#[serial]
+fn concurrent_saves_keep_all_provider_updates() {
+    replace_store_for_test(default_file());
+    let fields = vec![field("apiKey", PluginConfigFieldType::Secret)];
+    let dir = temp_path("concurrent-saves");
+    let path = dir.join("providers.json");
+    let barrier = Arc::new(Barrier::new(8));
+
+    let handles: Vec<_> = (0..8)
+        .map(|index| {
+            let fields = fields.clone();
+            let path = path.clone();
+            let barrier = Arc::clone(&barrier);
+            thread::spawn(move || {
+                barrier.wait();
+                let plugin_id = format!("provider-{index}");
+                let value = format!("secret-{index}");
+                save_plugin_values_to_path(&path, &plugin_id, &fields, secret_input(&value))
+                    .expect("save provider config");
+            })
+        })
+        .collect();
+    for handle in handles {
+        handle.join().expect("join save thread");
+    }
+
+    let cached = {
+        let locked = store().lock().expect("provider config store poisoned");
+        locked.providers.clone()
+    };
+    let loaded = load_from_path(&path);
+    let _ = std::fs::remove_dir_all(&dir);
+    replace_store_for_test(default_file());
+
+    assert_eq!(cached.len(), 8);
+    assert_eq!(loaded.providers.len(), 8);
+    for index in 0..8 {
+        let plugin_id = format!("provider-{index}");
+        let value = format!("secret-{index}");
+        assert_eq!(
+            cached
+                .get(&plugin_id)
+                .and_then(|values| values.get("apiKey"))
+                .and_then(Value::as_str),
+            Some(value.as_str())
+        );
+        assert_eq!(
+            loaded
+                .providers
+                .get(&plugin_id)
+                .and_then(|values| values.get("apiKey"))
+                .and_then(Value::as_str),
+            Some(value.as_str())
+        );
+    }
 }
