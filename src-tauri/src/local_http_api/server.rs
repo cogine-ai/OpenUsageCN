@@ -1,4 +1,5 @@
 use super::cache::{cache_state, enabled_snapshots_ordered, health_cache_state};
+use super::cors::cors_headers;
 use super::status::{
     get_status, mark_bind_failed, mark_running, mark_starting, LocalHttpApiServiceStatus,
 };
@@ -133,44 +134,45 @@ fn handle_connection(mut stream: TcpStream, _permit: ConnectionPermit) {
     };
 
     let host = header_value(&request, "host");
-    let response = route(method, path, host.as_deref());
+    let origin = header_value(&request, "origin");
+    let response = route(method, path, host.as_deref(), origin.as_deref());
     let _ = stream.write_all(response.as_bytes());
     let _ = stream.flush();
 }
 
-fn route(method: &str, path: &str, host: Option<&str>) -> String {
+fn route(method: &str, path: &str, host: Option<&str>, origin: Option<&str>) -> String {
     if !is_allowed_host(host) {
-        return response_forbidden_host();
+        return response_forbidden_host(origin);
     }
 
     if path == "/health" {
         return match method {
-            "GET" => handle_get_health(),
-            "OPTIONS" => response_no_content(),
-            _ => response_method_not_allowed(),
+            "GET" => handle_get_health(origin),
+            "OPTIONS" => response_no_content(origin),
+            _ => response_method_not_allowed(origin),
         };
     }
 
     // Match routes
     if path == "/v1/usage" {
         return match method {
-            "GET" => handle_get_usage_collection(),
-            "OPTIONS" => response_no_content(),
-            _ => response_method_not_allowed(),
+            "GET" => handle_get_usage_collection(origin),
+            "OPTIONS" => response_no_content(origin),
+            _ => response_method_not_allowed(origin),
         };
     }
 
     if let Some(provider_id) = path.strip_prefix("/v1/usage/") {
         if !provider_id.is_empty() && !provider_id.contains('/') {
             return match method {
-                "GET" => handle_get_usage_single(provider_id),
-                "OPTIONS" => response_no_content(),
-                _ => response_method_not_allowed(),
+                "GET" => handle_get_usage_single(provider_id, origin),
+                "OPTIONS" => response_no_content(origin),
+                _ => response_method_not_allowed(origin),
             };
         }
     }
 
-    response_not_found("not_found")
+    response_not_found(origin, "not_found")
 }
 
 fn header_value(request: &str, name: &str) -> Option<String> {
@@ -206,7 +208,7 @@ struct HealthResponse {
     cache: super::cache::HealthCacheSummary,
 }
 
-fn handle_get_health() -> String {
+fn handle_get_health(origin: Option<&str>) -> String {
     let cache_state = health_cache_state();
     let body = HealthResponse {
         status: "ok",
@@ -217,38 +219,38 @@ fn handle_get_health() -> String {
         cache: cache_state.cache,
     };
     match serde_json::to_string(&body) {
-        Ok(body) => response_json(200, "OK", &body),
+        Ok(body) => response_json(origin, 200, "OK", &body),
         Err(e) => {
             log::error!("failed to serialize local HTTP API health response: {e}");
-            response_internal_error()
+            response_internal_error(origin)
         }
     }
 }
 
-fn handle_get_usage_collection() -> String {
+fn handle_get_usage_collection(origin: Option<&str>) -> String {
     let snapshots = {
         let state = cache_state().lock().expect("cache state poisoned");
         enabled_snapshots_ordered(&state)
     };
     let body = serde_json::to_string(&snapshots).unwrap_or_else(|_| "[]".to_string());
-    response_json(200, "OK", &body)
+    response_json(origin, 200, "OK", &body)
 }
 
-fn handle_get_usage_single(provider_id: &str) -> String {
+fn handle_get_usage_single(provider_id: &str, origin: Option<&str>) -> String {
     let state = cache_state().lock().expect("cache state poisoned");
 
     // Check if provider is known at all
     let is_known = state.known_plugin_ids.iter().any(|id| id == provider_id);
     if !is_known {
-        return response_not_found("provider_not_found");
+        return response_not_found(origin, "provider_not_found");
     }
 
     match state.snapshots.get(provider_id) {
         Some(snapshot) => {
             let body = serde_json::to_string(snapshot).unwrap_or_else(|_| "{}".to_string());
-            response_json(200, "OK", &body)
+            response_json(origin, 200, "OK", &body)
         }
-        None => response_no_content(),
+        None => response_no_content(origin),
     }
 }
 
@@ -256,52 +258,49 @@ fn handle_get_usage_single(provider_id: &str) -> String {
 // HTTP response builders
 // ---------------------------------------------------------------------------
 
-const CORS_HEADERS: &str = "\
-Access-Control-Allow-Origin: *\r\n\
-Access-Control-Allow-Methods: GET, OPTIONS\r\n\
-Access-Control-Allow-Headers: Content-Type";
-
-fn response_json(status: u16, reason: &str, body: &str) -> String {
+fn response_json(origin: Option<&str>, status: u16, reason: &str, body: &str) -> String {
+    let cors = cors_headers(origin);
     format!(
         "HTTP/1.1 {} {}\r\nConnection: close\r\nContent-Type: application/json; charset=utf-8\r\n{}\r\nContent-Length: {}\r\n\r\n{}",
         status,
         reason,
-        CORS_HEADERS,
+        cors,
         body.len(),
         body,
     )
 }
 
-fn response_no_content() -> String {
+fn response_no_content(origin: Option<&str>) -> String {
+    let cors = cors_headers(origin);
     format!(
         "HTTP/1.1 204 No Content\r\nConnection: close\r\n{}\r\n\r\n",
-        CORS_HEADERS,
+        cors,
     )
 }
 
-fn response_not_found(error_code: &str) -> String {
+fn response_not_found(origin: Option<&str>, error_code: &str) -> String {
     let body = format!(r#"{{"error":"{}"}}"#, error_code);
-    response_json(404, "Not Found", &body)
+    response_json(origin, 404, "Not Found", &body)
 }
 
-fn response_method_not_allowed() -> String {
+fn response_method_not_allowed(origin: Option<&str>) -> String {
     let body = r#"{"error":"method_not_allowed"}"#;
-    response_json(405, "Method Not Allowed", body)
+    response_json(origin, 405, "Method Not Allowed", body)
 }
 
-fn response_forbidden_host() -> String {
+fn response_forbidden_host(origin: Option<&str>) -> String {
     let body = r#"{"error":"forbidden_host"}"#;
-    response_json(403, "Forbidden", body)
+    response_json(origin, 403, "Forbidden", body)
 }
 
-fn response_internal_error() -> String {
+fn response_internal_error(origin: Option<&str>) -> String {
     let body = r#"{"error":"internal_error"}"#;
-    response_json(500, "Internal Server Error", body)
+    response_json(origin, 500, "Internal Server Error", body)
 }
 
 fn response_service_unavailable() -> String {
     let body = r#"{"error":"server_busy"}"#;
-    response_json(503, "Service Unavailable", body)
+    response_json(None, 503, "Service Unavailable", body)
 }
 
 #[cfg(test)]
@@ -329,7 +328,7 @@ mod tests {
             state.snapshots.clear();
         }
 
-        let resp = route("GET", "/health", None);
+        let resp = route("GET", "/health", None, None);
 
         assert!(resp.starts_with("HTTP/1.1 200"));
         assert!(resp.contains(r#""status":"ok""#));
@@ -341,7 +340,7 @@ mod tests {
 
     #[test]
     fn route_rejects_non_loopback_host() {
-        let resp = route("GET", "/v1/usage", Some("evil.example"));
+        let resp = route("GET", "/v1/usage", Some("evil.example"), None);
 
         assert!(resp.starts_with("HTTP/1.1 403"));
         assert!(resp.contains(r#""error":"forbidden_host""#));
@@ -349,34 +348,55 @@ mod tests {
 
     #[test]
     fn route_allows_loopback_hosts() {
-        let resp = route("GET", "/v1/usage", Some("127.0.0.1:6736"));
+        let resp = route("GET", "/v1/usage", Some("127.0.0.1:6736"), None);
 
         assert!(resp.starts_with("HTTP/1.1 200"));
     }
 
     #[test]
     fn route_get_usage_returns_200() {
-        let resp = route("GET", "/v1/usage", None);
+        let resp = route("GET", "/v1/usage", None, None);
         assert!(resp.starts_with("HTTP/1.1 200"));
     }
 
     #[test]
     fn route_unknown_path_returns_404() {
-        let resp = route("GET", "/v2/something", None);
+        let resp = route("GET", "/v2/something", None, None);
         assert!(resp.starts_with("HTTP/1.1 404"));
     }
 
     #[test]
     fn route_post_returns_405() {
-        let resp = route("POST", "/v1/usage", None);
+        let resp = route("POST", "/v1/usage", None, None);
         assert!(resp.starts_with("HTTP/1.1 405"));
     }
 
     #[test]
-    fn route_options_returns_204_with_cors() {
-        let resp = route("OPTIONS", "/v1/usage", None);
+    fn route_options_returns_204_with_loopback_cors() {
+        let resp = route("OPTIONS", "/v1/usage", None, Some("http://localhost:3000"));
         assert!(resp.starts_with("HTTP/1.1 204"));
-        assert!(resp.contains("Access-Control-Allow-Origin: *"));
+        assert!(resp.contains("Access-Control-Allow-Origin: http://localhost:3000"));
+    }
+
+    #[test]
+    fn route_omits_cors_origin_for_public_origin() {
+        let resp = route(
+            "GET",
+            "/v1/usage",
+            Some("127.0.0.1:6736"),
+            Some("https://evil.example"),
+        );
+
+        assert!(resp.starts_with("HTTP/1.1 200"));
+        assert!(!resp.contains("Access-Control-Allow-Origin"));
+    }
+
+    #[test]
+    fn route_allows_tauri_app_origin() {
+        let resp = route("GET", "/health", None, Some("tauri://localhost"));
+
+        assert!(resp.starts_with("HTTP/1.1 200"));
+        assert!(resp.contains("Access-Control-Allow-Origin: tauri://localhost"));
     }
 
     #[test]
@@ -388,7 +408,7 @@ mod tests {
             state.snapshots.clear();
         }
 
-        let resp = route("GET", "/v1/usage/nonexistent", None);
+        let resp = route("GET", "/v1/usage/nonexistent", None, None);
         assert!(resp.starts_with("HTTP/1.1 404"));
         assert!(resp.contains("provider_not_found"));
     }
@@ -402,7 +422,7 @@ mod tests {
             state.snapshots.clear();
         }
 
-        let resp = route("GET", "/v1/usage/claude", None);
+        let resp = route("GET", "/v1/usage/claude", None, None);
         assert!(resp.starts_with("HTTP/1.1 204"));
     }
 
@@ -417,22 +437,23 @@ mod tests {
                 .insert("claude".to_string(), make_snapshot("claude", "Claude"));
         }
 
-        let resp = route("GET", "/v1/usage/claude", None);
+        let resp = route("GET", "/v1/usage/claude", None, None);
         assert!(resp.starts_with("HTTP/1.1 200"));
         assert!(resp.contains("fetchedAt"));
     }
 
     #[test]
     fn route_options_on_provider_returns_204() {
-        let resp = route("OPTIONS", "/v1/usage/claude", None);
+        let resp = route("OPTIONS", "/v1/usage/claude", None, None);
         assert!(resp.starts_with("HTTP/1.1 204"));
         assert!(resp.contains("Access-Control-Allow-Methods: GET, OPTIONS"));
     }
 
     #[test]
-    fn response_json_includes_cors_headers() {
-        let resp = response_json(200, "OK", "[]");
-        assert!(resp.contains("Access-Control-Allow-Origin: *"));
+    fn response_json_includes_content_type_and_common_cors_headers() {
+        let resp = response_json(Some("http://127.0.0.1:1420"), 200, "OK", "[]");
+        assert!(resp.contains("Access-Control-Allow-Origin: http://127.0.0.1:1420"));
+        assert!(resp.contains("Access-Control-Allow-Methods: GET, OPTIONS"));
         assert!(resp.contains("Content-Type: application/json; charset=utf-8"));
     }
 
@@ -461,6 +482,7 @@ mod tests {
 
         assert!(resp.starts_with("HTTP/1.1 503"));
         assert!(resp.contains(r#""error":"server_busy""#));
-        assert!(resp.contains("Access-Control-Allow-Origin: *"));
+        assert!(resp.contains("Access-Control-Allow-Methods: GET, OPTIONS"));
+        assert!(!resp.contains("Access-Control-Allow-Origin"));
     }
 }

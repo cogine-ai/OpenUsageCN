@@ -1,4 +1,5 @@
 pub(crate) mod cache;
+mod cors;
 mod server;
 mod status;
 

@@ -353,10 +353,13 @@ pub(super) fn enabled_snapshots_ordered(state: &CacheState) -> Vec<CachedPluginS
 
 pub(super) fn health_cache_state() -> HealthCacheState {
     let state = cache_state().lock().expect("cache state poisoned");
-    let enabled = enabled_plugin_ids_ordered(&state).len();
-    let last_successful_fetch_at = state
-        .snapshots
-        .values()
+    let enabled_plugin_ids = enabled_plugin_ids_ordered(&state);
+    let enabled_cached_snapshots: Vec<&CachedPluginSnapshot> = enabled_plugin_ids
+        .iter()
+        .filter_map(|id| state.snapshots.get(id))
+        .collect();
+    let last_successful_fetch_at = enabled_cached_snapshots
+        .iter()
         .filter_map(|snapshot| {
             let fetched_at = snapshot.fetched_at.trim();
             if fetched_at.is_empty() {
@@ -371,8 +374,8 @@ pub(super) fn health_cache_state() -> HealthCacheState {
         version: state.app_version.clone(),
         providers: HealthProvidersSummary {
             known: state.known_plugin_ids.len(),
-            enabled,
-            cached: state.snapshots.len(),
+            enabled: enabled_plugin_ids.len(),
+            cached: enabled_cached_snapshots.len(),
         },
         cache: HealthCacheSummary {
             ready: last_successful_fetch_at.is_some(),
@@ -488,6 +491,40 @@ mod tests {
         assert!(json.get("fetchedAt").is_some());
         assert!(json.get("fetched_at").is_none());
         assert_eq!(json["fetchedAt"], "2026-03-26T08:15:30Z");
+    }
+
+    #[test]
+    #[serial]
+    fn health_cache_state_counts_enabled_cached_snapshots_only() {
+        let dir = temp_dir("health-enabled-cache");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(SETTINGS_FILE_NAME),
+            r#"{"plugins":{"order":["claude","codex"],"disabled":["claude"]}}"#,
+        )
+        .unwrap();
+
+        init(
+            &dir,
+            vec!["claude".to_string(), "codex".to_string()],
+            "test-version".to_string(),
+        );
+        {
+            let mut state = cache_state().lock().unwrap();
+            state
+                .snapshots
+                .insert("claude".to_string(), make_snapshot("claude", "Claude"));
+        }
+
+        let health = health_cache_state();
+
+        assert_eq!(health.providers.known, 2);
+        assert_eq!(health.providers.enabled, 1);
+        assert_eq!(health.providers.cached, 0);
+        assert!(!health.cache.ready);
+        assert_eq!(health.cache.last_successful_fetch_at, None);
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
