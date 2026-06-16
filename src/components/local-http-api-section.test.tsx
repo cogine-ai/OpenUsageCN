@@ -48,9 +48,9 @@ describe("LocalHttpApiSection", () => {
 
     render(<LocalHttpApiSection />)
 
-    expect(await screen.findByText("本地 API")).toBeInTheDocument()
-    expect(screen.getByText("运行中")).toBeInTheDocument()
-    expect(screen.getByText("已缓存 2 个服务商")).toBeInTheDocument()
+    expect(screen.getByText("本地 API")).toBeInTheDocument()
+    expect(await screen.findByText("运行中")).toBeInTheDocument()
+    expect(await screen.findByText("已缓存 2 个服务商")).toBeInTheDocument()
     expect(localApiMocks.fetchLocalHttpApiHealth).toHaveBeenCalledTimes(1)
   })
 

@@ -36,6 +36,8 @@ OpenUsageCN 常驻菜单栏，用一个轻量面板展示各类 AI 编程工具�
 - [**Kimi Code**](docs/providers/kimi.md)：session、weekly
 - [**MiniMax**](docs/providers/minimax.md)：coding plan session
 - [**OpenCode Go**](docs/providers/opencode-go.md)：5h、weekly、monthly spend limits
+- [**Perplexity**](docs/providers/perplexity.md)：balance、usage analytics、本地 app session
+- [**Synthetic**](docs/providers/synthetic.md)：subscription、search、weekly token、5h limits
 - [**Devin**](docs/providers/devin.md)：weekly quota、extra usage
 - [**Z.ai**](docs/providers/zai.md)：session、weekly、web searches、设置页 API Key
 

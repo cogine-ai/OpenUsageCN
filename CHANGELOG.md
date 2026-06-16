@@ -4,6 +4,33 @@
 
 暂无。
 
+## v0.6.29
+
+### New Features
+
+- Add local HTTP API health reporting and Settings status display ([#10](https://github.com/cogine-ai/OpenUsageCN/pull/10)) by @lc708
+
+### Bug Fixes
+
+- Harden local HTTP API CORS, loopback host validation, bind failure status, and cache readiness handling ([#10](https://github.com/cogine-ai/OpenUsageCN/pull/10)) by @lc708
+
+### Chores
+
+- Align agent icon guidance with the current project rules ([#9](https://github.com/cogine-ai/OpenUsageCN/pull/9)) by @lc708
+
+---
+
+### Changelog
+
+**Full Changelog**: [v0.6.28...v0.6.29](https://github.com/cogine-ai/OpenUsageCN/compare/v0.6.28...v0.6.29)
+
+- [1d03325](https://github.com/cogine-ai/OpenUsageCN/commit/1d033255610e31dd7e8e186d2d0b70963c89538c) Merge pull request #10 from cogine-ai/cliq/local-http-api-hardening by @lc708
+- [9360c75](https://github.com/cogine-ai/OpenUsageCN/commit/9360c75d0858fed3e50f1a7f160e4480c6c553c1) Fix local API review follow-ups by @lc708
+- [e1f7a1e](https://github.com/cogine-ai/OpenUsageCN/commit/e1f7a1e6f077b04ab19ce5bf17777895b2c0ffee) Tighten local HTTP API CORS by @lc708
+- [02ac01e](https://github.com/cogine-ai/OpenUsageCN/commit/02ac01ed16a812900b2cc023d0d42ae7a050fe73) Harden local HTTP API diagnostics by @lc708
+- [5daff29](https://github.com/cogine-ai/OpenUsageCN/commit/5daff2938312d99c86576b2f7717cfd52dafc4f5) Merge pull request #9 from cogine-ai/cliq/lucide-icon-rule by @lc708
+- [ad1a97b](https://github.com/cogine-ai/OpenUsageCN/commit/ad1a97bc31e408fa6f89c5bd5782efc602623dcf) Align icon guidance with lucide by @lc708
+
 ## v0.6.28
 
 ### New Features
