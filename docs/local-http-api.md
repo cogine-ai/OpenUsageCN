@@ -116,7 +116,7 @@ The `lines` array uses the same metric line types as the internal plugin output:
 
 Responses include preflight headers:
 
-```
+```http
 Access-Control-Allow-Methods: GET, OPTIONS
 Access-Control-Allow-Headers: Content-Type
 ```

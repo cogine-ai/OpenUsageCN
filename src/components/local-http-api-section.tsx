@@ -77,6 +77,7 @@ export function LocalHttpApiSection() {
           if (cancelled) return
           console.error("Failed to read local HTTP API status:", error)
           setStatusError("无法读取服务状态")
+          scheduleRefresh()
         })
     }
 

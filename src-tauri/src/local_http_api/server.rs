@@ -232,8 +232,13 @@ fn handle_get_usage_collection(origin: Option<&str>) -> String {
         let state = cache_state().lock().expect("cache state poisoned");
         enabled_snapshots_ordered(&state)
     };
-    let body = serde_json::to_string(&snapshots).unwrap_or_else(|_| "[]".to_string());
-    response_json(origin, 200, "OK", &body)
+    match serde_json::to_string(&snapshots) {
+        Ok(body) => response_json(origin, 200, "OK", &body),
+        Err(e) => {
+            log::error!("failed to serialize local HTTP API usage collection response: {e}");
+            response_internal_error(origin)
+        }
+    }
 }
 
 fn handle_get_usage_single(provider_id: &str, origin: Option<&str>) -> String {
@@ -246,10 +251,15 @@ fn handle_get_usage_single(provider_id: &str, origin: Option<&str>) -> String {
     }
 
     match state.snapshots.get(provider_id) {
-        Some(snapshot) => {
-            let body = serde_json::to_string(snapshot).unwrap_or_else(|_| "{}".to_string());
-            response_json(origin, 200, "OK", &body)
-        }
+        Some(snapshot) => match serde_json::to_string(snapshot) {
+            Ok(body) => response_json(origin, 200, "OK", &body),
+            Err(e) => {
+                log::error!(
+                    "failed to serialize local HTTP API usage response for provider {provider_id}: {e}"
+                );
+                response_internal_error(origin)
+            }
+        },
         None => response_no_content(origin),
     }
 }

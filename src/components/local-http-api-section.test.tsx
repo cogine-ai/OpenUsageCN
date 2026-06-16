@@ -170,4 +170,48 @@ describe("LocalHttpApiSection", () => {
     expect(localApiMocks.getLocalHttpApiStatus).toHaveBeenCalledTimes(2)
     expect(localApiMocks.fetchLocalHttpApiHealth).toHaveBeenCalledTimes(1)
   })
+
+  it("retries status polling after a transient status read failure", async () => {
+    vi.useFakeTimers()
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+    localApiMocks.getLocalHttpApiStatus
+      .mockRejectedValueOnce(new Error("transient ipc failure"))
+      .mockResolvedValueOnce({
+        state: "running",
+        bind: "127.0.0.1:6736",
+        startedAt: "2026-06-16T10:00:00Z",
+      })
+    localApiMocks.fetchLocalHttpApiHealth.mockResolvedValue({
+      status: "ok",
+      apiVersion: "v1",
+      version: "0.6.28",
+      service: {
+        state: "running",
+        bind: "127.0.0.1:6736",
+        startedAt: "2026-06-16T10:00:00Z",
+      },
+      providers: { known: 18, enabled: 3, cached: 2 },
+      cache: {
+        ready: true,
+        lastSuccessfulFetchAt: "2026-06-16T11:30:00Z",
+      },
+    })
+
+    render(<LocalHttpApiSection />)
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(screen.getByText("无法读取服务状态")).toBeInTheDocument()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000)
+    })
+
+    expect(screen.getByText("运行中")).toBeInTheDocument()
+    expect(screen.getByText("已缓存 2 个服务商")).toBeInTheDocument()
+    expect(localApiMocks.getLocalHttpApiStatus).toHaveBeenCalledTimes(2)
+    expect(localApiMocks.fetchLocalHttpApiHealth).toHaveBeenCalledTimes(1)
+    consoleError.mockRestore()
+  })
 })

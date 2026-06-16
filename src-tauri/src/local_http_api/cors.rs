@@ -85,6 +85,13 @@ mod tests {
     }
 
     #[test]
+    fn cors_headers_reflect_ipv6_loopback_origins() {
+        let headers = cors_headers(Some("http://[::1]:3000"));
+
+        assert!(headers.contains("Access-Control-Allow-Origin: http://[::1]:3000"));
+    }
+
+    #[test]
     fn cors_headers_reflect_tauri_app_origins() {
         let headers = cors_headers(Some("tauri://localhost"));
 
