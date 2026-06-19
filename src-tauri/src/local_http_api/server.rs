@@ -495,4 +495,43 @@ mod tests {
         assert!(resp.contains("Access-Control-Allow-Methods: GET, OPTIONS"));
         assert!(!resp.contains("Access-Control-Allow-Origin"));
     }
+
+    #[test]
+    fn route_strips_query_string_from_path() {
+        let resp = route("GET", "/v1/usage?cache=false", None, None);
+
+        assert!(resp.starts_with("HTTP/1.1 200"));
+    }
+
+    #[test]
+    fn route_strips_trailing_slash_from_nested_paths() {
+        let resp = route("GET", "/v1/usage/claude/", None, None);
+
+        assert!(
+            resp.starts_with("HTTP/1.1 204") || resp.starts_with("HTTP/1.1 404"),
+            "unexpected response: {resp}"
+        );
+    }
+
+    #[test]
+    fn route_rejects_nested_provider_paths() {
+        let resp = route("GET", "/v1/usage/claude/extra", None, None);
+
+        assert!(resp.starts_with("HTTP/1.1 404"));
+        assert!(resp.contains("not_found"));
+    }
+
+    #[test]
+    fn route_allows_ipv6_loopback_host() {
+        let resp = route("GET", "/health", Some("[::1]:6736"), None);
+
+        assert!(resp.starts_with("HTTP/1.1 200"));
+    }
+
+    #[test]
+    fn header_value_is_case_insensitive() {
+        let request = "GET /health HTTP/1.1\r\nHoSt: 127.0.0.1:6736\r\n\r\n";
+
+        assert_eq!(header_value(request, "host").as_deref(), Some("127.0.0.1:6736"));
+    }
 }
