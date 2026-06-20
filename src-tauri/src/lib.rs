@@ -625,6 +625,10 @@ pub fn run() {
     let _guard = runtime.enter();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            log::info!("Secondary OpenUsageCN instance requested; showing existing panel");
+            panel::show_panel(app);
+        }))
         .plugin(tauri_plugin_aptabase::Builder::new("A-US-6435241436").build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())

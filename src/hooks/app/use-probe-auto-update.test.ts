@@ -9,7 +9,10 @@ vi.mock("@/lib/settings", () => ({
   getEnabledPluginIds: getEnabledPluginIdsMock,
 }))
 
-import { useProbeAutoUpdate } from "@/hooks/app/use-probe-auto-update"
+import {
+  AUTO_UPDATE_FAILURE_BACKOFF_MS,
+  useProbeAutoUpdate,
+} from "@/hooks/app/use-probe-auto-update"
 
 describe("useProbeAutoUpdate", () => {
   beforeEach(() => {
@@ -29,6 +32,7 @@ describe("useProbeAutoUpdate", () => {
       useProbeAutoUpdate({
         pluginSettings: null,
         autoUpdateInterval: 15,
+        pluginStatesRef: { current: {} },
         setLoadingForPlugins: vi.fn(),
         setErrorForPlugins: vi.fn(),
         isPluginLoading: vi.fn(() => false),
@@ -50,6 +54,7 @@ describe("useProbeAutoUpdate", () => {
       useProbeAutoUpdate({
         pluginSettings: { order: ["codex"], disabled: [] },
         autoUpdateInterval: 15,
+        pluginStatesRef: { current: {} },
         setLoadingForPlugins: vi.fn(),
         setErrorForPlugins: vi.fn(),
         isPluginLoading: vi.fn(() => false),
@@ -78,6 +83,7 @@ describe("useProbeAutoUpdate", () => {
       useProbeAutoUpdate({
         pluginSettings: { order: ["slow", "idle"], disabled: [] },
         autoUpdateInterval: 15,
+        pluginStatesRef: { current: {} },
         setLoadingForPlugins,
         setErrorForPlugins,
         isPluginLoading,
@@ -108,6 +114,7 @@ describe("useProbeAutoUpdate", () => {
       useProbeAutoUpdate({
         pluginSettings: { order: ["slow"], disabled: [] },
         autoUpdateInterval: 15,
+        pluginStatesRef: { current: {} },
         setLoadingForPlugins,
         setErrorForPlugins,
         isPluginLoading: vi.fn(() => true),
@@ -125,5 +132,83 @@ describe("useProbeAutoUpdate", () => {
     expect(setLoadingForPlugins).not.toHaveBeenCalled()
     expect(startBatch).not.toHaveBeenCalled()
     expect(setErrorForPlugins).not.toHaveBeenCalled()
+  })
+
+  it("backs off failed providers during auto-update", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(10_000)
+
+    const setLoadingForPlugins = vi.fn()
+    const setErrorForPlugins = vi.fn()
+    const startBatch = vi.fn().mockResolvedValue(["healthy"])
+
+    renderHook(() =>
+      useProbeAutoUpdate({
+        pluginSettings: { order: ["failed", "healthy"], disabled: [] },
+        autoUpdateInterval: 5,
+        pluginStatesRef: {
+          current: {
+            failed: {
+              data: null,
+              loading: false,
+              error: "Auth expired",
+              lastErrorAt: Date.now(),
+              lastManualRefreshAt: null,
+              lastUpdatedAt: null,
+            },
+          },
+        },
+        setLoadingForPlugins,
+        setErrorForPlugins,
+        isPluginLoading: vi.fn(() => false),
+        startBatch,
+      })
+    )
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5 * 60_000)
+    })
+
+    expect(setLoadingForPlugins).toHaveBeenCalledWith(["healthy"])
+    expect(startBatch).toHaveBeenCalledWith(["healthy"])
+    expect(setErrorForPlugins).not.toHaveBeenCalled()
+  })
+
+  it("retries failed providers after the auto-update backoff expires", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(10_000)
+
+    const setLoadingForPlugins = vi.fn()
+    const startBatch = vi.fn().mockResolvedValue(["failed"])
+
+    renderHook(() =>
+      useProbeAutoUpdate({
+        pluginSettings: { order: ["failed"], disabled: [] },
+        autoUpdateInterval: 15,
+        pluginStatesRef: {
+          current: {
+            failed: {
+              data: null,
+              loading: false,
+              error: "Auth expired",
+              lastErrorAt: Date.now(),
+              lastManualRefreshAt: null,
+              lastUpdatedAt: null,
+            },
+          },
+        },
+        setLoadingForPlugins,
+        setErrorForPlugins: vi.fn(),
+        isPluginLoading: vi.fn(() => false),
+        startBatch,
+      })
+    )
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(AUTO_UPDATE_FAILURE_BACKOFF_MS)
+    })
+
+    expect(setLoadingForPlugins).toHaveBeenCalledWith(["failed"])
+    expect(startBatch).toHaveBeenCalledWith(["failed"])
   })
 })

@@ -9,6 +9,7 @@
 - `displayPlugins` + `navPlugins` are computed by `useAppPluginViews`.
 - `settingsPlugins` is computed by `useSettingsPluginList`.
 - `autoUpdateNextAt` is runtime scheduling state from `useProbe`.
+- Automatic refresh skips providers that are still loading or inside the short failure backoff. Manual refresh still retries immediately.
 - `selectedPlugin` is computed by `useAppPluginViews`.
 
 ## Main data flow
