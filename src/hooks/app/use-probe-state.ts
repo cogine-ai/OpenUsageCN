@@ -47,6 +47,7 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
           data: existing?.data ?? null,
           loading: true,
           error: null,
+          lastErrorAt: null,
           lastManualRefreshAt: existing?.lastManualRefreshAt ?? null,
           lastUpdatedAt: existing?.lastUpdatedAt ?? null,
         }
@@ -56,6 +57,7 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
   }, [updatePluginStates])
 
   const setErrorForPlugins = useCallback((ids: string[], error: string) => {
+    const now = Date.now()
     updatePluginStates((prev) => {
       const next = { ...prev }
       for (const id of ids) {
@@ -64,6 +66,7 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
           data: existing?.data ?? null,
           loading: false,
           error,
+          lastErrorAt: now,
           lastManualRefreshAt: existing?.lastManualRefreshAt ?? null,
           lastUpdatedAt: existing?.lastUpdatedAt ?? null,
         }
@@ -89,6 +92,7 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
             data: errorMessage ? (existing?.data ?? null) : output,
             loading: false,
             error: errorMessage,
+            lastErrorAt: errorMessage ? now : null,
             lastManualRefreshAt: !errorMessage && isManual
               ? now
               : existing?.lastManualRefreshAt ?? null,

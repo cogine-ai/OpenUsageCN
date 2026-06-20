@@ -1,13 +1,17 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useState, type MutableRefObject } from "react"
 import {
   getEnabledPluginIds,
   type AutoUpdateIntervalMinutes,
   type PluginSettings,
 } from "@/lib/settings"
+import type { PluginState } from "@/hooks/app/types"
+
+export const AUTO_UPDATE_FAILURE_BACKOFF_MS = 15 * 60_000
 
 type UseProbeAutoUpdateArgs = {
   pluginSettings: PluginSettings | null
   autoUpdateInterval: AutoUpdateIntervalMinutes
+  pluginStatesRef: MutableRefObject<Record<string, PluginState>>
   setLoadingForPlugins: (ids: string[]) => void
   setErrorForPlugins: (ids: string[], error: string) => void
   isPluginLoading: (id: string) => boolean
@@ -17,6 +21,7 @@ type UseProbeAutoUpdateArgs = {
 export function useProbeAutoUpdate({
   pluginSettings,
   autoUpdateInterval,
+  pluginStatesRef,
   setLoadingForPlugins,
   setErrorForPlugins,
   isPluginLoading,
@@ -42,7 +47,13 @@ export function useProbeAutoUpdate({
     scheduleNext()
 
     const interval = setInterval(() => {
-      const idleIds = enabledIds.filter((id) => !isPluginLoading(id))
+      const now = Date.now()
+      const idleIds = enabledIds.filter((id) => {
+        if (isPluginLoading(id)) return false
+        const currentState = pluginStatesRef.current[id]
+        if (!currentState?.error || !currentState.lastErrorAt) return true
+        return now - currentState.lastErrorAt >= AUTO_UPDATE_FAILURE_BACKOFF_MS
+      })
       if (idleIds.length === 0) {
         scheduleNext()
         return
@@ -61,6 +72,7 @@ export function useProbeAutoUpdate({
     autoUpdateInterval,
     autoUpdateResetToken,
     pluginSettings,
+    pluginStatesRef,
     isPluginLoading,
     setLoadingForPlugins,
     setErrorForPlugins,

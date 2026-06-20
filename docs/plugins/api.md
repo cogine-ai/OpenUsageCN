@@ -371,6 +371,8 @@ try {
 - The user clicks Refresh (per-provider retry button)
 - The auto-update timer fires (configurable: 5/15/30/60 minutes)
 
+If a provider fails, automatic refresh waits through a short failure backoff before retrying that provider. The user can still click Refresh to retry immediately.
+
 Any token refresh logic (e.g., OAuth refresh) must run inside `probe(ctx)` at those times.
 
 ## Line Builders
