@@ -129,7 +129,7 @@ describe("useProbeEvents", () => {
     expect(onResult).toHaveBeenCalledWith(output)
 
     completeListener?.({ payload: { batchId } })
-    expect(onBatchComplete).toHaveBeenCalledTimes(1)
+    expect(onBatchComplete).toHaveBeenCalledWith(["a"])
 
     resultListener?.({ payload: { batchId, output } })
     expect(onResult).toHaveBeenCalledTimes(1)
@@ -153,6 +153,24 @@ describe("useProbeEvents", () => {
 
     expect(onResult).not.toHaveBeenCalled()
     expect(onBatchComplete).not.toHaveBeenCalled()
+  })
+
+  it("passes batch plugin ids to batch-complete handler", async () => {
+    invokeMock.mockImplementation(async (_cmd: string, args: any) => ({
+      batchId: args.batchId,
+      pluginIds: args.pluginIds ?? ["a", "b"],
+    }))
+    const onBatchComplete = vi.fn()
+    const { result } = renderHook(() =>
+      useProbeEvents({ onResult: vi.fn(), onBatchComplete })
+    )
+
+    await act(() => result.current.startBatch(["a", "b"]))
+    const completeListener = listeners.get("probe:batch-complete")
+    const batchId = invokeMock.mock.calls[0]?.[1]?.batchId
+    completeListener?.({ payload: { batchId } })
+
+    expect(onBatchComplete).toHaveBeenCalledWith(["a", "b"])
   })
 
   it("rejects when invoke fails", async () => {

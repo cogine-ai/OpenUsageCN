@@ -25,10 +25,16 @@ export function useProbe({
     manualRefreshIdsRef,
     setLoadingForPlugins,
     setErrorForPlugins,
+    clearStuckLoadingForPlugins,
     handleProbeResult,
   } = useProbeState({ onProbeResult })
 
-  const handleBatchComplete = useCallback(() => {}, [])
+  const handleBatchComplete = useCallback(
+    (pluginIds: string[]) => {
+      clearStuckLoadingForPlugins(pluginIds)
+    },
+    [clearStuckLoadingForPlugins]
+  )
 
   const { startBatch } = useProbeEvents({
     onResult: handleProbeResult,

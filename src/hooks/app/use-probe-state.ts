@@ -106,12 +106,35 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
     [getErrorMessage, onProbeResult, updatePluginStates]
   )
 
+  const clearStuckLoadingForPlugins = useCallback((ids: string[]) => {
+    const now = Date.now()
+    updatePluginStates((prev) => {
+      const stuckIds = ids.filter((id) => prev[id]?.loading)
+      if (stuckIds.length === 0) return prev
+
+      const next = { ...prev }
+      for (const id of stuckIds) {
+        const existing = prev[id]
+        next[id] = {
+          data: existing?.data ?? null,
+          loading: false,
+          error: "无法更新数据，请重试。",
+          lastErrorAt: now,
+          lastManualRefreshAt: existing?.lastManualRefreshAt ?? null,
+          lastUpdatedAt: existing?.lastUpdatedAt ?? null,
+        }
+      }
+      return next
+    })
+  }, [updatePluginStates])
+
   return {
     pluginStates,
     pluginStatesRef,
     manualRefreshIdsRef,
     setLoadingForPlugins,
     setErrorForPlugins,
+    clearStuckLoadingForPlugins,
     handleProbeResult,
   }
 }

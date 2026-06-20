@@ -36,6 +36,34 @@ describe("useProbeState", () => {
     expect(result.current.pluginStates.codex?.error).toBe("无法更新数据，请重试。")
   })
 
+  it("clears orphaned loading states when a batch completes", () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(99_000)
+    const { result } = renderHook(() => useProbeState({}))
+
+    act(() => {
+      result.current.setLoadingForPlugins(["codex", "claude"])
+      result.current.handleProbeResult({
+        providerId: "codex",
+        displayName: "Codex",
+        iconUrl: "",
+        lines: [{ type: "text", label: "Now", value: "OK" }],
+      })
+    })
+
+    expect(result.current.pluginStates.claude?.loading).toBe(true)
+
+    act(() => {
+      result.current.clearStuckLoadingForPlugins(["codex", "claude"])
+    })
+
+    expect(result.current.pluginStates.codex?.loading).toBe(false)
+    expect(result.current.pluginStates.codex?.error).toBeNull()
+    expect(result.current.pluginStates.claude?.loading).toBe(false)
+    expect(result.current.pluginStates.claude?.error).toBe("无法更新数据，请重试。")
+    expect(result.current.pluginStates.claude?.lastErrorAt).toBe(99_000)
+  })
+
   it("tracks error time for auto-update backoff and clears it after success", () => {
     vi.useFakeTimers()
     vi.setSystemTime(123_000)

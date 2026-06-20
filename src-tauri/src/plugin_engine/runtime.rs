@@ -682,6 +682,10 @@ fn parse_bar_chart_line<'js>(
     )
 }
 
+pub fn probe_panic_output(plugin: &LoadedPlugin) -> PluginOutput {
+    error_output(plugin, "runtime error".to_string())
+}
+
 fn error_output(plugin: &LoadedPlugin, message: String) -> PluginOutput {
     PluginOutput {
         provider_id: plugin.manifest.id.clone(),
@@ -767,6 +771,14 @@ mod tests {
             Some(MetricLine::Badge { text, .. }) => text.clone(),
             other => panic!("expected error badge, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn probe_panic_output_returns_error_badge() {
+        let plugin = test_plugin("");
+        let output = probe_panic_output(&plugin);
+        assert_eq!(output.provider_id, "test");
+        assert_eq!(error_text(output), "runtime error");
     }
 
     #[test]
