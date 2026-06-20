@@ -495,4 +495,28 @@ mod tests {
         assert!(resp.contains("Access-Control-Allow-Methods: GET, OPTIONS"));
         assert!(!resp.contains("Access-Control-Allow-Origin"));
     }
+
+    #[test]
+    fn response_internal_error_returns_500_json() {
+        let resp = response_internal_error(Some("http://localhost:3000"));
+
+        assert!(resp.starts_with("HTTP/1.1 500"));
+        assert!(resp.contains(r#""error":"internal_error""#));
+        assert!(resp.contains("Access-Control-Allow-Origin: http://localhost:3000"));
+    }
+
+    #[test]
+    fn route_rejects_ipv6_host_without_allowed_port() {
+        let resp = route("GET", "/health", Some("[::1]:9999"), None);
+
+        assert!(resp.starts_with("HTTP/1.1 403"));
+        assert!(resp.contains(r#""error":"forbidden_host""#));
+    }
+
+    #[test]
+    fn route_allows_ipv6_loopback_host() {
+        let resp = route("GET", "/health", Some("[::1]:6736"), None);
+
+        assert!(resp.starts_with("HTTP/1.1 200"));
+    }
 }
