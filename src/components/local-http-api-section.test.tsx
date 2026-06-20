@@ -246,7 +246,7 @@ describe("LocalHttpApiSection", () => {
     await act(async () => {
       await Promise.resolve()
     })
-    expect(screen.getByText("无法读取健康检查")).toBeInTheDocument()
+    expect(screen.getAllByText("无法读取健康检查")).toHaveLength(2)
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2_000)
