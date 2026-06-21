@@ -112,4 +112,32 @@ mod tests {
 
         assert!(!headers.contains("Access-Control-Allow-Origin"));
     }
+
+    #[test]
+    fn cors_headers_omit_origin_for_crlf_injection_attempts() {
+        let headers = cors_headers(Some("http://localhost\r\nInjected: yes"));
+
+        assert!(!headers.contains("Access-Control-Allow-Origin"));
+    }
+
+    #[test]
+    fn cors_headers_omit_origin_for_invalid_ports() {
+        let headers = cors_headers(Some("http://localhost:abc"));
+
+        assert!(!headers.contains("Access-Control-Allow-Origin"));
+    }
+
+    #[test]
+    fn cors_headers_omit_origin_for_credentials_in_authority() {
+        let headers = cors_headers(Some("http://user@localhost:3000"));
+
+        assert!(!headers.contains("Access-Control-Allow-Origin"));
+    }
+
+    #[test]
+    fn cors_headers_reflect_tauri_localhost_origins() {
+        let headers = cors_headers(Some("http://tauri.localhost:1420"));
+
+        assert!(headers.contains("Access-Control-Allow-Origin: http://tauri.localhost:1420"));
+    }
 }
