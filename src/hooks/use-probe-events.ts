@@ -19,11 +19,12 @@ type ProbeBatchStarted = {
 
 type UseProbeEventsOptions = {
   onResult: (output: PluginOutput) => void
-  onBatchComplete: () => void
+  onBatchComplete: (pluginIds: string[]) => void
 }
 
 export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOptions) {
   const activeBatchIds = useRef<Set<string>>(new Set())
+  const batchPluginIds = useRef<Map<string, string[]>>(new Map())
   const unlisteners = useRef<UnlistenFn[]>([])
   const listenersReadyRef = useRef<Promise<void> | null>(null)
   const listenersReadyResolveRef = useRef<(() => void) | null>(null)
@@ -51,9 +52,12 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
       const completeUnlisten = await listen<ProbeBatchComplete>(
         "probe:batch-complete",
         (event) => {
-          if (activeBatchIds.current.delete(event.payload.batchId)) {
-            onBatchComplete()
+          if (!activeBatchIds.current.delete(event.payload.batchId)) {
+            return
           }
+          const pluginIds = batchPluginIds.current.get(event.payload.batchId) ?? []
+          batchPluginIds.current.delete(event.payload.batchId)
+          onBatchComplete(pluginIds)
         }
       )
 
@@ -97,9 +101,13 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
       : { batchId }
     try {
       const result = await invoke<ProbeBatchStarted>("start_probe_batch", args)
+      const startedIds =
+        result.pluginIds.length > 0 ? result.pluginIds : (pluginIds ?? [])
+      batchPluginIds.current.set(batchId, startedIds)
       return result.pluginIds
     } catch (error) {
       activeBatchIds.current.delete(batchId)
+      batchPluginIds.current.delete(batchId)
       throw error
     }
   }, [])

@@ -32,7 +32,7 @@ const state = vi.hoisted(() => ({
   autostartDisableMock: vi.fn(),
   autostartIsEnabledMock: vi.fn(),
   renderTrayBarsIconMock: vi.fn(),
-  probeHandlers: null as null | { onResult: (output: any) => void; onBatchComplete: () => void },
+  probeHandlers: null as null | { onResult: (output: any) => void; onBatchComplete: (pluginIds: string[]) => void },
   trayGetByIdMock: vi.fn(),
   traySetIconMock: vi.fn(),
   traySetIconAsTemplateMock: vi.fn(),
@@ -209,7 +209,7 @@ vi.mock("@/lib/tray-bars-icon", async () => {
 })
 
 vi.mock("@/hooks/use-probe-events", () => ({
-  useProbeEvents: (handlers: { onResult: (output: any) => void; onBatchComplete: () => void }) => {
+  useProbeEvents: (handlers: { onResult: (output: any) => void; onBatchComplete: (pluginIds: string[]) => void }) => {
     state.probeHandlers = handlers
     return { startBatch: state.startBatchMock }
   },
@@ -438,7 +438,7 @@ describe("App", () => {
       iconUrl: "icon-a",
       lines: [{ type: "text", label: "Now", value: "Later" }],
     })
-    state.probeHandlers?.onBatchComplete()
+    state.probeHandlers?.onBatchComplete(["a"])
     await screen.findByText("Now")
   })
 
@@ -1497,7 +1497,7 @@ describe("App", () => {
       iconUrl: "icon-a",
       lines: [{ type: "text", label: "Now", value: "OK" }],
     })
-    state.probeHandlers?.onBatchComplete()
+    state.probeHandlers?.onBatchComplete(["a"])
     const initialCalls = state.startBatchMock.mock.calls.length
 
     // Advance time by 5 minutes to trigger the interval
@@ -1532,7 +1532,7 @@ describe("App", () => {
       iconUrl: "icon-a",
       lines: [{ type: "text", label: "Now", value: "OK" }],
     })
-    state.probeHandlers?.onBatchComplete()
+    state.probeHandlers?.onBatchComplete(["a"])
 
     // Advance time to trigger the interval (which will fail)
     await vi.advanceTimersByTimeAsync(5 * 60 * 1000)

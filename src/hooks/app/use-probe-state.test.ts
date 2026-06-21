@@ -65,4 +65,21 @@ describe("useProbeState", () => {
     expect(result.current.pluginStates.codex?.error).toBeNull()
     expect(result.current.pluginStates.codex?.lastErrorAt).toBeNull()
   })
+
+  it("clears orphaned loading when a batch completes without a result", () => {
+    const { result } = renderHook(() => useProbeState({}))
+
+    act(() => {
+      result.current.setLoadingForPlugins(["codex"])
+    })
+    expect(result.current.pluginStates.codex?.loading).toBe(true)
+
+    act(() => {
+      result.current.finalizeBatchPlugins(["codex"])
+    })
+
+    expect(result.current.pluginStates.codex?.loading).toBe(false)
+    expect(result.current.pluginStates.codex?.error).toBe("无法更新数据，请重试。")
+    expect(result.current.pluginStates.codex?.lastErrorAt).toBeTypeOf("number")
+  })
 })

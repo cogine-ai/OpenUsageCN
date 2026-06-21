@@ -75,6 +75,27 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
     })
   }, [updatePluginStates])
 
+  const finalizeBatchPlugins = useCallback((ids: string[]) => {
+    const now = Date.now()
+    updatePluginStates((prev) => {
+      let changed = false
+      const next = { ...prev }
+      for (const id of ids) {
+        const existing = prev[id]
+        if (!existing?.loading) continue
+        changed = true
+        const error = existing.error ?? "无法更新数据，请重试。"
+        next[id] = {
+          ...existing,
+          loading: false,
+          error,
+          lastErrorAt: existing.lastErrorAt ?? now,
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [updatePluginStates])
+
   const handleProbeResult = useCallback(
     (output: PluginOutput) => {
       const errorMessage = getErrorMessage(output)
@@ -112,6 +133,7 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
     manualRefreshIdsRef,
     setLoadingForPlugins,
     setErrorForPlugins,
+    finalizeBatchPlugins,
     handleProbeResult,
   }
 }

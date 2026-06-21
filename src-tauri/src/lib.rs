@@ -388,6 +388,17 @@ async fn start_probe_batch(
                     }
                     Err(_) => {
                         log::error!("probe {} panicked", plugin_id);
+                        let output = plugin_engine::runtime::probe_error_output(
+                            &plugin,
+                            "The plugin failed, try again or contact plugin author.",
+                        );
+                        let _ = handle.emit(
+                            "probe:result",
+                            ProbeResult {
+                                batch_id: bid.clone(),
+                                output,
+                            },
+                        );
                     }
                 }
 

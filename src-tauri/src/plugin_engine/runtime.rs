@@ -682,6 +682,10 @@ fn parse_bar_chart_line<'js>(
     )
 }
 
+pub fn probe_error_output(plugin: &LoadedPlugin, message: impl Into<String>) -> PluginOutput {
+    error_output(plugin, message.into())
+}
+
 fn error_output(plugin: &LoadedPlugin, message: String) -> PluginOutput {
     PluginOutput {
         provider_id: plugin.manifest.id.clone(),
@@ -767,6 +771,14 @@ mod tests {
             Some(MetricLine::Badge { text, .. }) => text.clone(),
             other => panic!("expected error badge, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn probe_error_output_returns_error_badge() {
+        let plugin = test_plugin("globalThis.__openusage_plugin = { probe() {} };");
+        let output = probe_error_output(&plugin, "runtime crashed");
+        assert_eq!(output.provider_id, "test");
+        assert_eq!(error_text(output), "runtime crashed");
     }
 
     #[test]
