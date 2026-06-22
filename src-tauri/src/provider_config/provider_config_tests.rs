@@ -261,6 +261,62 @@ fn delete_plugin_field_removes_value_from_cache_and_disk() {
 }
 
 #[test]
+fn merge_rejects_invalid_select_values() {
+    let fields = vec![select_field(Some("cn"))];
+    let input = HashMap::from([("region".to_string(), Value::String("invalid".to_string()))]);
+    let result = merge_values(&fields, HashMap::new(), input);
+    assert!(result.is_err());
+    assert!(
+        result
+            .unwrap_err()
+            .contains("Invalid value 'invalid' for config field 'region'")
+    );
+}
+
+#[test]
+fn delete_unknown_field_returns_error() {
+    let fields = vec![field("apiKey", PluginConfigFieldType::Secret)];
+    let path = temp_path("unknown-field");
+    let result = delete_plugin_field_from_path(&path, "bigmodel-cn", &fields, "missing");
+    assert!(result.is_err());
+    assert!(
+        result
+            .unwrap_err()
+            .contains("Unknown config field 'missing' for plugin bigmodel-cn")
+    );
+}
+
+#[test]
+#[serial]
+fn view_for_plugin_masks_configured_secrets() {
+    replace_store_for_test(ProviderConfigFile {
+        version: CONFIG_VERSION,
+        providers: HashMap::from([(
+            "bigmodel-cn".to_string(),
+            secret_input("abcdefghijklmnop"),
+        )]),
+    });
+
+    let view = view_for_plugin("bigmodel-cn", &[field("apiKey", PluginConfigFieldType::Secret)]);
+    let secret = view
+        .values
+        .get("apiKey")
+        .expect("secret view value");
+    match secret {
+        ProviderConfigViewValue::Secret {
+            configured,
+            hint,
+        } => {
+            assert!(configured);
+            assert_eq!(hint.as_deref(), Some("...mnop"));
+        }
+        other => panic!("expected secret view value, got {other:?}"),
+    }
+
+    replace_store_for_test(default_file());
+}
+
+#[test]
 #[serial]
 fn concurrent_saves_keep_all_provider_updates() {
     replace_store_for_test(default_file());

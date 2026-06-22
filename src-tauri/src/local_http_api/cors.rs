@@ -112,4 +112,34 @@ mod tests {
 
         assert!(!headers.contains("Access-Control-Allow-Origin"));
     }
+
+    #[test]
+    fn cors_headers_omit_origin_for_malformed_origins() {
+        for origin in [
+            "",
+            "http://localhost:3000\r\nInjected: true",
+            "https://evil.example/path",
+            "http://user@127.0.0.1:3000",
+        ] {
+            let headers = cors_headers(Some(origin));
+            assert!(
+                !headers.contains("Access-Control-Allow-Origin"),
+                "origin should be rejected: {origin:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn cors_headers_trim_trailing_slash_before_validation() {
+        let headers = cors_headers(Some("http://127.0.0.1:1420/"));
+
+        assert!(headers.contains("Access-Control-Allow-Origin: http://127.0.0.1:1420"));
+    }
+
+    #[test]
+    fn cors_headers_reflect_tauri_localhost_origin() {
+        let headers = cors_headers(Some("http://tauri.localhost:1420"));
+
+        assert!(headers.contains("Access-Control-Allow-Origin: http://tauri.localhost:1420"));
+    }
 }
