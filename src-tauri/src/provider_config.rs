@@ -4,7 +4,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
+
+static LOAD_DEGRADED: AtomicBool = AtomicBool::new(false);
 
 const CONFIG_VERSION: u32 = 1;
 
@@ -75,18 +78,23 @@ fn load_from_default_path() -> ProviderConfigFile {
 fn load_from_path(path: &Path) -> ProviderConfigFile {
     let contents = match std::fs::read_to_string(path) {
         Ok(contents) => contents,
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return default_file(),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            LOAD_DEGRADED.store(false, Ordering::Release);
+            return default_file();
+        }
         Err(err) => {
             log::warn!(
                 "[provider-config] failed to read {}: {}, using empty provider config",
                 path.display(),
                 err
             );
+            LOAD_DEGRADED.store(true, Ordering::Release);
             return default_file();
         }
     };
     match serde_json::from_str::<ProviderConfigFile>(&contents) {
         Ok(mut config) => {
+            LOAD_DEGRADED.store(false, Ordering::Release);
             config.version = CONFIG_VERSION;
             config
         }
@@ -97,14 +105,38 @@ fn load_from_path(path: &Path) -> ProviderConfigFile {
                 err
             );
             let backup = path.with_extension("json.bak");
-            if let Err(copy_err) = std::fs::copy(path, &backup) {
-                log::warn!(
-                    "[provider-config] failed to back up damaged config {}: {}",
-                    path.display(),
-                    copy_err
-                );
+            if !backup.exists() {
+                if let Err(copy_err) = std::fs::copy(path, &backup) {
+                    log::warn!(
+                        "[provider-config] failed to back up damaged config {}: {}",
+                        path.display(),
+                        copy_err
+                    );
+                }
             }
+            LOAD_DEGRADED.store(true, Ordering::Release);
             default_file()
+        }
+    }
+}
+
+fn try_parse_config_file(path: &Path) -> Option<ProviderConfigFile> {
+    let contents = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str::<ProviderConfigFile>(&contents).ok()
+}
+
+fn merge_persisted_providers_if_degraded(path: &Path, config: &mut ProviderConfigFile) {
+    if !LOAD_DEGRADED.load(Ordering::Acquire) {
+        return;
+    }
+
+    let backup = path.with_extension("json.bak");
+    for source in [path, backup.as_path()] {
+        let Some(disk) = try_parse_config_file(source) else {
+            continue;
+        };
+        for (id, values) in disk.providers {
+            config.providers.entry(id).or_insert(values);
         }
     }
 }
@@ -242,6 +274,7 @@ fn save_plugin_values_to_path(
         let locked = store().lock().expect("provider config store poisoned");
         locked.clone()
     };
+    merge_persisted_providers_if_degraded(path, &mut next_config);
 
     let existing = next_config
         .providers
@@ -262,6 +295,7 @@ fn save_plugin_values_to_path(
         let mut locked = store().lock().expect("provider config store poisoned");
         *locked = next_config.clone();
     }
+    LOAD_DEGRADED.store(false, Ordering::Release);
     if let Some(values) = next_config.providers.get(plugin_id) {
         register_secret_values(fields, values);
     }
@@ -293,6 +327,7 @@ fn delete_plugin_field_from_path(
         let locked = store().lock().expect("provider config store poisoned");
         locked.clone()
     };
+    merge_persisted_providers_if_degraded(path, &mut next_config);
     if let Some(values) = next_config.providers.get_mut(plugin_id) {
         values.remove(field_id);
         if values.is_empty() {
@@ -304,7 +339,18 @@ fn delete_plugin_field_from_path(
     save_to_path(path, &next_config)?;
     let mut locked = store().lock().expect("provider config store poisoned");
     *locked = next_config;
+    LOAD_DEGRADED.store(false, Ordering::Release);
     Ok(())
+}
+
+#[cfg(test)]
+pub(super) fn reset_load_state_for_test() {
+    LOAD_DEGRADED.store(false, Ordering::Release);
+}
+
+#[cfg(test)]
+pub(super) fn set_load_degraded_for_test(degraded: bool) {
+    LOAD_DEGRADED.store(degraded, Ordering::Release);
 }
 
 fn merge_values(

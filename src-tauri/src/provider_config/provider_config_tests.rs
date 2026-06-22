@@ -49,6 +49,7 @@ fn temp_path(label: &str) -> PathBuf {
 fn replace_store_for_test(config: ProviderConfigFile) {
     let mut locked = store().lock().expect("provider config store poisoned");
     *locked = config;
+    reset_load_state_for_test();
 }
 
 fn secret_input(value: &str) -> HashMap<String, Value> {
@@ -206,6 +207,47 @@ fn damaged_config_is_backed_up_before_fallback() {
 
     assert!(loaded.providers.is_empty());
     assert_eq!(backup_text, "{bad json");
+    reset_load_state_for_test();
+}
+
+#[test]
+#[serial]
+fn save_after_degraded_load_preserves_other_providers_on_disk() {
+    replace_store_for_test(default_file());
+    let fields = vec![field("apiKey", PluginConfigFieldType::Secret)];
+    let dir = temp_path("degraded-load-save");
+    let path = dir.join("providers.json");
+    std::fs::create_dir_all(&dir).expect("create temp dir");
+    std::fs::write(
+        &path,
+        r#"{"version":1,"providers":{"bigmodel-cn":{"apiKey":"existing-key"}}}"#,
+    )
+    .expect("write config");
+
+    set_load_degraded_for_test(true);
+    save_plugin_values_to_path(&path, "zai", &fields, secret_input("new-zai-key"))
+        .expect("save provider config");
+
+    let loaded = load_from_path(&path);
+    let _ = std::fs::remove_dir_all(&dir);
+    replace_store_for_test(default_file());
+
+    assert_eq!(
+        loaded
+            .providers
+            .get("bigmodel-cn")
+            .and_then(|values| values.get("apiKey"))
+            .and_then(Value::as_str),
+        Some("existing-key")
+    );
+    assert_eq!(
+        loaded
+            .providers
+            .get("zai")
+            .and_then(|values| values.get("apiKey"))
+            .and_then(Value::as_str),
+        Some("new-zai-key")
+    );
 }
 
 #[test]
