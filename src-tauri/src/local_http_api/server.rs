@@ -544,11 +544,19 @@ mod tests {
     }
 
     #[test]
-    fn route_strips_trailing_slash_from_nested_paths() {
-        let resp = route("GET", "/v1/usage/claude/", None, None);
+    #[serial]
+    fn request_parser_strips_trailing_slash_from_provider_path() {
+        {
+            let mut state = cache_state().lock().unwrap();
+            state.known_plugin_ids = vec!["claude".to_string()];
+            state.snapshots.clear();
+        }
+
+        let resp =
+            response_for_request("GET /v1/usage/claude/ HTTP/1.1\r\nHost: 127.0.0.1:6736\r\n\r\n");
 
         assert!(
-            resp.starts_with("HTTP/1.1 204") || resp.starts_with("HTTP/1.1 404"),
+            resp.starts_with("HTTP/1.1 204"),
             "unexpected response: {resp}"
         );
     }
