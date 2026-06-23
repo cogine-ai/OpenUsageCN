@@ -112,4 +112,54 @@ mod tests {
 
         assert!(!headers.contains("Access-Control-Allow-Origin"));
     }
+
+    #[test]
+    fn cors_headers_reflect_tauri_localhost_origins() {
+        let headers = cors_headers(Some("http://tauri.localhost:1420"));
+
+        assert!(headers.contains("Access-Control-Allow-Origin: http://tauri.localhost:1420"));
+    }
+
+    #[test]
+    fn cors_headers_normalize_trailing_slash_on_origin() {
+        let headers = cors_headers(Some("http://127.0.0.1:1420/"));
+
+        assert!(headers.contains("Access-Control-Allow-Origin: http://127.0.0.1:1420"));
+    }
+
+    #[test]
+    fn cors_headers_omit_origin_for_crlf_injection_attempts() {
+        let headers = cors_headers(Some("http://localhost\r\nX-Evil: true"));
+
+        assert!(!headers.contains("Access-Control-Allow-Origin"));
+        assert!(!headers.contains("X-Evil"));
+    }
+
+    #[test]
+    fn cors_headers_omit_origin_for_userinfo_in_authority() {
+        let headers = cors_headers(Some("http://user@localhost:3000"));
+
+        assert!(!headers.contains("Access-Control-Allow-Origin"));
+    }
+
+    #[test]
+    fn cors_headers_omit_origin_for_path_in_authority() {
+        let headers = cors_headers(Some("http://localhost/evil"));
+
+        assert!(!headers.contains("Access-Control-Allow-Origin"));
+    }
+
+    #[test]
+    fn cors_headers_omit_origin_for_invalid_port() {
+        let headers = cors_headers(Some("http://localhost:abc"));
+
+        assert!(!headers.contains("Access-Control-Allow-Origin"));
+    }
+
+    #[test]
+    fn cors_headers_omit_origin_for_empty_origin_string() {
+        let headers = cors_headers(Some("   "));
+
+        assert!(!headers.contains("Access-Control-Allow-Origin"));
+    }
 }

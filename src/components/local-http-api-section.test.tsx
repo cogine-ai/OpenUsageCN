@@ -214,4 +214,46 @@ describe("LocalHttpApiSection", () => {
     expect(localApiMocks.fetchLocalHttpApiHealth).toHaveBeenCalledTimes(1)
     consoleError.mockRestore()
   })
+
+  it("retries health polling after a transient health read failure", async () => {
+    vi.useFakeTimers()
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+    localApiMocks.getLocalHttpApiStatus.mockResolvedValue({
+      state: "running",
+      bind: "127.0.0.1:6736",
+      startedAt: "2026-06-16T10:00:00Z",
+    })
+    localApiMocks.fetchLocalHttpApiHealth
+      .mockRejectedValueOnce(new Error("connection refused"))
+      .mockResolvedValueOnce({
+        status: "ok",
+        apiVersion: "v1",
+        version: "0.6.29",
+        service: {
+          state: "running",
+          bind: "127.0.0.1:6736",
+          startedAt: "2026-06-16T10:00:00Z",
+        },
+        providers: { known: 18, enabled: 3, cached: 2 },
+        cache: {
+          ready: true,
+          lastSuccessfulFetchAt: "2026-06-16T11:30:00Z",
+        },
+      })
+
+    render(<LocalHttpApiSection />)
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(screen.getAllByText("无法读取健康检查")).toHaveLength(2)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000)
+    })
+
+    expect(screen.getByText("已缓存 2 个服务商")).toBeInTheDocument()
+    expect(localApiMocks.fetchLocalHttpApiHealth).toHaveBeenCalledTimes(2)
+    consoleError.mockRestore()
+  })
 })

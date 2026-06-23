@@ -211,4 +211,35 @@ describe("useProbeAutoUpdate", () => {
     expect(setLoadingForPlugins).toHaveBeenCalledWith(["failed"])
     expect(startBatch).toHaveBeenCalledWith(["failed"])
   })
+
+  it("surfaces auto-update batch start failures to plugin state", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(10_000)
+
+    const setLoadingForPlugins = vi.fn()
+    const setErrorForPlugins = vi.fn()
+    const startBatch = vi.fn().mockRejectedValue(new Error("ipc unavailable"))
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    renderHook(() =>
+      useProbeAutoUpdate({
+        pluginSettings: { order: ["codex"], disabled: [] },
+        autoUpdateInterval: 5,
+        pluginStatesRef: { current: {} },
+        setLoadingForPlugins,
+        setErrorForPlugins,
+        isPluginLoading: vi.fn(() => false),
+        startBatch,
+      })
+    )
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5 * 60_000)
+    })
+
+    expect(setLoadingForPlugins).toHaveBeenCalledWith(["codex"])
+    expect(startBatch).toHaveBeenCalledWith(["codex"])
+    expect(setErrorForPlugins).toHaveBeenCalledWith(["codex"], "无法开始刷新")
+    consoleError.mockRestore()
+  })
 })

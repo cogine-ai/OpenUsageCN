@@ -565,6 +565,55 @@ mod tests {
     }
 
     #[test]
+    fn load_cache_returns_empty_on_unsupported_version() {
+        let dir = temp_dir("unsupported-cache-version");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(CACHE_FILE_NAME), r#"{"version":2,"snapshots":{}}"#).unwrap();
+
+        let loaded = load_cache(&dir);
+        assert!(loaded.is_empty());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    #[serial]
+    fn enabled_snapshots_ordered_uses_default_enabled_plugins_without_settings() {
+        let dir = temp_dir("default-enabled-plugins");
+        std::fs::create_dir_all(&dir).unwrap();
+
+        init(
+            &dir,
+            vec![
+                "claude".to_string(),
+                "codex".to_string(),
+                "cursor".to_string(),
+                "zai".to_string(),
+            ],
+            "test-version".to_string(),
+        );
+        {
+            let mut state = cache_state().lock().unwrap();
+            state
+                .snapshots
+                .insert("codex".to_string(), make_snapshot("codex", "Codex"));
+            state
+                .snapshots
+                .insert("zai".to_string(), make_snapshot("zai", "Z.ai"));
+        }
+
+        let snapshots = {
+            let state = cache_state().lock().unwrap();
+            enabled_snapshots_ordered(&state)
+        };
+
+        assert_eq!(snapshots.len(), 1);
+        assert_eq!(snapshots[0].provider_id, "codex");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     #[serial]
     fn cache_successful_output_debounces_disk_writes() {
         let dir = temp_dir("debounced-cache");
