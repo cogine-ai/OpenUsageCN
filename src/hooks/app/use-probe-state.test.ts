@@ -65,4 +65,18 @@ describe("useProbeState", () => {
     expect(result.current.pluginStates.codex?.error).toBeNull()
     expect(result.current.pluginStates.codex?.lastErrorAt).toBeNull()
   })
+
+  it("records error time when setErrorForPlugins is called", () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(789_000)
+    const { result } = renderHook(() => useProbeState({}))
+
+    act(() => {
+      result.current.setErrorForPlugins(["codex"], "无法开始刷新")
+    })
+
+    expect(result.current.pluginStates.codex?.error).toBe("无法开始刷新")
+    expect(result.current.pluginStates.codex?.loading).toBe(false)
+    expect(result.current.pluginStates.codex?.lastErrorAt).toBe(789_000)
+  })
 })
