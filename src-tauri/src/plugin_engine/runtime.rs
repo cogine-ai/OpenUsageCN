@@ -692,6 +692,13 @@ fn error_output(plugin: &LoadedPlugin, message: String) -> PluginOutput {
     }
 }
 
+pub fn panic_probe_output(plugin: &LoadedPlugin) -> PluginOutput {
+    error_output(
+        plugin,
+        "The plugin crashed during refresh. Try again or update the plugin.".to_string(),
+    )
+}
+
 fn extract_error_string(ctx: &Ctx<'_>) -> String {
     let exc = ctx.catch();
     if exc.is_null() || exc.is_undefined() {
@@ -797,6 +804,16 @@ mod tests {
         );
         let output = run_probe(&plugin, &temp_app_dir("async"), "0.0.0");
         assert_eq!(error_text(output), "boom");
+    }
+
+    #[test]
+    fn panic_probe_output_returns_error_badge() {
+        let plugin = test_plugin("");
+        let output = panic_probe_output(&plugin);
+        assert_eq!(
+            error_text(output),
+            "The plugin crashed during refresh. Try again or update the plugin."
+        );
     }
 
     #[test]
