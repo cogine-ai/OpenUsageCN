@@ -568,11 +568,7 @@ mod tests {
     fn load_cache_returns_empty_on_unsupported_version() {
         let dir = temp_dir("unsupported-cache-version");
         std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(
-            dir.join(CACHE_FILE_NAME),
-            r#"{"version":2,"snapshots":{}}"#,
-        )
-        .unwrap();
+        std::fs::write(dir.join(CACHE_FILE_NAME), r#"{"version":2,"snapshots":{}}"#).unwrap();
 
         let loaded = load_cache(&dir);
         assert!(loaded.is_empty());
@@ -598,14 +594,12 @@ mod tests {
         );
         {
             let mut state = cache_state().lock().unwrap();
-            state.snapshots.insert(
-                "codex".to_string(),
-                make_snapshot("codex", "Codex"),
-            );
-            state.snapshots.insert(
-                "zai".to_string(),
-                make_snapshot("zai", "Z.ai"),
-            );
+            state
+                .snapshots
+                .insert("codex".to_string(), make_snapshot("codex", "Codex"));
+            state
+                .snapshots
+                .insert("zai".to_string(), make_snapshot("zai", "Z.ai"));
         }
 
         let snapshots = {

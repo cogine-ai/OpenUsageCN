@@ -1,13 +1,13 @@
 use super::cache::{cache_state, enabled_snapshots_ordered, health_cache_state};
 use super::cors::cors_headers;
 use super::status::{
-    get_status, mark_bind_failed, mark_running, mark_starting, LocalHttpApiServiceStatus,
+    LocalHttpApiServiceStatus, get_status, mark_bind_failed, mark_running, mark_starting,
 };
 use serde::Serialize;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 const BIND_ADDR: &str = "127.0.0.1:6736";
@@ -315,9 +315,11 @@ fn response_service_unavailable() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::super::cache::{cache_state, CachedPluginSnapshot};
+    use super::super::cache::{CachedPluginSnapshot, cache_state};
     use super::*;
     use serial_test::serial;
+    use std::net::Shutdown;
+    use std::thread;
 
     fn make_snapshot(id: &str, name: &str) -> CachedPluginSnapshot {
         CachedPluginSnapshot {
@@ -327,6 +329,33 @@ mod tests {
             lines: vec![],
             fetched_at: "2026-03-26T08:15:30Z".to_string(),
         }
+    }
+
+    fn response_for_request(request: &str) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind test listener");
+        let addr = listener.local_addr().expect("test listener addr");
+        let server = thread::spawn(move || {
+            let (stream, _) = listener.accept().expect("accept test connection");
+            let permit = ConnectionLimiter::new(1)
+                .acquire()
+                .expect("test connection permit");
+            handle_connection(stream, permit);
+        });
+
+        let mut client = TcpStream::connect(addr).expect("connect test client");
+        client
+            .write_all(request.as_bytes())
+            .expect("write test request");
+        client
+            .shutdown(Shutdown::Write)
+            .expect("shutdown test request");
+
+        let mut response = String::new();
+        client
+            .read_to_string(&mut response)
+            .expect("read test response");
+        server.join().expect("join test server");
+        response
     }
 
     #[test]
@@ -506,8 +535,10 @@ mod tests {
     }
 
     #[test]
-    fn route_strips_query_string_from_path() {
-        let resp = route("GET", "/v1/usage?cache=false", None, None);
+    fn request_parser_strips_query_string_from_path() {
+        let resp = response_for_request(
+            "GET /v1/usage?cache=false HTTP/1.1\r\nHost: 127.0.0.1:6736\r\n\r\n",
+        );
 
         assert!(resp.starts_with("HTTP/1.1 200"));
     }
@@ -549,6 +580,9 @@ mod tests {
     fn header_value_is_case_insensitive() {
         let request = "GET /health HTTP/1.1\r\nHoSt: 127.0.0.1:6736\r\n\r\n";
 
-        assert_eq!(header_value(request, "host").as_deref(), Some("127.0.0.1:6736"));
+        assert_eq!(
+            header_value(request, "host").as_deref(),
+            Some("127.0.0.1:6736")
+        );
     }
 }
