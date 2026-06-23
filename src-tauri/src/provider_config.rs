@@ -269,7 +269,9 @@ fn save_plugin_values_to_path(
     fields: &[PluginConfigField],
     input: HashMap<String, Value>,
 ) -> Result<(), String> {
-    let _writer = save_lock().lock().expect("provider config save lock poisoned");
+    let _writer = save_lock()
+        .lock()
+        .expect("provider config save lock poisoned");
     let mut next_config = {
         let locked = store().lock().expect("provider config store poisoned");
         locked.clone()
@@ -322,7 +324,9 @@ fn delete_plugin_field_from_path(
             "Unknown config field '{field_id}' for plugin {plugin_id}"
         ));
     }
-    let _writer = save_lock().lock().expect("provider config save lock poisoned");
+    let _writer = save_lock()
+        .lock()
+        .expect("provider config save lock poisoned");
     let mut next_config = {
         let locked = store().lock().expect("provider config store poisoned");
         locked.clone()

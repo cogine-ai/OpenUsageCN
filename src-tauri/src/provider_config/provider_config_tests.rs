@@ -169,6 +169,7 @@ fn save_write_failure_keeps_memory_cache_unchanged() {
 }
 
 #[test]
+#[serial]
 fn load_missing_version_uses_current_version() {
     let dir = temp_path("missing-version");
     let path = dir.join("providers.json");
@@ -194,6 +195,7 @@ fn load_missing_version_uses_current_version() {
 }
 
 #[test]
+#[serial]
 fn damaged_config_is_backed_up_before_fallback() {
     let dir = temp_path("damaged-backup");
     let path = dir.join("providers.json");
@@ -280,10 +282,7 @@ fn delete_plugin_field_removes_value_from_cache_and_disk() {
     let fields = vec![field("apiKey", PluginConfigFieldType::Secret)];
     replace_store_for_test(ProviderConfigFile {
         version: CONFIG_VERSION,
-        providers: HashMap::from([(
-            "bigmodel-cn".to_string(),
-            secret_input("secret-key"),
-        )]),
+        providers: HashMap::from([("bigmodel-cn".to_string(), secret_input("secret-key"))]),
     });
     let dir = temp_path("delete-field");
     let path = dir.join("providers.json");
