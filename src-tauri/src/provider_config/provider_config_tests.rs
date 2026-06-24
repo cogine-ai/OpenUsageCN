@@ -214,6 +214,38 @@ fn damaged_config_is_backed_up_before_fallback() {
 
 #[test]
 #[serial]
+fn degraded_load_recovers_providers_from_disk_for_reads() {
+    let fields = vec![field("apiKey", PluginConfigFieldType::Secret)];
+    let dir = temp_path("degraded-load-read");
+    let path = dir.join("providers.json");
+    std::fs::create_dir_all(&dir).expect("create temp dir");
+    std::fs::write(
+        &path,
+        r#"{"version":1,"providers":{"bigmodel-cn":{"apiKey":"existing-key"}}}"#,
+    )
+    .expect("write config");
+
+    set_load_degraded_for_test(true);
+    let mut config = default_file();
+    merge_persisted_providers_if_degraded(&path, &mut config);
+    let resolved = resolve_values(
+        &fields,
+        config
+            .providers
+            .get("bigmodel-cn")
+            .expect("provider recovered from disk"),
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+    reset_load_state_for_test();
+
+    assert_eq!(
+        resolved.get("apiKey").and_then(Value::as_str),
+        Some("existing-key")
+    );
+}
+
+#[test]
+#[serial]
 fn save_after_degraded_load_preserves_other_providers_on_disk() {
     replace_store_for_test(default_file());
     let fields = vec![field("apiKey", PluginConfigFieldType::Secret)];

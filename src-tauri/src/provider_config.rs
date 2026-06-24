@@ -72,7 +72,9 @@ fn load_from_default_path() -> ProviderConfigFile {
         log::warn!("[provider-config] no home directory, using empty provider config");
         return default_file();
     };
-    load_from_path(&path)
+    let mut config = load_from_path(&path);
+    merge_persisted_providers_if_degraded(&path, &mut config);
+    config
 }
 
 fn load_from_path(path: &Path) -> ProviderConfigFile {
