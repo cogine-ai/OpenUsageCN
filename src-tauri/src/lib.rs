@@ -33,6 +33,37 @@ fn probe_worker_count(plugin_count: usize) -> usize {
     plugin_count.min(MAX_CONCURRENT_PROBES)
 }
 
+fn select_plugins_for_batch(
+    plugins: Vec<plugin_engine::manifest::LoadedPlugin>,
+    plugin_ids: Option<Vec<String>>,
+) -> Vec<plugin_engine::manifest::LoadedPlugin> {
+    match plugin_ids {
+        Some(ids) => {
+            let mut by_id: HashMap<String, plugin_engine::manifest::LoadedPlugin> = plugins
+                .into_iter()
+                .map(|plugin| (plugin.manifest.id.clone(), plugin))
+                .collect();
+            let mut seen = HashSet::new();
+            ids.into_iter()
+                .filter_map(|id| {
+                    if !seen.insert(id.clone()) {
+                        return None;
+                    }
+                    by_id.remove(&id)
+                })
+                .collect()
+        }
+        None => plugins,
+    }
+}
+
+fn probe_output_should_cache(output: &plugin_engine::runtime::PluginOutput) -> bool {
+    !output
+        .lines
+        .iter()
+        .any(|line| matches!(line, plugin_engine::runtime::MetricLine::Badge { label, .. } if label == "Error"))
+}
+
 fn today_utc_ymd() -> String {
     let date = time::OffsetDateTime::now_utc().date();
     format!(
@@ -276,24 +307,7 @@ async fn start_probe_batch(
         )
     };
 
-    let selected_plugins = match plugin_ids {
-        Some(ids) => {
-            let mut by_id: HashMap<String, plugin_engine::manifest::LoadedPlugin> = plugins
-                .into_iter()
-                .map(|plugin| (plugin.manifest.id.clone(), plugin))
-                .collect();
-            let mut seen = HashSet::new();
-            ids.into_iter()
-                .filter_map(|id| {
-                    if !seen.insert(id.clone()) {
-                        return None;
-                    }
-                    by_id.remove(&id)
-                })
-                .collect()
-        }
-        None => plugins,
-    };
+    let selected_plugins = select_plugins_for_batch(plugins, plugin_ids);
 
     let response_plugin_ids: Vec<String> = selected_plugins
         .iter()
@@ -365,18 +379,15 @@ async fn start_probe_batch(
 
                 match result {
                     Ok(output) => {
-                        let has_error = output.lines.iter().any(|line| {
-                            matches!(line, plugin_engine::runtime::MetricLine::Badge { label, .. } if label == "Error")
-                        });
-                        if has_error {
-                            log::warn!("probe {} completed with error", plugin_id);
-                        } else {
+                        if probe_output_should_cache(&output) {
                             log::info!(
                                 "probe {} completed ok ({} lines)",
                                 plugin_id,
                                 output.lines.len()
                             );
                             local_http_api::cache_successful_output(&output);
+                        } else {
+                            log::warn!("probe {} completed with error", plugin_id);
                         }
                         let _ = handle.emit(
                             "probe:result",
@@ -773,13 +784,17 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::{
-        DAILY_ACTIVE_TRACKED_DAY_KEY, MAX_CONCURRENT_PROBES, plugin_config_dto, probe_worker_count,
+        DAILY_ACTIVE_TRACKED_DAY_KEY, MAX_CONCURRENT_PROBES, plugin_config_dto,
+        probe_output_should_cache, probe_worker_count, select_plugins_for_batch,
         seconds_until_next_utc_day, should_track_daily_active,
     };
     use crate::plugin_engine::manifest::{
-        PluginConfig, PluginConfigField, PluginConfigFieldType, PluginConfigOption,
+        LoadedPlugin, PluginConfig, PluginConfigField, PluginConfigFieldType, PluginConfigOption,
+        PluginManifest,
     };
+    use crate::plugin_engine::runtime::{MetricLine, PluginOutput};
     use serde_json::json;
+    use std::path::PathBuf;
     use time::{Date, Month, PrimitiveDateTime, Time};
 
     #[test]
@@ -854,5 +869,82 @@ mod tests {
         assert_eq!(dto.fields[0].help.as_deref(), Some("Select an API region"));
         assert_eq!(dto.fields[0].options[0].value, "cn");
         assert_eq!(dto.fields[0].default, Some(json!("cn")));
+    }
+
+    fn test_plugin(id: &str) -> LoadedPlugin {
+        LoadedPlugin {
+            manifest: PluginManifest {
+                schema_version: 1,
+                id: id.to_string(),
+                name: id.to_string(),
+                version: "0.0.0".to_string(),
+                entry: "plugin.js".to_string(),
+                icon: "icon.svg".to_string(),
+                brand_color: None,
+                lines: vec![],
+                links: vec![],
+                config: None,
+            },
+            plugin_dir: PathBuf::from("."),
+            entry_script: String::new(),
+            icon_data_url: String::new(),
+        }
+    }
+
+    #[test]
+    fn select_plugins_for_batch_returns_all_when_ids_are_none() {
+        let plugins = vec![test_plugin("codex"), test_plugin("claude")];
+        let selected = select_plugins_for_batch(plugins.clone(), None);
+        assert_eq!(selected.len(), 2);
+        assert_eq!(selected[0].manifest.id, "codex");
+        assert_eq!(selected[1].manifest.id, "claude");
+    }
+
+    #[test]
+    fn select_plugins_for_batch_deduplicates_and_drops_unknown_ids() {
+        let plugins = vec![test_plugin("codex"), test_plugin("claude")];
+        let selected = select_plugins_for_batch(
+            plugins,
+            Some(vec![
+                "codex".to_string(),
+                "codex".to_string(),
+                "missing".to_string(),
+                "claude".to_string(),
+            ]),
+        );
+        assert_eq!(selected.len(), 2);
+        assert_eq!(selected[0].manifest.id, "codex");
+        assert_eq!(selected[1].manifest.id, "claude");
+    }
+
+    #[test]
+    fn probe_output_should_cache_skips_error_badges() {
+        let success = PluginOutput {
+            provider_id: "codex".to_string(),
+            display_name: "Codex".to_string(),
+            plan: None,
+            lines: vec![MetricLine::Text {
+                label: "Now".to_string(),
+                value: "OK".to_string(),
+                color: None,
+                subtitle: None,
+            }],
+            icon_url: String::new(),
+        };
+        let error = PluginOutput {
+            provider_id: "codex".to_string(),
+            display_name: "Codex".to_string(),
+            plan: None,
+            lines: vec![MetricLine::Badge {
+                label: "Error".to_string(),
+                text: "Auth expired".to_string(),
+                color: None,
+                subtitle: None,
+            }],
+            icon_url: String::new(),
+        };
+
+        assert!(probe_output_should_cache(&success));
+        assert!(!probe_output_should_cache(&error));
     }
 }

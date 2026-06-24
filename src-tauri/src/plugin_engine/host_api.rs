@@ -2954,6 +2954,7 @@ fn expand_path(path: &str) -> String {
 mod tests {
     use super::*;
     use rquickjs::{Context, Function, Object, Runtime};
+    use serial_test::serial;
 
     fn encrypt_aes_256_gcm_envelope_for_test(key: &[u8], plaintext: &str) -> String {
         let iv = [7_u8; 16];
@@ -3397,6 +3398,124 @@ mod tests {
                 "non-whitelisted vars must not be exposed"
             );
         });
+    }
+
+    #[test]
+    #[serial]
+    fn config_api_exposes_saved_provider_values_to_js() {
+        use crate::plugin_engine::manifest::PluginConfigFieldType;
+        use crate::provider_config::{
+            default_store_for_test, replace_providers_for_test, replace_store_for_test,
+        };
+        use serde_json::Value;
+
+        let api_key = "bigmodel-test-key-abcdef12";
+        replace_providers_for_test(HashMap::from([(
+            "bigmodel-cn".to_string(),
+            HashMap::from([(
+                "apiKey".to_string(),
+                Value::String(api_key.to_string()),
+            )]),
+        )]));
+
+        let fields = vec![PluginConfigField {
+            id: "apiKey".to_string(),
+            field_type: PluginConfigFieldType::Secret,
+            label: "API Key".to_string(),
+            placeholder: None,
+            help: None,
+            options: Vec::new(),
+            default: None,
+        }];
+
+        let rt = Runtime::new().expect("runtime");
+        let ctx = Context::full(&rt).expect("context");
+        ctx.with(|ctx| {
+            let app_data = std::env::temp_dir();
+            inject_host_api_with_deadline(
+                &ctx,
+                "bigmodel-cn",
+                &app_data,
+                "0.0.0",
+                &fields,
+                ProbeDeadline::none(),
+            )
+            .expect("inject host api");
+
+            let value: Option<String> = ctx
+                .eval(r#"__openusage_ctx.host.config.get("apiKey")"#)
+                .expect("config get from JS");
+            assert_eq!(value.as_deref(), Some(api_key));
+
+            let all: HashMap<String, Value> = ctx
+                .eval(r#"__openusage_ctx.host.config.all()"#)
+                .expect("config all from JS");
+            assert_eq!(
+                all.get("apiKey").and_then(Value::as_str),
+                Some(api_key)
+            );
+        });
+
+        replace_store_for_test(default_store_for_test());
+    }
+
+    #[test]
+    #[serial]
+    fn register_existing_secrets_redacts_saved_keys_in_logs() {
+        use crate::plugin_engine::manifest::{
+            LoadedPlugin, PluginConfig, PluginConfigFieldType, PluginManifest,
+        };
+        use crate::provider_config::{
+            default_store_for_test, register_existing_secrets, replace_providers_for_test,
+            replace_store_for_test,
+        };
+        use serde_json::Value;
+
+        let api_key = "saved-provider-secret-key-99";
+        replace_providers_for_test(HashMap::from([(
+            "zai".to_string(),
+            HashMap::from([(
+                "apiKey".to_string(),
+                Value::String(api_key.to_string()),
+            )]),
+        )]));
+
+        let plugin = LoadedPlugin {
+            manifest: PluginManifest {
+                schema_version: 1,
+                id: "zai".to_string(),
+                name: "Z.ai".to_string(),
+                version: "0.0.0".to_string(),
+                entry: "plugin.js".to_string(),
+                icon: "icon.svg".to_string(),
+                brand_color: None,
+                lines: vec![],
+                links: vec![],
+                config: Some(crate::plugin_engine::manifest::PluginConfig {
+                    fields: vec![PluginConfigField {
+                        id: "apiKey".to_string(),
+                        field_type: PluginConfigFieldType::Secret,
+                        label: "API Key".to_string(),
+                        placeholder: None,
+                        help: None,
+                        options: Vec::new(),
+                        default: None,
+                    }],
+                }),
+            },
+            plugin_dir: PathBuf::from("."),
+            entry_script: String::new(),
+            icon_data_url: String::new(),
+        };
+
+        register_existing_secrets(&[plugin]);
+        let redacted = redact_log_message(&format!("using api key {api_key}"));
+        assert!(
+            !redacted.contains(api_key),
+            "saved provider secret should be redacted in logs, got: {redacted}"
+        );
+
+        replace_store_for_test(default_store_for_test());
     }
 
     #[test]

@@ -47,9 +47,7 @@ fn temp_path(label: &str) -> PathBuf {
 }
 
 fn replace_store_for_test(config: ProviderConfigFile) {
-    let mut locked = store().lock().expect("provider config store poisoned");
-    *locked = config;
-    reset_load_state_for_test();
+    super::replace_store_for_test(config);
 }
 
 fn secret_input(value: &str) -> HashMap<String, Value> {

@@ -79,4 +79,87 @@ describe("useProbeState", () => {
     expect(result.current.pluginStates.codex?.loading).toBe(false)
     expect(result.current.pluginStates.codex?.lastErrorAt).toBe(789_000)
   })
+
+  it("preserves existing data when a probe returns an error", () => {
+    const existingData = {
+      providerId: "codex",
+      displayName: "Codex",
+      iconUrl: "",
+      lines: [{ type: "text" as const, label: "Now", value: "OK" }],
+    }
+    const { result } = renderHook(() => useProbeState({}))
+
+    act(() => {
+      result.current.handleProbeResult(existingData)
+    })
+
+    act(() => {
+      result.current.handleProbeResult({
+        providerId: "codex",
+        displayName: "Codex",
+        iconUrl: "",
+        lines: [{ type: "badge", label: "Error", text: "Auth expired" }],
+      })
+    })
+
+    expect(result.current.pluginStates.codex?.data).toEqual(existingData)
+    expect(result.current.pluginStates.codex?.error).toBe("Auth expired")
+    expect(result.current.pluginStates.codex?.loading).toBe(false)
+  })
+
+  it("tracks manual refresh time after a successful probe", () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(200_000)
+    const { result } = renderHook(() => useProbeState({}))
+
+    act(() => {
+      result.current.manualRefreshIdsRef.current.add("codex")
+    })
+
+    act(() => {
+      result.current.handleProbeResult({
+        providerId: "codex",
+        displayName: "Codex",
+        iconUrl: "",
+        lines: [{ type: "text", label: "Now", value: "OK" }],
+      })
+    })
+
+    expect(result.current.pluginStates.codex?.lastManualRefreshAt).toBe(200_000)
+    expect(result.current.manualRefreshIdsRef.current.has("codex")).toBe(false)
+  })
+
+  it("clears error state when marking plugins loading", () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(300_000)
+    const { result } = renderHook(() => useProbeState({}))
+
+    act(() => {
+      result.current.setErrorForPlugins(["codex"], "无法开始刷新")
+    })
+
+    act(() => {
+      result.current.setLoadingForPlugins(["codex"])
+    })
+
+    expect(result.current.pluginStates.codex?.loading).toBe(true)
+    expect(result.current.pluginStates.codex?.error).toBeNull()
+    expect(result.current.pluginStates.codex?.lastErrorAt).toBeNull()
+  })
+
+  it("invokes onProbeResult after handling probe output", () => {
+    const onProbeResult = vi.fn()
+    const { result } = renderHook(() => useProbeState({ onProbeResult }))
+
+    act(() => {
+      result.current.handleProbeResult({
+        providerId: "codex",
+        displayName: "Codex",
+        iconUrl: "",
+        lines: [{ type: "text", label: "Now", value: "OK" }],
+      })
+    })
+
+    expect(onProbeResult).toHaveBeenCalledTimes(1)
+  })
 })

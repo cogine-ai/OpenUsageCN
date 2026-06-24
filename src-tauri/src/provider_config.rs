@@ -353,6 +353,26 @@ pub(super) fn reset_load_state_for_test() {
 }
 
 #[cfg(test)]
+pub(crate) fn replace_store_for_test(config: ProviderConfigFile) {
+    let mut locked = store().lock().expect("provider config store poisoned");
+    *locked = config;
+    reset_load_state_for_test();
+}
+
+#[cfg(test)]
+pub(crate) fn default_store_for_test() -> ProviderConfigFile {
+    default_file()
+}
+
+#[cfg(test)]
+pub(crate) fn replace_providers_for_test(providers: HashMap<String, HashMap<String, Value>>) {
+    replace_store_for_test(ProviderConfigFile {
+        version: CONFIG_VERSION,
+        providers,
+    });
+}
+
+#[cfg(test)]
 pub(super) fn set_load_degraded_for_test(degraded: bool) {
     LOAD_DEGRADED.store(degraded, Ordering::Release);
 }
