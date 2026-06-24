@@ -3447,13 +3447,10 @@ mod tests {
                 .expect("config get from JS");
             assert_eq!(value.as_deref(), Some(api_key));
 
-            let all: HashMap<String, Value> = ctx
-                .eval(r#"__openusage_ctx.host.config.all()"#)
-                .expect("config all from JS");
-            assert_eq!(
-                all.get("apiKey").and_then(Value::as_str),
-                Some(api_key)
-            );
+            let missing: Option<String> = ctx
+                .eval(r#"__openusage_ctx.host.config.get("missingField")"#)
+                .expect("config get missing field from JS");
+            assert!(missing.is_none());
         });
 
         replace_store_for_test(default_store_for_test());
