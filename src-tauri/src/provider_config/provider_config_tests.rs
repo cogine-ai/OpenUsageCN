@@ -214,6 +214,55 @@ fn damaged_config_is_backed_up_before_fallback() {
 
 #[test]
 #[serial]
+fn degraded_load_recovers_providers_from_valid_backup() {
+    let dir = temp_path("degraded-load-recover");
+    let path = dir.join("providers.json");
+    let backup = path.with_extension("json.bak");
+    std::fs::create_dir_all(&dir).expect("create temp dir");
+    std::fs::write(&path, "{bad json").expect("write damaged config");
+    std::fs::write(
+        &backup,
+        r#"{"version":1,"providers":{"bigmodel-cn":{"apiKey":"backup-key"}}}"#,
+    )
+    .expect("write backup");
+
+    let loaded = load_from_path(&path);
+    let _ = std::fs::remove_dir_all(&dir);
+    reset_load_state_for_test();
+
+    assert_eq!(
+        loaded
+            .providers
+            .get("bigmodel-cn")
+            .and_then(|values| values.get("apiKey"))
+            .and_then(Value::as_str),
+        Some("backup-key")
+    );
+}
+
+#[test]
+#[serial]
+fn save_after_degraded_load_rejects_unrecoverable_damaged_file() {
+    replace_store_for_test(default_file());
+    let fields = vec![field("apiKey", PluginConfigFieldType::Secret)];
+    let dir = temp_path("degraded-load-reject");
+    let path = dir.join("providers.json");
+    std::fs::create_dir_all(&dir).expect("create temp dir");
+    std::fs::write(&path, "{bad json").expect("write damaged config");
+
+    set_load_degraded_for_test(true);
+    let result = save_plugin_values_to_path(&path, "zai", &fields, secret_input("new-zai-key"));
+    let disk_text = std::fs::read_to_string(&path).expect("read damaged config");
+    let _ = std::fs::remove_dir_all(&dir);
+    replace_store_for_test(default_file());
+    reset_load_state_for_test();
+
+    assert!(result.is_err());
+    assert_eq!(disk_text, "{bad json");
+}
+
+#[test]
+#[serial]
 fn save_after_degraded_load_preserves_other_providers_on_disk() {
     replace_store_for_test(default_file());
     let fields = vec![field("apiKey", PluginConfigFieldType::Secret)];

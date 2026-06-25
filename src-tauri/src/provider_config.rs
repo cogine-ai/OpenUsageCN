@@ -2,7 +2,7 @@ use crate::plugin_engine::host_api;
 use crate::plugin_engine::manifest::{LoadedPlugin, PluginConfigField, PluginConfigFieldType};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
@@ -89,7 +89,7 @@ fn load_from_path(path: &Path) -> ProviderConfigFile {
                 err
             );
             LOAD_DEGRADED.store(true, Ordering::Release);
-            return default_file();
+            return recover_config_after_degraded_load(path);
         }
     };
     match serde_json::from_str::<ProviderConfigFile>(&contents) {
@@ -115,7 +115,7 @@ fn load_from_path(path: &Path) -> ProviderConfigFile {
                 }
             }
             LOAD_DEGRADED.store(true, Ordering::Release);
-            default_file()
+            recover_config_after_degraded_load(path)
         }
     }
 }
@@ -125,20 +125,69 @@ fn try_parse_config_file(path: &Path) -> Option<ProviderConfigFile> {
     serde_json::from_str::<ProviderConfigFile>(&contents).ok()
 }
 
-fn merge_persisted_providers_if_degraded(path: &Path, config: &mut ProviderConfigFile) {
-    if !LOAD_DEGRADED.load(Ordering::Acquire) {
-        return;
-    }
-
+fn recover_providers_from_disk(path: &Path) -> HashMap<String, HashMap<String, Value>> {
     let backup = path.with_extension("json.bak");
+    let mut recovered = HashMap::new();
     for source in [path, backup.as_path()] {
         let Some(disk) = try_parse_config_file(source) else {
             continue;
         };
         for (id, values) in disk.providers {
-            config.providers.entry(id).or_insert(values);
+            recovered.entry(id).or_insert(values);
         }
     }
+    recovered
+}
+
+fn recover_config_after_degraded_load(path: &Path) -> ProviderConfigFile {
+    let providers = recover_providers_from_disk(path);
+    if providers.is_empty() {
+        return default_file();
+    }
+
+    log::info!(
+        "[provider-config] recovered {} provider config entries from disk after degraded load",
+        providers.len()
+    );
+    ProviderConfigFile {
+        version: CONFIG_VERSION,
+        providers,
+    }
+}
+
+fn disk_has_unrecoverable_content(path: &Path) -> bool {
+    let Ok(metadata) = std::fs::metadata(path) else {
+        return false;
+    };
+    if metadata.len() == 0 {
+        return false;
+    }
+    recover_providers_from_disk(path).is_empty()
+}
+
+fn merge_persisted_providers_if_degraded(
+    path: &Path,
+    config: &mut ProviderConfigFile,
+) -> Result<(), String> {
+    if !LOAD_DEGRADED.load(Ordering::Acquire) {
+        return Ok(());
+    }
+
+    let before_ids: HashSet<_> = config.providers.keys().cloned().collect();
+    for (id, values) in recover_providers_from_disk(path) {
+        config.providers.entry(id).or_insert(values);
+    }
+    let merged_from_disk = config
+        .providers
+        .keys()
+        .any(|id| !before_ids.contains(id));
+    if !merged_from_disk && disk_has_unrecoverable_content(path) && before_ids.is_empty() {
+        return Err(
+            "Provider config file is damaged and could not be recovered. Restore providers.json.bak manually before saving."
+                .to_string(),
+        );
+    }
+    Ok(())
 }
 
 fn save_to_path(path: &Path, config: &ProviderConfigFile) -> Result<(), String> {
@@ -276,7 +325,7 @@ fn save_plugin_values_to_path(
         let locked = store().lock().expect("provider config store poisoned");
         locked.clone()
     };
-    merge_persisted_providers_if_degraded(path, &mut next_config);
+    merge_persisted_providers_if_degraded(path, &mut next_config)?;
 
     let existing = next_config
         .providers
@@ -331,7 +380,7 @@ fn delete_plugin_field_from_path(
         let locked = store().lock().expect("provider config store poisoned");
         locked.clone()
     };
-    merge_persisted_providers_if_degraded(path, &mut next_config);
+    merge_persisted_providers_if_degraded(path, &mut next_config)?;
     if let Some(values) = next_config.providers.get_mut(plugin_id) {
         values.remove(field_id);
         if values.is_empty() {

@@ -126,7 +126,7 @@ Validation rules:
 - Select fields must have non-empty options and unique option values.
 - If a saved select value is no longer valid after a plugin update, OpenUsageCN falls back to the field default or the first option.
 
-Saved provider values live in `~/.openusagecn/providers.json`, outside the plugin directory. Secret fields such as API keys are stored as plaintext in that local file, protected only by best-effort private file permissions (`0600` on macOS/Linux). Bundled plugins are copied into the app data plugin directory on startup and may overwrite plugin files, so user-provided config must not be stored inside `plugins/<id>/`.
+Saved provider values live in `~/.openusagecn/providers.json`, outside the plugin directory. Secret fields such as API keys are stored as plaintext in that local file, protected only by best-effort private file permissions (`0600` on macOS/Linux). If that file is damaged at startup, OpenUsageCN tries to recover saved values from `providers.json.bak` before showing Settings or running probes, and it refuses to overwrite an unrecoverable damaged file when you save. Bundled plugins are copied into the app data plugin directory on startup and may overwrite plugin files, so user-provided config must not be stored inside `plugins/<id>/`.
 
 ## Output Shape Declaration
 
