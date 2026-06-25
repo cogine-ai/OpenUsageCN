@@ -79,4 +79,114 @@ describe("useProbeState", () => {
     expect(result.current.pluginStates.codex?.loading).toBe(false)
     expect(result.current.pluginStates.codex?.lastErrorAt).toBe(789_000)
   })
+
+  it("preserves stale data and lastUpdatedAt when a probe returns an error badge", () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(200_000)
+    const { result } = renderHook(() => useProbeState({}))
+
+    act(() => {
+      result.current.handleProbeResult({
+        providerId: "codex",
+        displayName: "Codex",
+        iconUrl: "",
+        lines: [{ type: "text", label: "Usage", value: "42%" }],
+      })
+    })
+
+    act(() => {
+      result.current.handleProbeResult({
+        providerId: "codex",
+        displayName: "Codex",
+        iconUrl: "",
+        lines: [{ type: "badge", label: "Error", text: "Auth expired" }],
+      })
+    })
+
+    const state = result.current.pluginStates.codex
+    expect(state?.error).toBe("Auth expired")
+    expect(state?.data?.lines[0]).toEqual({ type: "text", label: "Usage", value: "42%" })
+    expect(state?.lastUpdatedAt).toBe(200_000)
+    expect(state?.lastErrorAt).toBe(200_000)
+  })
+
+  it("surfaces plugin panic output as an error without replacing existing data", () => {
+    const { result } = renderHook(() => useProbeState({}))
+
+    act(() => {
+      result.current.handleProbeResult({
+        providerId: "codex",
+        displayName: "Codex",
+        iconUrl: "",
+        lines: [{ type: "text", label: "Usage", value: "42%" }],
+      })
+    })
+
+    act(() => {
+      result.current.handleProbeResult({
+        providerId: "codex",
+        displayName: "Codex",
+        iconUrl: "",
+        lines: [
+          {
+            type: "badge",
+            label: "Error",
+            text: "The plugin crashed during refresh. Try again or update the plugin.",
+          },
+        ],
+      })
+    })
+
+    const state = result.current.pluginStates.codex
+    expect(state?.error).toBe(
+      "The plugin crashed during refresh. Try again or update the plugin."
+    )
+    expect(state?.data?.lines[0]).toEqual({ type: "text", label: "Usage", value: "42%" })
+  })
+
+  it("records manual refresh time only after successful probe results", () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(300_000)
+    const { result } = renderHook(() => useProbeState({}))
+
+    act(() => {
+      result.current.manualRefreshIdsRef.current.add("codex")
+      result.current.handleProbeResult({
+        providerId: "codex",
+        displayName: "Codex",
+        iconUrl: "",
+        lines: [{ type: "text", label: "Usage", value: "42%" }],
+      })
+    })
+
+    expect(result.current.pluginStates.codex?.lastManualRefreshAt).toBe(300_000)
+
+    act(() => {
+      result.current.manualRefreshIdsRef.current.add("codex")
+      result.current.handleProbeResult({
+        providerId: "codex",
+        displayName: "Codex",
+        iconUrl: "",
+        lines: [{ type: "badge", label: "Error", text: "Auth expired" }],
+      })
+    })
+
+    expect(result.current.pluginStates.codex?.lastManualRefreshAt).toBe(300_000)
+  })
+
+  it("calls onProbeResult after each probe result", () => {
+    const onProbeResult = vi.fn()
+    const { result } = renderHook(() => useProbeState({ onProbeResult }))
+
+    act(() => {
+      result.current.handleProbeResult({
+        providerId: "codex",
+        displayName: "Codex",
+        iconUrl: "",
+        lines: [{ type: "text", label: "Usage", value: "42%" }],
+      })
+    })
+
+    expect(onProbeResult).toHaveBeenCalledTimes(1)
+  })
 })

@@ -515,4 +515,180 @@ mod tests {
         assert_eq!(sanitized[0].label, "Status");
         assert_eq!(sanitized[0].url, "https://status.example.com");
     }
+
+    fn manifest_with_config(config_json: &str) -> PluginManifest {
+        parse_manifest(&format!(
+            r#"
+            {{
+              "schemaVersion": 1,
+              "id": "test-plugin",
+              "name": "Test",
+              "version": "0.0.1",
+              "entry": "plugin.js",
+              "icon": "icon.svg",
+              "brandColor": null,
+              "config": {config_json},
+              "lines": [
+                {{ "type": "progress", "label": "A", "scope": "overview" }}
+              ]
+            }}
+            "#
+        ))
+    }
+
+    #[test]
+    fn validate_plugin_config_accepts_well_formed_fields() {
+        let manifest = manifest_with_config(
+            r#"
+            {
+              "fields": [
+                {
+                  "id": "apiKey",
+                  "type": "secret",
+                  "label": "API Key"
+                },
+                {
+                  "id": "region",
+                  "type": "select",
+                  "label": "Region",
+                  "options": [
+                    { "value": "cn", "label": "CN" },
+                    { "value": "global", "label": "Global" }
+                  ]
+                }
+              ]
+            }
+            "#,
+        );
+
+        validate_plugin_config(&manifest).expect("valid config should pass");
+    }
+
+    #[test]
+    fn validate_plugin_config_rejects_empty_field_id() {
+        let manifest = manifest_with_config(
+            r#"
+            {
+              "fields": [
+                { "id": "  ", "type": "text", "label": "Name" }
+              ]
+            }
+            "#,
+        );
+
+        let error = validate_plugin_config(&manifest).expect_err("empty id should fail");
+        assert!(error.to_string().contains("config field id cannot be empty"));
+    }
+
+    #[test]
+    fn validate_plugin_config_rejects_duplicate_field_ids() {
+        let manifest = manifest_with_config(
+            r#"
+            {
+              "fields": [
+                { "id": "apiKey", "type": "secret", "label": "Primary" },
+                { "id": "apiKey", "type": "secret", "label": "Duplicate" }
+              ]
+            }
+            "#,
+        );
+
+        let error = validate_plugin_config(&manifest).expect_err("duplicate id should fail");
+        assert!(error.to_string().contains("is duplicated"));
+    }
+
+    #[test]
+    fn validate_plugin_config_rejects_empty_label() {
+        let manifest = manifest_with_config(
+            r#"
+            {
+              "fields": [
+                { "id": "apiKey", "type": "secret", "label": "  " }
+              ]
+            }
+            "#,
+        );
+
+        let error = validate_plugin_config(&manifest).expect_err("empty label should fail");
+        assert!(error.to_string().contains("label cannot be empty"));
+    }
+
+    #[test]
+    fn validate_plugin_config_rejects_select_without_options() {
+        let manifest = manifest_with_config(
+            r#"
+            {
+              "fields": [
+                { "id": "region", "type": "select", "label": "Region", "options": [] }
+              ]
+            }
+            "#,
+        );
+
+        let error = validate_plugin_config(&manifest).expect_err("empty options should fail");
+        assert!(error.to_string().contains("needs options"));
+    }
+
+    #[test]
+    fn validate_plugin_config_rejects_invalid_select_options() {
+        let manifest = manifest_with_config(
+            r#"
+            {
+              "fields": [
+                {
+                  "id": "region",
+                  "type": "select",
+                  "label": "Region",
+                  "options": [
+                    { "value": " ", "label": "Blank" },
+                    { "value": "cn", "label": "CN" }
+                  ]
+                }
+              ]
+            }
+            "#,
+        );
+        let empty_value = validate_plugin_config(&manifest).expect_err("empty option value");
+        assert!(empty_value.to_string().contains("empty option value"));
+
+        let manifest = manifest_with_config(
+            r#"
+            {
+              "fields": [
+                {
+                  "id": "region",
+                  "type": "select",
+                  "label": "Region",
+                  "options": [
+                    { "value": "cn", "label": " " },
+                    { "value": "global", "label": "Global" }
+                  ]
+                }
+              ]
+            }
+            "#,
+        );
+        let empty_label = validate_plugin_config(&manifest).expect_err("empty option label");
+        assert!(empty_label.to_string().contains("label cannot be empty"));
+
+        let manifest = manifest_with_config(
+            r#"
+            {
+              "fields": [
+                {
+                  "id": "region",
+                  "type": "select",
+                  "label": "Region",
+                  "options": [
+                    { "value": "cn", "label": "CN" },
+                    { "value": "cn", "label": "Duplicate" }
+                  ]
+                }
+              ]
+            }
+            "#,
+        );
+        let duplicate = validate_plugin_config(&manifest).expect_err("duplicate option");
+        assert!(duplicate.to_string().contains("is duplicated"));
+    }
 }
