@@ -225,6 +225,7 @@ export function ProviderConfigFields({
             {field.type === "toggle" ? (
               <div className="flex h-8 items-center">
                 <Checkbox
+                  aria-label={field.label}
                   id={inputId}
                   checked={Boolean(draft[field.id])}
                   disabled={loading || saving}
