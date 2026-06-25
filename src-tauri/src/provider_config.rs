@@ -233,7 +233,7 @@ pub fn view_for_plugin(plugin_id: &str, fields: &[PluginConfigField]) -> Provide
                 let configured = value.and_then(Value::as_str).is_some_and(|s| !s.is_empty());
                 ProviderConfigViewValue::Secret {
                     configured,
-                    hint: value.and_then(Value::as_str).map(secret_hint),
+                    hint: value.and_then(Value::as_str).and_then(secret_hint),
                 }
             }
             PluginConfigFieldType::Text => ProviderConfigViewValue::Text {
@@ -491,14 +491,14 @@ fn register_secret_values(fields: &[PluginConfigField], values: &HashMap<String,
     }
 }
 
-fn secret_hint(value: &str) -> String {
+fn secret_hint(value: &str) -> Option<String> {
     let trimmed = value.trim();
     let chars: Vec<char> = trimmed.chars().collect();
     if chars.len() <= 4 {
-        "已配置".to_string()
+        None
     } else {
         let last4: String = chars[chars.len() - 4..].iter().collect();
-        format!("...{last4}")
+        Some(format!("...{last4}"))
     }
 }
 

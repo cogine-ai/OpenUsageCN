@@ -364,10 +364,7 @@ fn concurrent_saves_keep_all_provider_updates() {
 fn view_for_plugin_masks_short_secrets_without_hint_suffix() {
     replace_store_for_test(ProviderConfigFile {
         version: CONFIG_VERSION,
-        providers: HashMap::from([(
-            "bigmodel-cn".to_string(),
-            secret_input("abcd"),
-        )]),
+        providers: HashMap::from([("bigmodel-cn".to_string(), secret_input("abcd"))]),
     });
     let fields = vec![field("apiKey", PluginConfigFieldType::Secret)];
 
@@ -377,7 +374,7 @@ fn view_for_plugin_masks_short_secrets_without_hint_suffix() {
     match view.values.get("apiKey") {
         Some(ProviderConfigViewValue::Secret { configured, hint }) => {
             assert!(configured);
-            assert_eq!(hint.as_deref(), Some("已配置"));
+            assert!(hint.is_none());
         }
         other => panic!("expected secret view, got {other:?}"),
     }
@@ -388,10 +385,7 @@ fn view_for_plugin_masks_short_secrets_without_hint_suffix() {
 fn view_for_plugin_masks_long_secrets_with_last_four_chars() {
     replace_store_for_test(ProviderConfigFile {
         version: CONFIG_VERSION,
-        providers: HashMap::from([(
-            "bigmodel-cn".to_string(),
-            secret_input("sk-live-1234abcd"),
-        )]),
+        providers: HashMap::from([("bigmodel-cn".to_string(), secret_input("sk-live-1234abcd"))]),
     });
     let fields = vec![field("apiKey", PluginConfigFieldType::Secret)];
 

@@ -69,6 +69,26 @@ describe("ProviderConfigFields", () => {
     expect(screen.getByRole("button", { name: "清除" })).toBeInTheDocument()
   })
 
+  it("shows configured short secrets without duplicating the placeholder", async () => {
+    providerConfigMocks.getProviderConfig.mockResolvedValue({
+      values: {
+        apiKey: { type: "secret", configured: true, hint: null },
+      },
+    })
+
+    render(
+      <ProviderConfigFields
+        pluginId="bigmodel-cn"
+        fields={[secretField]}
+        onSaved={vi.fn()}
+      />
+    )
+
+    const input = await screen.findByLabelText("API Key")
+    expect(input).toHaveAttribute("placeholder", "已配置")
+    expect(input).toHaveValue("")
+  })
+
   it("saves values and notifies parent after reload", async () => {
     const onSaved = vi.fn()
     providerConfigMocks.getProviderConfig
