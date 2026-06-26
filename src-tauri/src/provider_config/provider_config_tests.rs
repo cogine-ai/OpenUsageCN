@@ -214,6 +214,56 @@ fn damaged_config_is_backed_up_before_fallback() {
 
 #[test]
 #[serial]
+fn load_from_backup_when_main_config_is_damaged() {
+    let dir = temp_path("damaged-main-valid-backup");
+    let path = dir.join("providers.json");
+    let backup = path.with_extension("json.bak");
+    std::fs::create_dir_all(&dir).expect("create temp dir");
+    std::fs::write(&path, "{bad json").expect("write damaged config");
+    std::fs::write(
+        &backup,
+        r#"{"version":1,"providers":{"bigmodel-cn":{"apiKey":"backup-key"}}}"#,
+    )
+    .expect("write backup");
+
+    let loaded = load_from_path(&path);
+    let _ = std::fs::remove_dir_all(&dir);
+    reset_load_state_for_test();
+
+    assert_eq!(
+        loaded
+            .providers
+            .get("bigmodel-cn")
+            .and_then(|values| values.get("apiKey"))
+            .and_then(Value::as_str),
+        Some("backup-key")
+    );
+}
+
+#[test]
+#[serial]
+fn save_after_unrecoverable_degraded_load_refuses_to_overwrite_disk() {
+    replace_store_for_test(default_file());
+    let fields = vec![field("apiKey", PluginConfigFieldType::Secret)];
+    let dir = temp_path("unrecoverable-degraded-save");
+    let path = dir.join("providers.json");
+    let backup = path.with_extension("json.bak");
+    std::fs::create_dir_all(&dir).expect("create temp dir");
+    std::fs::write(&path, "{bad json").expect("write damaged config");
+    std::fs::write(&backup, "{also bad").expect("write damaged backup");
+
+    set_load_degraded_for_test(true);
+    let result = save_plugin_values_to_path(&path, "zai", &fields, secret_input("new-zai-key"));
+    let on_disk = std::fs::read_to_string(&path).expect("read config");
+    let _ = std::fs::remove_dir_all(&dir);
+    replace_store_for_test(default_file());
+
+    assert!(result.is_err());
+    assert_eq!(on_disk, "{bad json");
+}
+
+#[test]
+#[serial]
 fn save_after_degraded_load_preserves_other_providers_on_disk() {
     replace_store_for_test(default_file());
     let fields = vec![field("apiKey", PluginConfigFieldType::Secret)];

@@ -115,6 +115,14 @@ fn load_from_path(path: &Path) -> ProviderConfigFile {
                 }
             }
             LOAD_DEGRADED.store(true, Ordering::Release);
+            if let Some(mut config) = try_parse_config_file(&backup) {
+                log::info!(
+                    "[provider-config] loaded provider config from backup {}",
+                    backup.display()
+                );
+                config.version = CONFIG_VERSION;
+                return config;
+            }
             default_file()
         }
     }
@@ -125,20 +133,32 @@ fn try_parse_config_file(path: &Path) -> Option<ProviderConfigFile> {
     serde_json::from_str::<ProviderConfigFile>(&contents).ok()
 }
 
-fn merge_persisted_providers_if_degraded(path: &Path, config: &mut ProviderConfigFile) {
+fn merge_persisted_providers_if_degraded(path: &Path, config: &mut ProviderConfigFile) -> bool {
     if !LOAD_DEGRADED.load(Ordering::Acquire) {
-        return;
+        return true;
     }
 
+    let mut recovered = false;
     let backup = path.with_extension("json.bak");
     for source in [path, backup.as_path()] {
         let Some(disk) = try_parse_config_file(source) else {
             continue;
         };
+        recovered = true;
         for (id, values) in disk.providers {
             config.providers.entry(id).or_insert(values);
         }
     }
+    recovered
+}
+
+fn ensure_degraded_save_is_safe(path: &Path, recovered_from_disk: bool) -> Result<(), String> {
+    if LOAD_DEGRADED.load(Ordering::Acquire) && !recovered_from_disk && path.exists() {
+        return Err(
+            "Cannot update provider config because the existing config file is damaged and could not be recovered. Repair or remove ~/.openusagecn/providers.json and try again.".to_string(),
+        );
+    }
+    Ok(())
 }
 
 fn save_to_path(path: &Path, config: &ProviderConfigFile) -> Result<(), String> {
@@ -276,7 +296,8 @@ fn save_plugin_values_to_path(
         let locked = store().lock().expect("provider config store poisoned");
         locked.clone()
     };
-    merge_persisted_providers_if_degraded(path, &mut next_config);
+    let recovered_from_disk = merge_persisted_providers_if_degraded(path, &mut next_config);
+    ensure_degraded_save_is_safe(path, recovered_from_disk)?;
 
     let existing = next_config
         .providers
@@ -331,7 +352,8 @@ fn delete_plugin_field_from_path(
         let locked = store().lock().expect("provider config store poisoned");
         locked.clone()
     };
-    merge_persisted_providers_if_degraded(path, &mut next_config);
+    let recovered_from_disk = merge_persisted_providers_if_degraded(path, &mut next_config);
+    ensure_degraded_save_is_safe(path, recovered_from_disk)?;
     if let Some(values) = next_config.providers.get_mut(plugin_id) {
         values.remove(field_id);
         if values.is_empty() {
