@@ -1,5 +1,8 @@
 use super::*;
-use crate::plugin_engine::manifest::{PluginConfigFieldType, PluginConfigOption};
+use crate::plugin_engine::host_api;
+use crate::plugin_engine::manifest::{
+    LoadedPlugin, PluginConfig, PluginConfigFieldType, PluginConfigOption, PluginManifest,
+};
 use serial_test::serial;
 use std::sync::{Arc, Barrier};
 use std::thread;
@@ -54,6 +57,28 @@ fn replace_store_for_test(config: ProviderConfigFile) {
 
 fn secret_input(value: &str) -> HashMap<String, Value> {
     HashMap::from([("apiKey".to_string(), Value::String(value.to_string()))])
+}
+
+fn loaded_plugin_with_secret(id: &str) -> LoadedPlugin {
+    LoadedPlugin {
+        manifest: PluginManifest {
+            schema_version: 1,
+            id: id.to_string(),
+            name: "Test".to_string(),
+            version: "0.0.1".to_string(),
+            entry: "plugin.js".to_string(),
+            icon: "icon.svg".to_string(),
+            brand_color: None,
+            lines: vec![],
+            links: vec![],
+            config: Some(PluginConfig {
+                fields: vec![field("apiKey", PluginConfigFieldType::Secret)],
+            }),
+        },
+        plugin_dir: PathBuf::from("."),
+        entry_script: String::new(),
+        icon_data_url: String::new(),
+    }
 }
 
 #[cfg(unix)]
@@ -357,6 +382,27 @@ fn concurrent_saves_keep_all_provider_updates() {
             Some(value.as_str())
         );
     }
+}
+
+#[test]
+#[serial]
+fn register_existing_secrets_redacts_persisted_values() {
+    let secret = "id.part+token/secret=20260615";
+    replace_store_for_test(ProviderConfigFile {
+        version: CONFIG_VERSION,
+        providers: HashMap::from([("bigmodel-cn".to_string(), secret_input(secret))]),
+    });
+
+    register_existing_secrets(&[loaded_plugin_with_secret("bigmodel-cn")]);
+    let redacted = host_api::redact_log_message(&format!("startup probe uses {secret}"));
+
+    replace_store_for_test(default_file());
+
+    assert!(
+        !redacted.contains(secret),
+        "persisted secret should be redacted after startup registration, got: {redacted}"
+    );
+    assert!(redacted.contains("id.p...0615"));
 }
 
 #[test]

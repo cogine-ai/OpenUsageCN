@@ -691,4 +691,107 @@ mod tests {
         let duplicate = validate_plugin_config(&manifest).expect_err("duplicate option");
         assert!(duplicate.to_string().contains("is duplicated"));
     }
+
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_plugins_dir(name: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        std::env::temp_dir().join(format!("openusagecn-manifest-{name}-{nanos}"))
+    }
+
+    fn write_plugin_files(plugin_dir: &Path, manifest_json: &str) {
+        fs::create_dir_all(plugin_dir).expect("create plugin dir");
+        fs::write(plugin_dir.join("plugin.json"), manifest_json).expect("write manifest");
+        fs::write(
+            plugin_dir.join("plugin.js"),
+            r#"globalThis.__openusage_plugin = { probe: () => ({ lines: [] }) };"#,
+        )
+        .expect("write entry script");
+        fs::write(
+            plugin_dir.join("icon.svg"),
+            r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"></svg>"#,
+        )
+        .expect("write icon");
+    }
+
+    fn valid_manifest_json(id: &str, config_json: Option<&str>) -> String {
+        let config = config_json
+            .map(|json| format!(r#","config": {json}"#))
+            .unwrap_or_default();
+        format!(
+            r#"{{
+  "schemaVersion": 1,
+  "id": "{id}",
+  "name": "{id}",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "brandColor": "#000000",
+  "lines": []
+  {config}
+}}"#
+        )
+    }
+
+    #[test]
+    fn load_plugins_from_dir_skips_invalid_config_but_keeps_valid_plugins() {
+        let root = temp_plugins_dir("invalid-config");
+        write_plugin_files(
+            &root.join("bad-config"),
+            &valid_manifest_json(
+                "bad-config",
+                Some(
+                    r#"{
+              "fields": [
+                { "id": "apiKey", "type": "secret", "label": "Primary" },
+                { "id": "apiKey", "type": "secret", "label": "Duplicate" }
+              ]
+            }"#,
+                ),
+            ),
+        );
+        write_plugin_files(&root.join("good"), &valid_manifest_json("good", None));
+
+        let plugins = load_plugins_from_dir(&root);
+        let _ = fs::remove_dir_all(&root);
+
+        assert_eq!(plugins.len(), 1);
+        assert_eq!(plugins[0].manifest.id, "good");
+    }
+
+    #[test]
+    fn load_plugins_from_dir_rejects_entry_outside_plugin_directory() {
+        let root = temp_plugins_dir("path-traversal");
+        let plugin_dir = root.join("escape");
+        fs::create_dir_all(&plugin_dir).expect("create plugin dir");
+        fs::write(
+            plugin_dir.join("plugin.json"),
+            r#"{
+  "schemaVersion": 1,
+  "id": "escape",
+  "name": "Escape",
+  "version": "0.0.1",
+  "entry": "../outside.js",
+  "icon": "icon.svg",
+  "brandColor": "#000000",
+  "lines": []
+}"#,
+        )
+        .expect("write manifest");
+        fs::write(root.join("outside.js"), "export {}").expect("write outside entry");
+        fs::write(
+            plugin_dir.join("icon.svg"),
+            r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"></svg>"#,
+        )
+        .expect("write icon");
+
+        let plugins = load_plugins_from_dir(&root);
+        let _ = fs::remove_dir_all(&root);
+
+        assert!(plugins.is_empty());
+    }
 }

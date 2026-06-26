@@ -212,4 +212,85 @@ describe("ProviderConfigFields", () => {
     expect(onSaved).not.toHaveBeenCalled()
     consoleError.mockRestore()
   })
+
+  it("initializes select fields from saved values", async () => {
+    const selectField: PluginConfigField = {
+      id: "region",
+      type: "select",
+      label: "Region",
+      options: [
+        { value: "cn", label: "CN" },
+        { value: "global", label: "Global" },
+      ],
+      default: "cn",
+    }
+    providerConfigMocks.getProviderConfig.mockResolvedValue({
+      values: {
+        region: { type: "select", value: "global" },
+      },
+    })
+
+    render(
+      <ProviderConfigFields
+        pluginId="zai"
+        fields={[selectField]}
+        onSaved={vi.fn()}
+      />
+    )
+
+    const select = await screen.findByLabelText("Region")
+    expect(select).toHaveValue("global")
+  })
+
+  it("initializes text fields from saved values", async () => {
+    const textField: PluginConfigField = {
+      id: "endpoint",
+      type: "text",
+      label: "Endpoint",
+      placeholder: "https://api.example.com",
+      options: [],
+    }
+    providerConfigMocks.getProviderConfig.mockResolvedValue({
+      values: {
+        endpoint: { type: "text", value: "https://saved.example.com" },
+      },
+    })
+
+    render(
+      <ProviderConfigFields
+        pluginId="custom"
+        fields={[textField]}
+        onSaved={vi.fn()}
+      />
+    )
+
+    const input = await screen.findByLabelText("Endpoint")
+    expect(input).toHaveValue("https://saved.example.com")
+  })
+
+  it("shows clear failure copy without calling onSaved", async () => {
+    const onSaved = vi.fn()
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+    providerConfigMocks.getProviderConfig.mockResolvedValue({
+      values: {
+        apiKey: { type: "secret", configured: true, hint: "...abcd" },
+      },
+    })
+    providerConfigMocks.deleteProviderConfigField.mockRejectedValue(new Error("delete failed"))
+
+    render(
+      <ProviderConfigFields
+        pluginId="bigmodel-cn"
+        fields={[secretField]}
+        onSaved={onSaved}
+      />
+    )
+
+    await screen.findByRole("button", { name: "清除" })
+    await userEvent.click(screen.getByRole("button", { name: "清除" }))
+
+    expect(await screen.findByText("清除失败")).toBeInTheDocument()
+    expect(onSaved).not.toHaveBeenCalled()
+    consoleError.mockRestore()
+  })
 })
