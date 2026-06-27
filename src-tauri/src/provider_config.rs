@@ -89,7 +89,7 @@ fn load_from_path(path: &Path) -> ProviderConfigFile {
                 err
             );
             LOAD_DEGRADED.store(true, Ordering::Release);
-            return default_file();
+            return recover_degraded_config(path);
         }
     };
     match serde_json::from_str::<ProviderConfigFile>(&contents) {
@@ -115,9 +115,25 @@ fn load_from_path(path: &Path) -> ProviderConfigFile {
                 }
             }
             LOAD_DEGRADED.store(true, Ordering::Release);
-            default_file()
+            recover_degraded_config(path)
         }
     }
+}
+
+fn recover_degraded_config(path: &Path) -> ProviderConfigFile {
+    let mut config = default_file();
+    merge_persisted_providers_if_degraded(path, &mut config);
+    if has_recoverable_disk_config(path) {
+        LOAD_DEGRADED.store(false, Ordering::Release);
+    }
+    config
+}
+
+fn has_recoverable_disk_config(path: &Path) -> bool {
+    let backup = path.with_extension("json.bak");
+    [path, backup.as_path()]
+        .iter()
+        .any(|source| try_parse_config_file(source).is_some())
 }
 
 fn try_parse_config_file(path: &Path) -> Option<ProviderConfigFile> {
@@ -277,6 +293,13 @@ fn save_plugin_values_to_path(
         locked.clone()
     };
     merge_persisted_providers_if_degraded(path, &mut next_config);
+    if LOAD_DEGRADED.load(Ordering::Acquire) && !has_recoverable_disk_config(path) {
+        return Err(
+            "Provider config file is damaged and cannot be recovered automatically. \
+             Rename or remove ~/.openusagecn/providers.json and providers.json.bak, then try again."
+                .to_string(),
+        );
+    }
 
     let existing = next_config
         .providers
@@ -332,6 +355,13 @@ fn delete_plugin_field_from_path(
         locked.clone()
     };
     merge_persisted_providers_if_degraded(path, &mut next_config);
+    if LOAD_DEGRADED.load(Ordering::Acquire) && !has_recoverable_disk_config(path) {
+        return Err(
+            "Provider config file is damaged and cannot be recovered automatically. \
+             Rename or remove ~/.openusagecn/providers.json and providers.json.bak, then try again."
+                .to_string(),
+        );
+    }
     if let Some(values) = next_config.providers.get_mut(plugin_id) {
         values.remove(field_id);
         if values.is_empty() {
