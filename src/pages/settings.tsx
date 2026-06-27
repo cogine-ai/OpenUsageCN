@@ -583,7 +583,6 @@ export function SettingsPage({
         </p>
         <label className="flex items-center gap-2 text-sm select-none text-foreground">
           <Checkbox
-            aria-label="登录时启动"
             key={`start-on-login-${startOnLogin}`}
             checked={startOnLogin}
             onCheckedChange={(checked) => onStartOnLoginChange(checked === true)}
