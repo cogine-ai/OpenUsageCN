@@ -400,3 +400,105 @@ fn view_for_plugin_masks_long_secrets_with_last_four_chars() {
         other => panic!("expected secret view, got {other:?}"),
     }
 }
+
+#[test]
+#[serial]
+fn view_for_plugin_masks_five_char_secret_with_hint() {
+    replace_store_for_test(ProviderConfigFile {
+        version: CONFIG_VERSION,
+        providers: HashMap::from([("bigmodel-cn".to_string(), secret_input("abcde"))]),
+    });
+    let fields = vec![field("apiKey", PluginConfigFieldType::Secret)];
+
+    let view = view_for_plugin("bigmodel-cn", &fields);
+    replace_store_for_test(default_file());
+
+    match view.values.get("apiKey") {
+        Some(ProviderConfigViewValue::Secret { configured, hint }) => {
+            assert!(configured);
+            assert_eq!(hint.as_deref(), Some("...bcde"));
+        }
+        other => panic!("expected secret view, got {other:?}"),
+    }
+}
+
+#[test]
+#[serial]
+fn view_for_plugin_trims_secret_before_hint_length_check() {
+    replace_store_for_test(ProviderConfigFile {
+        version: CONFIG_VERSION,
+        providers: HashMap::from([("bigmodel-cn".to_string(), secret_input("  abcd  "))]),
+    });
+    let fields = vec![field("apiKey", PluginConfigFieldType::Secret)];
+
+    let view = view_for_plugin("bigmodel-cn", &fields);
+    replace_store_for_test(default_file());
+
+    match view.values.get("apiKey") {
+        Some(ProviderConfigViewValue::Secret { configured, hint }) => {
+            assert!(configured);
+            assert!(hint.is_none());
+        }
+        other => panic!("expected secret view, got {other:?}"),
+    }
+}
+
+#[test]
+#[serial]
+fn save_after_degraded_load_merges_from_backup_when_main_unreadable() {
+    replace_store_for_test(default_file());
+    let fields = vec![field("apiKey", PluginConfigFieldType::Secret)];
+    let dir = temp_path("degraded-load-backup");
+    let path = dir.join("providers.json");
+    let backup = path.with_extension("json.bak");
+    std::fs::create_dir_all(&dir).expect("create temp dir");
+    std::fs::write(&path, "{bad json").expect("write damaged config");
+    std::fs::write(
+        &backup,
+        r#"{"version":1,"providers":{"bigmodel-cn":{"apiKey":"backup-key"}}}"#,
+    )
+    .expect("write backup");
+
+    set_load_degraded_for_test(true);
+    save_plugin_values_to_path(&path, "zai", &fields, secret_input("new-zai-key"))
+        .expect("save provider config");
+
+    let loaded = load_from_path(&path);
+    let _ = std::fs::remove_dir_all(&dir);
+    replace_store_for_test(default_file());
+
+    assert_eq!(
+        loaded
+            .providers
+            .get("bigmodel-cn")
+            .and_then(|values| values.get("apiKey"))
+            .and_then(Value::as_str),
+        Some("backup-key")
+    );
+    assert_eq!(
+        loaded
+            .providers
+            .get("zai")
+            .and_then(|values| values.get("apiKey"))
+            .and_then(Value::as_str),
+        Some("new-zai-key")
+    );
+}
+
+#[test]
+#[serial]
+fn damaged_config_does_not_overwrite_existing_backup() {
+    let dir = temp_path("damaged-backup-existing");
+    let path = dir.join("providers.json");
+    let backup = path.with_extension("json.bak");
+    std::fs::create_dir_all(&dir).expect("create temp dir");
+    std::fs::write(&backup, "original backup").expect("write existing backup");
+    std::fs::write(&path, "{bad json").expect("write damaged config");
+
+    let _loaded = load_from_path(&path);
+    let backup_text = std::fs::read_to_string(&backup).expect("read backup");
+    let _ = std::fs::remove_dir_all(&dir);
+    reset_load_state_for_test();
+
+    assert_eq!(backup_text, "original backup");
+}
