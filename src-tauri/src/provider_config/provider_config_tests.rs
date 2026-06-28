@@ -196,6 +196,86 @@ fn load_missing_version_uses_current_version() {
 
 #[test]
 #[serial]
+fn damaged_config_does_not_overwrite_existing_backup() {
+    let dir = temp_path("existing-backup");
+    let path = dir.join("providers.json");
+    let backup = path.with_extension("json.bak");
+    std::fs::create_dir_all(&dir).expect("create temp dir");
+    std::fs::write(&path, "{still bad").expect("write damaged config");
+    std::fs::write(
+        &backup,
+        r#"{"version":1,"providers":{"bigmodel-cn":{"apiKey":"from-backup"}}}"#,
+    )
+    .expect("write existing backup");
+
+    let loaded = load_from_path(&path);
+    let backup_text = std::fs::read_to_string(&backup).expect("read backup");
+    let _ = std::fs::remove_dir_all(&dir);
+
+    assert!(loaded.providers.is_empty());
+    assert_eq!(
+        backup_text,
+        r#"{"version":1,"providers":{"bigmodel-cn":{"apiKey":"from-backup"}}}"#
+    );
+    reset_load_state_for_test();
+}
+
+#[test]
+#[serial]
+fn save_after_degraded_load_merges_providers_from_backup_file() {
+    replace_store_for_test(default_file());
+    let fields = vec![field("apiKey", PluginConfigFieldType::Secret)];
+    let dir = temp_path("degraded-backup-merge");
+    let path = dir.join("providers.json");
+    let backup = path.with_extension("json.bak");
+    std::fs::create_dir_all(&dir).expect("create temp dir");
+    std::fs::write(&path, "{bad json on disk").expect("write damaged config");
+    std::fs::write(
+        &backup,
+        r#"{"version":1,"providers":{"bigmodel-cn":{"apiKey":"backup-key"}}}"#,
+    )
+    .expect("write backup");
+
+    set_load_degraded_for_test(true);
+    save_plugin_values_to_path(&path, "zai", &fields, secret_input("new-zai-key"))
+        .expect("save provider config");
+
+    let loaded = load_from_path(&path);
+    let _ = std::fs::remove_dir_all(&dir);
+    replace_store_for_test(default_file());
+
+    assert_eq!(
+        loaded
+            .providers
+            .get("bigmodel-cn")
+            .and_then(|values| values.get("apiKey"))
+            .and_then(Value::as_str),
+        Some("backup-key")
+    );
+    assert_eq!(
+        loaded
+            .providers
+            .get("zai")
+            .and_then(|values| values.get("apiKey"))
+            .and_then(Value::as_str),
+        Some("new-zai-key")
+    );
+}
+
+#[test]
+fn merge_values_rejects_invalid_toggle_input() {
+    let fields = vec![field("enabled", PluginConfigFieldType::Toggle)];
+    let input = HashMap::from([(
+        "enabled".to_string(),
+        Value::String("not-a-boolean".to_string()),
+    )]);
+
+    let error = merge_values(&fields, HashMap::new(), input).expect_err("invalid toggle");
+    assert!(error.contains("Invalid boolean value"));
+}
+
+#[test]
+#[serial]
 fn damaged_config_is_backed_up_before_fallback() {
     let dir = temp_path("damaged-backup");
     let path = dir.join("providers.json");

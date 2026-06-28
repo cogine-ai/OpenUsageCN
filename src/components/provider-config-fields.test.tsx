@@ -191,6 +191,68 @@ describe("ProviderConfigFields", () => {
     consoleError.mockRestore()
   })
 
+  it("saves toggle values and reloads the view", async () => {
+    const onSaved = vi.fn()
+    providerConfigMocks.getProviderConfig
+      .mockResolvedValueOnce({
+        values: {
+          enabled: { type: "toggle", value: true },
+        },
+      })
+      .mockResolvedValueOnce({
+        values: {
+          enabled: { type: "toggle", value: false },
+        },
+      })
+
+    render(
+      <ProviderConfigFields
+        pluginId="zai"
+        fields={[toggleField]}
+        onSaved={onSaved}
+      />
+    )
+
+    const checkbox = await screen.findByRole("checkbox", { name: "Enabled" })
+    expect(checkbox).toBeChecked()
+    await userEvent.click(checkbox)
+    await userEvent.click(screen.getByRole("button", { name: "保存" }))
+
+    await waitFor(() => {
+      expect(providerConfigMocks.saveProviderConfig).toHaveBeenCalledWith("zai", {
+        enabled: false,
+      })
+    })
+    expect(onSaved).toHaveBeenCalledWith("zai")
+    expect(await screen.findByRole("checkbox", { name: "Enabled" })).not.toBeChecked()
+  })
+
+  it("shows clear failure copy without calling onSaved", async () => {
+    const onSaved = vi.fn()
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+    providerConfigMocks.getProviderConfig.mockResolvedValue({
+      values: {
+        apiKey: { type: "secret", configured: true, hint: "...abcd" },
+      },
+    })
+    providerConfigMocks.deleteProviderConfigField.mockRejectedValue(new Error("delete failed"))
+
+    render(
+      <ProviderConfigFields
+        pluginId="bigmodel-cn"
+        fields={[secretField]}
+        onSaved={onSaved}
+      />
+    )
+
+    await screen.findByRole("button", { name: "清除" })
+    await userEvent.click(screen.getByRole("button", { name: "清除" }))
+
+    expect(await screen.findByText("清除失败")).toBeInTheDocument()
+    expect(onSaved).not.toHaveBeenCalled()
+    consoleError.mockRestore()
+  })
+
   it("shows save failure copy without calling onSaved", async () => {
     const onSaved = vi.fn()
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})

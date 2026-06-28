@@ -114,6 +114,96 @@ describe("useProbeRefreshActions", () => {
     expect(resetAutoUpdateSchedule).not.toHaveBeenCalled()
   })
 
+  it("skips retry when the plugin is already loading", () => {
+    const startBatch = vi.fn()
+    const resetAutoUpdateSchedule = vi.fn()
+
+    const { result } = renderHook(() =>
+      useProbeRefreshActions({
+        pluginSettings: { order: ["codex"], disabled: [] },
+        pluginStatesRef: {
+          current: {
+            codex: {
+              data: null,
+              loading: true,
+              error: null,
+              lastManualRefreshAt: null,
+              lastUpdatedAt: null,
+            },
+          },
+        },
+        manualRefreshIdsRef: { current: new Set<string>() },
+        resetAutoUpdateSchedule,
+        setLoadingForPlugins: vi.fn(),
+        setErrorForPlugins: vi.fn(),
+        startBatch,
+      })
+    )
+
+    act(() => {
+      result.current.handleRetryPlugin("codex")
+    })
+
+    expect(startBatch).not.toHaveBeenCalled()
+    expect(resetAutoUpdateSchedule).not.toHaveBeenCalled()
+  })
+
+  it("skips retry when a manual refresh is already in flight", () => {
+    const startBatch = vi.fn()
+
+    const { result } = renderHook(() =>
+      useProbeRefreshActions({
+        pluginSettings: { order: ["codex"], disabled: [] },
+        pluginStatesRef: { current: {} },
+        manualRefreshIdsRef: { current: new Set<string>(["codex"]) },
+        resetAutoUpdateSchedule: vi.fn(),
+        setLoadingForPlugins: vi.fn(),
+        setErrorForPlugins: vi.fn(),
+        startBatch,
+      })
+    )
+
+    act(() => {
+      result.current.handleRetryPlugin("codex")
+    })
+
+    expect(startBatch).not.toHaveBeenCalled()
+  })
+
+  it("skips retry while manual refresh cooldown is active", () => {
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(1_000_000)
+    const startBatch = vi.fn()
+
+    const { result } = renderHook(() =>
+      useProbeRefreshActions({
+        pluginSettings: { order: ["codex"], disabled: [] },
+        pluginStatesRef: {
+          current: {
+            codex: {
+              data: null,
+              loading: false,
+              error: null,
+              lastManualRefreshAt: 900_001,
+              lastUpdatedAt: null,
+            },
+          },
+        },
+        manualRefreshIdsRef: { current: new Set<string>() },
+        resetAutoUpdateSchedule: vi.fn(),
+        setLoadingForPlugins: vi.fn(),
+        setErrorForPlugins: vi.fn(),
+        startBatch,
+      })
+    )
+
+    act(() => {
+      result.current.handleRetryPlugin("codex")
+    })
+
+    expect(startBatch).not.toHaveBeenCalled()
+    nowSpy.mockRestore()
+  })
+
   it("cleans up manual refresh ids and sets errors when batch start fails", async () => {
     const failure = new Error("batch failed")
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
