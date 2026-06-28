@@ -500,11 +500,6 @@ fn delete_provider_config_field(
 }
 
 #[tauri::command]
-fn get_log_path(app_handle: tauri::AppHandle) -> Result<String, String> {
-    log_path::for_app(&app_handle).map(|path| path.to_string_lossy().to_string())
-}
-
-#[tauri::command]
 fn get_local_http_api_status() -> local_http_api::LocalHttpApiServiceStatus {
     local_http_api::get_status()
 }
@@ -668,7 +663,6 @@ pub fn run() {
             get_provider_config,
             save_provider_config,
             delete_provider_config_field,
-            get_log_path,
             get_local_http_api_status,
             update_global_shortcut
         ])
