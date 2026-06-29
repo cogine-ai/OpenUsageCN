@@ -212,4 +212,34 @@ describe("ProviderConfigFields", () => {
     expect(onSaved).not.toHaveBeenCalled()
     consoleError.mockRestore()
   })
+
+  it("shows clear failure copy when delete is rejected", async () => {
+    const onSaved = vi.fn()
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+    providerConfigMocks.getProviderConfig.mockResolvedValue({
+      values: {
+        apiKey: { type: "secret", configured: true, hint: "...abcd" },
+      },
+    })
+    providerConfigMocks.deleteProviderConfigField.mockRejectedValue(
+      new Error(
+        "Provider config file is damaged and cannot be recovered automatically."
+      )
+    )
+
+    render(
+      <ProviderConfigFields
+        pluginId="bigmodel-cn"
+        fields={[secretField]}
+        onSaved={onSaved}
+      />
+    )
+
+    await screen.findByRole("button", { name: "清除" })
+    await userEvent.click(screen.getByRole("button", { name: "清除" }))
+
+    expect(await screen.findByText("清除失败")).toBeInTheDocument()
+    expect(onSaved).not.toHaveBeenCalled()
+    consoleError.mockRestore()
+  })
 })
