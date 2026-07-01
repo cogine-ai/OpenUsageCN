@@ -1128,7 +1128,7 @@ describe("App", () => {
     expect(menuState.predefinedMenuItemCloseMock).toHaveBeenCalledTimes(1)
   })
 
-  it("opens devtools from sidebar context menu inspect action", async () => {
+  it("opens devtools from sidebar context menu inspect action in dev builds", async () => {
     render(<App />)
     await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
     state.invokeMock.mockClear()
