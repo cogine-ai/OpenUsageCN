@@ -241,6 +241,18 @@ fn load_recovers_from_valid_backup_when_main_is_corrupt() {
 }
 
 #[test]
+fn merge_values_rejects_invalid_select_option() {
+    let fields = vec![select_field(Some("cn"))];
+    let input = HashMap::from([("region".to_string(), Value::String("invalid".to_string()))]);
+    let result = merge_values(&fields, HashMap::new(), input);
+    let err = result.expect_err("invalid select should fail");
+    assert!(
+        err.contains("Invalid value 'invalid' for config field 'region'"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
 #[serial]
 fn save_refuses_when_disk_config_is_fully_unrecoverable() {
     replace_store_for_test(default_file());
@@ -327,6 +339,67 @@ fn save_round_trip_persists_values() {
             .and_then(|values| values.get("apiKey"))
             .and_then(Value::as_str),
         Some("secret-key")
+    );
+}
+
+#[test]
+#[serial]
+fn delete_refuses_when_disk_config_is_fully_unrecoverable() {
+    replace_store_for_test(ProviderConfigFile {
+        version: CONFIG_VERSION,
+        providers: HashMap::from([("bigmodel-cn".to_string(), secret_input("secret-key"))]),
+    });
+    let fields = vec![field("apiKey", PluginConfigFieldType::Secret)];
+    let dir = temp_path("fully-corrupt-delete");
+    let path = dir.join("providers.json");
+    let backup = path.with_extension("json.bak");
+    std::fs::create_dir_all(&dir).expect("create temp dir");
+    std::fs::write(&path, "{bad json").expect("write damaged config");
+    std::fs::write(&backup, "also bad").expect("write damaged backup");
+
+    let _ = load_from_path(&path);
+    let result = delete_plugin_field_from_path(&path, "bigmodel-cn", &fields, "apiKey");
+    let disk_text = std::fs::read_to_string(&path).expect("read config");
+    let cached = {
+        let locked = store().lock().expect("provider config store poisoned");
+        locked
+            .providers
+            .get("bigmodel-cn")
+            .and_then(|values| values.get("apiKey"))
+            .and_then(Value::as_str)
+            .map(str::to_string)
+    };
+    let _ = std::fs::remove_dir_all(&dir);
+    replace_store_for_test(default_file());
+
+    let err = result.expect_err("delete should fail");
+    assert!(
+        err.contains("damaged and cannot be recovered"),
+        "unexpected error: {err}"
+    );
+    assert_eq!(disk_text, "{bad json");
+    assert_eq!(cached, Some("secret-key".to_string()));
+}
+
+#[test]
+#[serial]
+fn delete_rejects_unknown_config_field() {
+    replace_store_for_test(ProviderConfigFile {
+        version: CONFIG_VERSION,
+        providers: HashMap::from([("bigmodel-cn".to_string(), secret_input("secret-key"))]),
+    });
+    let fields = vec![field("apiKey", PluginConfigFieldType::Secret)];
+    let dir = temp_path("unknown-field-delete");
+    let path = dir.join("providers.json");
+
+    let result = delete_plugin_field_from_path(&path, "bigmodel-cn", &fields, "missingField");
+    let _ = std::fs::remove_dir_all(&dir);
+    replace_store_for_test(default_file());
+
+    let err = result.expect_err("unknown field delete should fail");
+    assert!(
+        err.contains("Unknown config field 'missingField' for plugin bigmodel-cn"),
+        "unexpected error: {err}"
     );
 }
 
