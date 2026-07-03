@@ -78,6 +78,113 @@ describe("useProbeRefreshActions", () => {
     nowSpy.mockRestore()
   })
 
+  it("skips retry when the plugin is already loading", () => {
+    const startBatch = vi.fn()
+
+    const { result } = renderHook(() =>
+      useProbeRefreshActions({
+        pluginSettings: { order: ["codex"], disabled: [] },
+        pluginStatesRef: {
+          current: {
+            codex: { data: null, loading: true, error: null, lastManualRefreshAt: null, lastUpdatedAt: null },
+          },
+        },
+        manualRefreshIdsRef: { current: new Set<string>() },
+        resetAutoUpdateSchedule: vi.fn(),
+        setLoadingForPlugins: vi.fn(),
+        setErrorForPlugins: vi.fn(),
+        startBatch,
+      })
+    )
+
+    act(() => {
+      result.current.handleRetryPlugin("codex")
+    })
+
+    expect(startBatch).not.toHaveBeenCalled()
+  })
+
+  it("skips retry when a manual refresh is already in flight", () => {
+    const startBatch = vi.fn()
+
+    const { result } = renderHook(() =>
+      useProbeRefreshActions({
+        pluginSettings: { order: ["codex"], disabled: [] },
+        pluginStatesRef: { current: {} },
+        manualRefreshIdsRef: { current: new Set<string>(["codex"]) },
+        resetAutoUpdateSchedule: vi.fn(),
+        setLoadingForPlugins: vi.fn(),
+        setErrorForPlugins: vi.fn(),
+        startBatch,
+      })
+    )
+
+    act(() => {
+      result.current.handleRetryPlugin("codex")
+    })
+
+    expect(startBatch).not.toHaveBeenCalled()
+  })
+
+  it("skips retry while the plugin is still in the manual refresh cooldown", () => {
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(1_000_000)
+    const startBatch = vi.fn()
+
+    const { result } = renderHook(() =>
+      useProbeRefreshActions({
+        pluginSettings: { order: ["codex"], disabled: [] },
+        pluginStatesRef: {
+          current: {
+            codex: { data: null, loading: false, error: null, lastManualRefreshAt: 900_001, lastUpdatedAt: null },
+          },
+        },
+        manualRefreshIdsRef: { current: new Set<string>() },
+        resetAutoUpdateSchedule: vi.fn(),
+        setLoadingForPlugins: vi.fn(),
+        setErrorForPlugins: vi.fn(),
+        startBatch,
+      })
+    )
+
+    act(() => {
+      result.current.handleRetryPlugin("codex")
+    })
+
+    expect(startBatch).not.toHaveBeenCalled()
+    nowSpy.mockRestore()
+  })
+
+  it("skips refresh-all when every enabled plugin is still in cooldown", () => {
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(1_000_000)
+    const startBatch = vi.fn()
+    const resetAutoUpdateSchedule = vi.fn()
+
+    const { result } = renderHook(() =>
+      useProbeRefreshActions({
+        pluginSettings: { order: ["a", "b"], disabled: [] },
+        pluginStatesRef: {
+          current: {
+            a: { data: null, loading: false, error: null, lastManualRefreshAt: 900_001, lastUpdatedAt: null },
+            b: { data: null, loading: false, error: null, lastManualRefreshAt: 950_000, lastUpdatedAt: null },
+          },
+        },
+        manualRefreshIdsRef: { current: new Set<string>() },
+        resetAutoUpdateSchedule,
+        setLoadingForPlugins: vi.fn(),
+        setErrorForPlugins: vi.fn(),
+        startBatch,
+      })
+    )
+
+    act(() => {
+      result.current.handleRefreshAll()
+    })
+
+    expect(startBatch).not.toHaveBeenCalled()
+    expect(resetAutoUpdateSchedule).not.toHaveBeenCalled()
+    nowSpy.mockRestore()
+  })
+
   it("returns early when settings are unavailable or no plugins are eligible", () => {
     const startBatch = vi.fn()
     const resetAutoUpdateSchedule = vi.fn()
