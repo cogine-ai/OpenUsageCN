@@ -15,7 +15,7 @@ This plugin is separate from OpenCode Go. OpenCode reads the web dashboard subsc
 The Settings value is used first. If it is empty, `OPENCODE_COOKIE` is used.
 `OPENCODE_WORKSPACE_ID` is supported for the optional workspace selection.
 
-Cookie values entered in Settings are stored as plaintext in `~/.openusagecn/providers.json`, protected only by best-effort private file permissions (`0600` on macOS/Linux).
+Cookie values entered in Settings are stored as plaintext in `~/.openusagecn/providers.json`, protected only by best-effort private file permissions (`0600` on macOS/Linux; on Windows, use profile-local storage and OS account permissions to restrict access).
 
 ## Displayed Lines
 

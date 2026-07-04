@@ -74,6 +74,7 @@ describe("openrouter plugin", () => {
 
     expect(ctx.host.http.request.mock.calls[0][0].headers.Authorization).toBe("Bearer openrouter-api-key")
     expect(ctx.host.http.request.mock.calls[0][0].headers["HTTP-Referer"]).toBe("https://openusage.example")
+    expect(ctx.host.http.request.mock.calls[0][0].headers["X-Title"]).toBe("OpenUsageCN")
     expect(result.lines.find((line) => line.label === "Credits").used).toBe(25.75)
     expect(result.lines.find((line) => line.label === "Credits").limit).toBe(100.5)
     expect(result.lines.find((line) => line.label === "Balance").value).toBe("$74.75")

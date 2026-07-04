@@ -55,6 +55,7 @@ describe("opencode plugin", () => {
     const result = plugin.probe(ctx)
     const call = ctx.host.http.request.mock.calls[0][0]
 
+    // Opaque opencode.ai server-function ID used by the web dashboard for subscription data.
     expect(call.url).toContain("7abeebee372f304e050aaaf92be863f4a86490e382f8c79db68fd94040d691b4")
     expect(call.url).toContain(encodeURIComponent('["wrk_PUBLIC123"]'))
     expect(call.headers.Cookie).toBe("__Host-auth=public-cookie")
@@ -67,6 +68,7 @@ describe("opencode plugin", () => {
     const ctx = makeCtx()
     setEnv(ctx, { OPENCODE_COOKIE: "__Host-auth=public-cookie" })
     ctx.host.http.request.mockImplementation((opts) => {
+      // Opaque opencode.ai server-function ID used by the web dashboard for workspace discovery.
       if (opts.url.includes("def39973159c7f0483d8793a822b8dbb10d067e12c65455fcb4608459ba0234f")) {
         return { status: 200, bodyText: ';id:"wrk_DISCOVERED123",name:"Default"' }
       }
