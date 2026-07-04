@@ -188,6 +188,38 @@ describe("ProviderConfigFields", () => {
 
     expect(await screen.findByText("无法加载配置")).toBeInTheDocument()
     expect(await screen.findByRole("checkbox", { name: "Enabled" })).toBeChecked()
+    expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
+    consoleError.mockRestore()
+  })
+
+  it("does not save after load failure to avoid overwriting stored select and text fields", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+    const onSaved = vi.fn()
+    const selectField: PluginConfigField = {
+      id: "region",
+      type: "select",
+      label: "Region",
+      default: "intl",
+      options: [
+        { value: "intl", label: "International" },
+        { value: "cn", label: "China Mainland" },
+      ],
+    }
+    providerConfigMocks.getProviderConfig.mockRejectedValue(new Error("ipc unavailable"))
+
+    render(
+      <ProviderConfigFields
+        pluginId="alibaba-coding-plan"
+        fields={[selectField, secretField]}
+        onSaved={onSaved}
+      />
+    )
+
+    const saveButton = await screen.findByRole("button", { name: "保存" })
+    expect(saveButton).toBeDisabled()
+    await userEvent.click(saveButton)
+    expect(providerConfigMocks.saveProviderConfig).not.toHaveBeenCalled()
+    expect(onSaved).not.toHaveBeenCalled()
     consoleError.mockRestore()
   })
 
