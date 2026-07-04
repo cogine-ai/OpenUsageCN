@@ -15,7 +15,7 @@ use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-const WHITELISTED_ENV_VARS: [&str; 18] = [
+const WHITELISTED_ENV_VARS: [&str; 33] = [
     "CODEX_HOME",
     "CLAUDE_CONFIG_DIR",
     "CLAUDE_CODE_OAUTH_TOKEN",
@@ -34,6 +34,21 @@ const WHITELISTED_ENV_VARS: [&str; 18] = [
     "MINIMAX_CN_API_KEY",
     "SYNTHETIC_API_KEY",
     "PI_CODING_AGENT_DIR",
+    "OPENAI_ADMIN_KEY",
+    "OPENAI_API_KEY",
+    "OPENAI_PROJECT_ID",
+    "OPENROUTER_API_KEY",
+    "OPENROUTER_API_URL",
+    "OPENROUTER_HTTP_REFERER",
+    "OPENROUTER_X_TITLE",
+    "GEMINI_CONFIG_DIR",
+    "ALIBABA_CODING_PLAN_API_KEY",
+    "ALIBABA_QWEN_API_KEY",
+    "DASHSCOPE_API_KEY",
+    "ALIBABA_CODING_PLAN_COOKIE",
+    "ALIBABA_TOKEN_PLAN_COOKIE",
+    "OPENCODE_COOKIE",
+    "OPENCODE_WORKSPACE_ID",
 ];
 const MIN_BLOCKING_TIMEOUT: Duration = Duration::from_millis(1);
 
@@ -455,6 +470,16 @@ fn redact_body(body: &str) -> String {
                 })
                 .to_string();
         }
+    }
+
+    if let Ok(form_secret_re) = regex_lite::Regex::new(
+        r#"(?i)(^|[&\s])([A-Za-z0-9_.-]*(?:token|secret|password|auth|credential|cookie|csrf)[A-Za-z0-9_.-]*)=([^&\s]+)"#,
+    ) {
+        result = form_secret_re
+            .replace_all(&result, |caps: &regex_lite::Captures| {
+                format!("{}{}={}", &caps[1], &caps[2], redact_value(&caps[3]))
+            })
+            .to_string();
     }
 
     if let Ok(path_re) =
@@ -3400,6 +3425,32 @@ mod tests {
     }
 
     #[test]
+    fn env_api_allows_codexbar_gap_provider_vars() {
+        for name in [
+            "OPENAI_ADMIN_KEY",
+            "OPENAI_API_KEY",
+            "OPENAI_PROJECT_ID",
+            "OPENROUTER_API_KEY",
+            "OPENROUTER_API_URL",
+            "OPENROUTER_HTTP_REFERER",
+            "OPENROUTER_X_TITLE",
+            "GEMINI_CONFIG_DIR",
+            "ALIBABA_CODING_PLAN_API_KEY",
+            "ALIBABA_QWEN_API_KEY",
+            "DASHSCOPE_API_KEY",
+            "ALIBABA_CODING_PLAN_COOKIE",
+            "ALIBABA_TOKEN_PLAN_COOKIE",
+            "OPENCODE_COOKIE",
+            "OPENCODE_WORKSPACE_ID",
+        ] {
+            assert!(
+                WHITELISTED_ENV_VARS.contains(&name),
+                "{name} must be whitelisted for CodexBar gap provider plugins"
+            );
+        }
+    }
+
+    #[test]
     fn env_api_prefers_process_env() {
         struct RestoreEnvVar {
             name: &'static str,
@@ -3902,6 +3953,34 @@ mod tests {
         assert!(
             redacted.contains("c9df...a6cf"),
             "analytics_tracking_id should show first4...last4, got: {}",
+            redacted
+        );
+    }
+
+    #[test]
+    fn redact_body_redacts_form_encoded_tokens_and_csrf() {
+        let body =
+            "params=%7B%7D&sec_token=abcdefghijklmnopqrstuvwxyz123456&csrf=csrf-public-value-12345";
+        let redacted = redact_body(body);
+
+        assert!(
+            !redacted.contains("abcdefghijklmnopqrstuvwxyz123456"),
+            "sec_token should be redacted, got: {}",
+            redacted
+        );
+        assert!(
+            !redacted.contains("csrf-public-value-12345"),
+            "csrf should be redacted, got: {}",
+            redacted
+        );
+        assert!(
+            redacted.contains("sec_token=abcd...3456"),
+            "expected sec_token first4/last4 redaction, got: {}",
+            redacted
+        );
+        assert!(
+            redacted.contains("csrf=csrf...2345"),
+            "expected csrf first4/last4 redaction, got: {}",
             redacted
         );
     }

@@ -22,6 +22,8 @@ OpenUsageCN 常驻菜单栏，用一个轻量面板展示各类 AI 编程工具�
 
 ## 支持的服务商
 
+- [**Alibaba Coding Plan**](docs/providers/alibaba-coding-plan.md)：5 小时、weekly、monthly coding plan quota
+- [**Alibaba Token Plan**](docs/providers/alibaba-token-plan.md)：token plan quota、remaining、expires
 - [**Amp**](docs/providers/amp.md)：免费额度、奖励额度、credits
 - [**Antigravity**](docs/providers/antigravity.md)：全部模型用量
 - [**BigModel CN**](docs/providers/bigmodel-cn.md)：session、weekly、web searches、设置页 API Key
@@ -30,12 +32,16 @@ OpenUsageCN 常驻菜单栏，用一个轻量面板展示各类 AI 编程工具�
 - [**Copilot**](docs/providers/copilot.md)：premium、chat、completions
 - [**Cursor**](docs/providers/cursor.md)：credits、总用量、auto usage、API usage、on-demand、CLI auth
 - [**Factory / Droid**](docs/providers/factory.md)：standard、premium tokens
+- [**Gemini**](docs/providers/gemini.md)：Gemini CLI OAuth quota、Pro、Flash、Flash Lite
 - [**Grok**](docs/providers/grok.md)：credits used、plan、pay-as-you-go cap
 - [**JetBrains AI Assistant**](docs/providers/jetbrains-ai-assistant.md)：quota、remaining
 - [**Kiro**](docs/providers/kiro.md)：credits、bonus credits、overages
 - [**Kimi Code**](docs/providers/kimi.md)：session、weekly
 - [**MiniMax**](docs/providers/minimax.md)：coding plan session
+- [**OpenAI API**](docs/providers/openai-api.md)：organization spend、requests、tokens、legacy credits
+- [**OpenCode**](docs/providers/opencode.md)：opencode.ai session、weekly subscription usage
 - [**OpenCode Go**](docs/providers/opencode-go.md)：5h、weekly、monthly spend limits
+- [**OpenRouter**](docs/providers/openrouter.md)：credits、balance、key usage
 - [**Perplexity**](docs/providers/perplexity.md)：balance、usage analytics、本地 app session
 - [**Synthetic**](docs/providers/synthetic.md)：subscription、search、weekly token、5h limits
 - [**Devin**](docs/providers/devin.md)：weekly quota、extra usage
