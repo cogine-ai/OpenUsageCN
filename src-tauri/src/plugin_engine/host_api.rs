@@ -1,12 +1,12 @@
 use crate::plugin_engine::manifest::PluginConfigField;
 use crate::provider_config;
 use aes_gcm::{
-    AesGcm, Nonce,
-    aead::{Aead, KeyInit, OsRng, generic_array::typenum::U16, rand_core::RngCore},
+    aead::{generic_array::typenum::U16, rand_core::RngCore, Aead, KeyInit, OsRng},
     aes::Aes256,
+    AesGcm, Nonce,
 };
-use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
-use rquickjs::{Ctx, Exception, Function, Object, function::Rest};
+use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
+use rquickjs::{function::Rest, Ctx, Exception, Function, Object};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::ffi::{OsStr, OsString};
@@ -15,7 +15,7 @@ use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-const WHITELISTED_ENV_VARS: [&str; 18] = [
+const WHITELISTED_ENV_VARS: [&str; 33] = [
     "CODEX_HOME",
     "CLAUDE_CONFIG_DIR",
     "CLAUDE_CODE_OAUTH_TOKEN",
@@ -34,8 +34,73 @@ const WHITELISTED_ENV_VARS: [&str; 18] = [
     "MINIMAX_CN_API_KEY",
     "SYNTHETIC_API_KEY",
     "PI_CODING_AGENT_DIR",
+    "OPENAI_ADMIN_KEY",
+    "OPENAI_API_KEY",
+    "OPENAI_PROJECT_ID",
+    "OPENROUTER_API_KEY",
+    "OPENROUTER_API_URL",
+    "OPENROUTER_HTTP_REFERER",
+    "OPENROUTER_X_TITLE",
+    "GEMINI_CONFIG_DIR",
+    "ALIBABA_CODING_PLAN_API_KEY",
+    "ALIBABA_QWEN_API_KEY",
+    "DASHSCOPE_API_KEY",
+    "ALIBABA_CODING_PLAN_COOKIE",
+    "ALIBABA_TOKEN_PLAN_COOKIE",
+    "OPENCODE_COOKIE",
+    "OPENCODE_WORKSPACE_ID",
 ];
 const MIN_BLOCKING_TIMEOUT: Duration = Duration::from_millis(1);
+
+fn is_env_var_allowed_for_plugin(plugin_id: &str, name: &str) -> bool {
+    if !WHITELISTED_ENV_VARS.contains(&name) {
+        return false;
+    }
+
+    match plugin_id {
+        "claude" => matches!(
+            name,
+            "CLAUDE_CONFIG_DIR"
+                | "CLAUDE_CODE_OAUTH_TOKEN"
+                | "USER_TYPE"
+                | "USE_STAGING_OAUTH"
+                | "USE_LOCAL_OAUTH"
+                | "CLAUDE_CODE_CUSTOM_OAUTH_URL"
+                | "CLAUDE_CODE_OAUTH_CLIENT_ID"
+                | "CLAUDE_LOCAL_OAUTH_API_BASE"
+        ),
+        "codex" => matches!(name, "CODEX_HOME"),
+        "zai" => matches!(name, "ZAI_API_KEY" | "GLM_API_KEY"),
+        "bigmodel-cn" => matches!(name, "BIGMODEL_API_KEY" | "ZHIPUAI_API_KEY"),
+        "minimax" => matches!(
+            name,
+            "MINIMAX_API_KEY" | "MINIMAX_API_TOKEN" | "MINIMAX_CN_API_KEY"
+        ),
+        "synthetic" => matches!(name, "SYNTHETIC_API_KEY" | "PI_CODING_AGENT_DIR"),
+        "openai-api" => matches!(
+            name,
+            "OPENAI_ADMIN_KEY" | "OPENAI_API_KEY" | "OPENAI_PROJECT_ID"
+        ),
+        "openrouter" => matches!(
+            name,
+            "OPENROUTER_API_KEY"
+                | "OPENROUTER_API_URL"
+                | "OPENROUTER_HTTP_REFERER"
+                | "OPENROUTER_X_TITLE"
+        ),
+        "gemini" => matches!(name, "GEMINI_CONFIG_DIR"),
+        "alibaba-coding-plan" => matches!(
+            name,
+            "ALIBABA_CODING_PLAN_API_KEY"
+                | "ALIBABA_QWEN_API_KEY"
+                | "DASHSCOPE_API_KEY"
+                | "ALIBABA_CODING_PLAN_COOKIE"
+        ),
+        "alibaba-token-plan" => matches!(name, "ALIBABA_TOKEN_PLAN_COOKIE"),
+        "opencode" => matches!(name, "OPENCODE_COOKIE" | "OPENCODE_WORKSPACE_ID"),
+        _ => false,
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct ProbeDeadline {
@@ -457,6 +522,16 @@ fn redact_body(body: &str) -> String {
         }
     }
 
+    let form_secret_re = regex_lite::Regex::new(
+        r#"(?i)(^|[&\s])([A-Za-z0-9_.-]*(?:token|secret|password|auth|credential|cookie|csrf)[A-Za-z0-9_.-]*)=([^&\s]+)"#,
+    )
+    .expect("valid form secret redaction regex");
+    result = form_secret_re
+        .replace_all(&result, |caps: &regex_lite::Captures| {
+            format!("{}{}={}", &caps[1], &caps[2], redact_value(&caps[3]))
+        })
+        .to_string();
+
     if let Ok(path_re) =
         regex_lite::Regex::new(r#"(/(?:Users|home|opt|private|var|tmp|Applications)/[^\s"')]+)"#)
     {
@@ -867,12 +942,13 @@ fn inject_crypto<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()
     Ok(())
 }
 
-fn inject_env<'js>(ctx: &Ctx<'js>, host: &Object<'js>, _plugin_id: &str) -> rquickjs::Result<()> {
+fn inject_env<'js>(ctx: &Ctx<'js>, host: &Object<'js>, plugin_id: &str) -> rquickjs::Result<()> {
     let env_obj = Object::new(ctx.clone())?;
+    let pid = plugin_id.to_string();
     env_obj.set(
         "get",
         Function::new(ctx.clone(), move |name: String| -> Option<String> {
-            if !WHITELISTED_ENV_VARS.contains(&name.as_str()) {
+            if !is_env_var_allowed_for_plugin(&pid, &name) {
                 return None;
             }
 
@@ -2954,6 +3030,7 @@ fn expand_path(path: &str) -> String {
 mod tests {
     use super::*;
     use rquickjs::{Context, Function, Object, Runtime};
+    use serial_test::serial;
 
     fn encrypt_aes_256_gcm_envelope_for_test(key: &[u8], plaintext: &str) -> String {
         let iv = [7_u8; 16];
@@ -3299,7 +3376,49 @@ mod tests {
         );
     }
 
+    struct EnvVarGuard {
+        name: &'static str,
+        old: Option<String>,
+    }
+
+    impl EnvVarGuard {
+        fn set(name: &'static str, value: &str) -> Self {
+            let old = std::env::var(name).ok();
+            // SAFETY: tests that mutate env use this guard to restore the previous value on drop.
+            unsafe { std::env::set_var(name, value) };
+            Self { name, old }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            if let Some(value) = self.old.take() {
+                // SAFETY: value is restored to the process env at the end of the test.
+                unsafe { std::env::set_var(self.name, value) };
+            } else {
+                // SAFETY: var is removed only when it was absent before the test.
+                unsafe { std::env::remove_var(self.name) };
+            }
+        }
+    }
+
+    fn host_env_value_for_plugin(plugin_id: &str, name: &str) -> Option<String> {
+        let rt = Runtime::new().expect("runtime");
+        let ctx = Context::full(&rt).expect("context");
+        ctx.with(|ctx| {
+            let app_data = std::env::temp_dir();
+            inject_host_api(&ctx, plugin_id, &app_data, "0.0.0").expect("inject host api");
+            let globals = ctx.globals();
+            let probe_ctx: Object = globals.get("__openusage_ctx").expect("probe ctx");
+            let host: Object = probe_ctx.get("host").expect("host");
+            let env: Object = host.get("env").expect("env");
+            let get: Function = env.get("get").expect("get");
+            get.call((name.to_string(),)).expect("get env var")
+        })
+    }
+
     #[test]
+    #[serial]
     fn env_api_respects_allowlist_in_host_and_js() {
         let claude_env_vars = [
             "CLAUDE_CONFIG_DIR",
@@ -3319,18 +3438,21 @@ mod tests {
             );
         }
 
+        let _claude_config = EnvVarGuard::set("CLAUDE_CONFIG_DIR", "/tmp/openusage-claude");
+        let _opencode_cookie = EnvVarGuard::set("OPENCODE_COOKIE", "__Host-auth=scoped-test");
+
         let rt = Runtime::new().expect("runtime");
         let ctx = Context::full(&rt).expect("context");
         ctx.with(|ctx| {
             let app_data = std::env::temp_dir();
-            inject_host_api(&ctx, "test", &app_data, "0.0.0").expect("inject host api");
+            inject_host_api(&ctx, "claude", &app_data, "0.0.0").expect("inject host api");
             let globals = ctx.globals();
             let probe_ctx: Object = globals.get("__openusage_ctx").expect("probe ctx");
             let host: Object = probe_ctx.get("host").expect("host");
             let env: Object = host.get("env").expect("env");
             let get: Function = env.get("get").expect("get");
 
-            for name in WHITELISTED_ENV_VARS {
+            for name in claude_env_vars {
                 let expected = resolve_env_value(name);
                 let value: Option<String> =
                     get.call((name.to_string(),)).expect("get whitelisted var");
@@ -3343,6 +3465,22 @@ mod tests {
                     "{name} should match host env resolver from JS"
                 );
             }
+
+            let cross_plugin_value: Option<String> = get
+                .call(("OPENCODE_COOKIE".to_string(),))
+                .expect("get cross-plugin var");
+            assert!(
+                cross_plugin_value.is_none(),
+                "whitelisted vars for other plugins must not be exposed"
+            );
+
+            let js_cross_plugin_value: Option<String> = ctx
+                .eval(r#"__openusage_ctx.host.env.get("OPENCODE_COOKIE")"#)
+                .expect("js get cross-plugin var");
+            assert!(
+                js_cross_plugin_value.is_none(),
+                "whitelisted vars for other plugins must not be exposed from JS"
+            );
 
             let blocked: Option<String> = get
                 .call(("__OPENUSAGECN_TEST_NOT_WHITELISTED__".to_string(),))
@@ -3400,35 +3538,65 @@ mod tests {
     }
 
     #[test]
+    #[serial]
+    fn env_api_allows_codexbar_gap_provider_vars() {
+        for name in [
+            "OPENAI_ADMIN_KEY",
+            "OPENAI_API_KEY",
+            "OPENAI_PROJECT_ID",
+            "OPENROUTER_API_KEY",
+            "OPENROUTER_API_URL",
+            "OPENROUTER_HTTP_REFERER",
+            "OPENROUTER_X_TITLE",
+            "GEMINI_CONFIG_DIR",
+            "ALIBABA_CODING_PLAN_API_KEY",
+            "ALIBABA_QWEN_API_KEY",
+            "DASHSCOPE_API_KEY",
+            "ALIBABA_CODING_PLAN_COOKIE",
+            "ALIBABA_TOKEN_PLAN_COOKIE",
+            "OPENCODE_COOKIE",
+            "OPENCODE_WORKSPACE_ID",
+        ] {
+            assert!(
+                WHITELISTED_ENV_VARS.contains(&name),
+                "{name} must be whitelisted for CodexBar gap provider plugins"
+            );
+        }
+
+        let _opencode_cookie = EnvVarGuard::set("OPENCODE_COOKIE", "__Host-auth=scoped-test");
+        let _alibaba_cookie =
+            EnvVarGuard::set("ALIBABA_CODING_PLAN_COOKIE", "alibaba-cookie-scoped-test");
+
+        assert_eq!(
+            host_env_value_for_plugin("opencode", "OPENCODE_COOKIE").as_deref(),
+            Some("__Host-auth=scoped-test")
+        );
+        assert_eq!(
+            host_env_value_for_plugin("alibaba-coding-plan", "ALIBABA_CODING_PLAN_COOKIE")
+                .as_deref(),
+            Some("alibaba-cookie-scoped-test")
+        );
+        assert!(
+            host_env_value_for_plugin("openrouter", "OPENCODE_COOKIE").is_none(),
+            "OpenRouter must not read OpenCode cookie env"
+        );
+        assert!(
+            host_env_value_for_plugin("opencode", "ALIBABA_CODING_PLAN_COOKIE").is_none(),
+            "OpenCode must not read Alibaba cookie env"
+        );
+    }
+
+    #[test]
+    #[serial]
     fn env_api_prefers_process_env() {
-        struct RestoreEnvVar {
-            name: &'static str,
-            old: Option<String>,
-        }
-
-        impl Drop for RestoreEnvVar {
-            fn drop(&mut self) {
-                if let Some(value) = self.old.take() {
-                    // SAFETY: tests serialize env changes via this guard; value is restored on drop.
-                    unsafe { std::env::set_var(self.name, value) };
-                } else {
-                    // SAFETY: tests serialize env changes via this guard; var is restored/removed on drop.
-                    unsafe { std::env::remove_var(self.name) };
-                }
-            }
-        }
-
         let name = "ZAI_API_KEY";
-        let old = std::env::var(name).ok();
-        let _restore = RestoreEnvVar { name, old };
-        // SAFETY: this test restores the previous value in `Drop`.
-        unsafe { std::env::set_var(name, "sk-process-env-test-1234567890") };
+        let _restore = EnvVarGuard::set(name, "zai-process-env-test-value");
 
         let rt = Runtime::new().expect("runtime");
         let ctx = Context::full(&rt).expect("context");
         ctx.with(|ctx| {
             let app_data = std::env::temp_dir();
-            inject_host_api(&ctx, "test", &app_data, "0.0.0").expect("inject host api");
+            inject_host_api(&ctx, "zai", &app_data, "0.0.0").expect("inject host api");
             let globals = ctx.globals();
             let probe_ctx: Object = globals.get("__openusage_ctx").expect("probe ctx");
             let host: Object = probe_ctx.get("host").expect("host");
@@ -3438,7 +3606,7 @@ mod tests {
             let value: Option<String> = get.call((name.to_string(),)).expect("get");
             assert_eq!(
                 value.as_deref(),
-                Some("sk-process-env-test-1234567890"),
+                Some("zai-process-env-test-value"),
                 "process env should be preferred over shell lookup"
             );
 
@@ -3447,7 +3615,7 @@ mod tests {
                 .expect("js get");
             assert_eq!(
                 js_value.as_deref(),
-                Some("sk-process-env-test-1234567890"),
+                Some("zai-process-env-test-value"),
                 "process env should be preferred from JS"
             );
         });
@@ -3902,6 +4070,34 @@ mod tests {
         assert!(
             redacted.contains("c9df...a6cf"),
             "analytics_tracking_id should show first4...last4, got: {}",
+            redacted
+        );
+    }
+
+    #[test]
+    fn redact_body_redacts_form_encoded_tokens_and_csrf() {
+        let body =
+            "params=%7B%7D&sec_token=abcdefghijklmnopqrstuvwxyz123456&csrf=csrf-public-value-12345";
+        let redacted = redact_body(body);
+
+        assert!(
+            !redacted.contains("abcdefghijklmnopqrstuvwxyz123456"),
+            "sec_token should be redacted, got: {}",
+            redacted
+        );
+        assert!(
+            !redacted.contains("csrf-public-value-12345"),
+            "csrf should be redacted, got: {}",
+            redacted
+        );
+        assert!(
+            redacted.contains("sec_token=abcd...3456"),
+            "expected sec_token first4/last4 redaction, got: {}",
+            redacted
+        );
+        assert!(
+            redacted.contains("csrf=csrf...2345"),
+            "expected csrf first4/last4 redaction, got: {}",
             redacted
         );
     }

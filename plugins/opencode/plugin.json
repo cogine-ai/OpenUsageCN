@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "opencode",
+  "name": "OpenCode",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "brandColor": "#000000",
+  "config": {
+    "fields": [
+      {
+        "id": "cookieHeader",
+        "type": "secret",
+        "label": "Cookie Header",
+        "placeholder": "__Host-auth=...",
+        "help": "从 opencode.ai 手动复制 Cookie。留空则使用 OPENCODE_COOKIE"
+      },
+      {
+        "id": "workspaceId",
+        "type": "text",
+        "label": "Workspace ID",
+        "placeholder": "wrk_...",
+        "help": "可选。可填写 wrk_... 或 OpenCode workspace URL"
+      }
+    ]
+  },
+  "lines": [
+    { "type": "progress", "label": "Session", "scope": "overview", "primaryOrder": 1 },
+    { "type": "progress", "label": "Weekly", "scope": "overview", "period": "weekly" },
+    { "type": "text", "label": "Renews", "scope": "detail" }
+  ]
+}

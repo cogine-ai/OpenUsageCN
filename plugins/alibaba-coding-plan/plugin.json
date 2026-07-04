@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "id": "alibaba-coding-plan",
+  "name": "Alibaba Coding Plan",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "brandColor": "#FF6A00",
+  "config": {
+    "fields": [
+      {
+        "id": "source",
+        "type": "select",
+        "label": "Source",
+        "default": "auto",
+        "options": [
+          { "value": "auto", "label": "Auto" },
+          { "value": "api-key", "label": "API Key" },
+          { "value": "manual-cookie", "label": "Manual Cookie" }
+        ],
+        "help": "优先使用 API Key。Cookie 模式需要从阿里云控制台手动复制 Cookie"
+      },
+      {
+        "id": "region",
+        "type": "select",
+        "label": "Region",
+        "default": "intl",
+        "options": [
+          { "value": "intl", "label": "International" },
+          { "value": "cn", "label": "China Mainland" }
+        ]
+      },
+      {
+        "id": "apiKey",
+        "type": "secret",
+        "label": "API Key",
+        "placeholder": "sk-...",
+        "help": "留空则使用 ALIBABA_CODING_PLAN_API_KEY、ALIBABA_QWEN_API_KEY 或 DASHSCOPE_API_KEY"
+      },
+      {
+        "id": "cookieHeader",
+        "type": "secret",
+        "label": "Cookie Header",
+        "placeholder": "login_aliyunid_ticket=...; sec_token=...",
+        "help": "手工 Cookie 模式使用。留空则使用 ALIBABA_CODING_PLAN_COOKIE"
+      }
+    ]
+  },
+  "lines": [
+    { "type": "progress", "label": "Session", "scope": "overview", "primaryOrder": 1 },
+    { "type": "progress", "label": "Weekly", "scope": "overview", "period": "weekly" },
+    { "type": "progress", "label": "Monthly", "scope": "detail" }
+  ]
+}

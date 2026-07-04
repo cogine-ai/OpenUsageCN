@@ -1,0 +1,5 @@
+<svg viewBox="0 0 24 24" role="img" aria-label="OpenRouter" xmlns="http://www.w3.org/2000/svg">
+  <path d="M4 8h9a5 5 0 0 1 5 5v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  <path d="M4 16h7a3 3 0 0 0 3-3V8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  <path d="M17 5l3 3-3 3M17 13l3 3-3 3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

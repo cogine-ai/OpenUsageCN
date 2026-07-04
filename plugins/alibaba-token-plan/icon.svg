@@ -1,0 +1,5 @@
+<svg viewBox="0 0 24 24" role="img" aria-label="Alibaba Token Plan" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="8" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2"/>
+  <circle cx="16" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2"/>
+  <path d="M10.8 9.2l2.4 5.6M13.2 9.2l-2.4 5.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+</svg>

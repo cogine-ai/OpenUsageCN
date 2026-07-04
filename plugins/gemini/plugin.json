@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "gemini",
+  "name": "Gemini",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "brandColor": "#8E75B2",
+  "config": {
+    "fields": [
+      {
+        "id": "configDir",
+        "type": "text",
+        "label": "Gemini Config Dir",
+        "placeholder": "~/.gemini",
+        "help": "可选。留空则使用 GEMINI_CONFIG_DIR 或 ~/.gemini"
+      }
+    ]
+  },
+  "lines": [
+    { "type": "progress", "label": "Pro", "scope": "overview", "primaryOrder": 1 },
+    { "type": "progress", "label": "Flash", "scope": "overview" },
+    { "type": "progress", "label": "Flash Lite", "scope": "detail" }
+  ]
+}
