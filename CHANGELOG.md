@@ -4,6 +4,54 @@
 
 暂无。
 
+## v0.6.30
+
+### New Features
+
+- Add single-instance guard and refresh backoff ([#20](https://github.com/cogine-ai/OpenUsageCN/pull/20)) by @lc708
+- Add CodexBar gap provider plugins for Alibaba Coding Plan, Alibaba Token Plan, Gemini, OpenAI API, OpenCode, and OpenRouter ([#58](https://github.com/cogine-ai/OpenUsageCN/pull/58)) by @lc708
+
+### Bug Fixes
+
+- Fix provider config data loss after degraded load and return error results when plugins panic ([#27](https://github.com/cogine-ai/OpenUsageCN/pull/27)) by @app/cursor
+- Label provider config toggles and avoid duplicated short secret hints ([#33](https://github.com/cogine-ai/OpenUsageCN/pull/33)) by @app/cursor
+- Block provider config saves when disk config is unrecoverable ([#44](https://github.com/cogine-ai/OpenUsageCN/pull/44)) by @app/cursor
+
+### Chores
+
+- Expand local HTTP API security edge and refresh failure coverage ([#28](https://github.com/cogine-ai/OpenUsageCN/pull/28)) by @app/cursor
+- Cover provider config UI, plugin config validation, and probe error state handling ([#33](https://github.com/cogine-ai/OpenUsageCN/pull/33)) by @app/cursor
+- Clarify provider config recovery saves ([#44](https://github.com/cogine-ai/OpenUsageCN/pull/44)) by @app/cursor
+
+---
+
+### Changelog
+
+**Full Changelog**: [v0.6.29...v0.6.30](https://github.com/cogine-ai/OpenUsageCN/compare/v0.6.29...v0.6.30)
+
+- [2d3b600](https://github.com/cogine-ai/OpenUsageCN/commit/2d3b600406a9f67a96043c0a654a748d496b9af1) Merge pull request #11 from cogine-ai/cliq/release-0.6.29 by @lc708
+- [c5ca1e3](https://github.com/cogine-ai/OpenUsageCN/commit/c5ca1e3233d68d7aef711263c0ae3b9a6166b3a3) Add single instance guard and refresh backoff by @lc708
+- [54875ad](https://github.com/cogine-ai/OpenUsageCN/commit/54875ad288f4b4590ec16676bd159afab2b85546) Merge pull request #20 from cogine-ai/cliq/single-instance-refresh-backoff by @lc708
+- [c97f388](https://github.com/cogine-ai/OpenUsageCN/commit/c97f38867a1b93fcd3c0596f4f8e51ca4e006701) Fix provider config data loss after degraded load by @cursoragent
+- [0824891](https://github.com/cogine-ai/OpenUsageCN/commit/08248913564f1cc9ff5c8f0acddb6d5139380f71) Emit probe error result when plugin panics by @cursoragent
+- [e540e13](https://github.com/cogine-ai/OpenUsageCN/commit/e540e13f37b621f9333157298a7e43024a453eee) test: cover local HTTP API security edges and refresh failure paths by @cursoragent
+- [3fec279](https://github.com/cogine-ai/OpenUsageCN/commit/3fec27989821a769f318bcd9f85bfa4e99ee3e46) test(provider-config): serialize degraded-load tests by @lc708
+- [a580c81](https://github.com/cogine-ai/OpenUsageCN/commit/a580c81c2b9d21eaa8184d2bb71efc4334105362) Merge pull request #27 from cogine-ai/cursor/critical-bug-investigation-4062 by @app/cursor
+- [9a2b2e6](https://github.com/cogine-ai/OpenUsageCN/commit/9a2b2e63ae8924c34f13027e3394e1aaacae1cf1) test(local-http-api): fix query-string coverage by @lc708
+- [b8ad57b](https://github.com/cogine-ai/OpenUsageCN/commit/b8ad57bdc044d3b38d7c2012b6ef81cf4373d302) test(local-http-api): tighten trailing slash coverage by @lc708
+- [34e5b40](https://github.com/cogine-ai/OpenUsageCN/commit/34e5b407a845263a931ba93f65e39a065c0235b0) Merge pull request #28 from cogine-ai/cursor/missing-test-coverage-87c7 by @app/cursor
+- [6e5069a](https://github.com/cogine-ai/OpenUsageCN/commit/6e5069a64a9fac78625a2c241e8914c6040784de) test: cover provider config UI and probe error state handling by @cursoragent
+- [956fb9d](https://github.com/cogine-ai/OpenUsageCN/commit/956fb9d6592344dc9eeb7ec2173eb168e528386d) test: cover plugin config validation and secret view masking by @cursoragent
+- [4e98ace](https://github.com/cogine-ai/OpenUsageCN/commit/4e98ace3911d5ae95cbb315e35d782a8afe55fc7) fix: label provider config toggles by @lc708
+- [f45ab55](https://github.com/cogine-ai/OpenUsageCN/commit/f45ab5575b7bdb9281f24ded28e69ce656f61e0a) fix: avoid duplicated short secret hint by @lc708
+- [265fc5d](https://github.com/cogine-ai/OpenUsageCN/commit/265fc5d5dfb761941e080e94aee363dfb55f0c22) Merge pull request #33 from cogine-ai/cursor/missing-test-coverage-d84f by @app/cursor
+- [dbb3349](https://github.com/cogine-ai/OpenUsageCN/commit/dbb3349152357c0cb8f319bd6f5daedb5b395c6a) fix: block provider config save when disk config is unrecoverable by @cursoragent
+- [6a5274b](https://github.com/cogine-ai/OpenUsageCN/commit/6a5274b6b542f9f6fc9fdedae61c35137e329e7d) docs: clarify provider config recovery saves by @lc708
+- [2c943aa](https://github.com/cogine-ai/OpenUsageCN/commit/2c943aa3414f5ebc708fce96559b3e512bc6e64b) Merge pull request #44 from cogine-ai/cursor/critical-bug-investigation-dbd3 by @app/cursor
+- [e854933](https://github.com/cogine-ai/OpenUsageCN/commit/e8549337cf0814e8d80f5fba627701999f09e7fd) Add CodexBar gap provider plugins by @lc708
+- [8b8b491](https://github.com/cogine-ai/OpenUsageCN/commit/8b8b491c0e05bc5adfba5eda35c24f0fbbb8aee3) Address PR review findings by @lc708
+- [56b725b](https://github.com/cogine-ai/OpenUsageCN/commit/56b725bdb07ffa2c4d85660a879f61106cba9034) Merge pull request #58 from cogine-ai/cliq/codexbar-provider-gap by @lc708
+
 ## v0.6.29
 
 ### New Features
