@@ -93,4 +93,14 @@ describe("opencode plugin", () => {
     const plugin = await loadPlugin()
     expect(() => plugin.probe(ctx)).toThrow("OpenCode session expired.")
   })
+
+  it("throws when workspace discovery returns no IDs", async () => {
+    const ctx = makeCtx()
+    setEnv(ctx, { OPENCODE_COOKIE: "__Host-auth=public-cookie" })
+    ctx.host.http.request.mockReturnValue({ status: 200, bodyText: "[]" })
+
+    const plugin = await loadPlugin()
+    expect(() => plugin.probe(ctx)).toThrow("OpenCode workspace ID not found.")
+    expect(ctx.host.http.request.mock.calls.length).toBeGreaterThanOrEqual(2)
+  })
 })
