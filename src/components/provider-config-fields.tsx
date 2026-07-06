@@ -16,6 +16,7 @@ type DraftValues = Record<string, string | boolean>
 type ProviderConfigFieldsProps = {
   pluginId: string
   fields: PluginConfigField[]
+  initialView?: ProviderConfigView | null
   onSaved: (pluginId: string) => void
 }
 
@@ -61,6 +62,7 @@ function secretPlaceholder(field: PluginConfigField, view: ProviderConfigView | 
 export function ProviderConfigFields({
   pluginId,
   fields,
+  initialView,
   onSaved,
 }: ProviderConfigFieldsProps) {
   const [view, setView] = useState<ProviderConfigView | null>(null)
@@ -71,6 +73,14 @@ export function ProviderConfigFields({
   const [status, setStatus] = useState<string | null>(null)
 
   useEffect(() => {
+    if (initialView) {
+      setView(initialView)
+      setDraft(initialDraft(fields, initialView))
+      setLoading(false)
+      setError(null)
+      return
+    }
+
     let cancelled = false
     setLoading(true)
     setError(null)
@@ -92,7 +102,7 @@ export function ProviderConfigFields({
     return () => {
       cancelled = true
     }
-  }, [fields, pluginId])
+  }, [fields, initialView, pluginId])
 
   const canSave = useMemo(() => fields.length > 0 && !loading && !saving, [fields, loading, saving])
 

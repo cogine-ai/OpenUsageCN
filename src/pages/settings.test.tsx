@@ -162,7 +162,7 @@ describe("SettingsPage", () => {
     expect(screen.getByText("选择刷新频率")).toBeInTheDocument()
   })
 
-  it("renders provider config fields", async () => {
+  it("renders provider config fields after expanding configurable providers", async () => {
     render(
       <SettingsPage
         {...defaultProps}
@@ -188,6 +188,7 @@ describe("SettingsPage", () => {
       />
     )
 
+    await userEvent.click(screen.getByRole("button", { name: "展开 BigModel CN 配置" }))
     expect(await screen.findByLabelText("API Key")).toBeInTheDocument()
     expect(screen.getByText("留空则使用 BIGMODEL_API_KEY 或 ZHIPUAI_API_KEY 环境变量")).toBeInTheDocument()
   })

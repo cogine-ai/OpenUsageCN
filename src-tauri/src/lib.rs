@@ -196,6 +196,7 @@ pub struct ConfigFieldDto {
     pub help: Option<String>,
     pub options: Vec<ConfigOptionDto>,
     pub default: Option<serde_json::Value>,
+    pub default_source: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -462,6 +463,7 @@ fn plugin_config_dto(config: &plugin_engine::manifest::PluginConfig) -> PluginCo
                     })
                     .collect(),
                 default: field.default.clone(),
+                default_source: field.default_source,
             })
             .collect(),
     }
@@ -843,6 +845,7 @@ mod tests {
                     label: "China".to_string(),
                 }],
                 default: Some(json!("cn")),
+                default_source: true,
             }],
         });
 
@@ -854,5 +857,6 @@ mod tests {
         assert_eq!(dto.fields[0].help.as_deref(), Some("Select an API region"));
         assert_eq!(dto.fields[0].options[0].value, "cn");
         assert_eq!(dto.fields[0].default, Some(json!("cn")));
+        assert!(dto.fields[0].default_source);
     }
 }

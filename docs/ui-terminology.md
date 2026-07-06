@@ -21,6 +21,10 @@
 | Settings | 设置 |
 | Menubar | 菜单栏 |
 | Global Shortcut | 全局快捷键 |
+| Configured | 已配置 |
+| Default Config | 使用默认 |
+| Unconfigured | 未配置 |
+| Unknown Config | 配置未知 |
 
 ## 使用约定
 
@@ -30,3 +34,4 @@
 - 保留插件返回的指标 label，例如 Session、Weekly、Monthly；第一阶段不改这些运行时输出。
 - 菜单栏小面板文案要短，优先使用“刷新用量”“重置时间”“已暂停”这类直接说法。
 - 错误提示应说明用户看到的问题，例如“无法开始刷新”，同时继续在日志里记录详细英文错误。
+- 设置页服务商配置状态用“已配置 / 使用默认 / 未配置 / 配置未知”，只描述 OpenUsageCN 当前能判断的配置状态。
