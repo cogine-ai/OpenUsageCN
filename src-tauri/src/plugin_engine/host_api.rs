@@ -3588,6 +3588,72 @@ mod tests {
 
     #[test]
     #[serial]
+    fn env_api_scopes_codexbar_vars_to_plugin() {
+        let _openai_admin = EnvVarGuard::set("OPENAI_ADMIN_KEY", "openai-admin-scoped-test-key");
+        let _openai_api = EnvVarGuard::set("OPENAI_API_KEY", "openai-api-scoped-test-key");
+        let _openrouter_key = EnvVarGuard::set("OPENROUTER_API_KEY", "openrouter-scoped-test-key");
+        let _gemini_dir = EnvVarGuard::set("GEMINI_CONFIG_DIR", "/tmp/gemini-scoped-test");
+        let _alibaba_key = EnvVarGuard::set("ALIBABA_CODING_PLAN_API_KEY", "alibaba-key-scoped-test");
+        let _token_cookie = EnvVarGuard::set("ALIBABA_TOKEN_PLAN_COOKIE", "token-plan-cookie-scoped-test");
+        let _opencode_cookie = EnvVarGuard::set("OPENCODE_COOKIE", "__Host-auth=scoped-test");
+        let _opencode_workspace =
+            EnvVarGuard::set("OPENCODE_WORKSPACE_ID", "wrk_SCOPED123");
+
+        assert_eq!(
+            host_env_value_for_plugin("openai-api", "OPENAI_ADMIN_KEY").as_deref(),
+            Some("openai-admin-scoped-test-key")
+        );
+        assert_eq!(
+            host_env_value_for_plugin("openrouter", "OPENROUTER_API_KEY").as_deref(),
+            Some("openrouter-scoped-test-key")
+        );
+        assert_eq!(
+            host_env_value_for_plugin("gemini", "GEMINI_CONFIG_DIR").as_deref(),
+            Some("/tmp/gemini-scoped-test")
+        );
+        assert_eq!(
+            host_env_value_for_plugin("alibaba-coding-plan", "ALIBABA_CODING_PLAN_API_KEY")
+                .as_deref(),
+            Some("alibaba-key-scoped-test")
+        );
+        assert_eq!(
+            host_env_value_for_plugin("alibaba-token-plan", "ALIBABA_TOKEN_PLAN_COOKIE")
+                .as_deref(),
+            Some("token-plan-cookie-scoped-test")
+        );
+        assert_eq!(
+            host_env_value_for_plugin("opencode", "OPENCODE_WORKSPACE_ID").as_deref(),
+            Some("wrk_SCOPED123")
+        );
+
+        assert!(
+            host_env_value_for_plugin("gemini", "OPENAI_API_KEY").is_none(),
+            "Gemini must not read OpenAI env"
+        );
+        assert!(
+            host_env_value_for_plugin("openai-api", "OPENROUTER_API_KEY").is_none(),
+            "OpenAI API must not read OpenRouter env"
+        );
+        assert!(
+            host_env_value_for_plugin("openrouter", "OPENAI_ADMIN_KEY").is_none(),
+            "OpenRouter must not read OpenAI admin env"
+        );
+        assert!(
+            host_env_value_for_plugin("alibaba-token-plan", "ALIBABA_CODING_PLAN_API_KEY").is_none(),
+            "Token plan must not read coding plan API key env"
+        );
+        assert!(
+            host_env_value_for_plugin("alibaba-coding-plan", "ALIBABA_TOKEN_PLAN_COOKIE").is_none(),
+            "Coding plan must not read token plan cookie env"
+        );
+        assert!(
+            host_env_value_for_plugin("gemini", "OPENCODE_COOKIE").is_none(),
+            "Gemini must not read OpenCode cookie env"
+        );
+    }
+
+    #[test]
+    #[serial]
     fn env_api_prefers_process_env() {
         let name = "ZAI_API_KEY";
         let _restore = EnvVarGuard::set(name, "zai-process-env-test-value");

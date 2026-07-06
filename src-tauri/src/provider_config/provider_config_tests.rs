@@ -454,3 +454,37 @@ fn view_for_plugin_masks_long_secrets_with_last_four_chars() {
         other => panic!("expected secret view, got {other:?}"),
     }
 }
+
+#[test]
+#[serial]
+fn save_registers_secret_values_for_log_redaction() {
+    use crate::plugin_engine::host_api::redact_log_message;
+
+    replace_store_for_test(default_file());
+    let path = temp_path("secret-redaction");
+    let fields = vec![
+        field("apiKey", PluginConfigFieldType::Secret),
+        field("cookieHeader", PluginConfigFieldType::Secret),
+    ];
+    let cookie_secret = "alibaba-cookie-header-secret-20260706";
+    let values = HashMap::from([
+        (
+            "apiKey".to_string(),
+            Value::String("sk-alibaba-api-key-20260706".to_string()),
+        ),
+        (
+            "cookieHeader".to_string(),
+            Value::String(cookie_secret.to_string()),
+        ),
+    ]);
+
+    save_plugin_values_to_path(&path, "alibaba-coding-plan", &fields, values).expect("save");
+    let redacted = redact_log_message(&format!("cookie header: {cookie_secret}"));
+    let _ = std::fs::remove_file(&path);
+    replace_store_for_test(default_file());
+
+    assert!(
+        !redacted.contains(cookie_secret),
+        "saved cookie secret should be redacted in logs, got: {redacted}"
+    );
+}
