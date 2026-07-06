@@ -128,7 +128,7 @@ Validation rules:
 - Select fields must have non-empty options and unique option values.
 - If a saved select value is no longer valid after a plugin update, OpenUsageCN falls back to the field default or the first option.
 
-If `providers.json` is damaged and cannot be read or parsed, OpenUsageCN keeps the last readable backup when one exists. If neither `providers.json` nor `providers.json.bak` can be recovered, saves are blocked until you rename or remove the damaged files so other providers' keys are not silently overwritten. Secret fields such as API keys are stored as plaintext in that local file, protected only by best-effort private file permissions (`0600` on macOS/Linux). Bundled plugins are copied into the app data plugin directory on startup and may overwrite plugin files, so user-provided config must not be stored inside `plugins/<id>/`.
+If `providers.json` is damaged and cannot be read or parsed, OpenUsageCN keeps the last readable backup when one exists. If neither `providers.json` nor `providers.json.bak` can be recovered, saves are blocked until you rename or remove the damaged files so other providers' keys are not silently overwritten. If settings cannot load a provider's saved values into the UI, **Save** stays disabled until the load succeeds so empty form defaults cannot overwrite stored text or select fields. Secret fields such as API keys are stored as plaintext in that local file, protected only by best-effort private file permissions (`0600` on macOS/Linux). Bundled plugins are copied into the app data plugin directory on startup and may overwrite plugin files, so user-provided config must not be stored inside `plugins/<id>/`.
 
 ## Output Shape Declaration
 
