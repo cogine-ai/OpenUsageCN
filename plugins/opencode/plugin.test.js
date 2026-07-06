@@ -85,6 +85,16 @@ describe("opencode plugin", () => {
     expect(result.lines.find((line) => line.label === "Session").used).toBe(17)
   })
 
+  it("throws when workspace discovery returns no workspace ID", async () => {
+    const ctx = makeCtx()
+    setEnv(ctx, { OPENCODE_COOKIE: "__Host-auth=public-cookie" })
+    ctx.host.http.request.mockReturnValue({ status: 200, bodyText: "no workspace ids here" })
+    const plugin = await loadPlugin()
+    expect(() => plugin.probe(ctx)).toThrow(
+      "OpenCode workspace ID not found. Add the Workspace ID in Settings."
+    )
+  })
+
   it("rejects signed out responses", async () => {
     const ctx = makeCtx()
     setEnv(ctx, { OPENCODE_COOKIE: "__Host-auth=public-cookie", OPENCODE_WORKSPACE_ID: "wrk_PUBLIC123" })

@@ -86,6 +86,53 @@ describe("alibaba-coding-plan plugin", () => {
     expect(call.bodyText).toContain("sfm_codingplan_public_cn")
   })
 
+  it("throws when manual cookie source is configured without a cookie", async () => {
+    const ctx = makeCtx()
+    ctx.host.config.get.mockImplementation((key) => (key === "source" ? "manual-cookie" : null))
+    setEnv(ctx, {})
+    const plugin = await loadPlugin()
+    expect(() => plugin.probe(ctx)).toThrow(
+      "No Alibaba Coding Plan cookie found. Add it in Settings or set ALIBABA_CODING_PLAN_COOKIE."
+    )
+  })
+
+  it("throws when cookie is missing sec_token", async () => {
+    const ctx = makeCtx()
+    ctx.host.config.get.mockImplementation((key) => {
+      if (key === "source") return "manual-cookie"
+      if (key === "cookieHeader") return "login_aliyunid_ticket=ticket; csrf=csrf-header-value"
+      return null
+    })
+    setEnv(ctx, {})
+    const plugin = await loadPlugin()
+    expect(() => plugin.probe(ctx)).toThrow(
+      "Alibaba Coding Plan cookie missing sec_token. Copy a fresh console Cookie header."
+    )
+  })
+
+  it("throws when API key auth fails", async () => {
+    const ctx = makeCtx()
+    setEnv(ctx, { ALIBABA_CODING_PLAN_API_KEY: "public-alibaba-key" })
+    ctx.host.http.request.mockReturnValue({ status: 401, bodyText: "{}" })
+    const plugin = await loadPlugin()
+    expect(() => plugin.probe(ctx)).toThrow("Alibaba Coding Plan API key invalid. Check your API key.")
+  })
+
+  it("throws when cookie auth fails", async () => {
+    const ctx = makeCtx()
+    ctx.host.config.get.mockImplementation((key) => {
+      if (key === "source") return "manual-cookie"
+      if (key === "cookieHeader") return "login_aliyunid_ticket=ticket; sec_token=console-session-value; csrf=csrf-header-value"
+      return null
+    })
+    setEnv(ctx, {})
+    ctx.host.http.request.mockReturnValue({ status: 403, bodyText: "{}" })
+    const plugin = await loadPlugin()
+    expect(() => plugin.probe(ctx)).toThrow(
+      "Alibaba Coding Plan login expired. Copy a fresh console Cookie header."
+    )
+  })
+
   it("uses manual cookie source without importing browser cookies", async () => {
     const ctx = makeCtx()
     ctx.host.config.get.mockImplementation((key) => {

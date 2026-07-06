@@ -66,6 +66,24 @@ describe("alibaba-token-plan plugin", () => {
     expect(result.lines.find((line) => line.label === "Expires").value).toBe("2026-03-01")
   })
 
+  it("throws when login expires", async () => {
+    const ctx = makeCtx()
+    setEnv(ctx, { ALIBABA_TOKEN_PLAN_COOKIE: "login_aliyunid_ticket=ticket; sec_token=console-session-value" })
+    ctx.host.http.request.mockReturnValue({ status: 403, bodyText: "{}" })
+    const plugin = await loadPlugin()
+    expect(() => plugin.probe(ctx)).toThrow(
+      "Alibaba Token Plan login expired. Copy a fresh console Cookie header."
+    )
+  })
+
+  it("throws when quota data is missing", async () => {
+    const ctx = makeCtx()
+    setEnv(ctx, { ALIBABA_TOKEN_PLAN_COOKIE: "login_aliyunid_ticket=ticket; sec_token=console-session-value" })
+    ctx.host.http.request.mockReturnValue({ status: 200, bodyText: JSON.stringify({ Data: {} }) })
+    const plugin = await loadPlugin()
+    expect(() => plugin.probe(ctx)).toThrow("Alibaba Token Plan response missing quota data.")
+  })
+
   it("expands nested JSON strings from console responses", async () => {
     const ctx = makeCtx()
     setEnv(ctx, { ALIBABA_TOKEN_PLAN_COOKIE: "login_aliyunid_ticket=ticket" })
