@@ -44,6 +44,8 @@ pub struct PluginConfigField {
     #[serde(default)]
     pub options: Vec<PluginConfigOption>,
     pub default: Option<serde_json::Value>,
+    #[serde(default)]
+    pub default_source: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]

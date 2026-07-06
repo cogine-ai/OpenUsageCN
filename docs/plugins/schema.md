@@ -56,7 +56,8 @@ Bundled plugins live under `src-tauri/resources/bundled_plugins/<id>/`.
         "type": "secret",
         "label": "API Key",
         "placeholder": "key.secret",
-        "help": "留空则使用环境变量"
+        "help": "留空则使用环境变量",
+        "defaultSource": true
       }
     ]
   },
@@ -119,6 +120,7 @@ Field properties:
 | `help`        | string | No       | Short help text shown below the field. |
 | `options`     | array  | Select only | Select options: `{ "value": "...", "label": "..." }`. |
 | `default`     | any    | No       | Default value used when no saved value exists. |
+| `defaultSource` | boolean | No    | Set `true` when leaving the field empty can still use a plugin-managed fallback such as environment variables or default files. |
 
 Validation rules:
 

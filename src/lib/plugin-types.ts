@@ -50,6 +50,7 @@ export type PluginConfigField = {
   help?: string
   options: PluginConfigOption[]
   default?: unknown
+  defaultSource?: boolean
 }
 
 export type PluginConfig = {

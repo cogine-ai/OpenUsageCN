@@ -35,14 +35,16 @@
         "type": "secret",
         "label": "API Key",
         "placeholder": "sk-...",
-        "help": "留空则使用 ALIBABA_CODING_PLAN_API_KEY、ALIBABA_QWEN_API_KEY 或 DASHSCOPE_API_KEY"
+        "help": "留空则使用 ALIBABA_CODING_PLAN_API_KEY、ALIBABA_QWEN_API_KEY 或 DASHSCOPE_API_KEY",
+        "defaultSource": true
       },
       {
         "id": "cookieHeader",
         "type": "secret",
         "label": "Cookie Header",
         "placeholder": "login_aliyunid_ticket=...; sec_token=...",
-        "help": "手工 Cookie 模式使用。留空则使用 ALIBABA_CODING_PLAN_COOKIE"
+        "help": "手工 Cookie 模式使用。留空则使用 ALIBABA_CODING_PLAN_COOKIE",
+        "defaultSource": true
       }
     ]
   },

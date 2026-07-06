@@ -89,6 +89,25 @@ describe("ProviderConfigFields", () => {
     expect(input).toHaveValue("")
   })
 
+  it("uses initial view without loading provider config again", async () => {
+    render(
+      <ProviderConfigFields
+        pluginId="bigmodel-cn"
+        fields={[secretField]}
+        initialView={{
+          values: {
+            apiKey: { type: "secret", configured: true, hint: "...abcd" },
+          },
+        }}
+        onSaved={vi.fn()}
+      />
+    )
+
+    const input = await screen.findByLabelText("API Key")
+    expect(input).toHaveAttribute("placeholder", "已配置 ...abcd")
+    expect(providerConfigMocks.getProviderConfig).not.toHaveBeenCalled()
+  })
+
   it("saves values and notifies parent after reload", async () => {
     const onSaved = vi.fn()
     providerConfigMocks.getProviderConfig

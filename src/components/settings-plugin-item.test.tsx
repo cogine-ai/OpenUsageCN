@@ -40,6 +40,7 @@ const secretConfig: NonNullable<SettingsPluginConfig["config"]> = {
       placeholder: "key.secret",
       help: "留空则使用 BIGMODEL_API_KEY 或 ZHIPUAI_API_KEY 环境变量",
       options: [],
+      defaultSource: true,
     },
   ],
 }
@@ -92,10 +93,12 @@ describe("SortablePluginItem", () => {
     })
 
     expect(await screen.findByText("使用默认")).toBeInTheDocument()
+    expect(providerConfigMocks.getProviderConfig).toHaveBeenCalledTimes(1)
     expect(screen.queryByLabelText("API Key")).not.toBeInTheDocument()
 
     await userEvent.click(screen.getByRole("button", { name: "展开 BigModel CN 配置" }))
     expect(await screen.findByLabelText("API Key")).toBeInTheDocument()
+    expect(providerConfigMocks.getProviderConfig).toHaveBeenCalledTimes(1)
     expect(screen.queryByText("使用默认")).not.toBeInTheDocument()
 
     await userEvent.click(screen.getByRole("button", { name: "收起 BigModel CN 配置" }))
@@ -122,6 +125,7 @@ describe("SortablePluginItem", () => {
   })
 
   it("shows compact config status by provider config state", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
     providerConfigMocks.getProviderConfig.mockImplementation((pluginId: string) => {
       if (pluginId === "stored") {
         return Promise.resolve({
@@ -129,6 +133,9 @@ describe("SortablePluginItem", () => {
             apiKey: { type: "secret", configured: true, hint: "...abcd" },
           },
         })
+      }
+      if (pluginId === "failed") {
+        return Promise.reject(new Error("ipc unavailable"))
       }
       return Promise.resolve({ values: {} })
     })
@@ -170,6 +177,7 @@ describe("SortablePluginItem", () => {
                   placeholder: "key.secret",
                   help: "留空则使用 DEFAULT_API_KEY 环境变量",
                   options: [],
+                  defaultSource: true,
                 },
               ],
             },
@@ -198,11 +206,35 @@ describe("SortablePluginItem", () => {
           onToggle={vi.fn()}
           onProviderConfigSaved={vi.fn()}
         />
+        <SortablePluginItem
+          plugin={{
+            id: "failed",
+            name: "Failed",
+            enabled: true,
+            config: {
+              fields: [
+                {
+                  id: "apiKey",
+                  type: "secret",
+                  label: "API Key",
+                  placeholder: "key.secret",
+                  help: "留空则使用 FAILED_API_KEY 环境变量",
+                  options: [],
+                  defaultSource: true,
+                },
+              ],
+            },
+          }}
+          onToggle={vi.fn()}
+          onProviderConfigSaved={vi.fn()}
+        />
       </div>
     )
 
     expect(await screen.findByText("已配置")).toBeInTheDocument()
     expect(await screen.findByText("使用默认")).toBeInTheDocument()
     expect(await screen.findByText("未配置")).toBeInTheDocument()
+    expect(await screen.findByText("配置未知")).toBeInTheDocument()
+    consoleError.mockRestore()
   })
 })

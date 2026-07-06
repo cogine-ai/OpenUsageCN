@@ -14,6 +14,7 @@ fn field(id: &str, field_type: PluginConfigFieldType) -> PluginConfigField {
         help: None,
         options: Vec::new(),
         default: None,
+        default_source: false,
     }
 }
 
@@ -35,6 +36,7 @@ fn select_field(default: Option<&str>) -> PluginConfigField {
             },
         ],
         default: default.map(|value| Value::String(value.to_string())),
+        default_source: false,
     }
 }
 

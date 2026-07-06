@@ -13,14 +13,16 @@
         "type": "secret",
         "label": "Admin API Key",
         "placeholder": "sk-admin-...",
-        "help": "留空则使用 OPENAI_ADMIN_KEY 或 OPENAI_API_KEY 环境变量"
+        "help": "留空则使用 OPENAI_ADMIN_KEY 或 OPENAI_API_KEY 环境变量",
+        "defaultSource": true
       },
       {
         "id": "projectId",
         "type": "text",
         "label": "Project ID",
         "placeholder": "proj_...",
-        "help": "可选。留空则使用 OPENAI_PROJECT_ID 环境变量"
+        "help": "可选。留空则使用 OPENAI_PROJECT_ID 环境变量",
+        "defaultSource": true
       }
     ]
   },

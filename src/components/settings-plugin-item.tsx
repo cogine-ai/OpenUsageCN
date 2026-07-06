@@ -59,7 +59,7 @@ function hasDefaultSource(field: PluginConfigField): boolean {
   if (field.type === "select" && field.options.length > 0) {
     return true
   }
-  return /环境变量|environment variable|env var/i.test(field.help ?? "")
+  return field.defaultSource === true
 }
 
 function hasConfiguredValue(field: PluginConfigField, value: ProviderConfigViewValue | undefined): boolean {
@@ -253,6 +253,7 @@ export function SortablePluginItem({
           <ProviderConfigFields
             pluginId={plugin.id}
             fields={fields}
+            initialView={configView}
             onSaved={handleConfigSaved}
           />
         </div>
