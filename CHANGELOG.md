@@ -4,6 +4,26 @@
 
 暂无。
 
+## v0.6.31
+
+### New Features
+
+- Collapse configurable provider settings cards with compact config status labels and checkbox-only enable toggles ([#65](https://github.com/cogine-ai/OpenUsageCN/pull/65)) by @lc708
+
+### Bug Fixes
+
+- Align provider config status docs/tests and avoid duplicate config-load IPC when expanding provider settings ([#65](https://github.com/cogine-ai/OpenUsageCN/pull/65)) by @lc708
+
+---
+
+### Changelog
+
+**Full Changelog**: [v0.6.30...v0.6.31](https://github.com/cogine-ai/OpenUsageCN/compare/v0.6.30...v0.6.31)
+
+- [128b2b3](https://github.com/cogine-ai/OpenUsageCN/commit/128b2b359a257ffe7c809ad1ea5a9387bf969c07) Merge pull request #65 from cogine-ai/cliq/release-0.6.30 by @lc708
+- [ab42036](https://github.com/cogine-ai/OpenUsageCN/commit/ab420364ab419c507a1588f699099257ba1c4eff) fix: address provider settings review comments by @lc708
+- [e059be2](https://github.com/cogine-ai/OpenUsageCN/commit/e059be2e34fd7fca02a54803ba1ab0f854c06657) feat: collapse provider settings cards by @lc708
+
 ## v0.6.30
 
 ### New Features
