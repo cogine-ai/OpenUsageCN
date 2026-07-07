@@ -124,6 +124,107 @@ describe("SortablePluginItem", () => {
     expect(onToggle).toHaveBeenCalledWith("bigmodel-cn")
   })
 
+  it("shows configured status when select or toggle differs from default", async () => {
+    providerConfigMocks.getProviderConfig.mockImplementation((pluginId: string) => {
+      if (pluginId === "select-provider") {
+        return Promise.resolve({
+          values: {
+            region: { type: "select", value: "global" },
+          },
+        })
+      }
+      if (pluginId === "toggle-provider") {
+        return Promise.resolve({
+          values: {
+            enabled: { type: "toggle", value: true },
+          },
+        })
+      }
+      return Promise.resolve({ values: {} })
+    })
+
+    render(
+      <div>
+        <SortablePluginItem
+          plugin={{
+            id: "select-provider",
+            name: "Select Provider",
+            enabled: true,
+            config: {
+              fields: [
+                {
+                  id: "region",
+                  type: "select",
+                  label: "Region",
+                  options: [
+                    { value: "cn", label: "CN" },
+                    { value: "global", label: "Global" },
+                  ],
+                  default: "cn",
+                },
+              ],
+            },
+          }}
+          onToggle={vi.fn()}
+          onProviderConfigSaved={vi.fn()}
+        />
+        <SortablePluginItem
+          plugin={{
+            id: "toggle-provider",
+            name: "Toggle Provider",
+            enabled: true,
+            config: {
+              fields: [
+                {
+                  id: "enabled",
+                  type: "toggle",
+                  label: "Enabled",
+                  options: [],
+                  default: false,
+                },
+              ],
+            },
+          }}
+          onToggle={vi.fn()}
+          onProviderConfigSaved={vi.fn()}
+        />
+      </div>
+    )
+
+    expect(await screen.findAllByText("已配置")).toHaveLength(2)
+  })
+
+  it("shows default status when select matches default with defaultSource", async () => {
+    providerConfigMocks.getProviderConfig.mockResolvedValue({
+      values: {
+        region: { type: "select", value: "cn" },
+      },
+    })
+
+    renderItem({
+      id: "bigmodel-cn",
+      name: "BigModel CN",
+      enabled: true,
+      config: {
+        fields: [
+          {
+            id: "region",
+            type: "select",
+            label: "Region",
+            options: [
+              { value: "cn", label: "CN" },
+              { value: "global", label: "Global" },
+            ],
+            default: "cn",
+            defaultSource: true,
+          },
+        ],
+      },
+    })
+
+    expect(await screen.findByText("使用默认")).toBeInTheDocument()
+  })
+
   it("shows compact config status by provider config state", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
     providerConfigMocks.getProviderConfig.mockImplementation((pluginId: string) => {
