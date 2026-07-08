@@ -188,15 +188,19 @@ export function SideNav({
           action: () => onPluginContextAction(pluginId, "remove"),
         })
         const bottomSeparator = await PredefinedMenuItem.new({ item: "Separator" })
-        const inspectItem = await MenuItem.new({
-          id: `ctx-inspect-${pluginId}`,
-          text: "检查元素",
-          action: () => {
-            invoke("open_devtools").catch(console.error)
-          },
-        })
+        const inspectItem = import.meta.env.DEV
+          ? await MenuItem.new({
+              id: `ctx-inspect-${pluginId}`,
+              text: "检查元素",
+              action: () => {
+                invoke("open_devtools").catch(console.error)
+              },
+            })
+          : null
         const menu = await Menu.new({
-          items: [reloadItem, removeItem, bottomSeparator, inspectItem],
+          items: inspectItem
+            ? [reloadItem, removeItem, bottomSeparator, inspectItem]
+            : [reloadItem, removeItem, bottomSeparator],
         })
         try {
           await menu.popup()
@@ -206,7 +210,7 @@ export function SideNav({
             reloadItem.close(),
             removeItem.close(),
             bottomSeparator.close(),
-            inspectItem.close(),
+            ...(inspectItem ? [inspectItem.close()] : []),
           ])
         }
       })().catch(console.error)
