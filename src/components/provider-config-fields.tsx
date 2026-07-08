@@ -68,6 +68,7 @@ export function ProviderConfigFields({
   const [view, setView] = useState<ProviderConfigView | null>(null)
   const [draft, setDraft] = useState<DraftValues>({})
   const [loading, setLoading] = useState(true)
+  const [loadFailed, setLoadFailed] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
@@ -77,12 +78,14 @@ export function ProviderConfigFields({
       setView(initialView)
       setDraft(initialDraft(fields, initialView))
       setLoading(false)
+      setLoadFailed(false)
       setError(null)
       return
     }
 
     let cancelled = false
     setLoading(true)
+    setLoadFailed(false)
     setError(null)
     getProviderConfig(pluginId)
       .then((nextView) => {
@@ -93,6 +96,7 @@ export function ProviderConfigFields({
       .catch((err) => {
         if (cancelled) return
         console.error("Failed to load provider config:", err)
+        setLoadFailed(true)
         setError("无法加载配置")
         setDraft(initialDraft(fields, null))
       })
@@ -104,7 +108,10 @@ export function ProviderConfigFields({
     }
   }, [fields, initialView, pluginId])
 
-  const canSave = useMemo(() => fields.length > 0 && !loading && !saving, [fields, loading, saving])
+  const canSave = useMemo(
+    () => fields.length > 0 && !loading && !saving && !loadFailed,
+    [fields, loading, saving, loadFailed]
+  )
 
   const handleSave = async () => {
     const values: ProviderConfigInput = {}
