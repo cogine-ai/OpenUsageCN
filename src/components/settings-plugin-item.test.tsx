@@ -237,4 +237,61 @@ describe("SortablePluginItem", () => {
     expect(await screen.findByText("配置未知")).toBeInTheDocument()
     consoleError.mockRestore()
   })
+
+  it("shows configured status when select value differs from default", async () => {
+    providerConfigMocks.getProviderConfig.mockResolvedValue({
+      values: {
+        region: { type: "select", value: "global" },
+      },
+    })
+
+    renderItem({
+      id: "openai-api",
+      name: "OpenAI API",
+      enabled: true,
+      config: {
+        fields: [
+          {
+            id: "region",
+            type: "select",
+            label: "Region",
+            options: [
+              { value: "cn", label: "China" },
+              { value: "global", label: "Global" },
+            ],
+            default: "cn",
+          },
+        ],
+      },
+    })
+
+    expect(await screen.findByText("已配置")).toBeInTheDocument()
+  })
+
+  it("shows default status when toggle matches manifest default", async () => {
+    providerConfigMocks.getProviderConfig.mockResolvedValue({
+      values: {
+        enabled: { type: "toggle", value: true },
+      },
+    })
+
+    renderItem({
+      id: "zai",
+      name: "Z.ai",
+      enabled: true,
+      config: {
+        fields: [
+          {
+            id: "enabled",
+            type: "toggle",
+            label: "Enabled",
+            options: [],
+            default: true,
+          },
+        ],
+      },
+    })
+
+    expect(await screen.findByText("使用默认")).toBeInTheDocument()
+  })
 })
