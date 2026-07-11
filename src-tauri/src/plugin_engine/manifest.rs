@@ -539,6 +539,36 @@ mod tests {
     }
 
     #[test]
+    fn plugin_config_field_default_source_defaults_false_and_parses_true() {
+        let manifest = manifest_with_config(
+            r#"
+            {
+              "fields": [
+                {
+                  "id": "apiKey",
+                  "type": "secret",
+                  "label": "API Key",
+                  "defaultSource": true
+                },
+                {
+                  "id": "region",
+                  "type": "select",
+                  "label": "Region",
+                  "options": [
+                    { "value": "cn", "label": "CN" }
+                  ]
+                }
+              ]
+            }
+            "#,
+        );
+
+        let fields = manifest.config.expect("config").fields;
+        assert!(fields[0].default_source);
+        assert!(!fields[1].default_source);
+    }
+
+    #[test]
     fn validate_plugin_config_accepts_well_formed_fields() {
         let manifest = manifest_with_config(
             r#"
