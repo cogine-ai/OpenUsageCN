@@ -59,10 +59,10 @@ describe("codex plugin ccusage usage trend", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    const chart = result.lines.find((line) => line.label === "Usage Trend")
+    const chart = result.lines.find((line) => line.label === "用量趋势")
     expect(chart).toMatchObject({
       type: "barChart",
-      note: "Estimated from local Codex logs for the selected account.",
+      note: "根据所选账号的本地 Codex 日志估算。",
     })
     expect(chart.points.map((point) => point.value)).toEqual([150, 300])
 
@@ -76,5 +76,39 @@ describe("codex plugin ccusage usage trend", () => {
       type: "text",
       value: "50%",
     })
+  })
+
+  it("formats token counts with Chinese ten-thousand and hundred-million units", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
+      tokens: { access_token: "token" },
+      last_refresh: new Date().toISOString(),
+    }))
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      headers: { "x-codex-primary-used-percent": "10" },
+      bodyText: JSON.stringify({}),
+    })
+    ctx.host.ccusage.query.mockReturnValue({
+      status: "ok",
+      data: {
+        daily: [
+          { date: dayKey(3), totalTokens: 9999 },
+          { date: dayKey(2), totalTokens: 10000 },
+          { date: dayKey(1), totalTokens: 6005000 },
+          { date: dayKey(0), totalTokens: 10000000 },
+        ],
+      },
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    const chart = result.lines.find((line) => line.label === "用量趋势")
+    expect(chart.points.map((point) => point.valueLabel)).toEqual([
+      "9999.0 tokens",
+      "1.0万 tokens",
+      "600.5万 tokens",
+      "0.1亿 tokens",
+    ])
   })
 })
