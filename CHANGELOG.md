@@ -4,6 +4,21 @@
 
 暂无。
 
+## v0.6.32
+
+### New Features
+
+- Localize Codex usage metrics, add Chinese token units, and show the next manual-reset expiry with a warning color ([#89](https://github.com/cogine-ai/OpenUsageCN/pull/89)) by @lc708
+
+---
+
+### Changelog
+
+**Full Changelog**: [v0.6.31...v0.6.32](https://github.com/cogine-ai/OpenUsageCN/compare/v0.6.31...v0.6.32)
+
+- [0648527](https://github.com/cogine-ai/OpenUsageCN/commit/064852769c1ea80c1ec9291af1891da2657596fe) Merge pull request #89 from cogine-ai/cliq/codex-manual-reset-expiry-cn by @lc708
+- [fd8a101](https://github.com/cogine-ai/OpenUsageCN/commit/fd8a1016ce951fcf6dd6794cf06db7775e2150d6) feat(codex): localize usage and show reset expiry by @lc708
+
 ## v0.6.31
 
 ### New Features
