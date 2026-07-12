@@ -368,11 +368,11 @@ function MetricLineRenderer({
     return (
       <div>
         <div className="flex justify-between items-center h-[18px] gap-2">
-          <span className="text-xs text-muted-foreground min-w-0 truncate" title={line.label}>
+          <span className="text-xs text-muted-foreground min-w-0 flex-1 truncate" title={line.label}>
             {line.label}
           </span>
           <span
-            className="text-xs text-muted-foreground truncate flex-shrink-0 max-w-[45%] text-right"
+            className="text-xs text-muted-foreground min-w-0 truncate max-w-[70%] text-right"
             style={line.color ? { color: line.color } : undefined}
             title={line.value}
           >
@@ -380,7 +380,12 @@ function MetricLineRenderer({
           </span>
         </div>
         {line.subtitle && (
-          <div className="text-[10px] text-muted-foreground text-right -mt-0.5">{line.subtitle}</div>
+          <div
+            className="text-[10px] text-muted-foreground text-right -mt-0.5"
+            style={line.color ? { color: line.color } : undefined}
+          >
+            {line.subtitle}
+          </div>
         )}
       </div>
     )

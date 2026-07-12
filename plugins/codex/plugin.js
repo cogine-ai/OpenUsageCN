@@ -5,6 +5,7 @@
   const CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
   const REFRESH_URL = "https://auth.openai.com/oauth/token"
   const USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
+  const RATE_LIMIT_RESET_CREDITS_URL = "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits"
   const CREDIT_USD_RATE = 0.04
   const REFRESH_AGE_MS = 8 * 24 * 60 * 60 * 1000
   const ACCESS_TOKEN_REFRESH_WINDOW_MS = 5 * 60 * 1000
@@ -323,6 +324,69 @@
     })
   }
 
+  function fetchResetCreditInventory(ctx, accessToken, accountId, nowMs) {
+    const headers = {
+      Authorization: "Bearer " + accessToken,
+      Accept: "application/json",
+      "User-Agent": "OpenUsageCN",
+      "OpenAI-Beta": "codex-1",
+      originator: "Codex Desktop",
+    }
+    if (accountId) {
+      headers["ChatGPT-Account-ID"] = accountId
+    }
+
+    try {
+      const resp = ctx.util.request({
+        method: "GET",
+        url: RATE_LIMIT_RESET_CREDITS_URL,
+        headers,
+        timeoutMs: 4000,
+      })
+      if (resp.status < 200 || resp.status >= 300) {
+        ctx.host.log.error("rate limit reset credits returned error: status=" + resp.status)
+        return null
+      }
+
+      const data = ctx.util.tryParseJson(resp.bodyText)
+      if (!data || !Array.isArray(data.credits)) {
+        ctx.host.log.error("rate limit reset credits response invalid")
+        return null
+      }
+
+      let nextExpiryMs = null
+      let derivedAvailableCount = 0
+      for (let i = 0; i < data.credits.length; i++) {
+        const credit = data.credits[i]
+        if (!credit || credit.status !== "available") continue
+        if (credit.expires_at == null) {
+          derivedAvailableCount++
+          continue
+        }
+        const expiresAtMs = Date.parse(credit.expires_at)
+        if (!Number.isFinite(expiresAtMs) || expiresAtMs <= nowMs) continue
+        derivedAvailableCount++
+        if (nextExpiryMs === null || expiresAtMs < nextExpiryMs) {
+          nextExpiryMs = expiresAtMs
+        }
+      }
+
+      const responseAvailableCount = data.available_count != null
+        ? readNumber(data.available_count)
+        : null
+      const availableCount = responseAvailableCount !== null && responseAvailableCount >= 0
+        ? Math.floor(responseAvailableCount)
+        : derivedAvailableCount
+      if (availableCount > 0 && nextExpiryMs === null) {
+        ctx.host.log.warn("rate limit reset credits has no unexpired available card")
+      }
+      return { availableCount, nextExpiryMs }
+    } catch (e) {
+      ctx.host.log.error("rate limit reset credits request failed: " + String(e))
+      return null
+    }
+  }
+
   function readPercent(value) {
     const n = Number(value)
     return Number.isFinite(n) ? n : null
@@ -401,22 +465,19 @@
   function fmtTokens(n) {
     const abs = Math.abs(n)
     const sign = n < 0 ? "-" : ""
-    const units = [
-      { threshold: 1e9, divisor: 1e9, suffix: "B" },
-      { threshold: 1e6, divisor: 1e6, suffix: "M" },
-      { threshold: 1e3, divisor: 1e3, suffix: "K" },
-    ]
-    for (let i = 0; i < units.length; i++) {
-      const unit = units[i]
-      if (abs >= unit.threshold) {
-        const scaled = abs / unit.divisor
-        const formatted = scaled >= 10
-          ? Math.round(scaled).toString()
-          : scaled.toFixed(1).replace(/\.0$/, "")
-        return sign + formatted + unit.suffix
-      }
-    }
-    return sign + Math.round(abs).toString()
+    if (abs >= 1e7) return sign + (abs / 1e8).toFixed(1) + "亿"
+    if (abs >= 1e4) return sign + (abs / 1e4).toFixed(1) + "万"
+    return sign + abs.toFixed(1)
+  }
+
+  function resetCreditExpiryText(remainingMs) {
+    const hourMs = 60 * 60 * 1000
+    if (remainingMs < hourMs) return "<1小时"
+    const totalHours = Math.floor(remainingMs / hourMs)
+    if (totalHours < 24) return totalHours + "小时"
+    const days = Math.floor(totalHours / 24)
+    const hours = totalHours % 24
+    return days + "天" + (hours > 0 ? hours + "时" : "")
   }
 
   function dayKeyFromDate(date) {
@@ -591,9 +652,9 @@
     const points = collectUsageChartPoints(daily)
     if (points.length === 0) return
     lines.push(ctx.line.barChart({
-      label: "Usage Trend",
+      label: "用量趋势",
       points: points,
-      note: "Estimated from local Codex logs for the selected account.",
+      note: "根据所选账号的本地 Codex 日志估算。",
       color: "#74AA9C",
     }))
   }
@@ -682,7 +743,9 @@
             if (proactiveRefreshAuthError) throw proactiveRefreshAuthError
             ctx.host.log.info("usage returned 401, attempting refresh")
             didRefresh = true
-            return refreshToken(ctx, authState)
+            const refreshed = refreshToken(ctx, authState)
+            if (refreshed) accessToken = refreshed
+            return refreshed
           },
         })
       } catch (e) {
@@ -696,6 +759,7 @@
         didRefresh = true
         const refreshed = refreshToken(ctx, authState)
         if (refreshed) {
+          accessToken = refreshed
           try {
             resp = fetchUsage(ctx, refreshed, accountId)
           } catch (e) {
@@ -737,7 +801,7 @@
 
       if (headerPrimary !== null) {
         lines.push(ctx.line.progress({
-          label: "Session",
+          label: "5小时",
           used: headerPrimary,
           limit: 100,
           format: { kind: "percent" },
@@ -747,7 +811,7 @@
       }
       if (headerSecondary !== null) {
         lines.push(ctx.line.progress({
-          label: "Weekly",
+          label: "每周",
           used: headerSecondary,
           limit: 100,
           format: { kind: "percent" },
@@ -759,7 +823,7 @@
       if (lines.length === 0 && data.rate_limit) {
         if (data.rate_limit.primary_window && typeof data.rate_limit.primary_window.used_percent === "number") {
           lines.push(ctx.line.progress({
-            label: "Session",
+            label: "5小时",
             used: data.rate_limit.primary_window.used_percent,
             limit: 100,
             format: { kind: "percent" },
@@ -769,7 +833,7 @@
         }
         if (data.rate_limit.secondary_window && typeof data.rate_limit.secondary_window.used_percent === "number") {
           lines.push(ctx.line.progress({
-            label: "Weekly",
+            label: "每周",
             used: data.rate_limit.secondary_window.used_percent,
             limit: 100,
             format: { kind: "percent" },
@@ -800,7 +864,7 @@
           }
           if (rl.secondary_window && typeof rl.secondary_window.used_percent === "number") {
             lines.push(ctx.line.progress({
-              label: shortName + " Weekly",
+              label: shortName + " 每周",
               used: rl.secondary_window.used_percent,
               limit: 100,
               format: { kind: "percent" },
@@ -817,7 +881,7 @@
         const used = reviewWindow.used_percent
         if (typeof used === "number") {
           lines.push(ctx.line.progress({
-            label: "Reviews",
+            label: "代码审查",
             used: used,
             limit: 100,
             format: { kind: "percent" },
@@ -834,10 +898,31 @@
           ? readNumber(data.rate_limit_reset_credits.available_count)
           : null
       if (resetCredits !== null && resetCredits >= 0) {
-        lines.push(ctx.line.text({
-          label: "Rate Limit Resets",
-          value: Math.floor(resetCredits) + " available",
-        }))
+        let count = Math.floor(resetCredits)
+        const resetInventory = count > 0
+          ? fetchResetCreditInventory(ctx, accessToken, accountId, nowMs)
+          : null
+        if (resetInventory !== null) {
+          count = resetInventory.availableCount
+        }
+        const resetLine = {
+          label: "手动重置",
+          value: count + " 次可用",
+        }
+        if (count > 0) {
+          const nextExpiryMs = resetInventory && resetInventory.nextExpiryMs
+          if (!nextExpiryMs) {
+            resetLine.subtitle = "· 下一个到期未知"
+          } else {
+            const remainingMs = nextExpiryMs - nowMs
+            const expirySpacing = remainingMs >= 24 * 60 * 60 * 1000 ? "" : " "
+            resetLine.subtitle = "· 下一个" + expirySpacing + resetCreditExpiryText(remainingMs) + "后过期"
+            if (remainingMs < 24 * 60 * 60 * 1000) {
+              resetLine.color = "#f59e0b"
+            }
+          }
+        }
+        lines.push(ctx.line.text(resetLine))
       }
 
       const creditsRemaining = readCreditsRemaining(resp, data)
@@ -845,8 +930,8 @@
         const remaining = Math.max(0, Math.floor(creditsRemaining))
         const usdValue = (remaining * CREDIT_USD_RATE).toFixed(2)
         lines.push(ctx.line.text({
-          label: "Credits",
-          value: "$" + usdValue + " · " + remaining + " credits",
+          label: "点数",
+          value: "$" + usdValue + " · " + remaining + " 点数",
         }))
       }
 
@@ -880,8 +965,8 @@
           }
         }
 
-        pushDayUsageLine(lines, ctx, "Today", todayEntry)
-        pushDayUsageLine(lines, ctx, "Yesterday", yesterdayEntry)
+        pushDayUsageLine(lines, ctx, "今日", todayEntry)
+        pushDayUsageLine(lines, ctx, "昨日", yesterdayEntry)
 
         let totalTokens = 0
         let totalCostNanos = 0
@@ -902,7 +987,7 @@
 
         if (totalTokens > 0) {
           lines.push(ctx.line.text({
-            label: "Last 30 Days",
+            label: "近30天",
             value: costAndTokensLabel({ tokens: totalTokens, costUSD: hasCost ? totalCostNanos / 1e9 : null })
           }))
         }

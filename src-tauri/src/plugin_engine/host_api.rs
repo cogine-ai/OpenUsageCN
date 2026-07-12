@@ -541,6 +541,53 @@ fn redact_body(body: &str) -> String {
     result
 }
 
+fn redact_http_response_body(url: &str, body: &str) -> String {
+    let path = url.split('?').next().unwrap_or(url);
+    let body = if path.ends_with("/wham/rate-limit-reset-credits") {
+        redact_codex_reset_credit_inventory_sensitive_fields(body)
+    } else {
+        body.to_string()
+    };
+    redact_body(&body)
+}
+
+fn redact_codex_reset_credit_inventory_sensitive_fields(body: &str) -> String {
+    let Ok(mut payload) = serde_json::from_str::<serde_json::Value>(body) else {
+        return body.to_string();
+    };
+    let Some(root) = payload.as_object_mut() else {
+        return body.to_string();
+    };
+    let Some(credits) = root
+        .get_mut("credits")
+        .and_then(serde_json::Value::as_array_mut)
+    else {
+        return body.to_string();
+    };
+
+    let mut changed = false;
+    for credit in credits {
+        let Some(credit) = credit.as_object_mut() else {
+            continue;
+        };
+        for key in ["id", "profile_user_id", "profile_image_url"] {
+            let Some(value) = credit.get_mut(key) else {
+                continue;
+            };
+            let Some(raw_value) = value.as_str() else {
+                continue;
+            };
+            *value = serde_json::Value::String(redact_value(raw_value));
+            changed = true;
+        }
+    }
+
+    if !changed {
+        return body.to_string();
+    }
+    serde_json::to_string(&payload).unwrap_or_else(|_| body.to_string())
+}
+
 /// Lightweight redaction for log messages.
 pub(crate) fn redact_log_message(msg: &str) -> String {
     let mut result = msg.to_string();
@@ -1063,7 +1110,7 @@ fn inject_http<'js>(
                     .map_err(|e| Exception::throw_message(&ctx_inner, &e.to_string()))?;
 
                 // Redact BEFORE truncation to ensure sensitive values are caught while intact
-                let redacted_body = redact_body(&body);
+                let redacted_body = redact_http_response_body(&req.url, &body);
                 let body_preview = if redacted_body.len() > 500 {
                     // UTF-8 safe truncation: find valid char boundary at or before 500
                     let truncated: String = redacted_body
@@ -3959,6 +4006,69 @@ mod tests {
             redacted.contains("arn:...QMUK"),
             "profile arn should use first4...last4 redaction, got: {}",
             redacted
+        );
+    }
+
+    #[test]
+    fn redact_http_response_body_redacts_codex_reset_credit_sensitive_fields() {
+        let body = r#"{"credits":[{"id":"reset-credit-1234567890abcdef","title":"Manual reset","description":"Use when needed","profile_user_id":"profile-user-1234567890abcdef","profile_image_url":"https://images.example.com/private/avatar-1234567890abcdef.png"}]}"#;
+        let redacted = redact_http_response_body(
+            "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits",
+            body,
+        );
+
+        for sensitive in [
+            "reset-credit-1234567890abcdef",
+            "profile-user-1234567890abcdef",
+            "https://images.example.com/private/avatar-1234567890abcdef.png",
+        ] {
+            assert!(
+                !redacted.contains(sensitive),
+                "reset credit identifier should be redacted, got: {}",
+                redacted
+            );
+        }
+        assert!(
+            redacted.contains("rese...cdef"),
+            "reset credit id should use first4...last4 redaction, got: {}",
+            redacted
+        );
+        assert!(
+            redacted.contains("prof...cdef"),
+            "profile user id should use first4...last4 redaction, got: {}",
+            redacted
+        );
+        assert!(
+            redacted.contains("http....png"),
+            "profile image URL should use first4...last4 redaction, got: {}",
+            redacted
+        );
+        for visible in [
+            r#""title":"Manual reset""#,
+            r#""description":"Use when needed""#,
+        ] {
+            assert!(
+                redacted.contains(visible),
+                "non-sensitive reset inventory field should remain visible, got: {}",
+                redacted
+            );
+        }
+    }
+
+    #[test]
+    fn redact_body_preserves_unrelated_generic_id() {
+        let body = r#"{"id":"diagnostic-object-1234567890","status":"active"}"#;
+
+        assert_eq!(redact_body(body), body);
+    }
+
+    #[test]
+    fn redact_http_response_body_scopes_codex_inventory_rules_to_its_endpoint() {
+        let body = r#"{"credits":[{"id":"diagnostic-object-1234567890","profile_user_id":"profile-user-1234567890"}]}"#;
+
+        assert_eq!(
+            redact_http_response_body("https://example.com/usage", body),
+            body
         );
     }
 

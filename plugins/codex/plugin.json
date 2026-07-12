@@ -11,16 +11,16 @@
     { "label": "Usage dashboard", "url": "https://chatgpt.com/codex/settings/usage" }
   ],
   "lines": [
-    { "type": "progress", "label": "Session", "scope": "overview", "primaryOrder": 1 },
-    { "type": "progress", "label": "Weekly", "scope": "overview", "period": "weekly" },
+    { "type": "progress", "label": "5小时", "scope": "overview", "primaryOrder": 1 },
+    { "type": "progress", "label": "每周", "scope": "overview", "period": "weekly" },
     { "type": "progress", "label": "Spark", "scope": "detail" },
-    { "type": "progress", "label": "Spark Weekly", "scope": "detail" },
-    { "type": "progress", "label": "Reviews", "scope": "detail" },
-    { "type": "text", "label": "Rate Limit Resets", "scope": "detail" },
-    { "type": "text", "label": "Credits", "scope": "detail" },
-    { "type": "text", "label": "Today", "scope": "detail" },
-    { "type": "text", "label": "Yesterday", "scope": "detail" },
-    { "type": "text", "label": "Last 30 Days", "scope": "detail" },
-    { "type": "barChart", "label": "Usage Trend", "scope": "detail" }
+    { "type": "progress", "label": "Spark 每周", "scope": "detail" },
+    { "type": "progress", "label": "代码审查", "scope": "detail" },
+    { "type": "text", "label": "手动重置", "scope": "detail" },
+    { "type": "text", "label": "点数", "scope": "detail" },
+    { "type": "text", "label": "今日", "scope": "detail" },
+    { "type": "text", "label": "昨日", "scope": "detail" },
+    { "type": "text", "label": "近30天", "scope": "detail" },
+    { "type": "barChart", "label": "用量趋势", "scope": "detail" }
   ]
 }

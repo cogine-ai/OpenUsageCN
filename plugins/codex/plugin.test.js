@@ -43,7 +43,7 @@ describe("codex plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
+    expect(result.lines.find((line) => line.label === "5小时")).toBeTruthy()
   }
 
   it("throws when auth missing", async () => {
@@ -87,7 +87,7 @@ describe("codex plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
+    expect(result.lines.find((line) => line.label === "5小时")).toBeTruthy()
     expect(ctx.host.keychain.readGenericPassword).not.toHaveBeenCalled()
   })
 
@@ -225,17 +225,67 @@ describe("codex plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
     expect(result.plan).toBe("Pro 20x")
-    expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
-    expect(result.lines.find((line) => line.label === "Weekly")).toBeTruthy()
-    const credits = result.lines.find((line) => line.label === "Credits")
+    expect(result.lines.find((line) => line.label === "5小时")).toBeTruthy()
+    expect(result.lines.find((line) => line.label === "每周")).toBeTruthy()
+    const credits = result.lines.find((line) => line.label === "点数")
     expect(credits).toBeTruthy()
     expect(credits).toEqual({
       type: "text",
-      label: "Credits",
-      value: "$4.00 · 100 credits",
+      label: "点数",
+      value: "$4.00 · 100 点数",
     })
     expect(credits).not.toHaveProperty("used")
     expect(credits).not.toHaveProperty("limit")
+  })
+
+  it("uses the refreshed token for reset details after a usage 401", async () => {
+    const nowMs = Date.parse("2026-07-12T00:00:00.000Z")
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(nowMs)
+    const ctx = makeCtx()
+    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
+      tokens: { access_token: "old", refresh_token: "refresh", account_id: "account" },
+      last_refresh: new Date().toISOString(),
+    }))
+    let usageCalls = 0
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("oauth/token")) {
+        return { status: 200, headers: {}, bodyText: JSON.stringify({ access_token: "new" }) }
+      }
+      if (String(opts.url).includes("rate-limit-reset-credits")) {
+        expect(opts.headers.Authorization).toBe("Bearer new")
+        return {
+          status: 200,
+          headers: {},
+          bodyText: JSON.stringify({
+            credits: [
+              { status: "available", expires_at: new Date(nowMs + 2 * 60 * 60 * 1000).toISOString() },
+            ],
+            available_count: 1,
+          }),
+        }
+      }
+
+      usageCalls += 1
+      if (usageCalls === 1) {
+        expect(opts.headers.Authorization).toBe("Bearer old")
+        return { status: 401, headers: {}, bodyText: "" }
+      }
+      expect(opts.headers.Authorization).toBe("Bearer new")
+      return {
+        status: 200,
+        headers: {},
+        bodyText: JSON.stringify({ rate_limit_reset_credits: { available_count: 1 } }),
+      }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    expect(result.lines.find((line) => line.label === "手动重置")).toMatchObject({
+      value: "1 次可用",
+      subtitle: "· 下一个 2小时后过期",
+      color: "#f59e0b",
+    })
+    nowSpy.mockRestore()
   })
 
   it("maps prolite plan to Pro 5x", async () => {
@@ -263,14 +313,14 @@ describe("codex plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
     expect(result.plan).toBe("Pro 5x")
-    expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
-    expect(result.lines.find((line) => line.label === "Weekly")).toBeTruthy()
-    const credits = result.lines.find((line) => line.label === "Credits")
+    expect(result.lines.find((line) => line.label === "5小时")).toBeTruthy()
+    expect(result.lines.find((line) => line.label === "每周")).toBeTruthy()
+    const credits = result.lines.find((line) => line.label === "点数")
     expect(credits).toBeTruthy()
-    expect(credits.value).toBe("$4.00 · 100 credits")
+    expect(credits.value).toBe("$4.00 · 100 点数")
   })
 
-  it("uses zero credits from the response body when the account has no credits", async () => {
+  it("uses zero credits from the response body when the account has no 点数", async () => {
     const ctx = makeCtx()
     ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
       tokens: { access_token: "token" },
@@ -309,9 +359,9 @@ describe("codex plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    const credits = result.lines.find((line) => line.label === "Credits")
+    const credits = result.lines.find((line) => line.label === "点数")
     expect(credits).toBeTruthy()
-    expect(credits.value).toBe("$0.00 · 0 credits")
+    expect(credits.value).toBe("$0.00 · 0 点数")
   })
 
   it("shows credit balances above 1000 without a fake cap", async () => {
@@ -330,11 +380,11 @@ describe("codex plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    const credits = result.lines.find((line) => line.label === "Credits")
+    const credits = result.lines.find((line) => line.label === "点数")
     expect(credits).toEqual({
       type: "text",
-      label: "Credits",
-      value: "$50.00 · 1250 credits",
+      label: "点数",
+      value: "$50.00 · 1250 点数",
     })
   })
 
@@ -375,10 +425,10 @@ describe("codex plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    expect(result.lines.find((l) => l.label === "Today")).toBeUndefined()
-    expect(result.lines.find((l) => l.label === "Yesterday")).toBeUndefined()
-    expect(result.lines.find((l) => l.label === "Last 30 Days")).toBeUndefined()
-    expect(result.lines.find((l) => l.label === "Session")).toBeTruthy()
+    expect(result.lines.find((l) => l.label === "今日")).toBeUndefined()
+    expect(result.lines.find((l) => l.label === "昨日")).toBeUndefined()
+    expect(result.lines.find((l) => l.label === "近30天")).toBeUndefined()
+    expect(result.lines.find((l) => l.label === "5小时")).toBeTruthy()
   })
 
   it("adds token lines from codex ccusage format and passes codex provider", async () => {
@@ -414,14 +464,14 @@ describe("codex plugin", () => {
       const plugin = await loadPlugin()
       const result = plugin.probe(ctx)
 
-      const today = result.lines.find((l) => l.label === "Today")
+      const today = result.lines.find((l) => l.label === "今日")
       expect(today).toBeTruthy()
-      expect(today.value).toContain("150 tokens")
+      expect(today.value).toContain("150.0 tokens")
       expect(today.value).toContain("$0.75")
 
-      const last30 = result.lines.find((l) => l.label === "Last 30 Days")
+      const last30 = result.lines.find((l) => l.label === "近30天")
       expect(last30).toBeTruthy()
-      expect(last30.value).toContain("450 tokens")
+      expect(last30.value).toContain("450.0 tokens")
       expect(last30.value).toContain("$1.75")
 
       expect(ctx.host.ccusage.query).toHaveBeenCalled()
@@ -499,15 +549,15 @@ describe("codex plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    const todayLine = result.lines.find((l) => l.label === "Today")
+    const todayLine = result.lines.find((l) => l.label === "今日")
     expect(todayLine).toBeTruthy()
     expect(todayLine.value).toContain("$0.00")
-    expect(todayLine.value).toContain("0 tokens")
-    const yesterdayLine = result.lines.find((l) => l.label === "Yesterday")
+    expect(todayLine.value).toContain("0.0 tokens")
+    const yesterdayLine = result.lines.find((l) => l.label === "昨日")
     expect(yesterdayLine).toBeTruthy()
     expect(yesterdayLine.value).toContain("$0.00")
-    expect(yesterdayLine.value).toContain("0 tokens")
-    expect(result.lines.find((l) => l.label === "Last 30 Days")).toBeUndefined()
+    expect(yesterdayLine.value).toContain("0.0 tokens")
+    expect(result.lines.find((l) => l.label === "近30天")).toBeUndefined()
   })
 
   it("shows empty Yesterday state when yesterday's totals are zero (regression)", async () => {
@@ -538,10 +588,10 @@ describe("codex plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    const yesterdayLine = result.lines.find((l) => l.label === "Yesterday")
+    const yesterdayLine = result.lines.find((l) => l.label === "昨日")
     expect(yesterdayLine).toBeTruthy()
     expect(yesterdayLine.value).toContain("$0.00")
-    expect(yesterdayLine.value).toContain("0 tokens")
+    expect(yesterdayLine.value).toContain("0.0 tokens")
   })
 
   it("shows empty Today when history exists but today is missing (regression)", async () => {
@@ -567,18 +617,18 @@ describe("codex plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    const todayLine = result.lines.find((l) => l.label === "Today")
+    const todayLine = result.lines.find((l) => l.label === "今日")
     expect(todayLine).toBeTruthy()
     expect(todayLine.value).toContain("$0.00")
-    expect(todayLine.value).toContain("0 tokens")
-    const yesterdayLine = result.lines.find((l) => l.label === "Yesterday")
+    expect(todayLine.value).toContain("0.0 tokens")
+    const yesterdayLine = result.lines.find((l) => l.label === "昨日")
     expect(yesterdayLine).toBeTruthy()
     expect(yesterdayLine.value).toContain("$0.00")
-    expect(yesterdayLine.value).toContain("0 tokens")
+    expect(yesterdayLine.value).toContain("0.0 tokens")
 
-    const last30 = result.lines.find((l) => l.label === "Last 30 Days")
+    const last30 = result.lines.find((l) => l.label === "近30天")
     expect(last30).toBeTruthy()
-    expect(last30.value).toContain("300 tokens")
+    expect(last30.value).toContain("300.0 tokens")
     expect(last30.value).toContain("$1.00")
   })
 
@@ -610,9 +660,9 @@ describe("codex plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    const yesterdayLine = result.lines.find((l) => l.label === "Yesterday")
+    const yesterdayLine = result.lines.find((l) => l.label === "昨日")
     expect(yesterdayLine).toBeTruthy()
-    expect(yesterdayLine.value).toContain("220 tokens")
+    expect(yesterdayLine.value).toContain("220.0 tokens")
     expect(yesterdayLine.value).toContain("$1.10")
   })
 
@@ -637,9 +687,9 @@ describe("codex plugin", () => {
 
       const plugin = await loadPlugin()
       const result = plugin.probe(ctx)
-      const todayLine = result.lines.find((line) => line.label === "Today")
+      const todayLine = result.lines.find((line) => line.label === "今日")
       expect(todayLine).toBeTruthy()
-      expect(todayLine.value).toContain("10 tokens")
+      expect(todayLine.value).toContain("10.0 tokens")
     } finally {
       vi.useRealTimers()
     }
@@ -666,9 +716,9 @@ describe("codex plugin", () => {
 
       const plugin = await loadPlugin()
       const result = plugin.probe(ctx)
-      const todayLine = result.lines.find((line) => line.label === "Today")
+      const todayLine = result.lines.find((line) => line.label === "今日")
       expect(todayLine).toBeTruthy()
-      expect(todayLine.value).toContain("20 tokens")
+      expect(todayLine.value).toContain("20.0 tokens")
     } finally {
       vi.useRealTimers()
     }
@@ -695,9 +745,9 @@ describe("codex plugin", () => {
 
       const plugin = await loadPlugin()
       const result = plugin.probe(ctx)
-      const todayLine = result.lines.find((line) => line.label === "Today")
+      const todayLine = result.lines.find((line) => line.label === "今日")
       expect(todayLine).toBeTruthy()
-      expect(todayLine.value).toContain("30 tokens")
+      expect(todayLine.value).toContain("30.0 tokens")
     } finally {
       vi.useRealTimers()
     }
@@ -880,7 +930,7 @@ describe("codex plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
+    expect(result.lines.find((line) => line.label === "5小时")).toBeTruthy()
     expect(refreshCalls).toBe(1)
   })
 
@@ -937,7 +987,7 @@ describe("codex plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
+    expect(result.lines.find((line) => line.label === "5小时")).toBeTruthy()
   })
 
   it("fails cleanly when guarded reload switches to API-key auth", async () => {
@@ -1038,7 +1088,7 @@ describe("codex plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
+    expect(result.lines.find((line) => line.label === "5小时")).toBeTruthy()
     expect(ctx.host.keychain.readGenericPassword).not.toHaveBeenCalled()
     expect(refreshCalls).toBe(1)
   })
@@ -1079,7 +1129,7 @@ describe("codex plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
+    expect(result.lines.find((line) => line.label === "5小时")).toBeTruthy()
   })
 
   it("uses existing file token before checking keychain", async () => {
@@ -1118,7 +1168,7 @@ describe("codex plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
+    expect(result.lines.find((line) => line.label === "5小时")).toBeTruthy()
     expect(ctx.host.keychain.readGenericPassword).not.toHaveBeenCalled()
   })
 
@@ -1191,7 +1241,7 @@ describe("codex plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
+    expect(result.lines.find((line) => line.label === "5小时")).toBeTruthy()
   })
 
   it("falls back to keychain when file usage auth still fails after refresh", async () => {
@@ -1228,7 +1278,7 @@ describe("codex plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
+    expect(result.lines.find((line) => line.label === "5小时")).toBeTruthy()
     expect(ctx.host.keychain.readGenericPassword).toHaveBeenCalledWith("Codex Auth")
   })
 
@@ -1297,7 +1347,7 @@ describe("codex plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
+    expect(result.lines.find((line) => line.label === "5小时")).toBeTruthy()
     expect(ctx.host.keychain.readGenericPassword).not.toHaveBeenCalled()
   })
 
@@ -1390,46 +1440,113 @@ describe("codex plugin", () => {
     })
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
-    expect(result.lines.find((line) => line.label === "Reviews")).toBeTruthy()
-    const credits = result.lines.find((line) => line.label === "Credits")
+    expect(result.lines.find((line) => line.label === "5小时")).toBeTruthy()
+    expect(result.lines.find((line) => line.label === "代码审查")).toBeTruthy()
+    const credits = result.lines.find((line) => line.label === "点数")
     expect(credits).toBeTruthy()
-    expect(credits.value).toBe("$32.80 · 820 credits")
+    expect(credits.value).toBe("$32.80 · 820 点数")
   })
 
-  it("shows available rate limit resets as the first text line", async () => {
+  it.each([
+    [51 * 60 * 60 * 1000, "· 下一个2天3时后过期", undefined],
+    [24 * 60 * 60 * 1000, "· 下一个1天后过期", undefined],
+    [18 * 60 * 60 * 1000, "· 下一个 18小时后过期", "#f59e0b"],
+    [30 * 60 * 1000, "· 下一个 <1小时后过期", "#f59e0b"],
+  ])("shows the next available reset expiry for %i ms", async (remainingMs, subtitle, color) => {
+    const nowMs = Date.parse("2026-07-12T00:00:00.000Z")
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(nowMs)
+    const ctx = makeCtx()
+    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
+      tokens: { access_token: "token", account_id: "account" },
+      last_refresh: new Date().toISOString(),
+    }))
+    ctx.host.http.request
+      .mockReturnValueOnce({
+        status: 200,
+        headers: {},
+        bodyText: JSON.stringify({
+          rate_limit_reset_credits: { available_count: 2 },
+          credits: { balance: 100 },
+        }),
+      })
+      .mockReturnValueOnce({
+        status: 200,
+        headers: {},
+        bodyText: JSON.stringify({
+          credits: [
+            { status: "redeemed", expires_at: new Date(nowMs + 1000).toISOString() },
+            { status: "available", expires_at: new Date(nowMs - 1000).toISOString() },
+            { status: "available", expires_at: null },
+            { status: "available", expires_at: "not-a-date" },
+            { status: "available", expires_at: new Date(nowMs + remainingMs).toISOString() },
+            { status: "available", expires_at: new Date(nowMs + remainingMs + 3600000).toISOString() },
+          ],
+          available_count: 2,
+        }),
+      })
+    ctx.host.ccusage.query.mockReturnValue({ status: "ok", data: { daily: [] } })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    const resetIndex = result.lines.findIndex((line) => line.label === "手动重置")
+    const creditsIndex = result.lines.findIndex((line) => line.label === "点数")
+    const firstTextIndex = result.lines.findIndex((line) => line.type === "text")
+
+    expect(result.lines[resetIndex]).toEqual({
+      type: "text",
+      label: "手动重置",
+      value: "2 次可用",
+      subtitle,
+      ...(color ? { color } : {}),
+    })
+    expect(resetIndex).toBe(firstTextIndex)
+    expect(creditsIndex).toBe(resetIndex + 1)
+    expect(ctx.host.http.request.mock.calls[1][0]).toMatchObject({
+      method: "GET",
+      url: "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits",
+      headers: {
+        "ChatGPT-Account-ID": "account",
+        "OpenAI-Beta": "codex-1",
+        originator: "Codex Desktop",
+      },
+      timeoutMs: 4000,
+    })
+    nowSpy.mockRestore()
+  })
+
+  it("uses the newer reset inventory count when the usage summary is stale", async () => {
+    const nowMs = Date.parse("2026-07-12T00:00:00.000Z")
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(nowMs)
     const ctx = makeCtx()
     ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
       tokens: { access_token: "token" },
       last_refresh: new Date().toISOString(),
     }))
-    ctx.host.http.request.mockReturnValue({
-      status: 200,
-      headers: {},
-      bodyText: JSON.stringify({
-        rate_limit_reset_credits: { available_count: 1 },
-        credits: { balance: 100 },
-      }),
-    })
-    ctx.host.ccusage.query.mockReturnValue({
-      status: "ok",
-      data: { daily: [] },
-    })
+    ctx.host.http.request
+      .mockReturnValueOnce({
+        status: 200,
+        headers: {},
+        bodyText: JSON.stringify({ rate_limit_reset_credits: { available_count: 5 } }),
+      })
+      .mockReturnValueOnce({
+        status: 200,
+        headers: {},
+        bodyText: JSON.stringify({
+          credits: [
+            { status: "available", expires_at: new Date(nowMs + 48 * 60 * 60 * 1000).toISOString() },
+          ],
+          available_count: 1,
+        }),
+      })
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    const resetIndex = result.lines.findIndex((line) => line.label === "Rate Limit Resets")
-    const creditsIndex = result.lines.findIndex((line) => line.label === "Credits")
-    const firstTextIndex = result.lines.findIndex((line) => line.type === "text")
 
-    expect(result.lines[resetIndex]).toEqual({
-      type: "text",
-      label: "Rate Limit Resets",
-      value: "1 available",
+    expect(result.lines.find((line) => line.label === "手动重置")).toMatchObject({
+      value: "1 次可用",
+      subtitle: "· 下一个2天后过期",
     })
-    expect(resetIndex).toBeGreaterThanOrEqual(0)
-    expect(resetIndex).toBe(firstTextIndex)
-    expect(creditsIndex).toBe(resetIndex + 1)
+    nowSpy.mockRestore()
   })
 
   it("shows zero available rate limit resets and omits malformed counts", async () => {
@@ -1448,8 +1565,8 @@ describe("codex plugin", () => {
       }),
     })
     const zeroResult = plugin.probe(ctx)
-    expect(zeroResult.lines.find((line) => line.label === "Rate Limit Resets")?.value)
-      .toBe("0 available")
+    expect(zeroResult.lines.find((line) => line.label === "手动重置")?.value)
+      .toBe("0 次可用")
 
     ctx.host.http.request.mockReturnValueOnce({
       status: 200,
@@ -1459,8 +1576,35 @@ describe("codex plugin", () => {
       }),
     })
     const malformedResult = plugin.probe(ctx)
-    expect(malformedResult.lines.find((line) => line.label === "Rate Limit Resets"))
+    expect(malformedResult.lines.find((line) => line.label === "手动重置"))
       .toBeUndefined()
+  })
+
+  it("keeps the reset count and logs when reset details fail", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
+      tokens: { access_token: "token" },
+      last_refresh: new Date().toISOString(),
+    }))
+    ctx.host.http.request
+      .mockReturnValueOnce({
+        status: 200,
+        headers: {},
+        bodyText: JSON.stringify({ rate_limit_reset_credits: { available_count: 2 } }),
+      })
+      .mockReturnValueOnce({ status: 503, headers: {}, bodyText: "unavailable" })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    expect(result.lines.find((line) => line.label === "手动重置")).toEqual({
+      type: "text",
+      label: "手动重置",
+      value: "2 次可用",
+      subtitle: "· 下一个到期未知",
+    })
+    expect(ctx.host.log.error).toHaveBeenCalledWith(
+      "rate limit reset credits returned error: status=503"
+    )
   })
 
   it("omits resetsAt when window lacks reset info", async () => {
@@ -1480,7 +1624,7 @@ describe("codex plugin", () => {
     })
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    const sessionLine = result.lines.find((line) => line.label === "Session")
+    const sessionLine = result.lines.find((line) => line.label === "5小时")
     expect(sessionLine).toBeTruthy()
     expect(sessionLine.resetsAt).toBeUndefined()
   })
@@ -1508,7 +1652,7 @@ describe("codex plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    const session = result.lines.find((line) => line.label === "Session")
+    const session = result.lines.find((line) => line.label === "5小时")
     expect(session).toBeTruthy()
     expect(session.resetsAt).toBe(resetsAtExpected)
     nowSpy.mockRestore()
@@ -1542,9 +1686,9 @@ describe("codex plugin", () => {
     ctx.host.ccusage.query.mockReturnValue({ status: "runner_failed" })
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    expect(result.lines.find((l) => l.label === "Today")).toBeUndefined()
-    expect(result.lines.find((l) => l.label === "Yesterday")).toBeUndefined()
-    expect(result.lines.find((l) => l.label === "Last 30 Days")).toBeUndefined()
+    expect(result.lines.find((l) => l.label === "今日")).toBeUndefined()
+    expect(result.lines.find((l) => l.label === "昨日")).toBeUndefined()
+    expect(result.lines.find((l) => l.label === "近30天")).toBeUndefined()
     const statusLine = result.lines.find((l) => l.label === "Status")
     expect(statusLine).toBeTruthy()
     expect(statusLine.text).toBe("No usage data")
@@ -1635,7 +1779,7 @@ describe("codex plugin", () => {
     expect(spark.periodDurationMs).toBe(18000000)
     expect(spark.resetsAt).toBe(new Date((nowSec + 3600) * 1000).toISOString())
 
-    const sparkWeekly = result.lines.find((l) => l.label === "Spark Weekly")
+    const sparkWeekly = result.lines.find((l) => l.label === "Spark 每周")
     expect(sparkWeekly).toBeTruthy()
     expect(sparkWeekly.used).toBe(40)
     expect(sparkWeekly.limit).toBe(100)
@@ -1854,7 +1998,7 @@ describe("codex plugin", () => {
       vi.resetModules()
       const plugin = await loadPlugin()
       const result = plugin.probe(ctx)
-      expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
+      expect(result.lines.find((line) => line.label === "5小时")).toBeTruthy()
     }
 
     await runCase({ status: 500, headers: {}, bodyText: "" })
@@ -1892,8 +2036,8 @@ describe("codex plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
-    expect(result.lines.find((line) => line.label === "Today")).toBeUndefined()
+    expect(result.lines.find((line) => line.label === "5小时")).toBeTruthy()
+    expect(result.lines.find((line) => line.label === "今日")).toBeUndefined()
   })
 
   it("handles malformed ccusage result payload as runner_failed", async () => {
@@ -1911,8 +2055,8 @@ describe("codex plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
-    expect(result.lines.find((line) => line.label === "Today")).toBeUndefined()
+    expect(result.lines.find((line) => line.label === "5小时")).toBeTruthy()
+    expect(result.lines.find((line) => line.label === "今日")).toBeUndefined()
   })
 
   it("formats large token totals using compact units", async () => {
@@ -1948,10 +2092,10 @@ describe("codex plugin", () => {
 
       const plugin = await loadPlugin()
       const result = plugin.probe(ctx)
-      const today = result.lines.find((line) => line.label === "Today")
-      const last30 = result.lines.find((line) => line.label === "Last 30 Days")
-      expect(today && today.value).toContain("1.3M tokens")
-      expect(last30 && last30.value).toContain("26M tokens")
+      const today = result.lines.find((line) => line.label === "今日")
+      const last30 = result.lines.find((line) => line.label === "近30天")
+      expect(today && today.value).toContain("125.0万 tokens")
+      expect(last30 && last30.value).toContain("0.3亿 tokens")
     } finally {
       vi.useRealTimers()
     }

@@ -110,6 +110,42 @@ describe("ProviderCard", () => {
     expect(screen.getByText("342 credits")).toBeInTheDocument()
   })
 
+  it("applies a text metric color to its value and subtitle", () => {
+    render(
+      <ProviderCard
+        name="Reset Warning"
+        displayMode="used"
+        lines={[
+          {
+            type: "text",
+            label: "手动重置",
+            value: "2 次可用",
+            subtitle: "· 下一个 18小时后过期",
+            color: "#f59e0b",
+          },
+        ]}
+      />
+    )
+
+    expect(screen.getByText("2 次可用")).toHaveStyle({ color: "#f59e0b" })
+    expect(screen.getByText("· 下一个 18小时后过期")).toHaveStyle({ color: "#f59e0b" })
+  })
+
+  it("allows compact metric labels to leave more room for long values", () => {
+    render(
+      <ProviderCard
+        name="Token Totals"
+        displayMode="used"
+        lines={[
+          { type: "text", label: "今日", value: "$12711.97 · 220.0亿 tokens" },
+        ]}
+      />
+    )
+
+    expect(screen.getByText("今日")).toHaveClass("flex-1")
+    expect(screen.getByText("$12711.97 · 220.0亿 tokens")).toHaveClass("truncate", "max-w-[70%]")
+  })
+
   it("renders quick links and opens URL", async () => {
     render(
       <ProviderCard

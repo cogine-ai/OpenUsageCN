@@ -16,7 +16,7 @@
 
 ### GET /backend-api/wham/usage
 
-Returns rate limit windows, optional credits, and available on-demand rate limit resets.
+Returns rate limit windows, optional credits, and the number of available manual resets.
 
 #### Headers
 
@@ -65,10 +65,47 @@ Both rate_limit windows are enforced simultaneously — hitting either limit thr
 
 OpenUsageCN floors the remaining credit balance to a whole number and displays its fixed USD
 equivalent at `$0.04` per credit. For example, `820.6969075` renders as
-`$32.80 · 820 credits`. The credit balance is unbounded; the API does not provide a maximum.
+`$32.80 · 820 点数`. The credit balance is unbounded; the API does not provide a maximum.
 
-When available, OpenUsageCN displays the on-demand reset count as the first detail text metric,
-for example `1 available`.
+The Codex card uses short Chinese labels: `5小时`, `每周`, `代码审查`, `手动重置`, `点数`,
+`今日`, `昨日`, `近30天`, and `用量趋势`. Model names and the `tokens` unit stay unchanged.
+
+Token totals keep one decimal place. Values below `1万` use the original number, values from `1万`
+to below `0.1亿` use `万`, and values from `0.1亿` use `亿`. For example, `6005000` is shown as
+`600.5万 tokens`.
+
+### GET /backend-api/wham/rate-limit-reset-credits
+
+Returns the manual reset inventory, including each reset's status and expiry time.
+
+#### Headers
+
+| Header | Required | Value |
+|---|---|---|
+| Authorization | yes | `Bearer <access_token>` |
+| Accept | yes | `application/json` |
+| ChatGPT-Account-Id | no | `<account_id>` |
+| OpenAI-Beta | yes | `codex-1` |
+| originator | yes | `Codex Desktop` |
+
+#### Response
+
+```jsonc
+{
+  "credits": [
+    {
+      "id": "<reset_credit_id>",
+      "status": "available",
+      "expires_at": "2026-07-18T00:39:53Z"
+    }
+  ],
+  "available_count": 1
+}
+```
+
+OpenUsageCN ignores redeemed and expired resets, then shows the nearest valid expiry. Examples are
+`2 次可用 · 下一个2天3时后过期`, `2 次可用 · 下一个 18小时后过期`, and
+`2 次可用 · 下一个 <1小时后过期`. Expiries under 24 hours use a warning color.
 
 ## Authentication
 
