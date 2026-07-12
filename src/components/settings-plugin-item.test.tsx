@@ -237,4 +237,78 @@ describe("SortablePluginItem", () => {
     expect(await screen.findByText("配置未知")).toBeInTheDocument()
     consoleError.mockRestore()
   })
+
+  it("shows configured status for select and toggle overrides", async () => {
+    providerConfigMocks.getProviderConfig.mockImplementation((pluginId: string) => {
+      if (pluginId === "select-override") {
+        return Promise.resolve({
+          values: {
+            region: { type: "select", value: "global" },
+          },
+        })
+      }
+      if (pluginId === "toggle-override") {
+        return Promise.resolve({
+          values: {
+            enabled: { type: "toggle", value: false },
+          },
+        })
+      }
+      return Promise.resolve({ values: {} })
+    })
+
+    render(
+      <div>
+        <SortablePluginItem
+          plugin={{
+            id: "select-override",
+            name: "Select Override",
+            enabled: true,
+            config: {
+              fields: [
+                {
+                  id: "region",
+                  type: "select",
+                  label: "Region",
+                  options: [
+                    { value: "cn", label: "CN" },
+                    { value: "global", label: "Global" },
+                  ],
+                  default: "cn",
+                  defaultSource: true,
+                },
+              ],
+            },
+          }}
+          onToggle={vi.fn()}
+          onProviderConfigSaved={vi.fn()}
+        />
+        <SortablePluginItem
+          plugin={{
+            id: "toggle-override",
+            name: "Toggle Override",
+            enabled: true,
+            config: {
+              fields: [
+                {
+                  id: "enabled",
+                  type: "toggle",
+                  label: "Enabled",
+                  options: [],
+                  default: true,
+                  defaultSource: true,
+                },
+              ],
+            },
+          }}
+          onToggle={vi.fn()}
+          onProviderConfigSaved={vi.fn()}
+        />
+      </div>
+    )
+
+    const configuredBadges = await screen.findAllByText("已配置")
+    expect(configuredBadges).toHaveLength(2)
+    expect(screen.queryByText("使用默认")).not.toBeInTheDocument()
+  })
 })

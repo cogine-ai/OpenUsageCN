@@ -3588,6 +3588,51 @@ mod tests {
 
     #[test]
     #[serial]
+    fn env_api_scopes_codexbar_gap_vars_per_plugin() {
+        let _openai_key = EnvVarGuard::set("OPENAI_API_KEY", "sk-openai-scoped-test");
+        let _gemini_dir = EnvVarGuard::set("GEMINI_CONFIG_DIR", "/tmp/gemini-config");
+        let _openrouter_key = EnvVarGuard::set("OPENROUTER_API_KEY", "or-scoped-test");
+        let _alibaba_token_cookie =
+            EnvVarGuard::set("ALIBABA_TOKEN_PLAN_COOKIE", "token-plan-cookie-test");
+
+        assert_eq!(
+            host_env_value_for_plugin("openai-api", "OPENAI_API_KEY").as_deref(),
+            Some("sk-openai-scoped-test")
+        );
+        assert_eq!(
+            host_env_value_for_plugin("gemini", "GEMINI_CONFIG_DIR").as_deref(),
+            Some("/tmp/gemini-config")
+        );
+        assert_eq!(
+            host_env_value_for_plugin("openrouter", "OPENROUTER_API_KEY").as_deref(),
+            Some("or-scoped-test")
+        );
+        assert_eq!(
+            host_env_value_for_plugin("alibaba-token-plan", "ALIBABA_TOKEN_PLAN_COOKIE")
+                .as_deref(),
+            Some("token-plan-cookie-test")
+        );
+
+        assert!(
+            host_env_value_for_plugin("openai-api", "OPENROUTER_API_KEY").is_none(),
+            "OpenAI API plugin must not read OpenRouter env"
+        );
+        assert!(
+            host_env_value_for_plugin("gemini", "OPENAI_API_KEY").is_none(),
+            "Gemini plugin must not read OpenAI env"
+        );
+        assert!(
+            host_env_value_for_plugin("openrouter", "GEMINI_CONFIG_DIR").is_none(),
+            "OpenRouter plugin must not read Gemini env"
+        );
+        assert!(
+            host_env_value_for_plugin("alibaba-token-plan", "ALIBABA_CODING_PLAN_COOKIE").is_none(),
+            "Alibaba token plan must not read coding plan cookie env"
+        );
+    }
+
+    #[test]
+    #[serial]
     fn env_api_prefers_process_env() {
         let name = "ZAI_API_KEY";
         let _restore = EnvVarGuard::set(name, "zai-process-env-test-value");
