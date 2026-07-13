@@ -4,6 +4,21 @@
 
 暂无。
 
+## v0.6.33
+
+### Bug Fixes
+
+- Classify Codex rate-limit windows by duration so weekly-only and reversed responses display the correct labels and ordering ([#93](https://github.com/cogine-ai/OpenUsageCN/pull/93)) by @lc708
+
+---
+
+### Changelog
+
+**Full Changelog**: [v0.6.32...v0.6.33](https://github.com/cogine-ai/OpenUsageCN/compare/v0.6.32...v0.6.33)
+
+- [1490ae7](https://github.com/cogine-ai/OpenUsageCN/commit/1490ae7f4a65321c39d091a83a479c21abcbd120) Merge pull request #93 from cogine-ai/cliq/codex-weekly-window-normalization by @lc708
+- [d7f6ca1](https://github.com/cogine-ai/OpenUsageCN/commit/d7f6ca1bc85f380a96690386b795c803d95c0ee6) fix(codex): classify rate windows by duration by @lc708
+
 ## v0.6.32
 
 ### New Features
