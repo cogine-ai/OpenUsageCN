@@ -473,6 +473,43 @@ describe("App", () => {
     await waitFor(() => expect(state.traySetIconMock).toHaveBeenCalled())
   })
 
+  it("falls back when a Codex response temporarily contains only the weekly metric", async () => {
+    state.invokeMock.mockImplementation(async (cmd: string) => {
+      if (cmd === "list_plugins") {
+        return [
+          {
+            id: "codex",
+            name: "Codex",
+            iconUrl: "icon-codex",
+            primaryCandidates: ["5小时"],
+            weeklyCandidate: "每周",
+            lines: [
+              { type: "progress", label: "5小时", scope: "overview" },
+              { type: "progress", label: "每周", scope: "overview", period: "weekly" },
+            ],
+          },
+        ]
+      }
+      return null
+    })
+    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["codex"], disabled: [] })
+
+    render(<App />)
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+    state.traySetTitleMock.mockClear()
+
+    state.probeHandlers?.onResult({
+      providerId: "codex",
+      displayName: "Codex",
+      iconUrl: "icon-codex",
+      lines: [
+        { type: "progress", label: "每周", used: 8, limit: 100, format: { kind: "percent" } },
+      ],
+    })
+
+    await waitFor(() => expect(state.traySetTitleMock).toHaveBeenCalledWith("92%"))
+  })
+
   it("renders first provider tray icon on launch before probe data", async () => {
     state.invokeMock.mockImplementation(async (cmd: string) => {
       if (cmd === "list_plugins") {
