@@ -32,12 +32,12 @@ Returns rate limit windows, optional credits, and the number of available manual
 {
   "plan_type": "plus",                     // plan tier
   "rate_limit": {
-    "primary_window": {
+    "primary_window": {                     // first returned window
       "used_percent": 6,                   // % used in 5h rolling window
       "reset_at": 1738300000,              // unix seconds
       "limit_window_seconds": 18000        // 5 hours
     },
-    "secondary_window": {
+    "secondary_window": {                   // optional second window
       "used_percent": 24,                  // % used in 7-day window
       "reset_at": 1738900000,
       "limit_window_seconds": 604800       // 7 days
@@ -61,14 +61,17 @@ Returns rate limit windows, optional credits, and the number of available manual
 }
 ```
 
-Both rate_limit windows are enforced simultaneously — hitting either limit throttles the user.
+Window type is determined by `limit_window_seconds`, not by whether it appears under
+`primary_window` or `secondary_window`. The API can return one or both windows. When the 5-hour
+window is unavailable, the 7-day window can appear by itself under `primary_window`.
 
 OpenUsageCN floors the remaining credit balance to a whole number and displays its fixed USD
 equivalent at `$0.04` per credit. For example, `820.6969075` renders as
 `$32.80 · 820 点数`. The credit balance is unbounded; the API does not provide a maximum.
 
 The Codex card uses short Chinese labels: `5小时`, `每周`, `代码审查`, `手动重置`, `点数`,
-`今日`, `昨日`, `近30天`, and `用量趋势`. Model names and the `tokens` unit stay unchanged.
+`今日`, `昨日`, `近30天`, and `用量趋势`. `5小时` is shown only when an 18000-second window is
+present. Model names and the `tokens` unit stay unchanged.
 
 Token totals keep one decimal place. Values below `1万` use the original number, values from `1万`
 to below `0.1亿` use `万`, and values from `0.1亿` use `亿`. For example, `6005000` is shown as

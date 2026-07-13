@@ -431,6 +431,13 @@
   var PERIOD_SESSION_MS = 5 * 60 * 60 * 1000    // 5 hours
   var PERIOD_WEEKLY_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 
+  function getRateLimitWindowKind(window, fallbackKind) {
+    if (!window || typeof window.limit_window_seconds !== "number") return fallbackKind
+    if (window.limit_window_seconds * 1000 === PERIOD_SESSION_MS) return "session"
+    if (window.limit_window_seconds * 1000 === PERIOD_WEEKLY_MS) return "weekly"
+    return fallbackKind
+  }
+
   function queryTokenUsage(ctx) {
     if (!ctx.host.ccusage || typeof ctx.host.ccusage.query !== "function") {
       return { status: "no_runner", data: null }
@@ -799,48 +806,38 @@
       const headerPrimary = readPercent(resp.headers["x-codex-primary-used-percent"])
       const headerSecondary = readPercent(resp.headers["x-codex-secondary-used-percent"])
 
-      if (headerPrimary !== null) {
-        lines.push(ctx.line.progress({
-          label: "5小时",
-          used: headerPrimary,
-          limit: 100,
-          format: { kind: "percent" },
-          resetsAt: getResetsAtIso(ctx, nowSec, primaryWindow),
-          periodDurationMs: PERIOD_SESSION_MS
-        }))
-      }
-      if (headerSecondary !== null) {
-        lines.push(ctx.line.progress({
-          label: "每周",
-          used: headerSecondary,
-          limit: 100,
-          format: { kind: "percent" },
-          resetsAt: getResetsAtIso(ctx, nowSec, secondaryWindow),
-          periodDurationMs: PERIOD_WEEKLY_MS
-        }))
-      }
+      const rateLimitWindows = [
+        {
+          kind: getRateLimitWindowKind(primaryWindow, "session"),
+          window: primaryWindow,
+          headerUsed: headerPrimary,
+          bodyUsed: primaryWindow && typeof primaryWindow.used_percent === "number"
+            ? primaryWindow.used_percent
+            : null
+        },
+        {
+          kind: getRateLimitWindowKind(secondaryWindow, "weekly"),
+          window: secondaryWindow,
+          headerUsed: headerSecondary,
+          bodyUsed: secondaryWindow && typeof secondaryWindow.used_percent === "number"
+            ? secondaryWindow.used_percent
+            : null
+        }
+      ]
 
-      if (lines.length === 0 && data.rate_limit) {
-        if (data.rate_limit.primary_window && typeof data.rate_limit.primary_window.used_percent === "number") {
-          lines.push(ctx.line.progress({
-            label: "5小时",
-            used: data.rate_limit.primary_window.used_percent,
-            limit: 100,
-            format: { kind: "percent" },
-            resetsAt: getResetsAtIso(ctx, nowSec, primaryWindow),
-            periodDurationMs: PERIOD_SESSION_MS
-          }))
-        }
-        if (data.rate_limit.secondary_window && typeof data.rate_limit.secondary_window.used_percent === "number") {
-          lines.push(ctx.line.progress({
-            label: "每周",
-            used: data.rate_limit.secondary_window.used_percent,
-            limit: 100,
-            format: { kind: "percent" },
-            resetsAt: getResetsAtIso(ctx, nowSec, secondaryWindow),
-            periodDurationMs: PERIOD_WEEKLY_MS
-          }))
-        }
+      for (const kind of ["session", "weekly"]) {
+        const entry = rateLimitWindows.find((candidate) =>
+          candidate.kind === kind && (candidate.headerUsed !== null || candidate.bodyUsed !== null)
+        )
+        if (!entry) continue
+        lines.push(ctx.line.progress({
+          label: kind === "session" ? "5小时" : "每周",
+          used: entry.headerUsed !== null ? entry.headerUsed : entry.bodyUsed,
+          limit: 100,
+          format: { kind: "percent" },
+          resetsAt: getResetsAtIso(ctx, nowSec, entry.window),
+          periodDurationMs: kind === "session" ? PERIOD_SESSION_MS : PERIOD_WEEKLY_MS
+        }))
       }
 
       if (Array.isArray(data.additional_rate_limits)) {
