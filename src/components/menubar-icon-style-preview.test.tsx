@@ -51,7 +51,7 @@ describe("MenubarIconStylePreview", () => {
       />
     )
 
-    expect(container.querySelectorAll(".h-1").length).toBe(2)
+    expect(container.querySelectorAll(".relative.h-1").length).toBe(2)
   })
 
   it("renders donut style and clamps overflow fractions", () => {
