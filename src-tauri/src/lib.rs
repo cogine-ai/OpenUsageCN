@@ -366,9 +366,7 @@ async fn start_probe_batch(
 
                 match result {
                     Ok(output) => {
-                        let has_error = output.lines.iter().any(|line| {
-                            matches!(line, plugin_engine::runtime::MetricLine::Badge { label, .. } if label == "Error")
-                        });
+                        let has_error = plugin_engine::runtime::probe_output_has_error(&output);
                         if has_error {
                             log::warn!("probe {} completed with error", plugin_id);
                         } else {

@@ -567,6 +567,51 @@ mod tests {
     }
 
     #[test]
+    fn manifest_parses_default_source_flag() {
+        let explicit = manifest_with_config(
+            r#"
+            {
+              "fields": [
+                {
+                  "id": "apiKey",
+                  "type": "secret",
+                  "label": "API Key",
+                  "defaultSource": true
+                }
+              ]
+            }
+            "#,
+        );
+        let omitted = manifest_with_config(
+            r#"
+            {
+              "fields": [
+                {
+                  "id": "apiKey",
+                  "type": "secret",
+                  "label": "API Key"
+                }
+              ]
+            }
+            "#,
+        );
+
+        let explicit_field = explicit
+            .config
+            .as_ref()
+            .and_then(|config| config.fields.first())
+            .expect("explicit defaultSource field");
+        let omitted_field = omitted
+            .config
+            .as_ref()
+            .and_then(|config| config.fields.first())
+            .expect("omitted defaultSource field");
+
+        assert!(explicit_field.default_source);
+        assert!(!omitted_field.default_source);
+    }
+
+    #[test]
     fn validate_plugin_config_rejects_empty_field_id() {
         let manifest = manifest_with_config(
             r#"

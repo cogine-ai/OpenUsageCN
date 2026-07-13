@@ -699,6 +699,12 @@ pub fn panic_probe_output(plugin: &LoadedPlugin) -> PluginOutput {
     )
 }
 
+pub fn probe_output_has_error(output: &PluginOutput) -> bool {
+    output.lines.iter().any(|line| {
+        matches!(line, MetricLine::Badge { label, .. } if label == "Error")
+    })
+}
+
 fn extract_error_string(ctx: &Ctx<'_>) -> String {
     let exc = ctx.catch();
     if exc.is_null() || exc.is_undefined() {
@@ -814,6 +820,41 @@ mod tests {
             error_text(output),
             "The plugin crashed during refresh. Try again or update the plugin."
         );
+    }
+
+    #[test]
+    fn probe_output_has_error_detects_error_badge() {
+        let plugin = test_plugin("");
+        let output = panic_probe_output(&plugin);
+        assert!(probe_output_has_error(&output));
+    }
+
+    #[test]
+    fn probe_output_has_error_ignores_success_and_non_error_badges() {
+        let plugin = test_plugin("");
+        let success = PluginOutput {
+            provider_id: plugin.manifest.id.clone(),
+            display_name: plugin.manifest.name.clone(),
+            plan: None,
+            lines: vec![MetricLine::Text {
+                label: "Session".to_string(),
+                value: "42%".to_string(),
+                subtitle: None,
+                color: None,
+            }],
+            icon_url: plugin.icon_data_url.clone(),
+        };
+        assert!(!probe_output_has_error(&success));
+
+        let warning = PluginOutput {
+            lines: vec![MetricLine::Badge {
+                label: "Warning".to_string(),
+                text: "Low balance".to_string(),
+                color: None,
+            }],
+            ..success.clone()
+        };
+        assert!(!probe_output_has_error(&warning));
     }
 
     #[test]
