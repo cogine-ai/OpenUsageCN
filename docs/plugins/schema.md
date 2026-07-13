@@ -173,9 +173,9 @@ Example:
 
 ### Weekly Metric (Menubar)
 
-A provider can mark one progress line with `"period": "weekly"`. When the user sets the menubar metric to **Weekly** (Settings → Menubar Icon), the tray icon and tooltip show this line instead of the provider's primary metric.
+A provider can mark one progress line with `"period": "weekly"`. The **Default** menubar metric prefers the provider's primary line and falls back to its weekly line when the primary line is temporarily absent from the current response. The **Weekly** setting reverses that priority: it prefers the weekly line and falls back to the primary line when needed.
 
-It is an **override of the primary metric**, not a standalone mode: the provider must still define a primary (`primaryOrder`) line — a provider with *only* a weekly line will not appear in the menubar. Providers without a weekly line keep showing their primary. `period` only recognizes `"weekly"` (other values are ignored), and only the first `"period": "weekly"` line is used.
+The provider must still define a primary (`primaryOrder`) line to appear in the menubar; a provider that declares only a weekly line is skipped. Providers without a weekly line keep showing their primary. `period` only recognizes `"weekly"` (other values are ignored), and only the first `"period": "weekly"` line is used.
 
 ```json
 {

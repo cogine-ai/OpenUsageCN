@@ -462,6 +462,35 @@ describe("getTrayPrimaryBars", () => {
       expect(bars).toEqual([{ id: "a", fraction: 0.2, label: "Session" }])
     })
 
+    it("falls back to weekly when the default primary is temporarily unavailable", () => {
+      const bars = getTrayPrimaryBars({
+        displayMode: "left",
+        pluginsMeta: [metaWithWeekly],
+        pluginSettings: { order: ["a"], disabled: [] },
+        pluginStates: {
+          a: {
+            data: {
+              providerId: "a",
+              displayName: "A",
+              iconUrl: "",
+              lines: [
+                {
+                  type: "progress",
+                  label: "Weekly",
+                  used: 8,
+                  limit: 100,
+                  format: { kind: "percent" },
+                },
+              ],
+            },
+            loading: false,
+            error: null,
+          },
+        },
+      })
+      expect(bars).toEqual([{ id: "a", fraction: 0.92, label: "Weekly", weekly: true }])
+    })
+
     it("falls back to primary when the provider has no weekly candidate", () => {
       const bars = getTrayPrimaryBars({
         displayMode: "used",

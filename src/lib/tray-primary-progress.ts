@@ -59,10 +59,9 @@ export function getTrayPrimaryBars(args: {
     const meta = metaById.get(id)
     if (!meta) continue
     
-    // Skip plugins with no primary metric. Weekly mode is an override of the
-    // primary (see preferWeekly below), not a standalone mode — so a provider
-    // must define primaryCandidates to appear in the menubar; a weekly-only
-    // provider is intentionally skipped.
+    // Providers still need a declared primary metric to appear in the menubar.
+    // When that metric is temporarily absent from the current response, the
+    // selection below can fall back to the provider's declared weekly metric.
     if (!meta.primaryCandidates || meta.primaryCandidates.length === 0) continue
 
     const state = pluginStates[id]
@@ -72,18 +71,20 @@ export function getTrayPrimaryBars(args: {
     let label: string | undefined
     let weekly: true | undefined
     if (data) {
-      // Prefer the declared weekly line when requested and present in data.
-      const weeklyLabel = preferWeekly ? meta.weeklyCandidate : undefined
-      const usesWeekly =
-        weeklyLabel !== undefined &&
-        data.lines.some((line) => isProgressLine(line) && line.label === weeklyLabel)
-
-      // Otherwise fall back to the first primary candidate that exists in data.
-      const metricLabel = usesWeekly
-        ? weeklyLabel
-        : meta.primaryCandidates.find((candidate) =>
-            data.lines.some((line) => isProgressLine(line) && line.label === candidate)
-          )
+      const weeklyLabel =
+        meta.weeklyCandidate !== undefined &&
+        data.lines.some(
+          (line) => isProgressLine(line) && line.label === meta.weeklyCandidate
+        )
+          ? meta.weeklyCandidate
+          : undefined
+      const primaryLabel = meta.primaryCandidates.find((candidate) =>
+        data.lines.some((line) => isProgressLine(line) && line.label === candidate)
+      )
+      const metricLabel = preferWeekly
+        ? weeklyLabel ?? primaryLabel
+        : primaryLabel ?? weeklyLabel
+      const usesWeekly = weeklyLabel !== undefined && metricLabel === weeklyLabel
 
       if (metricLabel) {
         label = metricLabel
@@ -108,4 +109,3 @@ export function getTrayPrimaryBars(args: {
 
   return out
 }
-
