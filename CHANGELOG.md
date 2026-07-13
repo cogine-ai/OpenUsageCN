@@ -4,6 +4,21 @@
 
 暂无。
 
+## v0.6.34
+
+### Bug Fixes
+
+- Fall back to the weekly Codex metric when the default primary window is temporarily absent, keeping the menubar percentage visible ([#96](https://github.com/cogine-ai/OpenUsageCN/pull/96)) by @lc708
+
+---
+
+### Changelog
+
+**Full Changelog**: [v0.6.33...v0.6.34](https://github.com/cogine-ai/OpenUsageCN/compare/v0.6.33...v0.6.34)
+
+- [677b05b](https://github.com/cogine-ai/OpenUsageCN/commit/677b05b0038718b21fd802ed61a51b116d4774f7) Merge pull request #96 from cogine-ai/cliq/fix-menubar-weekly-fallback by @lc708
+- [cffed78](https://github.com/cogine-ai/OpenUsageCN/commit/cffed7836b3b4f3b2c1361be1374c1b08bf2abb9) fix(menubar): fall back to weekly metric by @lc708
+
 ## v0.6.33
 
 ### Bug Fixes
