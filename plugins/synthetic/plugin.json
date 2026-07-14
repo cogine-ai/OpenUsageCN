@@ -7,12 +7,12 @@
   "icon": "icon.svg",
   "brandColor": "#000000",
   "lines": [
-    { "type": "progress", "label": "5h Rate Limit", "scope": "overview", "primaryOrder": 1 },
-    { "type": "progress", "label": "Mana Bar", "scope": "overview" },
+    { "type": "progress", "label": "5h Rate Limit", "scope": "overview", "primaryOrder": 1, "limitResource": { "key": "fiveHour", "countUnit": "requests" } },
+    { "type": "progress", "label": "Mana Bar", "scope": "overview", "limitResource": { "key": "mana" } },
     { "type": "badge", "label": "Rate Limited", "scope": "detail" },
-    { "type": "progress", "label": "Subscription", "scope": "overview", "primaryOrder": 2 },
-    { "type": "progress", "label": "Free Tool Calls", "scope": "detail" },
-    { "type": "progress", "label": "Search", "scope": "detail" }
+    { "type": "progress", "label": "Subscription", "scope": "overview", "primaryOrder": 2, "limitResource": { "key": "subscription", "countUnit": "requests" } },
+    { "type": "progress", "label": "Free Tool Calls", "scope": "detail", "limitResource": { "key": "freeToolCalls", "countUnit": "requests" } },
+    { "type": "progress", "label": "Search", "scope": "detail", "limitResource": { "key": "search", "countUnit": "requests" } }
   ],
   "links": [
     { "label": "Dashboard", "url": "https://synthetic.new/billing" }

@@ -6,16 +6,20 @@
   "entry": "plugin.js",
   "icon": "icon.svg",
   "brandColor": "#000000",
+  "statusPage": {
+    "apiUrl": "https://status.cursor.com/api/v2/status.json",
+    "url": "https://status.cursor.com/"
+  },
   "links": [
     { "label": "Status", "url": "https://status.cursor.com/" },
     { "label": "Dashboard", "url": "https://www.cursor.com/dashboard" }
   ],
   "lines": [
-    { "type": "progress", "label": "Credits", "scope": "overview", "primaryOrder": 1 },
-    { "type": "progress", "label": "Total usage", "scope": "overview", "primaryOrder": 2 },
-    { "type": "progress", "label": "Requests", "scope": "overview", "primaryOrder": 3 },
-    { "type": "progress", "label": "Auto usage", "scope": "detail" },
-    { "type": "progress", "label": "API usage", "scope": "detail" },
-    { "type": "progress", "label": "On-demand", "scope": "detail" }
+    { "type": "progress", "label": "Credits", "scope": "overview", "primaryOrder": 1, "limitResource": { "key": "credits" } },
+    { "type": "progress", "label": "Total usage", "scope": "overview", "primaryOrder": 2, "limitResource": { "key": "totalUsage" } },
+    { "type": "progress", "label": "Requests", "scope": "overview", "primaryOrder": 3, "limitResource": { "key": "requests", "countUnit": "requests" } },
+    { "type": "progress", "label": "Auto usage", "scope": "detail", "limitResource": { "key": "autoUsage" } },
+    { "type": "progress", "label": "API usage", "scope": "detail", "limitResource": { "key": "apiUsage" } },
+    { "type": "progress", "label": "On-demand", "scope": "detail", "limitResource": { "key": "onDemand" } }
   ]
 }

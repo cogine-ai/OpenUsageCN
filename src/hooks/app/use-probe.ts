@@ -47,6 +47,7 @@ export function useProbe({
   } = useProbeAutoUpdate({
     pluginSettings,
     autoUpdateInterval,
+    pluginStates,
     pluginStatesRef,
     setLoadingForPlugins,
     setErrorForPlugins,

@@ -35,6 +35,16 @@ export type PluginLink = {
   url: string
 }
 
+export type PluginStatusPage = {
+  url: string
+}
+
+export type ProviderStatus = {
+  level: "operational" | "degraded" | "outage"
+  description: string
+  updatedAt: string | null
+}
+
 export type PluginConfigFieldType = "secret" | "text" | "select" | "toggle"
 
 export type PluginConfigOption = {
@@ -72,6 +82,7 @@ export type PluginMeta = {
   brandColor?: string
   lines: ManifestLine[]
   links?: PluginLink[]
+  statusPage?: PluginStatusPage
   config?: PluginConfig
   /** Ordered list of primary metric candidates. Frontend picks first available. */
   primaryCandidates: string[]

@@ -19,8 +19,8 @@
     ]
   },
   "lines": [
-    { "type": "progress", "label": "Pro", "scope": "overview", "primaryOrder": 1 },
-    { "type": "progress", "label": "Flash", "scope": "overview" },
-    { "type": "progress", "label": "Flash Lite", "scope": "detail" }
+    { "type": "progress", "label": "Pro", "scope": "overview", "primaryOrder": 1, "limitResource": { "key": "pro" } },
+    { "type": "progress", "label": "Flash", "scope": "overview", "limitResource": { "key": "flash" } },
+    { "type": "progress", "label": "Flash Lite", "scope": "detail", "limitResource": { "key": "flashLite" } }
   ]
 }

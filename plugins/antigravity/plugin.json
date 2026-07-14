@@ -7,8 +7,8 @@
   "icon": "icon.svg",
   "brandColor": "#4285F4",
   "lines": [
-    { "type": "progress", "label": "Gemini Pro", "scope": "overview", "primaryOrder": 1 },
-    { "type": "progress", "label": "Gemini Flash", "scope": "overview" },
-    { "type": "progress", "label": "Claude", "scope": "overview" }
+    { "type": "progress", "label": "Gemini Pro", "scope": "overview", "primaryOrder": 1, "limitResource": { "key": "geminiPro" } },
+    { "type": "progress", "label": "Gemini Flash", "scope": "overview", "limitResource": { "key": "geminiFlash" } },
+    { "type": "progress", "label": "Claude", "scope": "overview", "limitResource": { "key": "claude" } }
   ]
 }

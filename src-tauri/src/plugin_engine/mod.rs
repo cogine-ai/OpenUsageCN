@@ -3,9 +3,12 @@ pub mod manifest;
 pub mod runtime;
 
 use manifest::LoadedPlugin;
+use std::fs::{File, OpenOptions};
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 
 const RETIRED_BUNDLED_PLUGIN_IDS: &[&str] = &["windsurf"];
+const PLUGIN_INSTALL_LOCK_FILE: &str = ".plugin-install.lock";
 
 pub fn initialize_plugins(
     app_data_dir: &Path,
@@ -18,6 +21,20 @@ pub fn initialize_plugins(
         }
     }
 
+    initialize_installed_plugins(app_data_dir, resource_dir)
+}
+
+pub fn initialize_installed_plugins(
+    app_data_dir: &Path,
+    resource_dir: &Path,
+) -> (PathBuf, Vec<LoadedPlugin>) {
+    if let Err(err) = std::fs::create_dir_all(app_data_dir) {
+        log::error!(
+            "failed to create app data dir {} before plugin sync: {}",
+            app_data_dir.display(),
+            err
+        );
+    }
     let install_dir = app_data_dir.join("plugins");
     if let Err(err) = std::fs::create_dir_all(&install_dir) {
         log::warn!(
@@ -27,14 +44,70 @@ pub fn initialize_plugins(
         );
     }
 
+    let _process_guard = plugin_install_mutex()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let install_lock = acquire_plugin_install_lock(app_data_dir);
     let bundled_dir = resolve_bundled_dir(resource_dir);
     if bundled_dir.exists() {
-        copy_dir_recursive(&bundled_dir, &install_dir);
-        remove_retired_bundled_plugins(&install_dir);
+        if install_lock.is_some() {
+            copy_dir_recursive(&bundled_dir, &install_dir);
+            remove_retired_bundled_plugins(&install_dir);
+        } else {
+            log::error!(
+                "skipped bundled plugin sync because the cross-process lock was unavailable"
+            );
+        }
     }
 
+    // Keep the lock alive through loading so no other app or CLI process can
+    // replace a manifest or script between directory enumeration and reads.
     let plugins = load_active_plugins_from_dir(&install_dir);
+    drop(install_lock);
     (install_dir, plugins)
+}
+
+fn plugin_install_mutex() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+}
+
+fn acquire_plugin_install_lock(app_data_dir: &Path) -> Option<File> {
+    let path = app_data_dir.join(PLUGIN_INSTALL_LOCK_FILE);
+    let file = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .open(&path)
+        .map_err(|error| {
+            log::error!(
+                "failed to open plugin install lock {}: {}",
+                path.display(),
+                error
+            );
+        })
+        .ok()?;
+    if let Err(error) = lock_plugin_file(&file) {
+        log::error!("failed to acquire plugin install lock: {error}");
+        return None;
+    }
+    Some(file)
+}
+
+#[cfg(unix)]
+fn lock_plugin_file(file: &File) -> Result<(), std::io::Error> {
+    use std::os::fd::AsRawFd;
+    let result = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX) };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
+}
+
+#[cfg(not(unix))]
+fn lock_plugin_file(_file: &File) -> Result<(), std::io::Error> {
+    Ok(())
 }
 
 fn load_active_plugins_from_dir(plugins_dir: &Path) -> Vec<LoadedPlugin> {

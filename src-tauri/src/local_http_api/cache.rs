@@ -1,13 +1,18 @@
+use super::limits::ProviderLimitCatalog;
 use crate::plugin_engine::runtime::{MetricLine, PluginOutput};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 const CACHE_FILE_NAME: &str = "usage-api-cache.json";
-const SETTINGS_FILE_NAME: &str = "settings.json";
-const DEFAULT_ENABLED_PLUGINS: &[&str] = &["claude", "codex", "cursor"];
+const CACHE_LOCK_FILE_NAME: &str = ".usage-api-cache.lock";
+pub(super) const SETTINGS_FILE_NAME: &str = "settings.json";
+pub(super) const DEFAULT_ENABLED_PLUGINS: &[&str] = &["claude", "codex", "cursor"];
+
+pub(super) use super::cache_settings::enabled_plugin_ids_ordered;
 
 #[cfg(not(test))]
 const CACHE_WRITE_DEBOUNCE: Duration = Duration::from_millis(500);
@@ -40,6 +45,8 @@ pub(super) struct CacheState {
     pub snapshots: HashMap<String, CachedPluginSnapshot>,
     pub app_data_dir: PathBuf,
     pub known_plugin_ids: Vec<String>,
+    pub limit_catalog: HashMap<String, ProviderLimitCatalog>,
+    pub errors: HashMap<String, String>,
     pub app_version: String,
     dirty_generation: u64,
     flushed_generation: u64,
@@ -87,6 +94,8 @@ pub(super) fn cache_state() -> &'static Mutex<CacheState> {
             snapshots: HashMap::new(),
             app_data_dir: PathBuf::new(),
             known_plugin_ids: Vec::new(),
+            limit_catalog: HashMap::new(),
+            errors: HashMap::new(),
             app_version: String::new(),
             dirty_generation: 0,
             flushed_generation: 0,
@@ -130,18 +139,132 @@ fn save_cache(
     app_data_dir: &Path,
     snapshots: &HashMap<String, CachedPluginSnapshot>,
 ) -> Result<(), String> {
+    std::fs::create_dir_all(app_data_dir)
+        .map_err(|e| format!("failed to create app data directory: {}", e))?;
+    let lock_path = app_data_dir.join(CACHE_LOCK_FILE_NAME);
+    let lock_file = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .open(&lock_path)
+        .map_err(|e| format!("failed to open usage cache lock: {}", e))?;
+    lock_cache_file(&lock_file)?;
+
+    // The menu-bar app and one-shot CLI are separate processes. Re-read and
+    // merge while holding the file lock so they cannot discard each other's
+    // provider snapshots.
+    let mut merged_snapshots = load_cache(app_data_dir);
+    for (provider_id, incoming) in snapshots {
+        let should_replace = merged_snapshots
+            .get(provider_id)
+            .map(|current| snapshot_is_at_least_as_new(incoming, current))
+            .unwrap_or(true);
+        if should_replace {
+            merged_snapshots.insert(provider_id.clone(), incoming.clone());
+        }
+    }
     let file = UsageApiCacheFile {
         version: 1,
-        snapshots: snapshots.clone(),
+        snapshots: merged_snapshots,
     };
     let path = app_data_dir.join(CACHE_FILE_NAME);
-    let tmp_path = app_data_dir.join(".usage-api-cache.json.tmp");
+    let tmp_path = app_data_dir.join(format!(
+        ".usage-api-cache.{}.{}.tmp",
+        std::process::id(),
+        uuid::Uuid::new_v4()
+    ));
     let json = serde_json::to_string(&file)
         .map_err(|e| format!("failed to serialize usage cache: {}", e))?;
     std::fs::write(&tmp_path, &json)
         .map_err(|e| format!("failed to write temp cache file: {}", e))?;
-    std::fs::rename(&tmp_path, &path).map_err(|e| format!("failed to rename cache file: {}", e))?;
+    if let Err(e) = std::fs::rename(&tmp_path, &path) {
+        let _ = std::fs::remove_file(&tmp_path);
+        return Err(format!("failed to rename cache file: {}", e));
+    }
+    unlock_cache_file(&lock_file)?;
     Ok(())
+}
+
+#[cfg(unix)]
+fn lock_cache_file(file: &std::fs::File) -> Result<(), String> {
+    use std::os::fd::AsRawFd;
+    let result = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX) };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(format!(
+            "failed to lock usage cache: {}",
+            std::io::Error::last_os_error()
+        ))
+    }
+}
+
+#[cfg(unix)]
+fn unlock_cache_file(file: &std::fs::File) -> Result<(), String> {
+    use std::os::fd::AsRawFd;
+    let result = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_UN) };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(format!(
+            "failed to unlock usage cache: {}",
+            std::io::Error::last_os_error()
+        ))
+    }
+}
+
+#[cfg(not(unix))]
+fn lock_cache_file(_file: &std::fs::File) -> Result<(), String> {
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn unlock_cache_file(_file: &std::fs::File) -> Result<(), String> {
+    Ok(())
+}
+
+fn snapshot_is_at_least_as_new(
+    incoming: &CachedPluginSnapshot,
+    current: &CachedPluginSnapshot,
+) -> bool {
+    let parse = |value: &str| {
+        time::OffsetDateTime::parse(value, &time::format_description::well_known::Rfc3339)
+    };
+    let now = time::OffsetDateTime::now_utc();
+    let latest_credible_timestamp = now + time::Duration::minutes(5);
+    match (parse(&incoming.fetched_at), parse(&current.fetched_at)) {
+        (Ok(incoming_at), _) if incoming_at > latest_credible_timestamp => {
+            log::warn!(
+                "incoming usage cache timestamp is unexpectedly in the future (provider={})",
+                incoming.provider_id
+            );
+            false
+        }
+        (Ok(_), Ok(current_at)) if current_at > latest_credible_timestamp => {
+            log::warn!(
+                "stored usage cache timestamp is unexpectedly in the future (provider={})",
+                current.provider_id
+            );
+            true
+        }
+        (Ok(incoming_at), Ok(current_at)) => incoming_at >= current_at,
+        (Err(error), _) => {
+            log::warn!(
+                "incoming usage cache timestamp is invalid (provider={}): {}",
+                incoming.provider_id,
+                error
+            );
+            false
+        }
+        (_, Err(error)) => {
+            log::warn!(
+                "stored usage cache timestamp is invalid (provider={}): {}",
+                current.provider_id,
+                error
+            );
+            true
+        }
+    }
 }
 
 fn schedule_cache_flush_locked(state: &mut CacheState) {
@@ -240,12 +363,27 @@ fn flush_pending_cache_once() -> CacheFlushResult {
 // Public API: initialise + update cache
 // ---------------------------------------------------------------------------
 
-pub fn init(app_data_dir: &Path, known_plugin_ids: Vec<String>, app_version: String) {
+#[cfg(test)]
+fn init(app_data_dir: &Path, known_plugin_ids: Vec<String>, app_version: String) {
+    init_with_catalog(app_data_dir, known_plugin_ids, Vec::new(), app_version);
+}
+
+pub fn init_with_catalog(
+    app_data_dir: &Path,
+    known_plugin_ids: Vec<String>,
+    catalog: Vec<ProviderLimitCatalog>,
+    app_version: String,
+) {
     let snapshots = load_cache(app_data_dir);
     let mut state = cache_state().lock().expect("cache state poisoned");
     state.snapshots = snapshots;
     state.app_data_dir = app_data_dir.to_path_buf();
     state.known_plugin_ids = known_plugin_ids;
+    state.limit_catalog = catalog
+        .into_iter()
+        .map(|provider| (provider.provider_id.clone(), provider))
+        .collect();
+    state.errors.clear();
     state.app_version = app_version;
     state.dirty_generation = 0;
     state.flushed_generation = 0;
@@ -267,80 +405,38 @@ pub fn cache_successful_output(output: &PluginOutput) {
 
     let mut state = cache_state().lock().expect("cache state poisoned");
     state.snapshots.insert(output.provider_id.clone(), snapshot);
+    state.errors.remove(&output.provider_id);
     state.dirty_generation = state.dirty_generation.wrapping_add(1);
     schedule_cache_flush_locked(&mut state);
 }
 
-pub fn flush_cache() {
-    if let CacheFlushResult::Failed(e) = flush_pending_cache_once() {
-        log::warn!("{}", e);
+pub fn record_probe_error(provider_id: &str, message: impl Into<String>) {
+    let mut state = cache_state().lock().expect("cache state poisoned");
+    state.errors.insert(provider_id.to_string(), message.into());
+}
+
+pub fn flush_cache() -> Result<(), String> {
+    match flush_pending_cache_once() {
+        CacheFlushResult::Idle | CacheFlushResult::Flushed => Ok(()),
+        CacheFlushResult::Failed(error) => {
+            log::error!("{error}");
+            Err(error)
+        }
     }
 }
 
-// ---------------------------------------------------------------------------
-// Settings reader (reads settings.json directly, not via tauri_plugin_store)
-// ---------------------------------------------------------------------------
-
-#[derive(Deserialize)]
-struct SettingsFile {
-    plugins: Option<PluginSettingsJson>,
+pub(crate) fn enabled_provider_ids() -> Vec<String> {
+    let state = cache_state().lock().expect("cache state poisoned");
+    enabled_plugin_ids_ordered(&state)
 }
 
-#[derive(Deserialize)]
-struct PluginSettingsJson {
-    order: Option<Vec<String>>,
-    disabled: Option<Vec<String>>,
-}
-
-fn read_plugin_settings(app_data_dir: &Path) -> (Vec<String>, HashSet<String>, bool) {
-    let path = app_data_dir.join(SETTINGS_FILE_NAME);
-    let data = match std::fs::read_to_string(&path) {
-        Ok(d) => d,
-        Err(_) => return (Vec::new(), HashSet::new(), false),
-    };
-    match serde_json::from_str::<SettingsFile>(&data) {
-        Ok(sf) => {
-            let ps = sf.plugins.unwrap_or(PluginSettingsJson {
-                order: None,
-                disabled: None,
-            });
-            let has_settings = ps.order.is_some() || ps.disabled.is_some();
-            let order = ps.order.unwrap_or_default();
-            let disabled: HashSet<String> = ps.disabled.unwrap_or_default().into_iter().collect();
-            (order, disabled, has_settings)
-        }
-        Err(_) => (Vec::new(), HashSet::new(), false),
-    }
-}
-
-fn enabled_plugin_ids_ordered(state: &CacheState) -> Vec<String> {
-    let (settings_order, disabled, has_settings) = read_plugin_settings(&state.app_data_dir);
-
-    let default_enabled: HashSet<&str> = DEFAULT_ENABLED_PLUGINS.iter().copied().collect();
-
-    let is_enabled = |id: &str| -> bool {
-        if has_settings {
-            !disabled.contains(id)
-        } else {
-            default_enabled.contains(id)
-        }
-    };
-
-    // Build ordered plugin ids: settings order first, then remaining known ids.
-    let mut ordered: Vec<String> = Vec::new();
-    let mut seen = HashSet::new();
-    for id in &settings_order {
-        if seen.insert(id.clone()) {
-            ordered.push(id.clone());
-        }
-    }
-    for id in &state.known_plugin_ids {
-        if seen.insert(id.clone()) {
-            ordered.push(id.clone());
-        }
-    }
-
-    ordered.into_iter().filter(|id| is_enabled(id)).collect()
+pub(crate) fn snapshot_for_provider(provider_id: &str) -> Option<CachedPluginSnapshot> {
+    cache_state()
+        .lock()
+        .expect("cache state poisoned")
+        .snapshots
+        .get(provider_id)
+        .cloned()
 }
 
 /// Build the ordered list of enabled cached snapshots for GET /v1/usage.
@@ -385,358 +481,5 @@ pub(super) fn health_cache_state() -> HealthCacheState {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::plugin_engine::runtime::{MetricLine, PluginOutput, ProgressFormat};
-    use serial_test::serial;
-    use std::time::Instant;
-
-    fn make_snapshot(id: &str, name: &str) -> CachedPluginSnapshot {
-        CachedPluginSnapshot {
-            provider_id: id.to_string(),
-            display_name: name.to_string(),
-            plan: Some("Pro".to_string()),
-            lines: vec![],
-            fetched_at: "2026-03-26T08:15:30Z".to_string(),
-        }
-    }
-
-    fn make_output(id: &str, name: &str) -> PluginOutput {
-        PluginOutput {
-            provider_id: id.to_string(),
-            display_name: name.to_string(),
-            plan: Some("Pro".to_string()),
-            lines: vec![MetricLine::Text {
-                label: "Usage".to_string(),
-                value: "42%".to_string(),
-                color: None,
-                subtitle: None,
-            }],
-            icon_url: String::new(),
-        }
-    }
-
-    fn temp_dir(label: &str) -> PathBuf {
-        std::env::temp_dir().join(format!(
-            "openusagecn-test-{}-{}",
-            label,
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ))
-    }
-
-    fn wait_for_cached_snapshots(
-        dir: &Path,
-        expected_len: usize,
-    ) -> HashMap<String, CachedPluginSnapshot> {
-        let deadline = Instant::now() + Duration::from_secs(1);
-        loop {
-            let loaded = load_cache(dir);
-            if loaded.len() == expected_len {
-                return loaded;
-            }
-            assert!(
-                Instant::now() < deadline,
-                "cache file was not flushed within the test deadline"
-            );
-            std::thread::sleep(Duration::from_millis(5));
-        }
-    }
-
-    fn wait_for_cache_writer_idle() {
-        let deadline = Instant::now() + Duration::from_secs(1);
-        loop {
-            let state = cache_state().lock().unwrap();
-            if !state.flush_scheduled && state.dirty_generation == state.flushed_generation {
-                return;
-            }
-            drop(state);
-            assert!(
-                Instant::now() < deadline,
-                "debounced cache writer did not return to idle"
-            );
-            std::thread::sleep(Duration::from_millis(5));
-        }
-    }
-
-    #[test]
-    fn cache_write_retry_delay_backs_off_and_caps() {
-        assert_eq!(
-            cache_write_retry_delay(1),
-            CACHE_WRITE_DEBOUNCE.saturating_mul(2)
-        );
-        assert_eq!(
-            cache_write_retry_delay(2),
-            CACHE_WRITE_DEBOUNCE.saturating_mul(4)
-        );
-        assert_eq!(cache_write_retry_delay(20), CACHE_WRITE_RETRY_MAX_DELAY);
-    }
-
-    #[test]
-    fn cache_write_failure_logs_are_throttled() {
-        assert!(should_log_cache_write_failure(1));
-        assert!(should_log_cache_write_failure(2));
-        assert!(!should_log_cache_write_failure(3));
-        assert!(should_log_cache_write_failure(4));
-        assert!(!should_log_cache_write_failure(5));
-        assert!(should_log_cache_write_failure(16));
-    }
-
-    #[test]
-    fn snapshot_serializes_with_fetched_at() {
-        let snap = make_snapshot("claude", "Claude");
-        let json: serde_json::Value = serde_json::to_value(&snap).unwrap();
-        assert!(json.get("fetchedAt").is_some());
-        assert!(json.get("fetched_at").is_none());
-        assert_eq!(json["fetchedAt"], "2026-03-26T08:15:30Z");
-    }
-
-    #[test]
-    #[serial]
-    fn health_cache_state_counts_enabled_cached_snapshots_only() {
-        let dir = temp_dir("health-enabled-cache");
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(
-            dir.join(SETTINGS_FILE_NAME),
-            r#"{"plugins":{"order":["claude","codex"],"disabled":["claude"]}}"#,
-        )
-        .unwrap();
-
-        init(
-            &dir,
-            vec!["claude".to_string(), "codex".to_string()],
-            "test-version".to_string(),
-        );
-        {
-            let mut state = cache_state().lock().unwrap();
-            state
-                .snapshots
-                .insert("claude".to_string(), make_snapshot("claude", "Claude"));
-        }
-
-        let health = health_cache_state();
-
-        assert_eq!(health.providers.known, 2);
-        assert_eq!(health.providers.enabled, 1);
-        assert_eq!(health.providers.cached, 0);
-        assert!(!health.cache.ready);
-        assert_eq!(health.cache.last_successful_fetch_at, None);
-
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn cache_file_round_trip() {
-        let dir = temp_dir("cache");
-        std::fs::create_dir_all(&dir).unwrap();
-
-        let mut snapshots = HashMap::new();
-        snapshots.insert("claude".to_string(), make_snapshot("claude", "Claude"));
-
-        save_cache(&dir, &snapshots).unwrap();
-        let loaded = load_cache(&dir);
-
-        assert_eq!(loaded.len(), 1);
-        assert_eq!(loaded["claude"].provider_id, "claude");
-        assert_eq!(loaded["claude"].fetched_at, "2026-03-26T08:15:30Z");
-
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn load_cache_returns_empty_on_missing_file() {
-        let dir = temp_dir("no-cache");
-        let loaded = load_cache(&dir);
-        assert!(loaded.is_empty());
-    }
-
-    #[test]
-    fn load_cache_returns_empty_on_invalid_json() {
-        let dir = temp_dir("bad-cache");
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join(CACHE_FILE_NAME), "not json").unwrap();
-
-        let loaded = load_cache(&dir);
-        assert!(loaded.is_empty());
-
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn load_cache_returns_empty_on_unsupported_version() {
-        let dir = temp_dir("unsupported-cache-version");
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join(CACHE_FILE_NAME), r#"{"version":2,"snapshots":{}}"#).unwrap();
-
-        let loaded = load_cache(&dir);
-        assert!(loaded.is_empty());
-
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    #[serial]
-    fn enabled_snapshots_ordered_uses_default_enabled_plugins_without_settings() {
-        let dir = temp_dir("default-enabled-plugins");
-        std::fs::create_dir_all(&dir).unwrap();
-
-        init(
-            &dir,
-            vec![
-                "claude".to_string(),
-                "codex".to_string(),
-                "cursor".to_string(),
-                "zai".to_string(),
-            ],
-            "test-version".to_string(),
-        );
-        {
-            let mut state = cache_state().lock().unwrap();
-            state
-                .snapshots
-                .insert("codex".to_string(), make_snapshot("codex", "Codex"));
-            state
-                .snapshots
-                .insert("zai".to_string(), make_snapshot("zai", "Z.ai"));
-        }
-
-        let snapshots = {
-            let state = cache_state().lock().unwrap();
-            enabled_snapshots_ordered(&state)
-        };
-
-        assert_eq!(snapshots.len(), 1);
-        assert_eq!(snapshots[0].provider_id, "codex");
-
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    #[serial]
-    fn cache_successful_output_debounces_disk_writes() {
-        let dir = temp_dir("debounced-cache");
-        std::fs::create_dir_all(&dir).unwrap();
-
-        init(
-            &dir,
-            vec!["claude".to_string(), "codex".to_string()],
-            "test".to_string(),
-        );
-        cache_successful_output(&make_output("claude", "Claude"));
-        cache_successful_output(&make_output("codex", "Codex"));
-
-        {
-            let state = cache_state().lock().unwrap();
-            assert!(state.flush_scheduled);
-            assert_eq!(state.dirty_generation, 2);
-            assert_eq!(state.flushed_generation, 0);
-        }
-        assert!(
-            !dir.join(CACHE_FILE_NAME).exists(),
-            "cache should not be written synchronously for every result"
-        );
-
-        let loaded = wait_for_cached_snapshots(&dir, 2);
-        assert_eq!(loaded["claude"].display_name, "Claude");
-        assert_eq!(loaded["codex"].display_name, "Codex");
-
-        wait_for_cache_writer_idle();
-
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    #[serial]
-    fn flush_cache_persists_pending_write_synchronously() {
-        let dir = temp_dir("flush-cache");
-        std::fs::create_dir_all(&dir).unwrap();
-
-        init(&dir, vec!["claude".to_string()], "test".to_string());
-        cache_successful_output(&make_output("claude", "Claude"));
-        assert!(
-            !dir.join(CACHE_FILE_NAME).exists(),
-            "cache write should be pending before explicit flush"
-        );
-
-        flush_cache();
-
-        let loaded = load_cache(&dir);
-        assert_eq!(loaded.len(), 1);
-        assert_eq!(loaded["claude"].display_name, "Claude");
-
-        wait_for_cache_writer_idle();
-
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    #[serial]
-    fn failed_cache_write_stays_pending_for_retry() {
-        let dir = temp_dir("cache-write-retry");
-
-        init(&dir, vec!["claude".to_string()], "test".to_string());
-        {
-            let mut state = cache_state().lock().unwrap();
-            state
-                .snapshots
-                .insert("claude".to_string(), make_snapshot("claude", "Claude"));
-            state.dirty_generation = 1;
-            state.flushed_generation = 0;
-            state.flush_scheduled = true;
-        }
-
-        assert!(matches!(
-            flush_pending_cache_once(),
-            CacheFlushResult::Failed(_)
-        ));
-        {
-            let state = cache_state().lock().unwrap();
-            assert_eq!(state.dirty_generation, 1);
-            assert_eq!(state.flushed_generation, 0);
-            assert!(state.flush_scheduled);
-        }
-
-        std::fs::create_dir_all(&dir).unwrap();
-        assert_eq!(flush_pending_cache_once(), CacheFlushResult::Flushed);
-
-        let loaded = load_cache(&dir);
-        assert_eq!(loaded.len(), 1);
-        assert_eq!(loaded["claude"].display_name, "Claude");
-
-        assert_eq!(flush_pending_cache_once(), CacheFlushResult::Idle);
-        {
-            let state = cache_state().lock().unwrap();
-            assert_eq!(state.dirty_generation, 1);
-            assert_eq!(state.flushed_generation, 1);
-            assert!(!state.flush_scheduled);
-        }
-
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn snapshot_with_progress_line_round_trips() {
-        let snap = CachedPluginSnapshot {
-            provider_id: "claude".to_string(),
-            display_name: "Claude".to_string(),
-            plan: Some("Max 20x".to_string()),
-            lines: vec![crate::plugin_engine::runtime::MetricLine::Progress {
-                label: "Session".to_string(),
-                used: 42.0,
-                limit: 100.0,
-                format: ProgressFormat::Percent,
-                resets_at: Some("2026-03-26T12:00:00Z".to_string()),
-                period_duration_ms: Some(14400000),
-                color: None,
-            }],
-            fetched_at: "2026-03-26T08:00:00Z".to_string(),
-        };
-
-        let json = serde_json::to_string(&snap).unwrap();
-        let deserialized: CachedPluginSnapshot = serde_json::from_str(&json).unwrap();
-        assert_eq!(deserialized.provider_id, "claude");
-        assert_eq!(deserialized.lines.len(), 1);
-    }
-}
+#[path = "cache_tests.rs"]
+mod tests;

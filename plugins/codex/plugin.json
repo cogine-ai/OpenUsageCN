@@ -6,16 +6,20 @@
   "entry": "plugin.js",
   "icon": "icon.svg",
   "brandColor": "#74AA9C",
+  "statusPage": {
+    "apiUrl": "https://status.openai.com/api/v2/status.json",
+    "url": "https://status.openai.com/"
+  },
   "links": [
     { "label": "Status", "url": "https://status.openai.com/" },
     { "label": "Usage dashboard", "url": "https://chatgpt.com/codex/settings/usage" }
   ],
   "lines": [
-    { "type": "progress", "label": "5小时", "scope": "overview", "primaryOrder": 1 },
-    { "type": "progress", "label": "每周", "scope": "overview", "period": "weekly" },
-    { "type": "progress", "label": "Spark", "scope": "detail" },
-    { "type": "progress", "label": "Spark 每周", "scope": "detail" },
-    { "type": "progress", "label": "代码审查", "scope": "detail" },
+    { "type": "progress", "label": "5小时", "scope": "overview", "primaryOrder": 1, "limitResource": { "key": "session" } },
+    { "type": "progress", "label": "每周", "scope": "overview", "period": "weekly", "limitResource": { "key": "weekly" } },
+    { "type": "progress", "label": "Spark", "scope": "detail", "limitResource": { "key": "spark" } },
+    { "type": "progress", "label": "Spark 每周", "scope": "detail", "limitResource": { "key": "sparkWeekly" } },
+    { "type": "progress", "label": "代码审查", "scope": "detail", "limitResource": { "key": "codeReview" } },
     { "type": "text", "label": "手动重置", "scope": "detail" },
     { "type": "text", "label": "点数", "scope": "detail" },
     { "type": "text", "label": "今日", "scope": "detail" },

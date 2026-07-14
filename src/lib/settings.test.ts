@@ -5,6 +5,7 @@ import {
   DEFAULT_GLOBAL_SHORTCUT,
   DEFAULT_MENUBAR_ICON_STYLE,
   DEFAULT_MENUBAR_METRIC,
+  DEFAULT_PACE_NOTIFICATION_SETTINGS,
   DEFAULT_PLUGIN_SETTINGS,
   DEFAULT_RESET_TIMER_DISPLAY_MODE,
   DEFAULT_START_ON_LOGIN,
@@ -17,6 +18,7 @@ import {
   loadGlobalShortcut,
   loadMenubarIconStyle,
   loadMenubarMetric,
+  loadPaceNotificationSettings,
   loadPluginSettings,
   loadResetTimerDisplayMode,
   loadStartOnLogin,
@@ -30,6 +32,7 @@ import {
   saveGlobalShortcut,
   saveMenubarIconStyle,
   saveMenubarMetric,
+  savePaceNotificationSettings,
   savePluginSettings,
   saveResetTimerDisplayMode,
   saveStartOnLogin,
@@ -431,5 +434,27 @@ describe("settings", () => {
   it("falls back to default for invalid start on login value", async () => {
     storeState.set("startOnLogin", "invalid")
     await expect(loadStartOnLogin()).resolves.toBe(DEFAULT_START_ON_LOGIN)
+  })
+
+  it("loads disabled notification defaults and sanitizes stored toggles", async () => {
+    await expect(loadPaceNotificationSettings()).resolves.toEqual(
+      DEFAULT_PACE_NOTIFICATION_SETTINGS
+    )
+    storeState.set("paceNotifications", {
+      almostOut: true,
+      closeToLimit: "yes",
+      runningOut: false,
+    })
+    await expect(loadPaceNotificationSettings()).resolves.toEqual({
+      almostOut: true,
+      closeToLimit: false,
+      runningOut: false,
+    })
+  })
+
+  it("saves notification toggles", async () => {
+    const value = { almostOut: true, closeToLimit: true, runningOut: false }
+    await savePaceNotificationSettings(value)
+    await expect(loadPaceNotificationSettings()).resolves.toEqual(value)
   })
 })

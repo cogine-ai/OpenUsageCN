@@ -32,6 +32,7 @@ export function OverviewPage({
       {plugins.map((plugin, index) => (
         <ProviderCard
           key={plugin.meta.id}
+          providerId={plugin.meta.id}
           name={plugin.meta.name}
           plan={plugin.data?.plan}
           showSeparator={index < plugins.length - 1}
@@ -39,6 +40,7 @@ export function OverviewPage({
           error={plugin.error}
           lines={plugin.data?.lines ?? []}
           skeletonLines={plugin.meta.lines}
+          statusPage={plugin.meta.statusPage}
           lastManualRefreshAt={plugin.lastManualRefreshAt}
           lastUpdatedAt={plugin.lastUpdatedAt}
           onRetry={onRetryPlugin ? () => onRetryPlugin(plugin.meta.id) : undefined}

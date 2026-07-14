@@ -27,9 +27,9 @@
     ]
   },
   "lines": [
-    { "type": "progress", "label": "Credits", "scope": "overview", "primaryOrder": 1 },
+    { "type": "progress", "label": "Credits", "scope": "overview", "primaryOrder": 1, "limitResource": { "key": "credits" } },
     { "type": "text", "label": "Balance", "scope": "overview" },
-    { "type": "progress", "label": "Key Limit", "scope": "detail" },
+    { "type": "progress", "label": "Key Limit", "scope": "detail", "limitResource": { "key": "keyLimit" } },
     { "type": "text", "label": "Daily Spend", "scope": "detail" },
     { "type": "text", "label": "Weekly Spend", "scope": "detail" },
     { "type": "text", "label": "Monthly Spend", "scope": "detail" }

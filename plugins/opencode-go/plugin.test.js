@@ -81,9 +81,26 @@ describe("opencode-go plugin", () => {
       { label: "Docs", url: "https://opencode.ai/docs/go/" },
     ]);
     expect(manifest.lines).toEqual([
-      { type: "progress", label: "Session", scope: "overview", primaryOrder: 1 },
-      { type: "progress", label: "Weekly", scope: "overview", period: "weekly" },
-      { type: "progress", label: "Monthly", scope: "detail" },
+      {
+        type: "progress",
+        label: "Session",
+        scope: "overview",
+        primaryOrder: 1,
+        limitResource: { key: "session" },
+      },
+      {
+        type: "progress",
+        label: "Weekly",
+        scope: "overview",
+        period: "weekly",
+        limitResource: { key: "weekly" },
+      },
+      {
+        type: "progress",
+        label: "Monthly",
+        scope: "detail",
+        limitResource: { key: "monthly" },
+      },
     ]);
   });
 

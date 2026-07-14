@@ -9,9 +9,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { SkeletonLines } from "@/components/skeleton-lines"
 import { UsageSparkline } from "@/components/usage-sparkline"
 import { PluginError } from "@/components/plugin-error"
+import { ProviderStatusNotice } from "@/components/provider-status-notice"
 import { useNowTicker } from "@/hooks/use-now-ticker"
+import { useProviderStatus } from "@/hooks/use-provider-status"
 import { REFRESH_COOLDOWN_MS, type DisplayMode, type ResetTimerDisplayMode, type TimeFormatMode } from "@/lib/settings"
-import type { ManifestLine, MetricLine, PluginLink } from "@/lib/plugin-types"
+import type { ManifestLine, MetricLine, PluginLink, PluginStatusPage } from "@/lib/plugin-types"
 import { groupLinesByType } from "@/lib/group-lines-by-type"
 import { clamp01, formatCountNumber, formatFixedPrecisionNumber } from "@/lib/utils"
 import { calculateDeficit, calculatePaceStatus, type PaceStatus } from "@/lib/pace-status"
@@ -19,9 +21,11 @@ import { buildPaceDetailText, formatDeficitText, formatRunsOutText, getPaceStatu
 import { formatResetAbsoluteLabel, formatResetRelativeLabel, formatResetTooltipText } from "@/lib/reset-tooltip"
 
 interface ProviderCardProps {
+  providerId?: string
   name: string
   plan?: string
   links?: PluginLink[]
+  statusPage?: PluginStatusPage
   showSeparator?: boolean
   loading?: boolean
   error?: string | null
@@ -94,9 +98,11 @@ function formatRelativeTime(diffMs: number): string {
 }
 
 export function ProviderCard({
+  providerId,
   name,
   plan,
   links = [],
+  statusPage,
   showSeparator = true,
   loading = false,
   error = null,
@@ -111,6 +117,7 @@ export function ProviderCard({
   timeFormatMode = "auto",
   onResetTimerDisplayModeToggle,
 }: ProviderCardProps) {
+  const providerStatus = useProviderStatus(providerId ?? "", providerId ? statusPage : undefined)
   const cooldownRemainingMs = useMemo(() => {
     if (!lastManualRefreshAt) return 0
     const remaining = REFRESH_COOLDOWN_MS - (Date.now() - lastManualRefreshAt)
@@ -279,6 +286,10 @@ export function ProviderCard({
           </div>
         )}
         {error && !hasStaleData && <PluginError message={error} />}
+
+        {statusPage && (
+          <ProviderStatusNotice status={providerStatus} statusUrl={statusPage.url} />
+        )}
 
         {error && hasStaleData && (
           <Tooltip>

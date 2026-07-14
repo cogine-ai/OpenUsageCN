@@ -17,7 +17,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { GlobalShortcutSection } from "@/components/global-shortcut-section";
 import { LocalHttpApiSection } from "@/components/local-http-api-section";
+import { CliSection } from "@/components/cli-section";
 import { MenubarIconStylePreview } from "@/components/menubar-icon-style-preview";
+import { PaceNotificationSettingsSection } from "@/components/pace-notification-settings";
 import { SortablePluginItem, type SettingsPluginConfig } from "@/components/settings-plugin-item";
 import {
   AUTO_UPDATE_OPTIONS,
@@ -32,6 +34,7 @@ import {
   type GlobalShortcut,
   type MenubarIconStyle,
   type MenubarMetric,
+  type PaceNotificationSettings,
   type ResetTimerDisplayMode,
   type ThemeMode,
   type TimeFormatMode,
@@ -64,6 +67,8 @@ interface SettingsPageProps {
   onGlobalShortcutChange: (value: GlobalShortcut) => void;
   startOnLogin: boolean;
   onStartOnLoginChange: (value: boolean) => void;
+  paceNotifications: PaceNotificationSettings;
+  onPaceNotificationsChange: (value: PaceNotificationSettings) => Promise<void>;
 }
 
 export function SettingsPage({
@@ -90,6 +95,8 @@ export function SettingsPage({
   onGlobalShortcutChange,
   startOnLogin,
   onStartOnLoginChange,
+  paceNotifications,
+  onPaceNotificationsChange,
 }: SettingsPageProps) {
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -139,6 +146,10 @@ export function SettingsPage({
           </div>
         </div>
       </section>
+      <PaceNotificationSettingsSection
+        value={paceNotifications}
+        onChange={onPaceNotificationsChange}
+      />
       <section>
         <h3 className="text-lg font-semibold mb-0">用量显示</h3>
         <p className="text-sm text-muted-foreground mb-2">
@@ -327,6 +338,7 @@ export function SettingsPage({
         onGlobalShortcutChange={onGlobalShortcutChange}
       />
       <LocalHttpApiSection />
+      <CliSection />
       <section>
         <h3 className="text-lg font-semibold mb-0">登录时启动</h3>
         <p className="text-sm text-muted-foreground mb-2">

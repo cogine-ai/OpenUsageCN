@@ -1,12 +1,17 @@
 #[cfg(target_os = "macos")]
 mod app_nap;
+pub mod cli;
+mod cli_installer;
 mod config;
 mod local_http_api;
 mod log_path;
+mod notifications;
 mod panel;
 mod plugin_engine;
 mod provider_config;
+mod provider_status;
 mod tray;
+mod usage_reader;
 #[cfg(target_os = "macos")]
 mod webkit_config;
 
@@ -154,6 +159,7 @@ pub struct PluginMeta {
     pub brand_color: Option<String>,
     pub lines: Vec<ManifestLineDto>,
     pub links: Vec<PluginLinkDto>,
+    pub status_page: Option<PluginStatusPageDto>,
     pub config: Option<PluginConfigDto>,
     /// Ordered list of primary metric candidates (sorted by primaryOrder).
     /// Frontend picks the first one that exists in runtime data.
@@ -176,6 +182,12 @@ pub struct ManifestLineDto {
 #[serde(rename_all = "camelCase")]
 pub struct PluginLinkDto {
     pub label: String,
+    pub url: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginStatusPageDto {
     pub url: String,
 }
 
@@ -366,11 +378,13 @@ async fn start_probe_batch(
 
                 match result {
                     Ok(output) => {
-                        let has_error = output.lines.iter().any(|line| {
-                            matches!(line, plugin_engine::runtime::MetricLine::Badge { label, .. } if label == "Error")
-                        });
-                        if has_error {
+                        if let Some(message) = plugin_engine::runtime::probe_error_message(&output)
+                        {
                             log::warn!("probe {} completed with error", plugin_id);
+                            local_http_api::record_probe_error(
+                                &plugin_id,
+                                plugin_engine::host_api::redact_log_message(message),
+                            );
                         } else {
                             log::info!(
                                 "probe {} completed ok ({} lines)",
@@ -390,6 +404,10 @@ async fn start_probe_batch(
                     Err(_) => {
                         log::error!("probe {} panicked", plugin_id);
                         let output = plugin_engine::runtime::panic_probe_output(&plugin);
+                        local_http_api::record_probe_error(
+                            &plugin_id,
+                            "The plugin crashed during refresh.",
+                        );
                         let _ = handle.emit(
                             "probe:result",
                             ProbeResult {
@@ -621,6 +639,11 @@ fn list_plugins(state: tauri::State<'_, Mutex<AppState>>) -> Vec<PluginMeta> {
                         url: link.url.clone(),
                     })
                     .collect(),
+                status_page: plugin.manifest.status_page.as_ref().map(|status_page| {
+                    PluginStatusPageDto {
+                        url: status_page.url.clone(),
+                    }
+                }),
                 config: plugin.manifest.config.as_ref().map(plugin_config_dto),
                 primary_candidates,
                 weekly_candidate,
@@ -672,6 +695,13 @@ pub fn run() {
             delete_provider_config_field,
             get_log_path,
             get_local_http_api_status,
+            provider_status::get_provider_status,
+            cli_installer::get_cli_install_status,
+            cli_installer::set_cli_installed,
+            notifications::get_notification_permission,
+            notifications::request_notification_permission,
+            notifications::post_pace_notification,
+            notifications::open_notification_settings,
             update_global_shortcut
         ])
         .setup(|app| {
@@ -682,6 +712,7 @@ pub fn run() {
             {
                 app_nap::disable_app_nap();
                 webkit_config::disable_webview_suspension(app.handle());
+                notifications::register_delegate(app.handle().clone());
             }
 
             use tauri::Manager;
@@ -713,6 +744,7 @@ pub fn run() {
             let (_, plugins) = plugin_engine::initialize_plugins(&app_data_dir, &resource_dir);
             let known_plugin_ids: Vec<String> =
                 plugins.iter().map(|p| p.manifest.id.clone()).collect();
+            let limit_catalog = local_http_api::limits::catalog_from_plugins(&plugins);
             provider_config::register_existing_secrets(&plugins);
             app.manage(Mutex::new(AppState {
                 plugins,
@@ -720,7 +752,12 @@ pub fn run() {
                 app_version: app.package_info().version.to_string(),
             }));
 
-            local_http_api::init(&app_data_dir, known_plugin_ids, version.clone());
+            local_http_api::init_with_catalog(
+                &app_data_dir,
+                known_plugin_ids,
+                limit_catalog,
+                version.clone(),
+            );
             local_http_api::start_server();
 
             tray::create(app.handle())?;
@@ -766,7 +803,9 @@ pub fn run() {
         .expect("error while building tauri application")
         .run(|_, event| match event {
             tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => {
-                local_http_api::flush_cache();
+                if let Err(error) = local_http_api::flush_cache() {
+                    log::error!("failed to flush usage cache during shutdown: {error}");
+                }
             }
             _ => {}
         });

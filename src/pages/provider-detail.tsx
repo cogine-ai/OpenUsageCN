@@ -29,6 +29,7 @@ export function ProviderDetailPage({
 
   return (
     <ProviderCard
+      providerId={plugin.meta.id}
       name={plugin.meta.name}
       plan={plugin.data?.plan}
       links={plugin.meta.links}
@@ -37,6 +38,7 @@ export function ProviderDetailPage({
       error={plugin.error}
       lines={plugin.data?.lines ?? []}
       skeletonLines={plugin.meta.lines}
+      statusPage={plugin.meta.statusPage}
       lastManualRefreshAt={plugin.lastManualRefreshAt}
       lastUpdatedAt={plugin.lastUpdatedAt}
       onRetry={onRetry}

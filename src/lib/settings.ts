@@ -26,6 +26,12 @@ export type MenubarMetric = "default" | "weekly";
 
 export type GlobalShortcut = string | null;
 
+export type PaceNotificationSettings = {
+  almostOut: boolean;
+  closeToLimit: boolean;
+  runningOut: boolean;
+};
+
 const SETTINGS_STORE_PATH = "settings.json";
 const PLUGIN_SETTINGS_KEY = "plugins";
 const AUTO_UPDATE_SETTINGS_KEY = "autoUpdateInterval";
@@ -39,6 +45,7 @@ const LEGACY_TRAY_ICON_STYLE_KEY = "trayIconStyle";
 const LEGACY_TRAY_SHOW_PERCENTAGE_KEY = "trayShowPercentage";
 const GLOBAL_SHORTCUT_KEY = "globalShortcut";
 const START_ON_LOGIN_KEY = "startOnLogin";
+const PACE_NOTIFICATION_SETTINGS_KEY = "paceNotifications";
 
 export const DEFAULT_AUTO_UPDATE_INTERVAL: AutoUpdateIntervalMinutes = 15;
 export const DEFAULT_THEME_MODE: ThemeMode = "system";
@@ -49,6 +56,11 @@ export const DEFAULT_MENUBAR_ICON_STYLE: MenubarIconStyle = "provider";
 export const DEFAULT_MENUBAR_METRIC: MenubarMetric = "default";
 export const DEFAULT_GLOBAL_SHORTCUT: GlobalShortcut = null;
 export const DEFAULT_START_ON_LOGIN = false;
+export const DEFAULT_PACE_NOTIFICATION_SETTINGS: PaceNotificationSettings = {
+  almostOut: false,
+  closeToLimit: false,
+  runningOut: false,
+};
 
 const AUTO_UPDATE_INTERVALS: AutoUpdateIntervalMinutes[] = [5, 15, 30, 60];
 const THEME_MODES: ThemeMode[] = ["system", "light", "dark"];
@@ -379,5 +391,21 @@ export async function loadStartOnLogin(): Promise<boolean> {
 
 export async function saveStartOnLogin(value: boolean): Promise<void> {
   await store.set(START_ON_LOGIN_KEY, value);
+  await store.save();
+}
+
+export async function loadPaceNotificationSettings(): Promise<PaceNotificationSettings> {
+  const stored = await store.get<Partial<PaceNotificationSettings>>(PACE_NOTIFICATION_SETTINGS_KEY);
+  return {
+    almostOut: stored?.almostOut === true,
+    closeToLimit: stored?.closeToLimit === true,
+    runningOut: stored?.runningOut === true,
+  };
+}
+
+export async function savePaceNotificationSettings(
+  value: PaceNotificationSettings
+): Promise<void> {
+  await store.set(PACE_NOTIFICATION_SETTINGS_KEY, value);
   await store.save();
 }

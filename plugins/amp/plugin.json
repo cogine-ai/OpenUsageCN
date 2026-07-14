@@ -7,7 +7,7 @@
   "icon": "icon.svg",
   "brandColor": "#F34E3F",
   "lines": [
-    { "type": "progress", "label": "Free", "scope": "overview", "primaryOrder": 1 },
+    { "type": "progress", "label": "Free", "scope": "overview", "primaryOrder": 1, "limitResource": { "key": "free" } },
     { "type": "text", "label": "Bonus", "scope": "detail" },
     { "type": "text", "label": "Credits", "scope": "overview" }
   ]

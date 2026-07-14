@@ -4,45 +4,66 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 const {
   getEnabledPluginIdsMock,
   invokeMock,
+  isTauriMock,
   saveAutoUpdateIntervalMock,
   saveGlobalShortcutMock,
+  savePaceNotificationSettingsMock,
   saveStartOnLoginMock,
 } = vi.hoisted(() => ({
   getEnabledPluginIdsMock: vi.fn(),
   saveAutoUpdateIntervalMock: vi.fn(),
   saveGlobalShortcutMock: vi.fn(),
+  savePaceNotificationSettingsMock: vi.fn(),
   saveStartOnLoginMock: vi.fn(),
   invokeMock: vi.fn(),
+  isTauriMock: vi.fn(),
 }))
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: invokeMock,
+  isTauri: isTauriMock,
 }))
 
 vi.mock("@/lib/settings", () => ({
   getEnabledPluginIds: getEnabledPluginIdsMock,
   saveAutoUpdateInterval: saveAutoUpdateIntervalMock,
   saveGlobalShortcut: saveGlobalShortcutMock,
+  savePaceNotificationSettings: savePaceNotificationSettingsMock,
   saveStartOnLogin: saveStartOnLoginMock,
 }))
 
 import { useSettingsSystemActions } from "@/hooks/app/use-settings-system-actions"
 
 describe("useSettingsSystemActions", () => {
+  const notificationsOff = {
+    almostOut: false,
+    closeToLimit: false,
+    runningOut: false,
+  }
+
+  const notificationArgs = () => ({
+    paceNotifications: notificationsOff,
+    setPaceNotifications: vi.fn(),
+  })
+
   beforeEach(() => {
     getEnabledPluginIdsMock.mockReset()
     saveAutoUpdateIntervalMock.mockReset()
     saveGlobalShortcutMock.mockReset()
+    savePaceNotificationSettingsMock.mockReset()
     saveStartOnLoginMock.mockReset()
     invokeMock.mockReset()
+    isTauriMock.mockReset()
 
     getEnabledPluginIdsMock.mockImplementation((settings: { order: string[]; disabled: string[] }) =>
       settings.order.filter((id) => !settings.disabled.includes(id))
     )
     saveAutoUpdateIntervalMock.mockResolvedValue(undefined)
     saveGlobalShortcutMock.mockResolvedValue(undefined)
+    savePaceNotificationSettingsMock.mockResolvedValue(undefined)
     saveStartOnLoginMock.mockResolvedValue(undefined)
     invokeMock.mockResolvedValue(undefined)
+    isTauriMock.mockReturnValue(true)
   })
 
   it("updates auto refresh schedule when at least one plugin is enabled", () => {
@@ -58,6 +79,7 @@ describe("useSettingsSystemActions", () => {
         setGlobalShortcut: vi.fn(),
         setStartOnLogin: vi.fn(),
         applyStartOnLogin: vi.fn().mockResolvedValue(undefined),
+        ...notificationArgs(),
       })
     )
 
@@ -82,6 +104,7 @@ describe("useSettingsSystemActions", () => {
         setGlobalShortcut: vi.fn(),
         setStartOnLogin: vi.fn(),
         applyStartOnLogin: vi.fn().mockResolvedValue(undefined),
+        ...notificationArgs(),
       })
     )
 
@@ -105,6 +128,7 @@ describe("useSettingsSystemActions", () => {
         setGlobalShortcut,
         setStartOnLogin,
         applyStartOnLogin,
+        ...notificationArgs(),
       })
     )
 
@@ -146,6 +170,7 @@ describe("useSettingsSystemActions", () => {
         setGlobalShortcut: vi.fn(),
         setStartOnLogin: vi.fn(),
         applyStartOnLogin,
+        ...notificationArgs(),
       })
     )
 
@@ -163,6 +188,63 @@ describe("useSettingsSystemActions", () => {
       expect(errorSpy).toHaveBeenCalledWith("Failed to update start on login:", startOnLoginApplyError)
     })
 
+    errorSpy.mockRestore()
+  })
+
+  it("persists notification toggles", async () => {
+    const setPaceNotifications = vi.fn()
+    const enabled = { ...notificationsOff, closeToLimit: true }
+    const { result, rerender } = renderHook(
+      ({ paceNotifications }) =>
+        useSettingsSystemActions({
+          pluginSettings: null,
+          setAutoUpdateInterval: vi.fn(),
+          setAutoUpdateNextAt: vi.fn(),
+          setGlobalShortcut: vi.fn(),
+          setStartOnLogin: vi.fn(),
+          applyStartOnLogin: vi.fn().mockResolvedValue(undefined),
+          paceNotifications,
+          setPaceNotifications,
+        }),
+      { initialProps: { paceNotifications: notificationsOff } }
+    )
+
+    await act(() => result.current.handlePaceNotificationsChange(enabled))
+    expect(setPaceNotifications).toHaveBeenCalledWith(enabled)
+    expect(savePaceNotificationSettingsMock).toHaveBeenCalledWith(enabled)
+
+    rerender({ paceNotifications: enabled })
+    await act(() => result.current.handlePaceNotificationsChange({ ...enabled, almostOut: true }))
+  })
+
+  it("rolls back and rejects when notification settings cannot be saved", async () => {
+    const setPaceNotifications = vi.fn()
+    const saveError = new Error("notification save failed")
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    savePaceNotificationSettingsMock.mockRejectedValueOnce(saveError)
+    const enabled = { ...notificationsOff, closeToLimit: true }
+    const { result } = renderHook(() =>
+      useSettingsSystemActions({
+        pluginSettings: null,
+        setAutoUpdateInterval: vi.fn(),
+        setAutoUpdateNextAt: vi.fn(),
+        setGlobalShortcut: vi.fn(),
+        setStartOnLogin: vi.fn(),
+        applyStartOnLogin: vi.fn().mockResolvedValue(undefined),
+        paceNotifications: notificationsOff,
+        setPaceNotifications,
+      })
+    )
+
+    await expect(
+      act(() => result.current.handlePaceNotificationsChange(enabled))
+    ).rejects.toThrow(saveError)
+    expect(setPaceNotifications).toHaveBeenNthCalledWith(1, enabled)
+    expect(setPaceNotifications).toHaveBeenNthCalledWith(2, notificationsOff)
+    expect(errorSpy).toHaveBeenCalledWith(
+      "Failed to save pace notification settings:",
+      saveError
+    )
     errorSpy.mockRestore()
   })
 })

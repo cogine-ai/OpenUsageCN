@@ -41,6 +41,6 @@ You can also use an authenticated proxy URL:
 
 ## Scope
 
-This applies to provider and plugin HTTP requests that go through OpenUsageCN's built-in HTTP client.
+This applies to provider, plugin, and provider-status HTTP requests that go through OpenUsageCN's built-in HTTP client.
 
 It is not a general macOS system proxy setting and does not automatically proxy unrelated subprocess network traffic.

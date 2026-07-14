@@ -16,12 +16,41 @@ pub struct ManifestLine {
     /// Marks this line as the provider's recurring-period metric for the
     /// menubar metric preference. Currently only "weekly" is recognized.
     pub period: Option<String>,
+    /// Stable, presentation-free identifier exported by `/v1/limits`.
+    /// Lines without this metadata remain UI-only.
+    pub limit_resource: Option<LimitResourceManifest>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct LimitResourceManifest {
+    pub key: String,
+    #[serde(default)]
+    pub kind: LimitResourceKind,
+    /// Stable unit for count-formatted progress rows. Runtime suffixes are
+    /// presentation strings and must not leak into the limits contract.
+    pub count_unit: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum LimitResourceKind {
+    #[default]
+    Consumption,
+    Balance,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginLink {
     pub label: String,
+    pub url: String,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginStatusPage {
+    pub api_url: String,
     pub url: String,
 }
 
@@ -78,6 +107,8 @@ pub struct PluginManifest {
     #[serde(default)]
     pub links: Vec<PluginLink>,
     #[serde(default)]
+    pub status_page: Option<PluginStatusPage>,
+    #[serde(default)]
     pub config: Option<PluginConfig>,
 }
 
@@ -130,37 +161,10 @@ fn load_single_plugin(
     let manifest_text = std::fs::read_to_string(&manifest_path)?;
     let mut manifest: PluginManifest = serde_json::from_str(&manifest_text)?;
     manifest.links = sanitize_plugin_links(&manifest.id, std::mem::take(&mut manifest.links));
+    manifest.status_page = normalize_status_page(&manifest.id, manifest.status_page.take())?;
     validate_plugin_config(&manifest)?;
 
-    // Validate primary_order / period: only progress lines can carry them,
-    // and period currently only recognizes "weekly".
-    for line in manifest.lines.iter() {
-        if line.primary_order.is_some() && line.line_type != "progress" {
-            log::warn!(
-                "plugin {} line '{}' has primaryOrder but type is '{}'; will be ignored",
-                manifest.id,
-                line.label,
-                line.line_type
-            );
-        }
-        if let Some(period) = line.period.as_deref() {
-            if line.line_type != "progress" {
-                log::warn!(
-                    "plugin {} line '{}' has period but type is '{}'; will be ignored",
-                    manifest.id,
-                    line.label,
-                    line.line_type
-                );
-            } else if period != "weekly" {
-                log::warn!(
-                    "plugin {} line '{}' has unsupported period '{}'; only \"weekly\" is recognized",
-                    manifest.id,
-                    line.label,
-                    period
-                );
-            }
-        }
-    }
+    validate_manifest_lines(&manifest)?;
 
     if manifest.entry.trim().is_empty() {
         return Err("plugin entry field cannot be empty".into());
@@ -191,6 +195,85 @@ fn load_single_plugin(
         entry_script,
         icon_data_url,
     })
+}
+
+fn validate_manifest_lines(manifest: &PluginManifest) -> Result<(), Box<dyn std::error::Error>> {
+    let mut limit_resource_keys = HashSet::new();
+    for line in &manifest.lines {
+        if line.primary_order.is_some() && line.line_type != "progress" {
+            log::warn!(
+                "plugin {} line '{}' has primaryOrder but type is '{}'; will be ignored",
+                manifest.id,
+                line.label,
+                line.line_type
+            );
+        }
+        if let Some(period) = line.period.as_deref() {
+            if line.line_type != "progress" {
+                log::warn!(
+                    "plugin {} line '{}' has period but type is '{}'; will be ignored",
+                    manifest.id,
+                    line.label,
+                    line.line_type
+                );
+            } else if period != "weekly" {
+                log::warn!(
+                    "plugin {} line '{}' has unsupported period '{}'; only \"weekly\" is recognized",
+                    manifest.id,
+                    line.label,
+                    period
+                );
+            }
+        }
+        if let Some(resource) = line.limit_resource.as_ref() {
+            if line.line_type != "progress" {
+                return Err(format!(
+                    "plugin {} line '{}' has limitResource but type is '{}'",
+                    manifest.id, line.label, line.line_type
+                )
+                .into());
+            }
+            if !is_valid_limit_resource_key(&resource.key) {
+                return Err(format!(
+                    "plugin {} line '{}' has invalid limitResource key '{}'",
+                    manifest.id, line.label, resource.key
+                )
+                .into());
+            }
+            if !limit_resource_keys.insert(resource.key.clone()) {
+                return Err(format!(
+                    "plugin {} has duplicate limitResource key '{}'",
+                    manifest.id, resource.key
+                )
+                .into());
+            }
+            if resource.kind == LimitResourceKind::Balance {
+                return Err(format!(
+                    "plugin {} line '{}' cannot export a balance from a progress value",
+                    manifest.id, line.label
+                )
+                .into());
+            }
+            if resource
+                .count_unit
+                .as_deref()
+                .is_some_and(|unit| unit.trim().is_empty())
+            {
+                return Err(format!(
+                    "plugin {} line '{}' has an empty limitResource countUnit",
+                    manifest.id, line.label
+                )
+                .into());
+            }
+        }
+    }
+    Ok(())
+}
+
+fn is_valid_limit_resource_key(key: &str) -> bool {
+    let mut chars = key.chars();
+    matches!(chars.next(), Some(first) if first.is_ascii_lowercase())
+        && chars.all(|character| character.is_ascii_alphanumeric())
 }
 
 fn validate_plugin_config(manifest: &PluginManifest) -> Result<(), Box<dyn std::error::Error>> {
@@ -251,6 +334,36 @@ fn validate_plugin_config(manifest: &PluginManifest) -> Result<(), Box<dyn std::
     Ok(())
 }
 
+fn normalize_status_page(
+    plugin_id: &str,
+    status_page: Option<PluginStatusPage>,
+) -> Result<Option<PluginStatusPage>, Box<dyn std::error::Error>> {
+    let Some(status_page) = status_page else {
+        return Ok(None);
+    };
+
+    let status_page = PluginStatusPage {
+        api_url: status_page.api_url.trim().to_string(),
+        url: status_page.url.trim().to_string(),
+    };
+    for (field, value) in [
+        ("apiUrl", status_page.api_url.as_str()),
+        ("url", status_page.url.as_str()),
+    ] {
+        let parsed = reqwest::Url::parse(value).map_err(|error| {
+            format!("plugin {plugin_id} statusPage.{field} is invalid: {error}")
+        })?;
+        if parsed.scheme() != "https" || parsed.host_str().is_none() {
+            return Err(format!(
+                "plugin {plugin_id} statusPage.{field} must be an absolute HTTPS URL"
+            )
+            .into());
+        }
+    }
+
+    Ok(Some(status_page))
+}
+
 fn sanitize_plugin_links(plugin_id: &str, links: Vec<PluginLink>) -> Vec<PluginLink> {
     links
         .into_iter()
@@ -281,416 +394,9 @@ fn sanitize_plugin_links(plugin_id: &str, links: Vec<PluginLink>) -> Vec<PluginL
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
+#[path = "manifest_tests.rs"]
+mod tests;
 
-    fn parse_manifest(json: &str) -> PluginManifest {
-        serde_json::from_str::<PluginManifest>(json).expect("manifest parse failed")
-    }
-
-    #[test]
-    fn primary_order_is_none_by_default() {
-        let manifest = parse_manifest(
-            r#"
-            {
-              "schemaVersion": 1,
-              "id": "x",
-              "name": "X",
-              "version": "0.0.1",
-              "entry": "plugin.js",
-              "icon": "icon.svg",
-              "brandColor": null,
-              "lines": [
-                { "type": "progress", "label": "A", "scope": "overview" }
-              ]
-            }
-            "#,
-        );
-        assert_eq!(manifest.lines.len(), 1);
-        assert!(manifest.lines[0].primary_order.is_none());
-        assert!(manifest.links.is_empty());
-    }
-
-    #[test]
-    fn primary_order_parsed_correctly() {
-        let manifest = parse_manifest(
-            r#"
-            {
-              "schemaVersion": 1,
-              "id": "x",
-              "name": "X",
-              "version": "0.0.1",
-              "entry": "plugin.js",
-              "icon": "icon.svg",
-              "brandColor": null,
-              "lines": [
-                { "type": "progress", "label": "A", "scope": "overview", "primaryOrder": 1 },
-                { "type": "progress", "label": "B", "scope": "overview", "primaryOrder": 2 },
-                { "type": "progress", "label": "C", "scope": "overview" }
-              ]
-            }
-            "#,
-        );
-
-        assert_eq!(manifest.lines[0].primary_order, Some(1));
-        assert_eq!(manifest.lines[1].primary_order, Some(2));
-        assert!(manifest.lines[2].primary_order.is_none());
-    }
-
-    #[test]
-    fn primary_candidates_sorted_by_order() {
-        let manifest = parse_manifest(
-            r#"
-            {
-              "schemaVersion": 1,
-              "id": "x",
-              "name": "X",
-              "version": "0.0.1",
-              "entry": "plugin.js",
-              "icon": "icon.svg",
-              "brandColor": null,
-              "lines": [
-                { "type": "progress", "label": "Third", "scope": "overview", "primaryOrder": 3 },
-                { "type": "progress", "label": "First", "scope": "overview", "primaryOrder": 1 },
-                { "type": "progress", "label": "Second", "scope": "overview", "primaryOrder": 2 },
-                { "type": "progress", "label": "None", "scope": "overview" }
-              ]
-            }
-            "#,
-        );
-
-        // Extract candidates sorted by primary_order (same logic as lib.rs)
-        let mut candidates: Vec<_> = manifest
-            .lines
-            .iter()
-            .filter(|l| l.line_type == "progress" && l.primary_order.is_some())
-            .collect();
-        candidates.sort_by_key(|l| l.primary_order.unwrap());
-        let labels: Vec<_> = candidates.iter().map(|l| l.label.as_str()).collect();
-
-        assert_eq!(labels, vec!["First", "Second", "Third"]);
-    }
-
-    #[test]
-    fn period_parsed_and_weekly_candidate_resolved() {
-        let manifest = parse_manifest(
-            r#"
-            {
-              "schemaVersion": 1,
-              "id": "x",
-              "name": "X",
-              "version": "0.0.1",
-              "entry": "plugin.js",
-              "icon": "icon.svg",
-              "brandColor": null,
-              "lines": [
-                { "type": "progress", "label": "Session", "scope": "overview", "primaryOrder": 1 },
-                { "type": "progress", "label": "Weekly", "scope": "overview", "period": "weekly" }
-              ]
-            }
-            "#,
-        );
-
-        assert!(manifest.lines[0].period.is_none());
-        assert_eq!(manifest.lines[1].period.as_deref(), Some("weekly"));
-
-        // Exercise the shipped resolver used by list_plugins.
-        assert_eq!(weekly_candidate(&manifest.lines), Some("Weekly"));
-    }
-
-    #[test]
-    fn weekly_candidate_absent_when_no_period() {
-        let manifest = parse_manifest(
-            r#"
-            {
-              "schemaVersion": 1,
-              "id": "x",
-              "name": "X",
-              "version": "0.0.1",
-              "entry": "plugin.js",
-              "icon": "icon.svg",
-              "brandColor": null,
-              "lines": [
-                { "type": "progress", "label": "Session", "scope": "overview", "primaryOrder": 1 }
-              ]
-            }
-            "#,
-        );
-
-        assert_eq!(weekly_candidate(&manifest.lines), None);
-    }
-
-    #[test]
-    fn weekly_candidate_first_match_wins() {
-        // Precedence is intentionally first-match; lock it in so it can't drift silently.
-        let manifest = parse_manifest(
-            r#"
-            {
-              "schemaVersion": 1,
-              "id": "x",
-              "name": "X",
-              "version": "0.0.1",
-              "entry": "plugin.js",
-              "icon": "icon.svg",
-              "brandColor": null,
-              "lines": [
-                { "type": "progress", "label": "Weekly A", "scope": "overview", "period": "weekly" },
-                { "type": "progress", "label": "Weekly B", "scope": "overview", "period": "weekly" }
-              ]
-            }
-            "#,
-        );
-
-        assert_eq!(weekly_candidate(&manifest.lines), Some("Weekly A"));
-    }
-
-    #[test]
-    fn weekly_candidate_ignores_unsupported_period() {
-        // A typo'd period (e.g. "week") is not recognized; the provider keeps its primary metric.
-        let manifest = parse_manifest(
-            r#"
-            {
-              "schemaVersion": 1,
-              "id": "x",
-              "name": "X",
-              "version": "0.0.1",
-              "entry": "plugin.js",
-              "icon": "icon.svg",
-              "brandColor": null,
-              "lines": [
-                { "type": "progress", "label": "Weekly", "scope": "overview", "period": "week" }
-              ]
-            }
-            "#,
-        );
-
-        assert_eq!(weekly_candidate(&manifest.lines), None);
-    }
-
-    #[test]
-    fn links_are_parsed_when_present() {
-        let manifest = parse_manifest(
-            r#"
-            {
-              "schemaVersion": 1,
-              "id": "x",
-              "name": "X",
-              "version": "0.0.1",
-              "entry": "plugin.js",
-              "icon": "icon.svg",
-              "brandColor": null,
-              "links": [
-                { "label": "Status", "url": "https://status.example.com" },
-                { "label": "Billing", "url": "https://example.com/billing" }
-              ],
-              "lines": [
-                { "type": "progress", "label": "A", "scope": "overview", "primaryOrder": 1 }
-              ]
-            }
-            "#,
-        );
-
-        assert_eq!(manifest.links.len(), 2);
-        assert_eq!(manifest.links[0].label, "Status");
-        assert_eq!(manifest.links[1].url, "https://example.com/billing");
-    }
-
-    #[test]
-    fn sanitize_plugin_links_filters_invalid_entries() {
-        let links = vec![
-            PluginLink {
-                label: " Status ".to_string(),
-                url: " https://status.example.com ".to_string(),
-            },
-            PluginLink {
-                label: " ".to_string(),
-                url: "https://example.com".to_string(),
-            },
-            PluginLink {
-                label: "Docs".to_string(),
-                url: "ftp://example.com".to_string(),
-            },
-        ];
-
-        let sanitized = sanitize_plugin_links("x", links);
-        assert_eq!(sanitized.len(), 1);
-        assert_eq!(sanitized[0].label, "Status");
-        assert_eq!(sanitized[0].url, "https://status.example.com");
-    }
-
-    fn manifest_with_config(config_json: &str) -> PluginManifest {
-        parse_manifest(&format!(
-            r#"
-            {{
-              "schemaVersion": 1,
-              "id": "test-plugin",
-              "name": "Test",
-              "version": "0.0.1",
-              "entry": "plugin.js",
-              "icon": "icon.svg",
-              "brandColor": null,
-              "config": {config_json},
-              "lines": [
-                {{ "type": "progress", "label": "A", "scope": "overview" }}
-              ]
-            }}
-            "#
-        ))
-    }
-
-    #[test]
-    fn validate_plugin_config_accepts_well_formed_fields() {
-        let manifest = manifest_with_config(
-            r#"
-            {
-              "fields": [
-                {
-                  "id": "apiKey",
-                  "type": "secret",
-                  "label": "API Key"
-                },
-                {
-                  "id": "region",
-                  "type": "select",
-                  "label": "Region",
-                  "options": [
-                    { "value": "cn", "label": "CN" },
-                    { "value": "global", "label": "Global" }
-                  ]
-                }
-              ]
-            }
-            "#,
-        );
-
-        validate_plugin_config(&manifest).expect("valid config should pass");
-    }
-
-    #[test]
-    fn validate_plugin_config_rejects_empty_field_id() {
-        let manifest = manifest_with_config(
-            r#"
-            {
-              "fields": [
-                { "id": "  ", "type": "text", "label": "Name" }
-              ]
-            }
-            "#,
-        );
-
-        let error = validate_plugin_config(&manifest).expect_err("empty id should fail");
-        assert!(error.to_string().contains("config field id cannot be empty"));
-    }
-
-    #[test]
-    fn validate_plugin_config_rejects_duplicate_field_ids() {
-        let manifest = manifest_with_config(
-            r#"
-            {
-              "fields": [
-                { "id": "apiKey", "type": "secret", "label": "Primary" },
-                { "id": "apiKey", "type": "secret", "label": "Duplicate" }
-              ]
-            }
-            "#,
-        );
-
-        let error = validate_plugin_config(&manifest).expect_err("duplicate id should fail");
-        assert!(error.to_string().contains("is duplicated"));
-    }
-
-    #[test]
-    fn validate_plugin_config_rejects_empty_label() {
-        let manifest = manifest_with_config(
-            r#"
-            {
-              "fields": [
-                { "id": "apiKey", "type": "secret", "label": "  " }
-              ]
-            }
-            "#,
-        );
-
-        let error = validate_plugin_config(&manifest).expect_err("empty label should fail");
-        assert!(error.to_string().contains("label cannot be empty"));
-    }
-
-    #[test]
-    fn validate_plugin_config_rejects_select_without_options() {
-        let manifest = manifest_with_config(
-            r#"
-            {
-              "fields": [
-                { "id": "region", "type": "select", "label": "Region", "options": [] }
-              ]
-            }
-            "#,
-        );
-
-        let error = validate_plugin_config(&manifest).expect_err("empty options should fail");
-        assert!(error.to_string().contains("needs options"));
-    }
-
-    #[test]
-    fn validate_plugin_config_rejects_invalid_select_options() {
-        let manifest = manifest_with_config(
-            r#"
-            {
-              "fields": [
-                {
-                  "id": "region",
-                  "type": "select",
-                  "label": "Region",
-                  "options": [
-                    { "value": " ", "label": "Blank" },
-                    { "value": "cn", "label": "CN" }
-                  ]
-                }
-              ]
-            }
-            "#,
-        );
-        let empty_value = validate_plugin_config(&manifest).expect_err("empty option value");
-        assert!(empty_value.to_string().contains("empty option value"));
-
-        let manifest = manifest_with_config(
-            r#"
-            {
-              "fields": [
-                {
-                  "id": "region",
-                  "type": "select",
-                  "label": "Region",
-                  "options": [
-                    { "value": "cn", "label": " " },
-                    { "value": "global", "label": "Global" }
-                  ]
-                }
-              ]
-            }
-            "#,
-        );
-        let empty_label = validate_plugin_config(&manifest).expect_err("empty option label");
-        assert!(empty_label.to_string().contains("label cannot be empty"));
-
-        let manifest = manifest_with_config(
-            r#"
-            {
-              "fields": [
-                {
-                  "id": "region",
-                  "type": "select",
-                  "label": "Region",
-                  "options": [
-                    { "value": "cn", "label": "CN" },
-                    { "value": "cn", "label": "Duplicate" }
-                  ]
-                }
-              ]
-            }
-            "#,
-        );
-        let duplicate = validate_plugin_config(&manifest).expect_err("duplicate option");
-        assert!(duplicate.to_string().contains("is duplicated"));
-    }
-}
+#[cfg(test)]
+#[path = "manifest_limits_tests.rs"]
+mod limit_tests;

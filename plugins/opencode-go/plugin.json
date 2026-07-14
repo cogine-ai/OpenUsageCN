@@ -21,18 +21,21 @@
       "type": "progress",
       "label": "Session",
       "scope": "overview",
-      "primaryOrder": 1
+      "primaryOrder": 1,
+      "limitResource": { "key": "session" }
     },
     {
       "type": "progress",
       "label": "Weekly",
       "scope": "overview",
-      "period": "weekly"
+      "period": "weekly",
+      "limitResource": { "key": "weekly" }
     },
     {
       "type": "progress",
       "label": "Monthly",
-      "scope": "detail"
+      "scope": "detail",
+      "limitResource": { "key": "monthly" }
     }
   ]
 }

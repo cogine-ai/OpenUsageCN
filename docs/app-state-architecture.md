@@ -10,6 +10,9 @@
 - `settingsPlugins` is computed by `useSettingsPluginList`.
 - `autoUpdateNextAt` is runtime scheduling state from `useProbe`.
 - Automatic refresh skips providers that are still loading or inside the short failure backoff. Manual refresh still retries immediately.
+- Reset-boundary refreshes are one-shot probes for providers whose reported quota reset arrives before the next automatic refresh.
+- `useProviderStatus` keeps the latest successful status-page result per supported provider; failed checks are logged without being shown as provider incidents.
+- `usePaceNotifications` keeps in-memory per-metric notification state. A provider is primed on its first successful data, removed when disabled, and re-armed after recovery or a real reset window.
 - `selectedPlugin` is computed by `useAppPluginViews`.
 
 ## Main data flow
@@ -18,6 +21,12 @@
 3. Derived hooks recompute view models from source state.
 4. `App.tsx` passes derived values directly to `AppShell` and `AppContent`.
 5. `AppShell` and `AppContent` render from those direct props and source stores.
+
+## Shared usage readers
+
+- The menu-bar app and one-shot CLI both run the same plugin probes and read the same provider settings.
+- Plugin installation and successful snapshot writes use cross-process locks, so simultaneous app and CLI runs do not read partial plugin updates or overwrite newer provider data.
+- `/v1/limits` projects that cache into stable numeric resources. The CLI can also refresh stale data without starting the Tauri UI or local HTTP server.
 
 ## Guardrails
 - Keep source-of-truth state in dedicated stores (`app-ui-store`, `app-plugin-store`, `app-preferences-store`).
