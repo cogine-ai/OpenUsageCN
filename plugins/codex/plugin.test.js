@@ -1800,7 +1800,7 @@ describe("codex plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("Usage request failed after refresh")
   })
 
-  it("surfaces additional_rate_limits as Spark lines", async () => {
+  it("keeps stable Spark resource keys when the remote limit name changes", async () => {
     const ctx = makeCtx()
     ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
       tokens: { access_token: "token" },
@@ -1820,7 +1820,7 @@ describe("codex plugin", () => {
         },
         additional_rate_limits: [
           {
-            limit_name: "GPT-5.3-Codex-Spark",
+            limit_name: "GPT-5.3-Codex-Spark Plus",
             metered_feature: "codex_bengalfox",
             rate_limit: {
               primary_window: {
@@ -1844,17 +1844,19 @@ describe("codex plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    const spark = result.lines.find((l) => l.label === "Spark")
+    const spark = result.lines.find((l) => l.label === "Spark Plus")
     expect(spark).toBeTruthy()
     expect(spark.used).toBe(25)
     expect(spark.limit).toBe(100)
+    expect(spark.limitResourceKey).toBe("spark")
     expect(spark.periodDurationMs).toBe(18000000)
     expect(spark.resetsAt).toBe(new Date((nowSec + 3600) * 1000).toISOString())
 
-    const sparkWeekly = result.lines.find((l) => l.label === "Spark 每周")
+    const sparkWeekly = result.lines.find((l) => l.label === "Spark Plus 每周")
     expect(sparkWeekly).toBeTruthy()
     expect(sparkWeekly.used).toBe(40)
     expect(sparkWeekly.limit).toBe(100)
+    expect(sparkWeekly.limitResourceKey).toBe("sparkWeekly")
     expect(sparkWeekly.periodDurationMs).toBe(604800000)
     expect(sparkWeekly.resetsAt).toBe(new Date((nowSec + 86400) * 1000).toISOString())
 

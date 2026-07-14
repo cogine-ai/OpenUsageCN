@@ -186,6 +186,40 @@ fn cache_save_merges_providers_without_replacing_a_newer_snapshot() {
 }
 
 #[test]
+fn cache_merge_rejects_an_invalid_incoming_timestamp() {
+    let current = make_snapshot("provider-a", "Current");
+    let mut incoming = make_snapshot("provider-a", "Invalid Incoming");
+    incoming.fetched_at = "not-a-timestamp".to_string();
+
+    assert!(!snapshot_is_at_least_as_new(&incoming, &current));
+}
+
+#[test]
+fn cache_merge_does_not_let_a_future_stored_timestamp_block_current_data() {
+    let mut current = make_snapshot("provider-a", "Future Stored");
+    current.fetched_at = (time::OffsetDateTime::now_utc() + time::Duration::hours(1))
+        .format(&time::format_description::well_known::Rfc3339)
+        .unwrap();
+    let mut incoming = make_snapshot("provider-a", "Current Incoming");
+    incoming.fetched_at = time::OffsetDateTime::now_utc()
+        .format(&time::format_description::well_known::Rfc3339)
+        .unwrap();
+
+    assert!(snapshot_is_at_least_as_new(&incoming, &current));
+}
+
+#[test]
+fn cache_merge_rejects_an_incoming_timestamp_far_in_the_future() {
+    let current = make_snapshot("provider-a", "Current");
+    let mut incoming = make_snapshot("provider-a", "Future Incoming");
+    incoming.fetched_at = (time::OffsetDateTime::now_utc() + time::Duration::hours(1))
+        .format(&time::format_description::well_known::Rfc3339)
+        .unwrap();
+
+    assert!(!snapshot_is_at_least_as_new(&incoming, &current));
+}
+
+#[test]
 fn load_cache_returns_empty_on_missing_file() {
     let dir = temp_dir("no-cache");
     let loaded = load_cache(&dir);
@@ -366,6 +400,7 @@ fn snapshot_with_progress_line_round_trips() {
         plan: Some("Max 20x".to_string()),
         lines: vec![crate::plugin_engine::runtime::MetricLine::Progress {
             label: "Session".to_string(),
+            limit_resource_key: None,
             used: 42.0,
             limit: 100.0,
             format: ProgressFormat::Percent,

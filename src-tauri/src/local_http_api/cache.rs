@@ -230,7 +230,23 @@ fn snapshot_is_at_least_as_new(
     let parse = |value: &str| {
         time::OffsetDateTime::parse(value, &time::format_description::well_known::Rfc3339)
     };
+    let now = time::OffsetDateTime::now_utc();
+    let latest_credible_timestamp = now + time::Duration::minutes(5);
     match (parse(&incoming.fetched_at), parse(&current.fetched_at)) {
+        (Ok(incoming_at), _) if incoming_at > latest_credible_timestamp => {
+            log::warn!(
+                "incoming usage cache timestamp is unexpectedly in the future (provider={})",
+                incoming.provider_id
+            );
+            false
+        }
+        (Ok(_), Ok(current_at)) if current_at > latest_credible_timestamp => {
+            log::warn!(
+                "stored usage cache timestamp is unexpectedly in the future (provider={})",
+                current.provider_id
+            );
+            true
+        }
         (Ok(incoming_at), Ok(current_at)) => incoming_at >= current_at,
         (Err(error), _) => {
             log::warn!(
@@ -238,7 +254,7 @@ fn snapshot_is_at_least_as_new(
                 incoming.provider_id,
                 error
             );
-            true
+            false
         }
         (_, Err(error)) => {
             log::warn!(

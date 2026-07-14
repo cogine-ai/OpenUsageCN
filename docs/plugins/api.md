@@ -413,6 +413,7 @@ ctx.line.progress({
     kind: "percent" | "dollars" | "count",
     suffix?: string                 // Required when kind="count" (e.g. "credits")
   },
+  limitResourceKey?: string,        // Stable manifest key when the UI label is dynamic
   resetsAt?: string | null,         // Optional: ISO timestamp for when usage resets
   periodDurationMs?: number,        // Optional: period length in ms for pace tracking
   color?: string,                   // Optional: hex color for progress bar
@@ -425,7 +426,7 @@ Notes:
 - For `format.kind: "percent"`, `limit` must be `100`.
 - Prefer setting `resetsAt` (via `ctx.util.toIso(...)`) instead of putting reset info in other lines.
 - `periodDurationMs`: when provided with `resetsAt`, enables pace visuals (Dot Pacing status + in-bar pace marker) and projected-rate messaging.
-- To expose this value through `/v1/limits`, add a stable `limitResource` declaration to the matching progress line in `plugin.json`. Do not expose formatted text by parsing it.
+- To expose this value through `/v1/limits`, add a stable `limitResource` declaration to the matching progress line in `plugin.json`. If its runtime label can change, also pass the same key as `limitResourceKey`. Do not expose formatted text by parsing it.
 
 **Example:**
 

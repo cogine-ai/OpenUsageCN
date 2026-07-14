@@ -1,5 +1,5 @@
 use crate::usage_reader::{LimitsReadError, read_limits_once};
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 
 const EXIT_OK: i32 = 0;
 const EXIT_INVALID_ARGUMENTS: i32 = 2;
@@ -13,19 +13,23 @@ struct CliArguments {
 }
 
 pub fn should_run_from_env() -> bool {
-    let invoked_as_openusage = std::env::args_os()
-        .next()
-        .as_deref()
-        .and_then(|argument| std::path::Path::new(argument).file_name())
-        == Some(OsStr::new("openusage"));
-    invoked_as_openusage || std::env::args().nth(1).as_deref() == Some("--openusage-cli")
+    let mut arguments = std::env::args_os();
+    should_run(arguments.next().as_deref(), arguments.next().as_deref())
 }
 
 pub fn run_from_env() -> i32 {
-    let mut args: Vec<String> = std::env::args().skip(1).collect();
-    if args.first().map(String::as_str) == Some("--openusage-cli") {
-        args.remove(0);
+    let mut raw_args: Vec<OsString> = std::env::args_os().skip(1).collect();
+    if raw_args.first().map(OsString::as_os_str) == Some(OsStr::new("--openusage-cli")) {
+        raw_args.remove(0);
     }
+    let args = match utf8_arguments(raw_args) {
+        Ok(args) => args,
+        Err(message) => {
+            eprintln!("openusage: {message}");
+            eprintln!("Usage: openusage [provider] [--force]");
+            return EXIT_INVALID_ARGUMENTS;
+        }
+    };
     if args
         .iter()
         .any(|argument| argument == "--help" || argument == "-h")
@@ -74,6 +78,24 @@ pub fn run_from_env() -> i32 {
     println!("{json}");
 
     exit_code_for_result(read.refresh_failed, read.missing_snapshot)
+}
+
+fn should_run(program: Option<&OsStr>, first_argument: Option<&OsStr>) -> bool {
+    let invoked_as_openusage = program
+        .and_then(|argument| std::path::Path::new(argument).file_name())
+        == Some(OsStr::new("openusage"));
+    invoked_as_openusage || first_argument == Some(OsStr::new("--openusage-cli"))
+}
+
+fn utf8_arguments(arguments: impl IntoIterator<Item = OsString>) -> Result<Vec<String>, String> {
+    arguments
+        .into_iter()
+        .map(|argument| {
+            argument
+                .into_string()
+                .map_err(|_| "arguments must be valid UTF-8".to_string())
+        })
+        .collect()
 }
 
 fn exit_code_for_result(refresh_failed: bool, missing_snapshot: bool) -> i32 {
@@ -138,5 +160,26 @@ mod tests {
         assert_eq!(exit_code_for_result(true, true), EXIT_READ_FAILED);
         assert_eq!(exit_code_for_result(false, true), EXIT_NO_SNAPSHOT);
         assert_eq!(exit_code_for_result(false, false), EXIT_OK);
+    }
+
+    #[test]
+    fn detects_cli_invocation_without_decoding_arguments() {
+        assert!(should_run(
+            Some(OsStr::new("/usr/local/bin/openusage")),
+            None
+        ));
+        assert!(should_run(
+            Some(OsStr::new("openusagecn")),
+            Some(OsStr::new("--openusage-cli"))
+        ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_non_utf8_arguments_as_invalid_input() {
+        use std::os::unix::ffi::OsStringExt;
+
+        let result = utf8_arguments([OsString::from_vec(vec![0xff])]);
+        assert_eq!(result, Err("arguments must be valid UTF-8".to_string()));
     }
 }

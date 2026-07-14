@@ -64,6 +64,21 @@ describe("PaceNotificationSettingsSection", () => {
     expect(invokeMock).not.toHaveBeenCalledWith("request_notification_permission")
   })
 
+  it("treats unavailable development notifications as a capability state, not an error", async () => {
+    invokeMock.mockResolvedValue("unavailable")
+    render(
+      <PaceNotificationSettingsSection
+        value={{ almostOut: false, closeToLimit: false, runningOut: false }}
+        onChange={vi.fn().mockResolvedValue(undefined)}
+      />
+    )
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("get_notification_permission")
+    })
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  })
+
   it("shows a friendly error when permission cannot be requested", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
     invokeMock.mockImplementation((command: string) =>

@@ -372,28 +372,27 @@ describe("useProbeAutoUpdate", () => {
     expect(startBatch).toHaveBeenCalledTimes(1)
   })
 
-  it("marks a reset boundary handled without conflicting with loading or failure backoff", async () => {
+  it("retries a reset boundary skipped while its provider is loading", async () => {
     vi.useFakeTimers()
     vi.setSystemTime(10_000)
 
     const resetAt = 20_000
     const loadingState = pluginStateWithReset("loading", resetAt)
     loadingState.loading = true
-    const failedState = pluginStateWithReset("failed", resetAt)
-    failedState.error = "Auth expired"
-    failedState.lastErrorAt = Date.now()
-    const pluginStates = { loading: loadingState, failed: failedState }
-    const startBatch = vi.fn()
+    const readyState = pluginStateWithReset("ready", resetAt)
+    const pluginStates = { loading: loadingState, ready: readyState }
+    const startBatch = vi.fn().mockResolvedValue([])
+    let loading = true
 
     renderHook(() =>
       useProbeAutoUpdate({
-        pluginSettings: { order: ["loading", "failed"], disabled: [] },
+        pluginSettings: { order: ["loading", "ready"], disabled: [] },
         autoUpdateInterval: 5,
         pluginStates,
         pluginStatesRef: { current: pluginStates },
         setLoadingForPlugins: vi.fn(),
         setErrorForPlugins: vi.fn(),
-        isPluginLoading: vi.fn((id) => id === "loading"),
+        isPluginLoading: vi.fn((id) => id === "loading" && loading),
         startBatch,
       })
     )
@@ -404,12 +403,100 @@ describe("useProbeAutoUpdate", () => {
       )
     })
 
-    expect(startBatch).not.toHaveBeenCalled()
+    expect(startBatch).toHaveBeenCalledTimes(1)
+    expect(startBatch).toHaveBeenLastCalledWith(["ready"])
+
+    loading = false
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(60_000)
+      await vi.advanceTimersByTimeAsync(RESET_BOUNDARY_REFRESH_MIN_DELAY_MS)
+    })
+
+    expect(startBatch).toHaveBeenCalledTimes(2)
+    expect(startBatch).toHaveBeenLastCalledWith(["loading"])
+  })
+
+  it("re-arms when every boundary candidate is temporarily ineligible", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(10_000)
+
+    const resetAt = 20_000
+    const loadingState = pluginStateWithReset("loading", resetAt)
+    loadingState.loading = true
+    const failedState = pluginStateWithReset("failed", resetAt)
+    failedState.error = "Auth expired"
+    failedState.lastErrorAt = resetAt + RESET_BOUNDARY_REFRESH_GRACE_MS
+      - AUTO_UPDATE_FAILURE_BACKOFF_MS + 1
+    const pluginStates = { loading: loadingState, failed: failedState }
+    const startBatch = vi.fn().mockResolvedValue([])
+    let loading = true
+
+    renderHook(() =>
+      useProbeAutoUpdate({
+        pluginSettings: { order: ["loading", "failed"], disabled: [] },
+        autoUpdateInterval: 5,
+        pluginStates,
+        pluginStatesRef: { current: pluginStates },
+        setLoadingForPlugins: vi.fn(),
+        setErrorForPlugins: vi.fn(),
+        isPluginLoading: vi.fn((id) => id === "loading" && loading),
+        startBatch,
+      })
+    )
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(
+        resetAt + RESET_BOUNDARY_REFRESH_GRACE_MS - Date.now()
+      )
     })
     expect(startBatch).not.toHaveBeenCalled()
+
+    loading = false
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(RESET_BOUNDARY_REFRESH_MIN_DELAY_MS)
+    })
+
+    expect(startBatch).toHaveBeenCalledTimes(1)
+    expect(startBatch).toHaveBeenCalledWith(["loading", "failed"])
+  })
+
+  it("does not postpone an overdue boundary when unrelated plugin state changes", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(100_000)
+
+    const codex = pluginStateWithReset("codex", 20_000)
+    const pluginStatesRef = { current: { codex } as Record<string, PluginState> }
+    const startBatch = vi.fn().mockResolvedValue(["codex"])
+    const common = {
+      pluginSettings: { order: ["codex"], disabled: [] },
+      autoUpdateInterval: 5 as const,
+      pluginStatesRef,
+      setLoadingForPlugins: vi.fn(),
+      setErrorForPlugins: vi.fn(),
+      isPluginLoading: vi.fn(() => false),
+      startBatch,
+    }
+    const { rerender } = renderHook(
+      ({ pluginStates }: { pluginStates: Record<string, PluginState> }) =>
+        useProbeAutoUpdate({ ...common, pluginStates }),
+      { initialProps: { pluginStates: { codex } } }
+    )
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000)
+    })
+
+    const unrelated = pluginStateWithReset("unrelated", 10 * 60_000)
+    unrelated.loading = true
+    pluginStatesRef.current = { codex, unrelated }
+    rerender({ pluginStates: { codex, unrelated } })
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000)
+    })
+
+    expect(startBatch).toHaveBeenCalledTimes(1)
+    expect(startBatch).toHaveBeenCalledWith(["codex"])
   })
 
   it("waits briefly before refreshing an already-passed reset boundary", async () => {

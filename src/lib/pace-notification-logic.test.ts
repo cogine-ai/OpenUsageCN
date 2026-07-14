@@ -88,6 +88,27 @@ describe("pace notification logic", () => {
     expect(nextWindow.nextState.fired.has("closeToLimit")).toBe(false)
   })
 
+  it("re-primes without firing when the reset window advances before usage rolls over", () => {
+    const current = prime(observation(30, 5 * hour, 10 * hour))
+    const nextWindowWithOldUsage = evaluatePaceNotification(
+      observation(95, 10 * hour + 31 * 60_000, 20 * hour),
+      current,
+      allOn
+    )
+
+    expect(nextWindowWithOldUsage.candidates).toEqual([])
+    expect(nextWindowWithOldUsage.nextState.previousBucket).toBe("behind")
+    expect(nextWindowWithOldUsage.nextState.wasUnderTenPercent).toBe(true)
+
+    const rolledOver = evaluatePaceNotification(
+      observation(5, 10 * hour + 31 * 60_000 + 1, 20 * hour),
+      nextWindowWithOldUsage.nextState,
+      allOn
+    )
+    expect(rolledOver.candidates).toEqual([])
+    expect(rolledOver.nextState.wasUnderTenPercent).toBe(false)
+  })
+
   it("preserves delivered pace edges while reset metadata is temporarily missing", () => {
     const first = evaluatePaceNotification(observation(60), prime(observation(30)), allOn)
     const delivered = commitDeliveredPaceNotifications(first, new Set(["runningOut"]))

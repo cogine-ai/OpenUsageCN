@@ -60,6 +60,8 @@ Returns the stable `openusage.limits.v1` machine contract for all enabled provid
 
 - **200 OK** — A limits envelope. `providers` may be empty before the first successful refresh.
 
+If one declared resource contains invalid machine data, the response keeps that provider's other valid resources and adds a resource-specific entry to `errors`.
+
 ### `GET /v1/limits/:providerId`
 
 Returns the same envelope scoped to one provider, including providers disabled in Settings.
@@ -115,6 +117,8 @@ Unknown routes return **404 Not Found**.
 ```
 
 The `lines` array uses the same metric line types as the internal plugin output: `progress`, `text`, `badge`, and `barChart`.
+
+Some progress lines include `limitResourceKey` to connect a changing display label to its stable `/v1/limits` resource. API consumers should use `/v1/limits` rather than depending on this internal field.
 
 `fetchedAt` is an ISO 8601 timestamp indicating when the snapshot was last successfully fetched.
 

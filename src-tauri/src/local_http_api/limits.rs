@@ -115,8 +115,12 @@ pub(super) fn envelope_from_state(provider_ids: &[String], state: &CacheState) -
             continue;
         };
         match provider_from_snapshot(snapshot, catalog, generated_at) {
-            Ok(provider) => {
+            Ok((provider, resource_errors)) => {
                 providers.insert(provider_id.clone(), provider);
+                errors.extend(resource_errors.into_iter().map(|message| LimitsError {
+                    provider_id: provider_id.clone(),
+                    message,
+                }));
             }
             Err(message) => {
                 log::error!("limits projection failed for provider {provider_id}: {message}");
@@ -153,31 +157,62 @@ fn provider_from_snapshot(
     snapshot: &CachedPluginSnapshot,
     catalog: &ProviderLimitCatalog,
     generated_at: OffsetDateTime,
-) -> Result<LimitsProvider, String> {
+) -> Result<(LimitsProvider, Vec<String>), String> {
     let fetched_at = snapshot_fetched_at(snapshot)
         .ok_or_else(|| "Cached freshness timestamp is invalid.".to_string())?;
     let expires_at = fetched_at + time::Duration::seconds(CACHE_FRESHNESS_SECONDS);
     let mut resources = BTreeMap::new();
+    let mut resource_errors = Vec::new();
     for descriptor in &catalog.resources {
-        let Some(line) = snapshot.lines.iter().find(|line| match line {
-            MetricLine::Progress { label, .. } => label == &descriptor.metric_label,
-            _ => false,
-        }) else {
+        let line = snapshot
+            .lines
+            .iter()
+            .find(|line| match line {
+                MetricLine::Progress {
+                    limit_resource_key: Some(key),
+                    ..
+                } => key == &descriptor.key,
+                _ => false,
+            })
+            .or_else(|| {
+                snapshot.lines.iter().find(|line| match line {
+                    MetricLine::Progress {
+                        label,
+                        limit_resource_key: None,
+                        ..
+                    } => label == &descriptor.metric_label,
+                    _ => false,
+                })
+            });
+        let Some(line) = line else {
             continue;
         };
-        let resource = resource_from_line(descriptor, line)
-            .map_err(|message| format!("Resource '{}': {message}", descriptor.key))?;
-        resources.insert(descriptor.key.clone(), resource);
+        match resource_from_line(descriptor, line) {
+            Ok(resource) => {
+                resources.insert(descriptor.key.clone(), resource);
+            }
+            Err(message) => {
+                let message = format!("Resource '{}': {message}", descriptor.key);
+                log::error!(
+                    "limits projection skipped invalid resource for provider {}: {message}",
+                    catalog.provider_id
+                );
+                resource_errors.push(message);
+            }
+        }
     }
 
-    Ok(LimitsProvider {
-        display_name: snapshot.display_name.clone(),
-        plan: snapshot.plan.clone(),
-        fetched_at: format_timestamp(fetched_at),
-        expires_at: format_timestamp(expires_at),
-        stale: generated_at >= expires_at,
-        resources,
-    })
+    Ok((
+        LimitsProvider {
+            display_name: snapshot.display_name.clone(),
+            plan: snapshot.plan.clone(),
+            fetched_at: format_timestamp(fetched_at),
+            expires_at: format_timestamp(expires_at),
+            stale: generated_at >= expires_at,
+            resources,
+        },
+        resource_errors,
+    ))
 }
 
 fn resource_from_line(
@@ -251,6 +286,7 @@ mod tests {
             plan: Some("Plus".to_string()),
             lines: vec![MetricLine::Progress {
                 label: "Session".to_string(),
+                limit_resource_key: None,
                 used: 34.0,
                 limit: 100.0,
                 format: ProgressFormat::Percent,
@@ -329,6 +365,7 @@ mod tests {
     fn count_resources_require_a_stable_unit() {
         let line = MetricLine::Progress {
             label: "Requests".to_string(),
+            limit_resource_key: None,
             used: 12.0,
             limit: 100.0,
             format: ProgressFormat::Count {
@@ -350,5 +387,95 @@ mod tests {
         .unwrap_err();
 
         assert_eq!(error, "count resource is missing a stable unit");
+    }
+
+    #[test]
+    fn explicit_resource_key_survives_runtime_label_changes() {
+        let mut snapshot = snapshot();
+        let MetricLine::Progress {
+            label,
+            limit_resource_key,
+            ..
+        } = &mut snapshot.lines[0]
+        else {
+            unreachable!()
+        };
+        *label = "Remote Name".to_string();
+        *limit_resource_key = Some("session".to_string());
+        let catalog = ProviderLimitCatalog {
+            provider_id: "codex".to_string(),
+            resources: vec![LimitCatalogResource {
+                key: "session".to_string(),
+                metric_label: "Session".to_string(),
+                kind: LimitResourceKind::Consumption,
+                count_unit: None,
+            }],
+        };
+
+        let (provider, errors) = provider_from_snapshot(
+            &snapshot,
+            &catalog,
+            OffsetDateTime::parse(
+                "2026-07-14T02:01:00Z",
+                &time::format_description::well_known::Rfc3339,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+        assert!(provider.resources.contains_key("session"));
+        assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn invalid_resource_does_not_remove_valid_provider_resources() {
+        let mut snapshot = snapshot();
+        snapshot.lines.push(MetricLine::Progress {
+            label: "Requests".to_string(),
+            limit_resource_key: None,
+            used: 12.0,
+            limit: 100.0,
+            format: ProgressFormat::Count {
+                suffix: "req".to_string(),
+            },
+            resets_at: None,
+            period_duration_ms: None,
+            color: None,
+        });
+        let catalog = ProviderLimitCatalog {
+            provider_id: "codex".to_string(),
+            resources: vec![
+                LimitCatalogResource {
+                    key: "session".to_string(),
+                    metric_label: "Session".to_string(),
+                    kind: LimitResourceKind::Consumption,
+                    count_unit: None,
+                },
+                LimitCatalogResource {
+                    key: "requests".to_string(),
+                    metric_label: "Requests".to_string(),
+                    kind: LimitResourceKind::Consumption,
+                    count_unit: None,
+                },
+            ],
+        };
+
+        let (provider, errors) = provider_from_snapshot(
+            &snapshot,
+            &catalog,
+            OffsetDateTime::parse(
+                "2026-07-14T02:01:00Z",
+                &time::format_description::well_known::Rfc3339,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+        assert!(provider.resources.contains_key("session"));
+        assert!(!provider.resources.contains_key("requests"));
+        assert_eq!(
+            errors,
+            vec!["Resource 'requests': count resource is missing a stable unit"]
+        );
     }
 }

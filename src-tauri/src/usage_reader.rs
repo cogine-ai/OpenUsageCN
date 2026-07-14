@@ -100,6 +100,7 @@ pub(crate) fn read_limits_once(
         .iter()
         .any(|provider_id| local_http_api::cache::snapshot_for_provider(provider_id).is_none());
     let envelope = local_http_api::limits::current_envelope(&selected_ids);
+    refresh_failed |= !envelope.errors.is_empty();
     Ok(LimitsRead {
         envelope,
         refresh_failed,
@@ -180,13 +181,25 @@ fn app_data_dir() -> Option<PathBuf> {
 
 fn cli_resource_dir() -> Option<PathBuf> {
     let executable = std::env::current_exe().ok()?;
+    cli_resource_dir_for_executable(&executable)
+}
+
+fn cli_resource_dir_for_executable(executable: &Path) -> Option<PathBuf> {
+    let executable = executable.canonicalize().ok()?;
+    bundled_resource_dir_for_executable(&executable)
+}
+
+fn bundled_resource_dir_for_executable(executable: &Path) -> Option<PathBuf> {
     let executable_dir = executable.parent()?;
-    if executable_dir.file_name().and_then(|name| name.to_str()) == Some("MacOS") {
-        return executable_dir
-            .parent()
-            .map(|contents| contents.join("Resources"));
+    let contents_dir = executable_dir.parent()?;
+    let app_dir = contents_dir.parent()?;
+    if executable_dir.file_name().and_then(|name| name.to_str()) == Some("MacOS")
+        && contents_dir.file_name().and_then(|name| name.to_str()) == Some("Contents")
+        && app_dir.extension().and_then(|extension| extension.to_str()) == Some("app")
+    {
+        return Some(contents_dir.join("Resources"));
     }
-    std::env::current_dir().ok()
+    None
 }
 
 fn is_packaged_resource_dir(path: &Path) -> bool {
@@ -216,5 +229,52 @@ mod tests {
         assert!(!is_packaged_resource_dir(Path::new(
             "/Users/example/openusage/resources"
         )));
+    }
+
+    #[test]
+    fn only_derives_resources_from_an_app_bundle_executable() {
+        assert_eq!(
+            bundled_resource_dir_for_executable(Path::new(
+                "/Applications/OpenUsageCN.app/Contents/MacOS/openusagecn"
+            )),
+            Some(PathBuf::from(
+                "/Applications/OpenUsageCN.app/Contents/Resources"
+            ))
+        );
+        assert_eq!(
+            bundled_resource_dir_for_executable(Path::new("/workspace/target/debug/openusagecn")),
+            None
+        );
+        assert_eq!(
+            bundled_resource_dir_for_executable(Path::new("/tmp/MacOS/openusagecn")),
+            None
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn resolves_an_installed_cli_symlink_back_to_the_app_bundle() {
+        let root =
+            std::env::temp_dir().join(format!("openusage-cli-resources-{}", uuid::Uuid::new_v4()));
+        let executable = root.join("OpenUsageCN.app/Contents/MacOS/openusagecn");
+        let resources = root.join("OpenUsageCN.app/Contents/Resources");
+        let link = root.join("bin/openusage");
+        std::fs::create_dir_all(executable.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(link.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(&resources).unwrap();
+        std::fs::write(&executable, "binary").unwrap();
+        std::os::unix::fs::symlink(&executable, &link).unwrap();
+
+        assert_eq!(
+            cli_resource_dir_for_executable(&link),
+            Some(resources.canonicalize().unwrap())
+        );
+
+        let copied_executable = root.join("untrusted/openusage");
+        std::fs::create_dir_all(copied_executable.parent().unwrap()).unwrap();
+        std::fs::write(&copied_executable, "binary").unwrap();
+        assert_eq!(cli_resource_dir_for_executable(&copied_executable), None);
+
+        let _ = std::fs::remove_dir_all(root);
     }
 }

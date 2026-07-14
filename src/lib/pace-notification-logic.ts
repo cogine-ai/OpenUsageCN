@@ -52,6 +52,8 @@ export function evaluatePaceNotification(
     next.fired.clear()
     next.previousBucket = "untracked"
     next.wasUnderTenPercent = false
+    next.primed = false
+    next.remainingPrimed = false
     next.resetsAtMs = observation.resetsAtMs
   } else if (next.resetsAtMs === null && observation.resetsAtMs !== null) {
     next.resetsAtMs = observation.resetsAtMs

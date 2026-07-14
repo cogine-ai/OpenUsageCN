@@ -832,6 +832,7 @@
         if (!entry) continue
         lines.push(ctx.line.progress({
           label: kind === "session" ? "5小时" : "每周",
+          limitResourceKey: kind,
           used: entry.headerUsed !== null ? entry.headerUsed : entry.bodyUsed,
           limit: 100,
           format: { kind: "percent" },
@@ -846,10 +847,12 @@
           const name = typeof entry.limit_name === "string" ? entry.limit_name : ""
           let shortName = name.replace(/^GPT-[\d.]+-Codex-/, "")
           if (!shortName) shortName = name || "Model"
+          const limitResourceKey = entry.metered_feature === "codex_bengalfox" ? "spark" : null
           const rl = entry.rate_limit
           if (rl.primary_window && typeof rl.primary_window.used_percent === "number") {
             lines.push(ctx.line.progress({
               label: shortName,
+              limitResourceKey: limitResourceKey,
               used: rl.primary_window.used_percent,
               limit: 100,
               format: { kind: "percent" },
@@ -862,6 +865,7 @@
           if (rl.secondary_window && typeof rl.secondary_window.used_percent === "number") {
             lines.push(ctx.line.progress({
               label: shortName + " 每周",
+              limitResourceKey: limitResourceKey ? limitResourceKey + "Weekly" : null,
               used: rl.secondary_window.used_percent,
               limit: 100,
               format: { kind: "percent" },
@@ -879,6 +883,7 @@
         if (typeof used === "number") {
           lines.push(ctx.line.progress({
             label: "代码审查",
+            limitResourceKey: "codeReview",
             used: used,
             limit: 100,
             format: { kind: "percent" },

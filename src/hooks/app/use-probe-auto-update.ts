@@ -87,6 +87,21 @@ export function recordAttemptedResetBoundary(
   attemptedBoundaries.set(pluginId, attempted)
 }
 
+function getResetBoundaryScheduleSignature(
+  pluginSettings: PluginSettings | null,
+  pluginStates: Record<string, PluginState>
+): string {
+  if (!pluginSettings) return ""
+
+  return JSON.stringify(
+    getEnabledPluginIds(pluginSettings).map((pluginId) => [
+      pluginId,
+      (pluginStates[pluginId]?.data?.lines ?? [])
+        .flatMap((line) => line.type === "progress" && line.resetsAt ? [line.resetsAt] : []),
+    ])
+  )
+}
+
 type UseProbeAutoUpdateArgs = {
   pluginSettings: PluginSettings | null
   autoUpdateInterval: AutoUpdateIntervalMinutes
@@ -112,6 +127,10 @@ export function useProbeAutoUpdate({
   const [autoUpdateResetToken, setAutoUpdateResetToken] = useState(0)
   const [resetBoundaryScheduleToken, setResetBoundaryScheduleToken] = useState(0)
   const attemptedResetBoundariesRef = useRef<Map<string, Set<number>>>(new Map())
+  const resetBoundaryScheduleSignature = getResetBoundaryScheduleSignature(
+    pluginSettings,
+    pluginStates
+  )
 
   useEffect(() => {
     if (!pluginSettings) {
@@ -168,7 +187,7 @@ export function useProbeAutoUpdate({
     const enabledIds = getEnabledPluginIds(pluginSettings)
     const plan = getResetBoundaryRefreshPlan({
       enabledIds,
-      pluginStates,
+      pluginStates: pluginStatesRef.current,
       attemptedBoundaries: attemptedResetBoundariesRef.current,
       nextAutoUpdateAt: autoUpdateNextAt,
     })
@@ -179,25 +198,31 @@ export function useProbeAutoUpdate({
       ? RESET_BOUNDARY_REFRESH_MIN_DELAY_MS
       : plan.refreshAt - now
     const timeout = setTimeout(() => {
-      for (const candidate of plan.candidates) {
-        recordAttemptedResetBoundary(
-          attemptedResetBoundariesRef.current,
-          candidate.pluginId,
-          candidate.boundaryAt
-        )
-      }
-
       const now = Date.now()
-      const eligibleIds = plan.candidates
-        .map((candidate) => candidate.pluginId)
-        .filter((id) => {
-          if (isPluginLoading(id)) return false
-          const currentState = pluginStatesRef.current[id]
-          if (!currentState?.error || !currentState.lastErrorAt) return true
-          return now - currentState.lastErrorAt >= AUTO_UPDATE_FAILURE_BACKOFF_MS
-        })
+      const eligibleCandidates = plan.candidates.filter((candidate) => {
+        if (isPluginLoading(candidate.pluginId)) return false
+        const currentState = pluginStatesRef.current[candidate.pluginId]
+        const refreshAt = candidate.boundaryAt + RESET_BOUNDARY_REFRESH_GRACE_MS
+        if (
+          currentState?.lastUpdatedAt !== null &&
+          currentState?.lastUpdatedAt !== undefined &&
+          currentState.lastUpdatedAt >= refreshAt
+        ) {
+          return false
+        }
+        if (!currentState?.error || !currentState.lastErrorAt) return true
+        return now - currentState.lastErrorAt >= AUTO_UPDATE_FAILURE_BACKOFF_MS
+      })
+      const eligibleIds = eligibleCandidates.map((candidate) => candidate.pluginId)
 
       if (eligibleIds.length > 0) {
+        for (const candidate of eligibleCandidates) {
+          recordAttemptedResetBoundary(
+            attemptedResetBoundariesRef.current,
+            candidate.pluginId,
+            candidate.boundaryAt
+          )
+        }
         setLoadingForPlugins(eligibleIds)
         startBatch(eligibleIds).catch((error) => {
           console.error("Failed to start reset-boundary refresh batch:", error)
@@ -212,8 +237,8 @@ export function useProbeAutoUpdate({
   }, [
     autoUpdateNextAt,
     pluginSettings,
-    pluginStates,
     pluginStatesRef,
+    resetBoundaryScheduleSignature,
     resetBoundaryScheduleToken,
     isPluginLoading,
     setLoadingForPlugins,

@@ -182,7 +182,7 @@ Add `limitResource` only to progress lines that should be available to scripts a
 | `kind` | string | No | `consumption` by default. Bundled progress resources currently use consumption; unbounded balance export is reserved for a future raw-scalar line type |
 | `countUnit` | string | Count rows | Stable unit such as `tokens`, `requests`, or `credits` |
 
-Keys must be unique within a plugin. The runtime progress line label must match the manifest label. Formatted suffixes and text rows are not exported as machine data.
+Keys must be unique within a plugin. Static runtime progress lines match their manifest label. Dynamic runtime labels must pass the same stable key as `limitResourceKey` to `ctx.line.progress`. Formatted suffixes and text rows are not exported as machine data.
 
 ### Primary Progress (Tray Icon)
 

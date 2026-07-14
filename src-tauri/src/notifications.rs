@@ -126,7 +126,9 @@ mod macos {
     }
 
     pub fn permission() -> Result<String, String> {
-        ensure_notification_center_available()?;
+        if !notification_center_available() {
+            return Ok("unavailable".to_string());
+        }
         let center = UNUserNotificationCenter::currentNotificationCenter();
         let (sender, receiver) = mpsc::channel();
         let completion = RcBlock::new(move |settings: NonNull<UNNotificationSettings>| {
@@ -141,7 +143,9 @@ mod macos {
     }
 
     pub fn request_permission() -> Result<String, String> {
-        ensure_notification_center_available()?;
+        if !notification_center_available() {
+            return Ok("unavailable".to_string());
+        }
         let center = UNUserNotificationCenter::currentNotificationCenter();
         let (sender, receiver) = mpsc::channel();
         let completion = RcBlock::new(move |granted: Bool, error: *mut NSError| {
@@ -247,6 +251,11 @@ mod macos {
             assert!(!is_bundled_app_executable(std::path::Path::new(
                 "/workspace/OpenUsageCN/Contents/MacOS/openusagecn"
             )));
+        }
+
+        #[test]
+        fn reports_notification_permission_as_unavailable_outside_an_app_bundle() {
+            assert_eq!(permission().unwrap(), "unavailable");
         }
     }
 }

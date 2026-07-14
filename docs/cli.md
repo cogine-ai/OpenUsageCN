@@ -34,6 +34,6 @@ Without `--force`, snapshots newer than five minutes are reused. Missing or stal
 | `0` | Requested data was returned successfully |
 | `2` | Invalid arguments or unknown provider id |
 | `3` | At least one requested provider has no successful snapshot |
-| `4` | A refresh or local read failed; JSON may still contain last-good data |
+| `4` | A refresh, local read, or resource projection failed; JSON may still contain other valid data |
 
 Use `openusage --help` for the command summary and `openusage --version` for the installed version.

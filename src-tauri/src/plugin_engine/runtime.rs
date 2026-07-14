@@ -35,6 +35,12 @@ pub enum MetricLine {
     },
     Progress {
         label: String,
+        #[serde(
+            default,
+            rename = "limitResourceKey",
+            skip_serializing_if = "Option::is_none"
+        )]
+        limit_resource_key: Option<String>,
         used: f64,
         limit: f64,
         format: ProgressFormat,
@@ -267,6 +273,10 @@ fn parse_lines(result: &Object) -> Result<Vec<MetricLine>, String> {
                 });
             }
             "progress" => {
+                let limit_resource_key = line
+                    .get::<_, String>("limitResourceKey")
+                    .ok()
+                    .filter(|key| !key.is_empty());
                 let used_value: Value = match line.get("used") {
                     Ok(v) => v,
                     Err(_) => {
@@ -493,6 +503,7 @@ fn parse_lines(result: &Object) -> Result<Vec<MetricLine>, String> {
 
                 out.push(MetricLine::Progress {
                     label,
+                    limit_resource_key,
                     used,
                     limit,
                     format,
@@ -850,6 +861,7 @@ mod tests {
     fn progress_resets_at_serializes_as_resets_at_camelcase() {
         let line = MetricLine::Progress {
             label: "Session".to_string(),
+            limit_resource_key: Some("session".to_string()),
             used: 1.0,
             limit: 100.0,
             format: ProgressFormat::Percent,
@@ -861,6 +873,10 @@ mod tests {
         let json: JsonValue = serde_json::to_value(&line).expect("serialize");
         let obj = json.as_object().expect("object");
         assert!(obj.get("resetsAt").is_some(), "expected resetsAt key");
+        assert_eq!(
+            obj.get("limitResourceKey"),
+            Some(&JsonValue::String("session".to_string()))
+        );
         assert!(
             obj.get("resets_at").is_none(),
             "did not expect resets_at key"
