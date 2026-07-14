@@ -4,6 +4,26 @@
 
 暂无。
 
+## v0.6.35
+
+### New Features
+
+- Add the machine-readable `/v1/limits` contract, global `openusage` CLI, reset-boundary refresh, provider incident notices, and quota pace notifications ([#101](https://github.com/cogine-ai/OpenUsageCN/pull/101)) by @lc708
+
+### Bug Fixes
+
+- Harden installed CLI plugin loading, preserve valid resources after projection errors, stabilize reset-boundary notifications and refresh retries, and reject invalid cache timestamps ([#101](https://github.com/cogine-ai/OpenUsageCN/pull/101)) by @lc708
+
+---
+
+### Changelog
+
+**Full Changelog**: [v0.6.34...v0.6.35](https://github.com/cogine-ai/OpenUsageCN/compare/v0.6.34...v0.6.35)
+
+- [d748157](https://github.com/cogine-ai/OpenUsageCN/commit/d74815714caa70c0296eab9a28b1f2ed9e645dba) feat: add machine-readable limits and quota alerts by @lc708
+- [8023dab](https://github.com/cogine-ai/OpenUsageCN/commit/8023dabb58f0aea0978f51622eab39d7e8393eb9) fix: address quota review findings by @lc708
+- [eca9ad3](https://github.com/cogine-ai/OpenUsageCN/commit/eca9ad3bc40bf267db42190ca05b55d2ea9c52b7) Merge pull request #101 from cogine-ai/cliq/limits-cli-pace-notifications by @lc708
+
 ## v0.6.34
 
 ### Bug Fixes
