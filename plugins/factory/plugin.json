@@ -7,7 +7,7 @@
   "icon": "icon.svg",
   "brandColor": "#020202",
   "lines": [
-    { "type": "progress", "label": "Standard", "scope": "overview", "primaryOrder": 1 },
-    { "type": "progress", "label": "Premium", "scope": "detail" }
+    { "type": "progress", "label": "Standard", "scope": "overview", "primaryOrder": 1, "limitResource": { "key": "standard", "countUnit": "tokens" } },
+    { "type": "progress", "label": "Premium", "scope": "detail", "limitResource": { "key": "premium", "countUnit": "tokens" } }
   ]
 }

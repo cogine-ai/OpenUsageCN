@@ -7,8 +7,8 @@
   "icon": "icon.svg",
   "brandColor": "#C09CFF",
   "lines": [
-    { "type": "progress", "label": "Credits", "scope": "overview", "primaryOrder": 1 },
-    { "type": "progress", "label": "Bonus Credits", "scope": "overview" },
+    { "type": "progress", "label": "Credits", "scope": "overview", "primaryOrder": 1, "limitResource": { "key": "credits", "countUnit": "credits" } },
+    { "type": "progress", "label": "Bonus Credits", "scope": "overview", "limitResource": { "key": "bonusCredits", "countUnit": "credits" } },
     { "type": "badge", "label": "Overages", "scope": "detail" }
   ]
 }

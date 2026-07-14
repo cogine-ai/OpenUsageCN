@@ -84,6 +84,12 @@ const defaultProps = {
   onGlobalShortcutChange: vi.fn(),
   startOnLogin: false,
   onStartOnLoginChange: vi.fn(),
+  paceNotifications: {
+    almostOut: false,
+    closeToLimit: false,
+    runningOut: false,
+  },
+  onPaceNotificationsChange: vi.fn(),
 }
 
 beforeEach(() => {
@@ -160,6 +166,23 @@ describe("SettingsPage", () => {
   it("shows auto-update helper text", () => {
     render(<SettingsPage {...defaultProps} />)
     expect(screen.getByText("选择刷新频率")).toBeInTheDocument()
+  })
+
+  it("updates quota notification toggles", async () => {
+    const onPaceNotificationsChange = vi.fn()
+    render(
+      <SettingsPage
+        {...defaultProps}
+        onPaceNotificationsChange={onPaceNotificationsChange}
+      />
+    )
+
+    await userEvent.click(screen.getByRole("checkbox", { name: "接近上限" }))
+    expect(onPaceNotificationsChange).toHaveBeenCalledWith({
+      almostOut: false,
+      closeToLimit: true,
+      runningOut: false,
+    })
   })
 
   it("renders provider config fields after expanding configurable providers", async () => {

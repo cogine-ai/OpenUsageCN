@@ -13,6 +13,7 @@ import type {
   GlobalShortcut,
   MenubarIconStyle,
   MenubarMetric,
+  PaceNotificationSettings,
   ResetTimerDisplayMode,
   ThemeMode,
   TimeFormatMode,
@@ -40,6 +41,7 @@ export type AppContentActionProps = {
   traySettingsPreview: TraySettingsPreview
   onGlobalShortcutChange: (value: GlobalShortcut) => void
   onStartOnLoginChange: (value: boolean) => void
+  onPaceNotificationsChange: (value: PaceNotificationSettings) => Promise<void>
 }
 
 export type AppContentProps = AppContentDerivedProps & AppContentActionProps
@@ -63,6 +65,7 @@ export function AppContent({
   traySettingsPreview,
   onGlobalShortcutChange,
   onStartOnLoginChange,
+  onPaceNotificationsChange,
 }: AppContentProps) {
   const { activeView } = useAppUiStore(
     useShallow((state) => ({
@@ -80,6 +83,7 @@ export function AppContent({
     globalShortcut,
     themeMode,
     startOnLogin,
+    paceNotifications,
   } = useAppPreferencesStore(
     useShallow((state) => ({
       displayMode: state.displayMode,
@@ -91,6 +95,7 @@ export function AppContent({
       globalShortcut: state.globalShortcut,
       themeMode: state.themeMode,
       startOnLogin: state.startOnLogin,
+      paceNotifications: state.paceNotifications,
     }))
   )
 
@@ -133,6 +138,8 @@ export function AppContent({
         onGlobalShortcutChange={onGlobalShortcutChange}
         startOnLogin={startOnLogin}
         onStartOnLoginChange={onStartOnLoginChange}
+        paceNotifications={paceNotifications}
+        onPaceNotificationsChange={onPaceNotificationsChange}
       />
     )
   }

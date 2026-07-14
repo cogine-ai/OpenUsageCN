@@ -7,7 +7,7 @@
   "icon": "icon.svg",
   "brandColor": "#000000",
   "lines": [
-    { "type": "progress", "label": "Session", "scope": "overview", "primaryOrder": 1 },
-    { "type": "progress", "label": "Weekly", "scope": "overview", "period": "weekly", "primaryOrder": 2 }
+    { "type": "progress", "label": "Session", "scope": "overview", "primaryOrder": 1, "limitResource": { "key": "session" } },
+    { "type": "progress", "label": "Weekly", "scope": "overview", "period": "weekly", "primaryOrder": 2, "limitResource": { "key": "weekly" } }
   ]
 }

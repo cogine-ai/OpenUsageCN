@@ -699,6 +699,13 @@ pub fn panic_probe_output(plugin: &LoadedPlugin) -> PluginOutput {
     )
 }
 
+pub fn probe_error_message(output: &PluginOutput) -> Option<&str> {
+    output.lines.iter().find_map(|line| match line {
+        MetricLine::Badge { label, text, .. } if label == "Error" => Some(text.as_str()),
+        _ => None,
+    })
+}
+
 fn extract_error_string(ctx: &Ctx<'_>) -> String {
     let exc = ctx.catch();
     if exc.is_null() || exc.is_undefined() {
@@ -753,6 +760,7 @@ mod tests {
                 brand_color: None,
                 lines: vec![],
                 links: vec![],
+                status_page: None,
                 config: None,
             },
             plugin_dir: PathBuf::from("."),

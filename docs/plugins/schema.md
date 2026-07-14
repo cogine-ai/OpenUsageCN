@@ -49,6 +49,10 @@ Bundled plugins live under `src-tauri/resources/bundled_plugins/<id>/`.
   "entry": "plugin.js",
   "icon": "icon.svg",
   "links": [{ "label": "Status", "url": "https://status.example.com" }],
+  "statusPage": {
+    "apiUrl": "https://status.example.com/api/v2/status.json",
+    "url": "https://status.example.com/"
+  },
   "config": {
     "fields": [
       {
@@ -63,7 +67,13 @@ Bundled plugins live under `src-tauri/resources/bundled_plugins/<id>/`.
   },
   "lines": [
     { "type": "badge", "label": "Plan", "scope": "overview" },
-    { "type": "progress", "label": "Usage", "scope": "overview", "primaryOrder": 1 },
+    {
+      "type": "progress",
+      "label": "Usage",
+      "scope": "overview",
+      "primaryOrder": 1,
+      "limitResource": { "key": "usage", "kind": "consumption" }
+    },
     { "type": "text", "label": "Details", "scope": "detail" }
   ]
 }
@@ -78,6 +88,7 @@ Bundled plugins live under `src-tauri/resources/bundled_plugins/<id>/`.
 | `entry`         | string | Yes      | Relative path to JS entry file             |
 | `icon`          | string | Yes      | Relative path to SVG icon file             |
 | `links`         | array  | No       | Optional quick links shown on detail page  |
+| `statusPage`    | object | No       | Optional provider outage status source     |
 | `config`        | object | No       | Optional Settings fields for this plugin   |
 | `lines`         | array  | Yes      | Output shape used for loading skeletons    |
 
@@ -88,6 +99,7 @@ Validation rules:
 - `id` must match `globalThis.__openusage_plugin.id`
 - `icon` must be relative and point to an SVG file (use `fill="currentColor"` for theme compatibility)
 - `links[].url` (if provided) must be an `http://` or `https://` URL
+- `statusPage.apiUrl` and `statusPage.url` must be absolute `https://` URLs
 
 ### Links Array (Optional)
 
@@ -95,6 +107,17 @@ Validation rules:
 |---------|--------|----------|-------------|
 | `label` | string | Yes      | Link text shown in the provider detail quick-actions row |
 | `url`   | string | Yes      | External destination opened in the browser (`http/https` only) |
+
+### Status Page (Optional)
+
+`statusPage` enables a lightweight outage notice for providers that publish an Atlassian Statuspage v2 status endpoint. Every five minutes, the app checks it through the Tauri backend. Healthy providers do not add anything to the UI. If a later check cannot reach the status service, the last successful result remains visible instead of guessing that the provider is healthy or unavailable.
+
+| Field    | Type   | Required | Description |
+|----------|--------|----------|-------------|
+| `apiUrl` | string | Yes      | Statuspage v2 `/api/v2/status.json` endpoint (`https` only) |
+| `url`    | string | Yes      | Public status page opened from an incident notice (`https` only) |
+
+The frontend sends only the plugin id when checking status. The backend resolves `apiUrl` from the loaded manifest, so UI code cannot supply an arbitrary request URL.
 
 ### Config Fields (Optional)
 
@@ -144,9 +167,22 @@ loading skeletons instantly while probes execute asynchronously.
 | `scope`   | string  | Yes      | `"overview"` or `"detail"` - where line appears   |
 | `primaryOrder` | number | No | Lower number = higher priority; orders this progress line among the tray-icon candidates (see below) |
 | `period`  | string  | No       | `"weekly"` marks this line as the provider's weekly metric (see below) |
+| `limitResource` | object | No | Exports this progress line through the stable `/v1/limits` contract |
 
 - `"overview"` - shown on both Overview tab and plugin detail pages
 - `"detail"` - shown only on plugin detail pages
+
+### Machine-Readable Limit Resource
+
+Add `limitResource` only to progress lines that should be available to scripts and local apps. Lines without it remain UI-only.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `key` | string | Yes | Stable provider-local id such as `session` or `weekly`; starts lowercase and contains letters or digits only |
+| `kind` | string | No | `consumption` by default. Bundled progress resources currently use consumption; unbounded balance export is reserved for a future raw-scalar line type |
+| `countUnit` | string | Count rows | Stable unit such as `tokens`, `requests`, or `credits` |
+
+Keys must be unique within a plugin. The runtime progress line label must match the manifest label. Formatted suffixes and text rows are not exported as machine data.
 
 ### Primary Progress (Tray Icon)
 

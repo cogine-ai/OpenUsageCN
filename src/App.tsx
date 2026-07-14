@@ -10,6 +10,7 @@ import { useSettingsPluginList } from "@/hooks/app/use-settings-plugin-list"
 import { useSettingsSystemActions } from "@/hooks/app/use-settings-system-actions"
 import { useSettingsTheme } from "@/hooks/app/use-settings-theme"
 import { useTrayIcon } from "@/hooks/app/use-tray-icon"
+import { usePaceNotifications } from "@/hooks/app/use-pace-notifications"
 import { REFRESH_COOLDOWN_MS, savePluginSettings } from "@/lib/settings"
 import { type PluginContextAction } from "@/components/side-nav"
 import { useAppPluginStore } from "@/stores/app-plugin-store"
@@ -60,6 +61,8 @@ function App() {
     setTimeFormatMode,
     setGlobalShortcut,
     setStartOnLogin,
+    paceNotifications,
+    setPaceNotifications,
   } = useAppPreferencesStore(
     useShallow((state) => ({
       autoUpdateInterval: state.autoUpdateInterval,
@@ -77,6 +80,8 @@ function App() {
       setTimeFormatMode: state.setTimeFormatMode,
       setGlobalShortcut: state.setGlobalShortcut,
       setStartOnLogin: state.setStartOnLogin,
+      paceNotifications: state.paceNotifications,
+      setPaceNotifications: state.setPaceNotifications,
     }))
   )
 
@@ -98,6 +103,13 @@ function App() {
     pluginSettings,
     autoUpdateInterval,
     onProbeResult: handleProbeResult,
+  })
+
+  usePaceNotifications({
+    pluginsMeta,
+    pluginSettings,
+    pluginStates,
+    settings: paceNotifications,
   })
 
   const { scheduleTrayIconUpdate, traySettingsPreview } = useTrayIcon({
@@ -128,6 +140,7 @@ function App() {
     setTimeFormatMode,
     setGlobalShortcut,
     setStartOnLogin,
+    setPaceNotifications,
     setLoadingForPlugins,
     setErrorForPlugins,
     startBatch,
@@ -158,6 +171,7 @@ function App() {
     handleAutoUpdateIntervalChange,
     handleGlobalShortcutChange,
     handleStartOnLoginChange,
+    handlePaceNotificationsChange,
   } = useSettingsSystemActions({
     pluginSettings,
     setAutoUpdateInterval,
@@ -165,6 +179,8 @@ function App() {
     setGlobalShortcut,
     setStartOnLogin,
     applyStartOnLogin,
+    paceNotifications,
+    setPaceNotifications,
   })
 
   const pluginSettingsRef = useRef(pluginSettings)
@@ -277,6 +293,7 @@ function App() {
         traySettingsPreview,
         onGlobalShortcutChange: handleGlobalShortcutChange,
         onStartOnLoginChange: handleStartOnLoginChange,
+        onPaceNotificationsChange: handlePaceNotificationsChange,
       }}
     />
   )

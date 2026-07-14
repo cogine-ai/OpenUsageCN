@@ -25,8 +25,8 @@
     ]
   },
   "lines": [
-    { "type": "progress", "label": "Session", "scope": "overview", "primaryOrder": 1 },
-    { "type": "progress", "label": "Weekly", "scope": "overview", "period": "weekly" },
+    { "type": "progress", "label": "Session", "scope": "overview", "primaryOrder": 1, "limitResource": { "key": "session" } },
+    { "type": "progress", "label": "Weekly", "scope": "overview", "period": "weekly", "limitResource": { "key": "weekly" } },
     { "type": "text", "label": "Renews", "scope": "detail" }
   ]
 }

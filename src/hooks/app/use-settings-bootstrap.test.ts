@@ -14,6 +14,7 @@ const {
   loadGlobalShortcutMock,
   loadMenubarIconStyleMock,
   loadMenubarMetricMock,
+  loadPaceNotificationSettingsMock,
   loadPluginSettingsMock,
   loadResetTimerDisplayModeMock,
   loadStartOnLoginMock,
@@ -36,6 +37,7 @@ const {
   loadGlobalShortcutMock: vi.fn(),
   loadMenubarIconStyleMock: vi.fn(),
   loadMenubarMetricMock: vi.fn(),
+  loadPaceNotificationSettingsMock: vi.fn(),
   loadPluginSettingsMock: vi.fn(),
   loadResetTimerDisplayModeMock: vi.fn(),
   loadStartOnLoginMock: vi.fn(),
@@ -65,6 +67,11 @@ vi.mock("@/lib/settings", () => ({
   DEFAULT_GLOBAL_SHORTCUT: null,
   DEFAULT_MENUBAR_ICON_STYLE: "provider",
   DEFAULT_MENUBAR_METRIC: "default",
+  DEFAULT_PACE_NOTIFICATION_SETTINGS: {
+    almostOut: false,
+    closeToLimit: false,
+    runningOut: false,
+  },
   DEFAULT_RESET_TIMER_DISPLAY_MODE: "relative",
   DEFAULT_START_ON_LOGIN: false,
   DEFAULT_THEME_MODE: "system",
@@ -75,6 +82,7 @@ vi.mock("@/lib/settings", () => ({
   loadGlobalShortcut: loadGlobalShortcutMock,
   loadMenubarIconStyle: loadMenubarIconStyleMock,
   loadMenubarMetric: loadMenubarMetricMock,
+  loadPaceNotificationSettings: loadPaceNotificationSettingsMock,
   loadPluginSettings: loadPluginSettingsMock,
   loadResetTimerDisplayMode: loadResetTimerDisplayModeMock,
   loadStartOnLogin: loadStartOnLoginMock,
@@ -101,6 +109,7 @@ function createArgs() {
     setStartOnLogin: vi.fn(),
     setMenubarIconStyle: vi.fn(),
     setMenubarMetric: vi.fn(),
+    setPaceNotifications: vi.fn(),
     setLoadingForPlugins: vi.fn(),
     setErrorForPlugins: vi.fn(),
     startBatch: vi.fn().mockResolvedValue(undefined),
@@ -121,6 +130,7 @@ describe("useSettingsBootstrap", () => {
     loadGlobalShortcutMock.mockReset()
     loadMenubarIconStyleMock.mockReset()
     loadMenubarMetricMock.mockReset()
+    loadPaceNotificationSettingsMock.mockReset()
     loadPluginSettingsMock.mockReset()
     loadResetTimerDisplayModeMock.mockReset()
     loadStartOnLoginMock.mockReset()
@@ -154,6 +164,11 @@ describe("useSettingsBootstrap", () => {
     loadGlobalShortcutMock.mockResolvedValue("CommandOrControl+Shift+O")
     loadMenubarIconStyleMock.mockResolvedValue("provider")
     loadMenubarMetricMock.mockResolvedValue("default")
+    loadPaceNotificationSettingsMock.mockResolvedValue({
+      almostOut: false,
+      closeToLimit: false,
+      runningOut: false,
+    })
     loadStartOnLoginMock.mockResolvedValue(true)
     migrateLegacyTraySettingsMock.mockResolvedValue(undefined)
     migrateWindsurfToDevinMock.mockImplementation((settings) => settings)

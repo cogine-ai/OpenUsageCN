@@ -54,13 +54,27 @@ Returns a single cached usage snapshot for the given provider.
 - **204 No Content** — Provider is known but has no cached snapshot yet.
 - **404 Not Found** — Provider ID is unknown.
 
+### `GET /v1/limits`
+
+Returns the stable `openusage.limits.v1` machine contract for all enabled providers. The first version exports numeric progress resources declared by each plugin; standalone balances and formatted text are not exported. UI labels, colors, badges, and charts are also excluded.
+
+- **200 OK** — A limits envelope. `providers` may be empty before the first successful refresh.
+
+### `GET /v1/limits/:providerId`
+
+Returns the same envelope scoped to one provider, including providers disabled in Settings.
+
+- **200 OK** — A scoped limits envelope. A refresh error can be returned even when no snapshot exists.
+- **204 No Content** — Provider is known but has neither a successful snapshot nor a recorded refresh error.
+- **404 Not Found** — Provider ID is unknown.
+
 ### Unsupported methods
 
 Any method other than `GET` or `OPTIONS` on the above routes returns **405 Method Not Allowed**.
 
 Unknown routes return **404 Not Found**.
 
-## Response Shape
+## Usage Response Shape
 
 ```json
 {
@@ -106,11 +120,83 @@ The `lines` array uses the same metric line types as the internal plugin output:
 
 `iconUrl` is intentionally omitted from the API response to keep payloads small.
 
+## Limits Response Shape
+
+```json
+{
+  "schema": "openusage.limits.v1",
+  "generatedAt": "2026-07-14T02:04:00Z",
+  "providers": {
+    "codex": {
+      "displayName": "Codex",
+      "plan": "Plus",
+      "fetchedAt": "2026-07-14T02:00:00Z",
+      "expiresAt": "2026-07-14T02:05:00Z",
+      "stale": false,
+      "resources": {
+        "session": {
+          "kind": "consumption",
+          "unit": "percent",
+          "used": 34.0,
+          "limit": 100.0,
+          "remaining": 66.0,
+          "utilization": 0.34,
+          "resetsAt": "2026-07-14T09:00:00Z",
+          "windowSeconds": 18000.0
+        }
+      }
+    }
+  },
+  "errors": []
+}
+```
+
+Resource keys such as `session` and `weekly` are stable identifiers declared by each plugin. Units are stable values such as `percent`, `usd`, `tokens`, `requests`, or `credits`. `expiresAt` is five minutes after the successful fetch; `stale` becomes `true` at that point.
+
+`used`, `available`, `limit`, `remaining`, and `utilization` are optional by contract so bounded consumption and unbounded balances can share the same schema. Current progress resources report `used`, `limit`, `remaining`, and `utilization`; values above `1` represent usage over the limit. Consumers must not infer missing fields.
+
+The resource key is stable, but its `unit` can follow the live plan or metric. Consumers should read `unit` from every response instead of assuming one permanent unit for a key.
+
+If a refresh fails, the last successful provider snapshot remains available and a redacted entry may appear in `errors`. Consumers should use numeric fields instead of parsing text from `/v1/usage`.
+
+### Current Resource Keys
+
+These identifiers are the stable keys currently exported by bundled plugins. New keys may be added without changing the schema.
+
+| Provider | Resource keys |
+|---|---|
+| `alibaba-coding-plan` | `session`, `weekly`, `monthly` |
+| `alibaba-token-plan` | `tokenQuota` |
+| `amp` | `free` |
+| `antigravity` | `geminiPro`, `geminiFlash`, `claude` |
+| `bigmodel-cn` | `session`, `weekly`, `webSearches` |
+| `claude` | `session`, `weekly`, `sonnet`, `claudeDesign`, `extraUsage` |
+| `codex` | `session`, `weekly`, `spark`, `sparkWeekly`, `codeReview` |
+| `copilot` | `premiumCredits`, `chat`, `completions` |
+| `cursor` | `credits`, `totalUsage`, `requests`, `autoUsage`, `apiUsage`, `onDemand` |
+| `devin` | `weekly`, `daily` |
+| `factory` | `standard`, `premium` |
+| `gemini` | `pro`, `flash`, `flashLite` |
+| `grok` | `creditsUsed` |
+| `jetbrains-ai-assistant` | `quota` |
+| `kimi` | `session`, `weekly` |
+| `kiro` | `credits`, `bonusCredits` |
+| `minimax` | `session` |
+| `openai-api` | `credits` |
+| `opencode-go` | `session`, `weekly`, `monthly` |
+| `opencode` | `session`, `weekly` |
+| `openrouter` | `credits`, `keyLimit` |
+| `perplexity` | `apiCredits` |
+| `synthetic` | `fiveHour`, `mana`, `subscription`, `freeToolCalls`, `search` |
+| `zai` | `session`, `weekly`, `webSearches` |
+
 ## Filtering and Caching Behavior
 
 - The collection endpoint (`/v1/usage`) returns **enabled providers only**, in the order defined by your plugin settings.
 - Only **successful** probe results are cached. A failed probe never overwrites a previous successful snapshot.
 - The single-provider endpoint (`/v1/usage/:providerId`) works for any known provider, including disabled ones.
+- The limits collection follows the same enabled-provider selection. `providers` is an object, so consumers must not rely on key order. Its single-provider route also works for disabled providers.
+- Limits freshness is five minutes. The HTTP API never triggers a refresh; use the app or the [`openusage` CLI](cli.md) when fresh data is required.
 
 ## CORS
 
@@ -162,6 +248,6 @@ If the service is running but `GET /v1/usage` returns `[]`, check `GET /health`.
 
 ## Security
 
-The API is read-only and binds only to loopback. It does not expose secrets; responses contain cached provider snapshots with `providerId`, `displayName`, optional `plan`, metric `lines`, and `fetchedAt`.
+The API is read-only and binds only to loopback. It does not expose provider credentials. `/v1/usage` returns cached presentation data, while `/v1/limits` returns only explicitly exported numeric resources and freshness metadata.
 
 OpenUsageCN rejects non-loopback `Host` headers and only grants browser CORS reads to loopback or app origins. This reduces DNS rebinding exposure from browser pages. Keep local integrations pointed at `http://127.0.0.1:6736` or `http://localhost:6736`.

@@ -7,8 +7,8 @@
   "icon": "icon.svg",
   "brandColor": "#A855F7",
   "lines": [
-    { "type": "progress", "label": "Premium", "scope": "overview", "primaryOrder": 1 },
-    { "type": "progress", "label": "Chat", "scope": "overview", "primaryOrder": 2 },
-    { "type": "progress", "label": "Completions", "scope": "overview" }
+    { "type": "progress", "label": "Premium", "scope": "overview", "primaryOrder": 1, "limitResource": { "key": "premiumCredits" } },
+    { "type": "progress", "label": "Chat", "scope": "overview", "primaryOrder": 2, "limitResource": { "key": "chat" } },
+    { "type": "progress", "label": "Completions", "scope": "overview", "limitResource": { "key": "completions" } }
   ]
 }

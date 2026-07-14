@@ -6,16 +6,20 @@
   "entry": "plugin.js",
   "icon": "icon.svg",
   "brandColor": "#DE7356",
+  "statusPage": {
+    "apiUrl": "https://status.claude.com/api/v2/status.json",
+    "url": "https://status.claude.com/"
+  },
   "links": [
-    { "label": "Status", "url": "https://status.anthropic.com/" },
+    { "label": "Status", "url": "https://status.claude.com/" },
     { "label": "Console", "url": "https://console.anthropic.com/" }
   ],
   "lines": [
-    { "type": "progress", "label": "Session", "scope": "overview", "primaryOrder": 1 },
-    { "type": "progress", "label": "Weekly", "scope": "overview", "period": "weekly", "primaryOrder": 2 },
-    { "type": "progress", "label": "Sonnet", "scope": "detail" },
-    { "type": "progress", "label": "Claude Design", "scope": "detail" },
-    { "type": "progress", "label": "Extra usage spent", "scope": "overview", "primaryOrder": 3 },
+    { "type": "progress", "label": "Session", "scope": "overview", "primaryOrder": 1, "limitResource": { "key": "session" } },
+    { "type": "progress", "label": "Weekly", "scope": "overview", "period": "weekly", "primaryOrder": 2, "limitResource": { "key": "weekly" } },
+    { "type": "progress", "label": "Sonnet", "scope": "detail", "limitResource": { "key": "sonnet" } },
+    { "type": "progress", "label": "Claude Design", "scope": "detail", "limitResource": { "key": "claudeDesign" } },
+    { "type": "progress", "label": "Extra usage spent", "scope": "overview", "primaryOrder": 3, "limitResource": { "key": "extraUsage" } },
     { "type": "text", "label": "Today", "scope": "detail" },
     { "type": "text", "label": "Yesterday", "scope": "detail" },
     { "type": "text", "label": "Last 30 Days", "scope": "detail" },

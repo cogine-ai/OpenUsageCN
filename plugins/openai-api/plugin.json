@@ -30,6 +30,6 @@
     { "type": "text", "label": "7D Spend", "scope": "overview" },
     { "type": "text", "label": "Requests", "scope": "overview" },
     { "type": "text", "label": "Tokens", "scope": "detail" },
-    { "type": "progress", "label": "Credits", "scope": "overview", "primaryOrder": 1 }
+    { "type": "progress", "label": "Credits", "scope": "overview", "primaryOrder": 1, "limitResource": { "key": "credits" } }
   ]
 }

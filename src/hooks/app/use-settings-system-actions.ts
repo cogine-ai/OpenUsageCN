@@ -4,9 +4,11 @@ import {
   getEnabledPluginIds,
   saveAutoUpdateInterval,
   saveGlobalShortcut,
+  savePaceNotificationSettings,
   saveStartOnLogin,
   type AutoUpdateIntervalMinutes,
   type GlobalShortcut,
+  type PaceNotificationSettings,
   type PluginSettings,
 } from "@/lib/settings"
 
@@ -17,6 +19,8 @@ type UseSettingsSystemActionsArgs = {
   setGlobalShortcut: (value: GlobalShortcut) => void
   setStartOnLogin: (value: boolean) => void
   applyStartOnLogin: (value: boolean) => Promise<void>
+  paceNotifications: PaceNotificationSettings
+  setPaceNotifications: (value: PaceNotificationSettings) => void
 }
 
 export function useSettingsSystemActions({
@@ -26,6 +30,8 @@ export function useSettingsSystemActions({
   setGlobalShortcut,
   setStartOnLogin,
   applyStartOnLogin,
+  paceNotifications,
+  setPaceNotifications,
 }: UseSettingsSystemActionsArgs) {
   const handleAutoUpdateIntervalChange = useCallback((value: AutoUpdateIntervalMinutes) => {
     setAutoUpdateInterval(value)
@@ -64,9 +70,21 @@ export function useSettingsSystemActions({
     })
   }, [applyStartOnLogin, setStartOnLogin])
 
+  const handlePaceNotificationsChange = useCallback(async (value: PaceNotificationSettings) => {
+    setPaceNotifications(value)
+    try {
+      await savePaceNotificationSettings(value)
+    } catch (error) {
+      console.error("Failed to save pace notification settings:", error)
+      setPaceNotifications(paceNotifications)
+      throw error
+    }
+  }, [paceNotifications, setPaceNotifications])
+
   return {
     handleAutoUpdateIntervalChange,
     handleGlobalShortcutChange,
     handleStartOnLoginChange,
+    handlePaceNotificationsChange,
   }
 }

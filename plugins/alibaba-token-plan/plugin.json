@@ -19,7 +19,7 @@
     ]
   },
   "lines": [
-    { "type": "progress", "label": "Token Quota", "scope": "overview", "primaryOrder": 1 },
+    { "type": "progress", "label": "Token Quota", "scope": "overview", "primaryOrder": 1, "limitResource": { "key": "tokenQuota", "countUnit": "tokens" } },
     { "type": "text", "label": "Remaining", "scope": "overview" },
     { "type": "text", "label": "Expires", "scope": "detail" }
   ]

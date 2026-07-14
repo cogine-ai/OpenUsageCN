@@ -370,8 +370,9 @@ try {
 - The app loads
 - The user clicks Refresh (per-provider retry button)
 - The auto-update timer fires (configurable: 5/15/30/60 minutes)
+- A reported `progress.resetsAt` boundary passes, after a short delay, when that targeted refresh would happen before the next auto-update timer
 
-If a provider fails, automatic refresh waits through a short failure backoff before retrying that provider. The user can still click Refresh to retry immediately.
+Reset-boundary refreshes only probe the provider that reported the boundary. A boundary is handled once per app session. Providers that are already loading or inside the automatic failure backoff are skipped. The user can still click Refresh to retry immediately.
 
 Any token refresh logic (e.g., OAuth refresh) must run inside `probe(ctx)` at those times.
 
@@ -424,6 +425,7 @@ Notes:
 - For `format.kind: "percent"`, `limit` must be `100`.
 - Prefer setting `resetsAt` (via `ctx.util.toIso(...)`) instead of putting reset info in other lines.
 - `periodDurationMs`: when provided with `resetsAt`, enables pace visuals (Dot Pacing status + in-bar pace marker) and projected-rate messaging.
+- To expose this value through `/v1/limits`, add a stable `limitResource` declaration to the matching progress line in `plugin.json`. Do not expose formatted text by parsing it.
 
 **Example:**
 

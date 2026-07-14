@@ -7,7 +7,7 @@
   "icon": "icon.svg",
   "brandColor": "#7d5fe6",
   "lines": [
-    { "type": "progress", "label": "Quota", "scope": "overview", "primaryOrder": 1 },
+    { "type": "progress", "label": "Quota", "scope": "overview", "primaryOrder": 1, "limitResource": { "key": "quota" } },
     { "type": "text", "label": "Used", "scope": "detail" },
     { "type": "text", "label": "Remaining", "scope": "detail" }
   ]
