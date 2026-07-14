@@ -733,6 +733,13 @@ fn error_line(message: String) -> MetricLine {
     }
 }
 
+/// True when the probe output includes an error badge line.
+pub fn probe_output_has_error(output: &PluginOutput) -> bool {
+    output.lines.iter().any(|line| {
+        matches!(line, MetricLine::Badge { label, .. } if label == "Error")
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -885,6 +892,50 @@ mod tests {
         assert_eq!(json["label"], "Usage Trend");
         assert_eq!(json["points"][0]["valueLabel"], "42 tokens");
         assert_eq!(json["note"], "Estimated from local logs");
+    }
+
+    fn output_with_lines(lines: Vec<MetricLine>) -> PluginOutput {
+        PluginOutput {
+            provider_id: "test".to_string(),
+            display_name: "Test".to_string(),
+            plan: None,
+            lines,
+            icon_url: String::new(),
+        }
+    }
+
+    #[test]
+    fn probe_output_has_error_is_true_for_error_badge() {
+        assert!(probe_output_has_error(&output_with_lines(vec![error_line(
+            "boom".to_string()
+        )])));
+    }
+
+    #[test]
+    fn probe_output_has_error_is_false_for_success_lines() {
+        assert!(!probe_output_has_error(&output_with_lines(vec![
+            MetricLine::Progress {
+                label: "Session".to_string(),
+                used: 1.0,
+                limit: 100.0,
+                format: ProgressFormat::Percent,
+                resets_at: None,
+                period_duration_ms: None,
+                color: None,
+            }
+        ])));
+    }
+
+    #[test]
+    fn probe_output_has_error_ignores_non_error_badges() {
+        assert!(!probe_output_has_error(&output_with_lines(vec![
+            MetricLine::Badge {
+                label: "Plan".to_string(),
+                text: "Pro".to_string(),
+                color: None,
+                subtitle: None,
+            }
+        ])));
     }
 
     #[test]
