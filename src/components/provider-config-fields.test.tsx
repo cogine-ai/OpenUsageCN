@@ -231,4 +231,30 @@ describe("ProviderConfigFields", () => {
     expect(onSaved).not.toHaveBeenCalled()
     consoleError.mockRestore()
   })
+
+  it("shows clear failure copy without calling onSaved", async () => {
+    const onSaved = vi.fn()
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+    providerConfigMocks.getProviderConfig.mockResolvedValue({
+      values: {
+        apiKey: { type: "secret", configured: true, hint: "...abcd" },
+      },
+    })
+    providerConfigMocks.deleteProviderConfigField.mockRejectedValue(new Error("delete failed"))
+
+    render(
+      <ProviderConfigFields
+        pluginId="bigmodel-cn"
+        fields={[secretField]}
+        onSaved={onSaved}
+      />
+    )
+
+    await screen.findByRole("button", { name: "清除" })
+    await userEvent.click(screen.getByRole("button", { name: "清除" }))
+
+    expect(await screen.findByText("清除失败")).toBeInTheDocument()
+    expect(onSaved).not.toHaveBeenCalled()
+    consoleError.mockRestore()
+  })
 })
