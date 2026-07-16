@@ -23,6 +23,8 @@ const plugin: PluginMeta = {
   lines: [],
   primaryCandidates: [],
 }
+const pluginSettings = { order: ["codex"], disabled: [] as string[] }
+const disabledPluginSettings = { order: ["codex"], disabled: ["codex"] as string[] }
 const settings = { almostOut: true, closeToLimit: true, runningOut: true }
 
 function state(used: number, revision: number): PluginState {
@@ -64,7 +66,7 @@ describe("usePaceNotifications", () => {
       ({ used, revision, disabled }) =>
         usePaceNotifications({
           pluginsMeta: [plugin],
-          pluginSettings: { order: ["codex"], disabled: disabled ? ["codex"] : [] },
+          pluginSettings: disabled ? disabledPluginSettings : pluginSettings,
           pluginStates: { codex: state(used, revision) },
           settings,
         }),
@@ -93,7 +95,7 @@ describe("usePaceNotifications", () => {
       ({ used, revision }) =>
         usePaceNotifications({
           pluginsMeta: [plugin],
-          pluginSettings: { order: ["codex"], disabled: [] },
+          pluginSettings,
           pluginStates: { codex: state(used, revision) },
           settings,
         }),
