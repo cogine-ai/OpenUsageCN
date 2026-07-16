@@ -84,4 +84,37 @@ describe("usePaceNotifications", () => {
     rerender({ used: 60, revision: 3, disabled: true })
     await waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(1))
   })
+
+  it("retries a milestone after notification delivery fails", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+    invokeMock.mockRejectedValueOnce(new Error("notification denied"))
+
+    const { rerender } = renderHook(
+      ({ used, revision }) =>
+        usePaceNotifications({
+          pluginsMeta: [plugin],
+          pluginSettings: { order: ["codex"], disabled: [] },
+          pluginStates: { codex: state(used, revision) },
+          settings,
+        }),
+      { initialProps: { used: 30, revision: 1 } }
+    )
+
+    await waitFor(() => expect(invokeMock).not.toHaveBeenCalled())
+    rerender({ used: 45, revision: 2 })
+    await waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(1))
+
+    invokeMock.mockResolvedValueOnce(undefined)
+    rerender({ used: 46, revision: 3 })
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledTimes(2)
+      expect(invokeMock).toHaveBeenLastCalledWith("post_pace_notification", {
+        title: "接近上限",
+        subtitle: "Codex · Session",
+        body: "按当前速度，预计将在重置前接近额度上限。",
+      })
+    })
+
+    consoleError.mockRestore()
+  })
 })

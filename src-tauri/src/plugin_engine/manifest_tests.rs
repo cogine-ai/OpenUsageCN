@@ -55,6 +55,56 @@ fn primary_order_parsed_correctly() {
 }
 
 #[test]
+fn default_source_defaults_false_and_parses_true() {
+    let without_flag = parse_manifest(
+        r#"
+        {
+          "schemaVersion": 1,
+          "id": "x",
+          "name": "X",
+          "version": "0.0.1",
+          "entry": "plugin.js",
+          "icon": "icon.svg",
+          "brandColor": null,
+          "lines": [],
+          "config": {
+            "fields": [
+              { "id": "apiKey", "type": "secret", "label": "API Key" }
+            ]
+          }
+        }
+        "#,
+    );
+    let with_flag = parse_manifest(
+        r#"
+        {
+          "schemaVersion": 1,
+          "id": "x",
+          "name": "X",
+          "version": "0.0.1",
+          "entry": "plugin.js",
+          "icon": "icon.svg",
+          "brandColor": null,
+          "lines": [],
+          "config": {
+            "fields": [
+              {
+                "id": "apiKey",
+                "type": "secret",
+                "label": "API Key",
+                "defaultSource": true
+              }
+            ]
+          }
+        }
+        "#,
+    );
+
+    assert!(!without_flag.config.expect("config").fields[0].default_source);
+    assert!(with_flag.config.expect("config").fields[0].default_source);
+}
+
+#[test]
 fn primary_candidates_sorted_by_order() {
     let manifest = parse_manifest(
         r#"

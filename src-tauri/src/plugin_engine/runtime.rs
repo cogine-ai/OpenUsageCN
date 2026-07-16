@@ -911,6 +911,54 @@ mod tests {
         assert_eq!(json["note"], "Estimated from local logs");
     }
 
+    fn output_with_lines(lines: Vec<MetricLine>) -> PluginOutput {
+        PluginOutput {
+            provider_id: "test".to_string(),
+            display_name: "Test".to_string(),
+            plan: None,
+            lines,
+            icon_url: String::new(),
+        }
+    }
+
+    #[test]
+    fn probe_error_message_returns_text_for_error_badge() {
+        assert_eq!(
+            probe_error_message(&output_with_lines(vec![error_line("boom".to_string())])),
+            Some("boom")
+        );
+    }
+
+    #[test]
+    fn probe_error_message_is_none_for_success_lines() {
+        assert_eq!(
+            probe_error_message(&output_with_lines(vec![MetricLine::Progress {
+                label: "Session".to_string(),
+                limit_resource_key: None,
+                used: 1.0,
+                limit: 100.0,
+                format: ProgressFormat::Percent,
+                resets_at: None,
+                period_duration_ms: None,
+                color: None,
+            }])),
+            None
+        );
+    }
+
+    #[test]
+    fn probe_error_message_ignores_non_error_badges() {
+        assert_eq!(
+            probe_error_message(&output_with_lines(vec![MetricLine::Badge {
+                label: "Plan".to_string(),
+                text: "Pro".to_string(),
+                color: None,
+                subtitle: None,
+            }])),
+            None
+        );
+    }
+
     #[test]
     fn bar_chart_caps_excessive_points() {
         // A plugin-controlled points array must not parse unbounded: this path

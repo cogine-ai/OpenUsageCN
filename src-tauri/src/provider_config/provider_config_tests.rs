@@ -359,6 +359,67 @@ fn delete_plugin_field_removes_value_from_cache_and_disk() {
 
 #[test]
 #[serial]
+fn delete_refuses_when_disk_config_is_fully_unrecoverable() {
+    replace_store_for_test(default_file());
+    let fields = vec![field("apiKey", PluginConfigFieldType::Secret)];
+    let dir = temp_path("fully-corrupt-delete");
+    let path = dir.join("providers.json");
+    let backup = path.with_extension("json.bak");
+    std::fs::create_dir_all(&dir).expect("create temp dir");
+    std::fs::write(&path, "{bad json").expect("write damaged config");
+    std::fs::write(&backup, "also bad").expect("write damaged backup");
+
+    let _ = load_from_path(&path);
+    let result = delete_plugin_field_from_path(&path, "bigmodel-cn", &fields, "apiKey");
+    let _ = std::fs::remove_dir_all(&dir);
+    replace_store_for_test(default_file());
+
+    let err = result.expect_err("delete should fail");
+    assert!(
+        err.contains("damaged and cannot be recovered"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn delete_rejects_unknown_config_field() {
+    let fields = vec![field("apiKey", PluginConfigFieldType::Secret)];
+    let dir = temp_path("unknown-field-delete");
+    let path = dir.join("providers.json");
+
+    let err = delete_plugin_field_from_path(&path, "bigmodel-cn", &fields, "missing")
+        .expect_err("unknown field should fail");
+    let _ = std::fs::remove_dir_all(&dir);
+
+    assert!(
+        err.contains("Unknown config field 'missing'"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn save_rejects_invalid_select_value() {
+    let fields = vec![select_field(Some("cn"))];
+    let dir = temp_path("invalid-select-save");
+    let path = dir.join("providers.json");
+
+    let err = save_plugin_values_to_path(
+        &path,
+        "bigmodel-cn",
+        &fields,
+        HashMap::from([("region".to_string(), Value::String("invalid".to_string()))]),
+    )
+    .expect_err("invalid select should fail");
+    let _ = std::fs::remove_dir_all(&dir);
+
+    assert!(
+        err.contains("Invalid value 'invalid' for config field 'region'"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+#[serial]
 fn concurrent_saves_keep_all_provider_updates() {
     replace_store_for_test(default_file());
     let fields = vec![field("apiKey", PluginConfigFieldType::Secret)];
