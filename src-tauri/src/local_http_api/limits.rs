@@ -7,6 +7,9 @@ use time::OffsetDateTime;
 
 pub const LIMITS_SCHEMA: &str = "openusage.limits.v1";
 pub const CACHE_FRESHNESS_SECONDS: i64 = 300;
+/// Matches the cache merge path: timestamps farther ahead than this are
+/// non-credible and force a refresh / `stale: true`.
+const CACHE_FUTURE_CREDIBILITY_MINUTES: i64 = 5;
 
 #[derive(Debug, Clone)]
 pub struct ProviderLimitCatalog {
@@ -149,7 +152,14 @@ pub(crate) fn current_envelope(provider_ids: &[String]) -> LimitsEnvelope {
 
 pub fn snapshot_is_stale(snapshot: &CachedPluginSnapshot, now: OffsetDateTime) -> bool {
     snapshot_fetched_at(snapshot)
-        .map(|fetched_at| now >= fetched_at + time::Duration::seconds(CACHE_FRESHNESS_SECONDS))
+        .map(|fetched_at| {
+            let latest_credible =
+                now + time::Duration::minutes(CACHE_FUTURE_CREDIBILITY_MINUTES);
+            if fetched_at > latest_credible {
+                return true;
+            }
+            now >= fetched_at + time::Duration::seconds(CACHE_FRESHNESS_SECONDS)
+        })
         .unwrap_or(true)
 }
 
@@ -161,6 +171,8 @@ fn provider_from_snapshot(
     let fetched_at = snapshot_fetched_at(snapshot)
         .ok_or_else(|| "Cached freshness timestamp is invalid.".to_string())?;
     let expires_at = fetched_at + time::Duration::seconds(CACHE_FRESHNESS_SECONDS);
+    let future_fetched_at =
+        fetched_at > generated_at + time::Duration::minutes(CACHE_FUTURE_CREDIBILITY_MINUTES);
     let mut resources = BTreeMap::new();
     let mut resource_errors = Vec::new();
     for descriptor in &catalog.resources {
@@ -208,7 +220,7 @@ fn provider_from_snapshot(
             plan: snapshot.plan.clone(),
             fetched_at: format_timestamp(fetched_at),
             expires_at: format_timestamp(expires_at),
-            stale: generated_at >= expires_at,
+            stale: future_fetched_at || generated_at >= expires_at,
             resources,
         },
         resource_errors,
@@ -337,6 +349,32 @@ mod tests {
 
         assert!(!snapshot_is_stale(&snapshot, fresh_now));
         assert!(snapshot_is_stale(&snapshot, stale_now));
+    }
+
+    #[test]
+    fn future_fetched_at_beyond_credibility_is_stale() {
+        let mut snapshot = snapshot();
+        snapshot.fetched_at = "2026-07-14T03:00:00Z".to_string();
+        let now = OffsetDateTime::parse(
+            "2026-07-14T02:00:00Z",
+            &time::format_description::well_known::Rfc3339,
+        )
+        .unwrap();
+
+        assert!(snapshot_is_stale(&snapshot, now));
+    }
+
+    #[test]
+    fn slightly_future_fetched_at_within_credibility_stays_fresh() {
+        let mut snapshot = snapshot();
+        snapshot.fetched_at = "2026-07-14T02:02:00Z".to_string();
+        let now = OffsetDateTime::parse(
+            "2026-07-14T02:00:00Z",
+            &time::format_description::well_known::Rfc3339,
+        )
+        .unwrap();
+
+        assert!(!snapshot_is_stale(&snapshot, now));
     }
 
     #[test]
