@@ -59,6 +59,80 @@ describe("usePaceNotifications", () => {
     vi.spyOn(Date, "now").mockReturnValue(now)
   })
 
+  it("posts almostOut and runningOut milestones on worsening edges", async () => {
+    const { rerender: rerenderAlmostOut } = renderHook(
+      ({ used, revision }) =>
+        usePaceNotifications({
+          pluginsMeta: [plugin],
+          pluginSettings: { order: ["codex"], disabled: [] },
+          pluginStates: { codex: state(used, revision) },
+          settings,
+        }),
+      { initialProps: { used: 89, revision: 1 } }
+    )
+
+    await waitFor(() => expect(invokeMock).not.toHaveBeenCalled())
+    rerenderAlmostOut({ used: 91, revision: 2 })
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("post_pace_notification", {
+        title: "即将用尽",
+        subtitle: "Codex · Session",
+        body: "当前周期的额度剩余不足 10%。",
+      })
+    })
+
+    const { rerender: rerenderRunningOut } = renderHook(
+      ({ used, revision }) =>
+        usePaceNotifications({
+          pluginsMeta: [plugin],
+          pluginSettings: { order: ["codex"], disabled: [] },
+          pluginStates: { codex: state(used, revision) },
+          settings,
+        }),
+      { initialProps: { used: 30, revision: 1 } }
+    )
+
+    await waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(1))
+    rerenderRunningOut({ used: 60, revision: 2 })
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("post_pace_notification", {
+        title: "预计提前用尽",
+        subtitle: "Codex · Session",
+        body: "按当前速度，额度预计会在重置前耗尽。",
+      })
+    })
+  })
+
+  it("retries a milestone after invoke failure", async () => {
+    invokeMock.mockRejectedValueOnce(new Error("notification denied"))
+
+    const { rerender } = renderHook(
+      ({ used, revision }) =>
+        usePaceNotifications({
+          pluginsMeta: [plugin],
+          pluginSettings: { order: ["codex"], disabled: [] },
+          pluginStates: { codex: state(used, revision) },
+          settings,
+        }),
+      { initialProps: { used: 30, revision: 1 } }
+    )
+
+    await waitFor(() => expect(invokeMock).not.toHaveBeenCalled())
+    rerender({ used: 45, revision: 2 })
+    await waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(1))
+
+    invokeMock.mockResolvedValue(undefined)
+    rerender({ used: 46, revision: 3 })
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledTimes(2)
+      expect(invokeMock).toHaveBeenLastCalledWith("post_pace_notification", {
+        title: "接近上限",
+        subtitle: "Codex · Session",
+        body: "按当前速度，预计将在重置前接近额度上限。",
+      })
+    })
+  })
+
   it("primes on first data, posts a worsening edge, and skips disabled providers", async () => {
     const { rerender } = renderHook(
       ({ used, revision, disabled }) =>

@@ -428,6 +428,174 @@ mod tests {
     }
 
     #[test]
+    fn catalog_from_plugins_maps_manifest_limit_metadata() {
+        use crate::plugin_engine::manifest::{
+            LimitResourceKind, LimitResourceManifest, LoadedPlugin, ManifestLine, PluginManifest,
+        };
+        use std::path::PathBuf;
+
+        let plugin = LoadedPlugin {
+            manifest: PluginManifest {
+                schema_version: 1,
+                id: "codex".to_string(),
+                name: "Codex".to_string(),
+                version: "0.0.1".to_string(),
+                entry: "plugin.js".to_string(),
+                icon: "icon.svg".to_string(),
+                brand_color: None,
+                lines: vec![
+                    ManifestLine {
+                        line_type: "progress".to_string(),
+                        label: "Session".to_string(),
+                        scope: "overview".to_string(),
+                        primary_order: Some(1),
+                        period: None,
+                        limit_resource: Some(LimitResourceManifest {
+                            key: "session5h".to_string(),
+                            kind: LimitResourceKind::Consumption,
+                            count_unit: None,
+                        }),
+                    },
+                    ManifestLine {
+                        line_type: "progress".to_string(),
+                        label: "Requests".to_string(),
+                        scope: "detail".to_string(),
+                        primary_order: None,
+                        period: None,
+                        limit_resource: Some(LimitResourceManifest {
+                            key: "requests".to_string(),
+                            kind: LimitResourceKind::Consumption,
+                            count_unit: Some("requests".to_string()),
+                        }),
+                    },
+                    ManifestLine {
+                        line_type: "text".to_string(),
+                        label: "Plan".to_string(),
+                        scope: "detail".to_string(),
+                        primary_order: None,
+                        period: None,
+                        limit_resource: None,
+                    },
+                ],
+                links: vec![],
+                status_page: None,
+                config: None,
+            },
+            plugin_dir: PathBuf::from("."),
+            entry_script: String::new(),
+            icon_data_url: String::new(),
+        };
+
+        let catalogs = catalog_from_plugins(&[plugin]);
+        assert_eq!(catalogs.len(), 1);
+        assert_eq!(catalogs[0].provider_id, "codex");
+        assert_eq!(catalogs[0].resources.len(), 2);
+        assert_eq!(catalogs[0].resources[0].key, "session5h");
+        assert_eq!(catalogs[0].resources[0].metric_label, "Session");
+        assert_eq!(catalogs[0].resources[0].kind, LimitResourceKind::Consumption);
+        assert_eq!(catalogs[0].resources[1].key, "requests");
+        assert_eq!(
+            catalogs[0].resources[1].count_unit.as_deref(),
+            Some("requests")
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn envelope_merges_probe_failures_partial_resources_and_invalid_freshness() {
+        use super::cache::{cache_state, CachedPluginSnapshot};
+        use crate::local_http_api::{init_with_catalog, record_probe_error};
+        use serial_test::serial;
+        use std::path::PathBuf;
+
+        let dir = std::env::temp_dir().join(format!(
+            "openusage-limits-envelope-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let catalog = vec![ProviderLimitCatalog {
+            provider_id: "codex".to_string(),
+            resources: vec![
+                LimitCatalogResource {
+                    key: "session".to_string(),
+                    metric_label: "Session".to_string(),
+                    kind: LimitResourceKind::Consumption,
+                    count_unit: None,
+                },
+                LimitCatalogResource {
+                    key: "requests".to_string(),
+                    metric_label: "Requests".to_string(),
+                    kind: LimitResourceKind::Consumption,
+                    count_unit: None,
+                },
+            ],
+        }];
+        init_with_catalog(
+            &dir,
+            vec!["codex".to_string(), "claude".to_string()],
+            catalog,
+            "test".to_string(),
+        );
+        record_probe_error("claude", "token expired: sk-secret");
+
+        let mut partial_snapshot = snapshot();
+        partial_snapshot.lines.push(MetricLine::Progress {
+            label: "Requests".to_string(),
+            limit_resource_key: None,
+            used: 12.0,
+            limit: 100.0,
+            format: ProgressFormat::Count {
+                suffix: "req".to_string(),
+            },
+            resets_at: None,
+            period_duration_ms: None,
+            color: None,
+        });
+        {
+            let mut state = cache_state().lock().expect("cache state poisoned");
+            state.snapshots.insert("codex".to_string(), partial_snapshot);
+            state.snapshots.insert(
+                "broken".to_string(),
+                CachedPluginSnapshot {
+                    provider_id: "broken".to_string(),
+                    display_name: "Broken".to_string(),
+                    plan: None,
+                    lines: vec![],
+                    fetched_at: "not-a-timestamp".to_string(),
+                },
+            );
+            state.limit_catalog.insert(
+                "broken".to_string(),
+                ProviderLimitCatalog {
+                    provider_id: "broken".to_string(),
+                    resources: vec![LimitCatalogResource {
+                        key: "session".to_string(),
+                        metric_label: "Session".to_string(),
+                        kind: LimitResourceKind::Consumption,
+                        count_unit: None,
+                    }],
+                },
+            );
+        }
+
+        let state = cache_state().lock().expect("cache state poisoned");
+        let envelope =
+            envelope_from_state(&["codex".to_string(), "claude".to_string(), "broken".to_string()], &state);
+
+        assert!(envelope.providers.contains_key("codex"));
+        assert!(envelope.providers["codex"].resources.contains_key("session"));
+        assert!(!envelope.providers["codex"].resources.contains_key("requests"));
+        assert!(!envelope.providers.contains_key("broken"));
+
+        let messages: Vec<&str> = envelope.errors.iter().map(|error| error.message.as_str()).collect();
+        assert!(messages.iter().any(|message| message.contains("token expired")));
+        assert!(!messages.iter().any(|message| message.contains("sk-secret")));
+        assert!(messages.iter().any(|message| message.contains("requests")));
+        assert!(messages.iter().any(|message| message.contains("invalid")));
+    }
+
+    #[test]
     fn invalid_resource_does_not_remove_valid_provider_resources() {
         let mut snapshot = snapshot();
         snapshot.lines.push(MetricLine::Progress {

@@ -1447,6 +1447,36 @@ describe("codex plugin", () => {
     expect(credits.value).toBe("$32.80 · 820 点数")
   })
 
+  it("keeps positional fallback label when limit_window_seconds is unrecognized", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
+      tokens: { access_token: "token" },
+      last_refresh: new Date().toISOString(),
+    }))
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      headers: {},
+      bodyText: JSON.stringify({
+        rate_limit: {
+          primary_window: {
+            used_percent: 20,
+            limit_window_seconds: 86400,
+            reset_after_seconds: 3600,
+          },
+          secondary_window: null,
+        },
+      }),
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    expect(result.lines.find((line) => line.label === "5小时")).toMatchObject({
+      used: 20,
+      periodDurationMs: 86_400_000,
+    })
+    expect(result.lines.find((line) => line.label === "每周")).toBeUndefined()
+  })
+
   it("shows a weekly-only primary window as 每周", async () => {
     const ctx = makeCtx()
     ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({

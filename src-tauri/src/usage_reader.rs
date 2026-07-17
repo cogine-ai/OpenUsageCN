@@ -214,6 +214,201 @@ fn is_packaged_resource_dir(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::local_http_api::cache::CachedPluginSnapshot;
+    use crate::local_http_api::limits::{LimitCatalogResource, ProviderLimitCatalog};
+    use crate::plugin_engine::manifest::LimitResourceKind;
+    use crate::plugin_engine::manifest::{LoadedPlugin, PluginManifest};
+    use crate::plugin_engine::runtime::{probe_error_message, ProgressFormat};
+    use serial_test::serial;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn cli_test_plugin(id: &str, entry_script: &str) -> LoadedPlugin {
+        LoadedPlugin {
+            manifest: PluginManifest {
+                schema_version: 1,
+                id: id.to_string(),
+                name: id.to_string(),
+                version: "0.0.0".to_string(),
+                entry: "plugin.js".to_string(),
+                icon: "icon.svg".to_string(),
+                brand_color: None,
+                lines: vec![],
+                links: vec![],
+                status_page: None,
+                config: None,
+            },
+            plugin_dir: PathBuf::from("."),
+            entry_script: entry_script.to_string(),
+            icon_data_url: "data:image/svg+xml;base64,".to_string(),
+        }
+    }
+
+    fn temp_app_dir(label: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        std::env::temp_dir().join(format!("openusagecn-usage-reader-{label}-{nanos}"))
+    }
+
+    #[test]
+    fn run_probes_surfaces_plugin_errors_without_worker_failure() {
+        let plugin = cli_test_plugin(
+            "codex",
+            r#"
+            globalThis.__openusage_plugin = {
+                probe() {
+                    throw "auth failed";
+                }
+            };
+            "#,
+        );
+        let (results, worker_failed) = run_probes(
+            vec![plugin],
+            temp_app_dir("probe-error"),
+            "0.0.0".to_string(),
+        );
+
+        assert!(!worker_failed);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].0, "codex");
+        assert_eq!(probe_error_message(&results[0].1), Some("auth failed"));
+    }
+
+    #[test]
+    fn run_probes_returns_empty_results_for_no_plugins() {
+        let (results, worker_failed) = run_probes(Vec::new(), temp_app_dir("empty"), "0.0.0".to_string());
+        assert!(!worker_failed);
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    #[serial]
+    fn limits_projection_errors_mark_refresh_failed_for_cli_exit_code() {
+        use crate::local_http_api::cache::CachedPluginSnapshot;
+        use crate::local_http_api::{init_with_catalog, limits::current_envelope};
+        use crate::plugin_engine::runtime::MetricLine;
+
+        let dir = std::env::temp_dir().join(format!(
+            "openusage-usage-reader-refresh-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let catalog = vec![ProviderLimitCatalog {
+            provider_id: "codex".to_string(),
+            resources: vec![
+                LimitCatalogResource {
+                    key: "session".to_string(),
+                    metric_label: "Session".to_string(),
+                    kind: LimitResourceKind::Consumption,
+                    count_unit: None,
+                },
+                LimitCatalogResource {
+                    key: "requests".to_string(),
+                    metric_label: "Requests".to_string(),
+                    kind: LimitResourceKind::Consumption,
+                    count_unit: None,
+                },
+            ],
+        }];
+        init_with_catalog(&dir, vec!["codex".to_string()], catalog, "test".to_string());
+
+        let mut snapshot = CachedPluginSnapshot {
+            provider_id: "codex".to_string(),
+            display_name: "Codex".to_string(),
+            plan: Some("Plus".to_string()),
+            lines: vec![MetricLine::Progress {
+                label: "Session".to_string(),
+                limit_resource_key: None,
+                used: 34.0,
+                limit: 100.0,
+                format: ProgressFormat::Percent,
+                resets_at: Some("2026-07-14T09:00:00Z".to_string()),
+                period_duration_ms: Some(18_000_000),
+                color: None,
+            }],
+            fetched_at: "2026-07-14T02:00:00Z".to_string(),
+        };
+        snapshot.lines.push(MetricLine::Progress {
+            label: "Requests".to_string(),
+            limit_resource_key: None,
+            used: 12.0,
+            limit: 100.0,
+            format: ProgressFormat::Count {
+                suffix: "req".to_string(),
+            },
+            resets_at: None,
+            period_duration_ms: None,
+            color: None,
+        });
+        {
+            let mut state = local_http_api::cache::cache_state()
+                .lock()
+                .expect("cache state poisoned");
+            state.snapshots.insert("codex".to_string(), snapshot);
+        }
+
+        let envelope = current_envelope(&["codex".to_string()]);
+        assert!(!envelope.errors.is_empty());
+
+        let refresh_failed = false | !envelope.errors.is_empty();
+        assert!(refresh_failed);
+    }
+
+    #[test]
+    #[serial]
+    fn healthy_limits_envelope_does_not_force_refresh_failed() {
+        use crate::local_http_api::cache::CachedPluginSnapshot;
+        use crate::local_http_api::{init_with_catalog, limits::current_envelope};
+        use crate::plugin_engine::runtime::MetricLine;
+
+        let dir = std::env::temp_dir().join(format!(
+            "openusage-usage-reader-healthy-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let catalog = vec![ProviderLimitCatalog {
+            provider_id: "codex".to_string(),
+            resources: vec![LimitCatalogResource {
+                key: "session".to_string(),
+                metric_label: "Session".to_string(),
+                kind: LimitResourceKind::Consumption,
+                count_unit: None,
+            }],
+        }];
+        init_with_catalog(&dir, vec!["codex".to_string()], catalog, "test".to_string());
+        {
+            let mut state = local_http_api::cache::cache_state()
+                .lock()
+                .expect("cache state poisoned");
+            state.snapshots.insert(
+                "codex".to_string(),
+                CachedPluginSnapshot {
+                    provider_id: "codex".to_string(),
+                    display_name: "Codex".to_string(),
+                    plan: None,
+                    lines: vec![MetricLine::Progress {
+                        label: "Session".to_string(),
+                        limit_resource_key: None,
+                        used: 10.0,
+                        limit: 100.0,
+                        format: ProgressFormat::Percent,
+                        resets_at: None,
+                        period_duration_ms: None,
+                        color: None,
+                    }],
+                    fetched_at: "2026-07-14T02:00:00Z".to_string(),
+                },
+            );
+        }
+
+        let envelope = current_envelope(&["codex".to_string()]);
+        assert!(envelope.errors.is_empty());
+        assert!(!(false | !envelope.errors.is_empty()));
+    }
 
     #[test]
     fn app_data_path_uses_tauri_identifier() {
