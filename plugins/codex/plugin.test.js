@@ -1472,7 +1472,7 @@ describe("codex plugin", () => {
     const result = plugin.probe(ctx)
     expect(result.lines.find((line) => line.label === "5小时")).toMatchObject({
       used: 20,
-      periodDurationMs: 86_400_000,
+      periodDurationMs: 18_000_000,
     })
     expect(result.lines.find((line) => line.label === "每周")).toBeUndefined()
   })

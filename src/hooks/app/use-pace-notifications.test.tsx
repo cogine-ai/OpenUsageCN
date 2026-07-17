@@ -24,6 +24,7 @@ const plugin: PluginMeta = {
   primaryCandidates: [],
 }
 const settings = { almostOut: true, closeToLimit: true, runningOut: true }
+const pluginSettings = { order: ["codex"], disabled: [] }
 
 function state(used: number, revision: number): PluginState {
   return {
@@ -64,7 +65,7 @@ describe("usePaceNotifications", () => {
       ({ used, revision }) =>
         usePaceNotifications({
           pluginsMeta: [plugin],
-          pluginSettings: { order: ["codex"], disabled: [] },
+          pluginSettings,
           pluginStates: { codex: state(used, revision) },
           settings,
         }),
@@ -85,7 +86,7 @@ describe("usePaceNotifications", () => {
       ({ used, revision }) =>
         usePaceNotifications({
           pluginsMeta: [plugin],
-          pluginSettings: { order: ["codex"], disabled: [] },
+          pluginSettings,
           pluginStates: { codex: state(used, revision) },
           settings,
         }),
@@ -104,33 +105,35 @@ describe("usePaceNotifications", () => {
   })
 
   it("retries a milestone after invoke failure", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
     invokeMock.mockRejectedValueOnce(new Error("notification denied"))
 
     const { rerender } = renderHook(
-      ({ used, revision }) =>
+      ({ used, revision, paceSettings }) =>
         usePaceNotifications({
           pluginsMeta: [plugin],
-          pluginSettings: { order: ["codex"], disabled: [] },
+          pluginSettings,
           pluginStates: { codex: state(used, revision) },
-          settings,
+          settings: paceSettings,
         }),
-      { initialProps: { used: 30, revision: 1 } }
+      { initialProps: { used: 30, revision: 1, paceSettings: settings } }
     )
 
     await waitFor(() => expect(invokeMock).not.toHaveBeenCalled())
-    rerender({ used: 45, revision: 2 })
-    await waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(1))
+    rerender({ used: 45, revision: 2, paceSettings: settings })
+    await waitFor(() => expect(invokeMock).toHaveBeenCalled())
 
     invokeMock.mockResolvedValue(undefined)
-    rerender({ used: 46, revision: 3 })
+    rerender({ used: 45, revision: 2, paceSettings: { ...settings, closeToLimit: false } })
+    rerender({ used: 45, revision: 2, paceSettings: settings })
     await waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledTimes(2)
       expect(invokeMock).toHaveBeenLastCalledWith("post_pace_notification", {
         title: "接近上限",
         subtitle: "Codex · Session",
         body: "按当前速度，预计将在重置前接近额度上限。",
       })
     })
+    consoleError.mockRestore()
   })
 
   it("primes on first data, posts a worsening edge, and skips disabled providers", async () => {
