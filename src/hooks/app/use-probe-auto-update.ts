@@ -216,18 +216,23 @@ export function useProbeAutoUpdate({
       const eligibleIds = eligibleCandidates.map((candidate) => candidate.pluginId)
 
       if (eligibleIds.length > 0) {
-        for (const candidate of eligibleCandidates) {
-          recordAttemptedResetBoundary(
-            attemptedResetBoundariesRef.current,
-            candidate.pluginId,
-            candidate.boundaryAt
-          )
-        }
         setLoadingForPlugins(eligibleIds)
-        startBatch(eligibleIds).catch((error) => {
-          console.error("Failed to start reset-boundary refresh batch:", error)
-          setErrorForPlugins(eligibleIds, "无法开始刷新")
-        })
+        startBatch(eligibleIds)
+          .then(() => {
+            // Only consume the boundary after the batch actually starts.
+            // A rejected startBatch must remain retryable after backoff.
+            for (const candidate of eligibleCandidates) {
+              recordAttemptedResetBoundary(
+                attemptedResetBoundariesRef.current,
+                candidate.pluginId,
+                candidate.boundaryAt
+              )
+            }
+          })
+          .catch((error) => {
+            console.error("Failed to start reset-boundary refresh batch:", error)
+            setErrorForPlugins(eligibleIds, "无法开始刷新")
+          })
       }
 
       setResetBoundaryScheduleToken((value) => value + 1)

@@ -561,4 +561,59 @@ describe("useProbeAutoUpdate", () => {
     expect(setErrorForPlugins).toHaveBeenCalledWith(["codex"], "无法开始刷新")
     consoleError.mockRestore()
   })
+
+  it("retries a reset-boundary refresh after startBatch rejects", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(10_000)
+
+    const resetAt = 20_000
+    const pluginStates = { codex: pluginStateWithReset("codex", resetAt) }
+    const setLoadingForPlugins = vi.fn()
+    const setErrorForPlugins = vi.fn()
+    const startBatch = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("ipc unavailable"))
+      .mockResolvedValueOnce(["codex"])
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    renderHook(() =>
+      useProbeAutoUpdate({
+        pluginSettings: { order: ["codex"], disabled: [] },
+        autoUpdateInterval: 5,
+        pluginStates,
+        pluginStatesRef: { current: pluginStates },
+        setLoadingForPlugins,
+        setErrorForPlugins,
+        isPluginLoading: vi.fn(() => false),
+        startBatch,
+      })
+    )
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(
+        resetAt + RESET_BOUNDARY_REFRESH_GRACE_MS - Date.now()
+      )
+    })
+
+    expect(startBatch).toHaveBeenCalledTimes(1)
+    expect(startBatch).toHaveBeenCalledWith(["codex"])
+    expect(setErrorForPlugins).toHaveBeenCalledWith(["codex"], "无法开始刷新")
+
+    // Clear the transient start failure so the boundary is eligible again.
+    // Recording the attempt before startBatch resolved would permanently skip
+    // this retry.
+    pluginStates.codex = {
+      ...pluginStates.codex,
+      error: null,
+      lastErrorAt: null,
+    }
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(RESET_BOUNDARY_REFRESH_MIN_DELAY_MS)
+    })
+
+    expect(startBatch).toHaveBeenCalledTimes(2)
+    expect(startBatch).toHaveBeenLastCalledWith(["codex"])
+    consoleError.mockRestore()
+  })
 })
