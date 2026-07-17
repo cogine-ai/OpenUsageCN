@@ -60,7 +60,8 @@ export function usePaceNotifications({
 
       for (const [providerId, pluginState] of Object.entries(inputs.pluginStates)) {
         if (!enabledIds.has(providerId) || !pluginState.data) continue
-        for (const [index, line] of pluginState.data.lines.entries()) {
+        const labelOccurrences = new Map<string, number>()
+        for (const line of pluginState.data.lines) {
           if (
             line.type !== "progress" ||
             !Number.isFinite(line.used) ||
@@ -69,7 +70,12 @@ export function usePaceNotifications({
             line.limit <= 0
           ) continue
 
-          const key = `${providerId}:${index}:${line.label}`
+          // Key by label + same-label occurrence so inserting/removing an
+          // unrelated progress line (e.g. Claude Sonnet, Cursor Bonus spend)
+          // does not drop paced state for later metrics.
+          const occurrence = labelOccurrences.get(line.label) ?? 0
+          labelOccurrences.set(line.label, occurrence + 1)
+          const key = `${providerId}:${line.label}:${occurrence}`
           seen.add(key)
           const resetsAtMs = line.resetsAt ? Date.parse(line.resetsAt) : null
           const evaluation = evaluatePaceNotification(
