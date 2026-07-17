@@ -7,7 +7,7 @@
   "icon": "icon.svg",
   "brandColor": "#20808D",
   "lines": [
-    { "type": "progress", "label": "API credits", "scope": "overview", "primaryOrder": 1, "limitResource": { "key": "apiCredits" } },
+    { "type": "progress", "label": "API credits", "scope": "overview", "primaryOrder": 1 },
     { "type": "text", "label": "Queries", "scope": "overview" },
     { "type": "text", "label": "Deep Research", "scope": "overview" },
     { "type": "text", "label": "Labs", "scope": "detail" },

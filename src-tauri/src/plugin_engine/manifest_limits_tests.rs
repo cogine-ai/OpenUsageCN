@@ -134,7 +134,6 @@ fn bundled_provider_limit_resource_keys_are_stable() {
         ("opencode-go", &["monthly", "session", "weekly"][..]),
         ("opencode", &["session", "weekly"][..]),
         ("openrouter", &["credits", "keyLimit"][..]),
-        ("perplexity", &["apiCredits"][..]),
         (
             "synthetic",
             &[

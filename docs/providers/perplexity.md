@@ -45,6 +45,7 @@ When a bearer token is present in the cache DB, the plugin calls:
   - `limit = customerInfo.balance`
   - `used = sum(usage-analytics[].meter_event_summaries[].cost)`
   - `resetsAt` not set (UI shows `$<limit> limit`, no reset countdown)
+- This progress line is UI-only. It is not exported through `/v1/limits`, because the live balance is not a consumption grant ceiling.
 
 ## Limitations
 

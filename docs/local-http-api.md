@@ -190,7 +190,6 @@ These identifiers are the stable keys currently exported by bundled plugins. New
 | `opencode-go` | `session`, `weekly`, `monthly` |
 | `opencode` | `session`, `weekly` |
 | `openrouter` | `credits`, `keyLimit` |
-| `perplexity` | `apiCredits` |
 | `synthetic` | `fiveHour`, `mana`, `subscription`, `freeToolCalls`, `search` |
 | `zai` | `session`, `weekly`, `webSearches` |
 
