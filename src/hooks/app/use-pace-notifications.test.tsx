@@ -84,4 +84,45 @@ describe("usePaceNotifications", () => {
     rerender({ used: 60, revision: 3, disabled: true })
     await waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(1))
   })
+
+  it("retries a failed pace notification after the trigger is re-enabled", async () => {
+    invokeMock
+      .mockRejectedValueOnce(new Error("notification center unavailable"))
+      .mockResolvedValue(undefined)
+
+    const { rerender } = renderHook(
+      ({ used, revision, notificationSettings }) =>
+        usePaceNotifications({
+          pluginsMeta: [plugin],
+          pluginSettings: { order: ["codex"], disabled: [] },
+          pluginStates: { codex: state(used, revision) },
+          settings: notificationSettings,
+        }),
+      {
+        initialProps: {
+          used: 30,
+          revision: 1,
+          notificationSettings: settings,
+        },
+      }
+    )
+
+    await waitFor(() => expect(invokeMock).not.toHaveBeenCalled())
+    rerender({ used: 45, revision: 2, notificationSettings: settings })
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("post_pace_notification", {
+        title: "接近上限",
+        subtitle: "Codex · Session",
+        body: "按当前速度，预计将在重置前接近额度上限。",
+      })
+    )
+
+    rerender({
+      used: 45,
+      revision: 2,
+      notificationSettings: { ...settings, closeToLimit: false },
+    })
+    rerender({ used: 45, revision: 2, notificationSettings: settings })
+    await waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(2))
+  })
 })
