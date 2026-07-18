@@ -214,6 +214,8 @@ fn is_packaged_resource_dir(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::local_http_api::{record_probe_error, limits::current_envelope};
+    use serial_test::serial;
 
     #[test]
     fn app_data_path_uses_tauri_identifier() {
@@ -276,5 +278,17 @@ mod tests {
         assert_eq!(cli_resource_dir_for_executable(&copied_executable), None);
 
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    #[serial]
+    fn cached_probe_errors_mark_limits_envelope_as_degraded() {
+        record_probe_error("codex", "auth failed");
+
+        let envelope = current_envelope(&["codex".to_string()]);
+
+        assert_eq!(envelope.errors.len(), 1);
+        assert_eq!(envelope.errors[0].provider_id, "codex");
+        assert!(!envelope.errors.is_empty(), "CLI treats non-empty errors as refresh failure");
     }
 }

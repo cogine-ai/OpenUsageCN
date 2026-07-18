@@ -1519,6 +1519,46 @@ describe("codex plugin", () => {
     })
   })
 
+  it("classifies reversed rate limit windows when both usage headers are present", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
+      tokens: { access_token: "token" },
+      last_refresh: new Date().toISOString(),
+    }))
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      headers: {
+        "x-codex-primary-used-percent": "23",
+        "x-codex-secondary-used-percent": "4",
+      },
+      bodyText: JSON.stringify({
+        rate_limit: {
+          primary_window: {
+            used_percent: 3,
+            limit_window_seconds: 604800,
+            reset_after_seconds: 7200,
+          },
+          secondary_window: {
+            used_percent: 4,
+            limit_window_seconds: 18000,
+            reset_after_seconds: 1800,
+          },
+        },
+      }),
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    expect(result.lines.find((line) => line.label === "5小时")).toMatchObject({
+      used: 4,
+      periodDurationMs: 18000000,
+    })
+    expect(result.lines.find((line) => line.label === "每周")).toMatchObject({
+      used: 23,
+      periodDurationMs: 604800000,
+    })
+  })
+
   it.each([
     [51 * 60 * 60 * 1000, "· 下一个2天3时后过期", undefined],
     [24 * 60 * 60 * 1000, "· 下一个1天后过期", undefined],

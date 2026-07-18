@@ -277,7 +277,10 @@ fn format_timestamp(value: OffsetDateTime) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::cache::cache_state;
+    use crate::plugin_engine::manifest::LimitResourceKind;
     use crate::plugin_engine::runtime::MetricLine;
+    use serial_test::serial;
 
     fn snapshot() -> CachedPluginSnapshot {
         CachedPluginSnapshot {
@@ -476,6 +479,44 @@ mod tests {
         assert_eq!(
             errors,
             vec!["Resource 'requests': count resource is missing a stable unit"]
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn envelope_from_state_includes_redacted_probe_errors_with_cached_provider() {
+        {
+            let mut state = cache_state().lock().expect("cache state poisoned");
+            state.snapshots.insert("codex".to_string(), snapshot());
+            state.limit_catalog.insert(
+                "codex".to_string(),
+                ProviderLimitCatalog {
+                    provider_id: "codex".to_string(),
+                    resources: vec![LimitCatalogResource {
+                        key: "session".to_string(),
+                        metric_label: "Session".to_string(),
+                        kind: LimitResourceKind::Consumption,
+                        count_unit: None,
+                    }],
+                },
+            );
+            state.errors.insert(
+                "codex".to_string(),
+                "Bearer sk-1234567890abcdef".to_string(),
+            );
+        }
+
+        let envelope = {
+            let state = cache_state().lock().expect("cache state poisoned");
+            envelope_from_state(&["codex".to_string()], &state)
+        };
+
+        assert!(envelope.providers.contains_key("codex"));
+        assert_eq!(envelope.errors.len(), 1);
+        assert_eq!(envelope.errors[0].provider_id, "codex");
+        assert!(
+            !envelope.errors[0].message.contains("sk-1234567890abcdef"),
+            "probe errors must be redacted in limits output"
         );
     }
 }

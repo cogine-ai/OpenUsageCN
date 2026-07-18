@@ -1,5 +1,7 @@
 use super::super::cache::{CachedPluginSnapshot, cache_state};
+use super::super::limits::{LimitCatalogResource, ProviderLimitCatalog};
 use super::*;
+use crate::plugin_engine::manifest::LimitResourceKind;
 use serial_test::serial;
 use std::net::Shutdown;
 use std::thread;
@@ -11,6 +13,18 @@ fn make_snapshot(id: &str, name: &str) -> CachedPluginSnapshot {
         plan: Some("Pro".to_string()),
         lines: vec![],
         fetched_at: "2026-03-26T08:15:30Z".to_string(),
+    }
+}
+
+fn make_codex_limit_catalog() -> ProviderLimitCatalog {
+    ProviderLimitCatalog {
+        provider_id: "codex".to_string(),
+        resources: vec![LimitCatalogResource {
+            key: "session".to_string(),
+            metric_label: "Session".to_string(),
+            kind: LimitResourceKind::Consumption,
+            count_unit: None,
+        }],
     }
 }
 
@@ -302,4 +316,52 @@ fn header_value_is_case_insensitive() {
         header_value(request, "host").as_deref(),
         Some("127.0.0.1:6736")
     );
+}
+
+#[test]
+#[serial]
+fn route_limits_provider_with_probe_error_returns_degraded_envelope() {
+    {
+        let mut state = cache_state().lock().unwrap();
+        state.known_plugin_ids = vec!["codex".to_string()];
+        state.snapshots.clear();
+        state.limit_catalog.clear();
+        state.errors.clear();
+        state
+            .errors
+            .insert("codex".to_string(), "auth failed".to_string());
+    }
+
+    let resp = route("GET", "/v1/limits/codex", None, None);
+
+    assert!(resp.starts_with("HTTP/1.1 200"));
+    assert!(resp.contains(r#""schema":"openusage.limits.v1""#));
+    assert!(resp.contains(r#""providerId":"codex""#));
+    assert!(resp.contains(r#""message":"auth failed""#));
+}
+
+#[test]
+#[serial]
+fn route_limits_includes_probe_errors_alongside_cached_provider() {
+    {
+        let mut state = cache_state().lock().unwrap();
+        state.known_plugin_ids = vec!["codex".to_string()];
+        state
+            .snapshots
+            .insert("codex".to_string(), make_snapshot("codex", "Codex"));
+        state
+            .limit_catalog
+            .insert("codex".to_string(), make_codex_limit_catalog());
+        state.errors.clear();
+        state
+            .errors
+            .insert("codex".to_string(), "refresh failed".to_string());
+    }
+
+    let resp = route("GET", "/v1/limits/codex", None, None);
+
+    assert!(resp.starts_with("HTTP/1.1 200"));
+    assert!(resp.contains(r#""displayName":"Codex""#));
+    assert!(resp.contains(r#""errors":[{"providerId":"codex","message":"refresh failed"}]"#)
+        || resp.contains(r#""providerId":"codex","message":"refresh failed""#));
 }
