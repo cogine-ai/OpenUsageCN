@@ -278,6 +278,7 @@ fn format_timestamp(value: OffsetDateTime) -> String {
 mod tests {
     use super::*;
     use crate::plugin_engine::runtime::MetricLine;
+    use serial_test::serial;
 
     fn snapshot() -> CachedPluginSnapshot {
         CachedPluginSnapshot {
@@ -477,5 +478,85 @@ mod tests {
             errors,
             vec!["Resource 'requests': count resource is missing a stable unit"]
         );
+    }
+
+    #[test]
+    #[serial]
+    fn envelope_redacts_cached_probe_errors() {
+        {
+            let mut state = super::cache::cache_state().lock().unwrap();
+            state.known_plugin_ids = vec!["codex".to_string()];
+            state.snapshots.clear();
+            state.limit_catalog.clear();
+            state.errors.clear();
+            state.errors.insert(
+                "codex".to_string(),
+                "auth token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U failed"
+                    .to_string(),
+            );
+        }
+
+        let state = super::cache::cache_state().lock().unwrap();
+        let envelope = envelope_from_state(&["codex".to_string()], &state);
+
+        assert!(envelope.providers.is_empty());
+        assert_eq!(envelope.errors.len(), 1);
+        assert_eq!(envelope.errors[0].provider_id, "codex");
+        assert!(
+            !envelope.errors[0].message.contains("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"),
+            "probe errors must be redacted in limits output"
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn envelope_includes_resource_projection_errors_alongside_valid_resources() {
+        let mut snap = snapshot();
+        snap.lines.push(MetricLine::Progress {
+            label: "Requests".to_string(),
+            limit_resource_key: None,
+            used: 12.0,
+            limit: 100.0,
+            format: ProgressFormat::Count {
+                suffix: "req".to_string(),
+            },
+            resets_at: None,
+            period_duration_ms: None,
+            color: None,
+        });
+        let catalog = ProviderLimitCatalog {
+            provider_id: "codex".to_string(),
+            resources: vec![
+                LimitCatalogResource {
+                    key: "session".to_string(),
+                    metric_label: "Session".to_string(),
+                    kind: LimitResourceKind::Consumption,
+                    count_unit: None,
+                },
+                LimitCatalogResource {
+                    key: "requests".to_string(),
+                    metric_label: "Requests".to_string(),
+                    kind: LimitResourceKind::Consumption,
+                    count_unit: None,
+                },
+            ],
+        };
+
+        {
+            let mut state = super::cache::cache_state().lock().unwrap();
+            state.known_plugin_ids = vec!["codex".to_string()];
+            state.snapshots.insert("codex".to_string(), snap);
+            state.limit_catalog.insert("codex".to_string(), catalog);
+            state.errors.clear();
+        }
+
+        let state = super::cache::cache_state().lock().unwrap();
+        let envelope = envelope_from_state(&["codex".to_string()], &state);
+
+        assert!(envelope.providers["codex"].resources.contains_key("session"));
+        assert!(!envelope.providers["codex"].resources.contains_key("requests"));
+        assert_eq!(envelope.errors.len(), 1);
+        assert_eq!(envelope.errors[0].provider_id, "codex");
+        assert!(envelope.errors[0].message.contains("requests"));
     }
 }

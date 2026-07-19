@@ -214,6 +214,7 @@ fn is_packaged_resource_dir(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     #[test]
     fn app_data_path_uses_tauri_identifier() {
@@ -276,5 +277,28 @@ mod tests {
         assert_eq!(cli_resource_dir_for_executable(&copied_executable), None);
 
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    #[serial]
+    fn limits_envelope_errors_signal_failed_refresh() {
+        use crate::local_http_api::limits::current_envelope;
+        use crate::local_http_api::{init_with_catalog, record_probe_error};
+
+        init_with_catalog(
+            std::env::temp_dir().as_path(),
+            vec!["codex".to_string()],
+            vec![],
+            "test".to_string(),
+        );
+        record_probe_error("codex", "probe failed");
+        let envelope = current_envelope(&["codex".to_string()]);
+
+        assert!(!envelope.errors.is_empty());
+        let refresh_failed = !envelope.errors.is_empty();
+        assert!(
+            refresh_failed,
+            "read_limits_once treats envelope errors as refresh_failed for CLI exit code 4"
+        );
     }
 }

@@ -937,4 +937,37 @@ mod tests {
             MAX_BAR_CHART_POINTS
         );
     }
+
+    #[test]
+    fn progress_line_preserves_limit_resource_key_from_plugin_output() {
+        let plugin = test_plugin(
+            r#"
+            globalThis.__openusage_plugin = {
+                probe(ctx) {
+                    return {
+                        lines: [
+                            ctx.line.progress({
+                                label: "Session",
+                                limitResourceKey: "session",
+                                used: 12,
+                                limit: 100,
+                                format: { kind: "percent" }
+                            })
+                        ]
+                    };
+                }
+            };
+            "#,
+        );
+
+        let output = run_probe(&plugin, &temp_app_dir("limit-resource-key"), "0.0.0");
+        let MetricLine::Progress {
+            limit_resource_key,
+            ..
+        } = &output.lines[0]
+        else {
+            panic!("expected progress line");
+        };
+        assert_eq!(limit_resource_key.as_deref(), Some("session"));
+    }
 }

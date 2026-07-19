@@ -84,4 +84,56 @@ describe("usePaceNotifications", () => {
     rerender({ used: 60, revision: 3, disabled: true })
     await waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(1))
   })
+
+  it("retries a failed notification when a disabled trigger is re-enabled", async () => {
+    invokeMock
+      .mockRejectedValueOnce(new Error("notification denied"))
+      .mockResolvedValue(undefined)
+
+    const { rerender } = renderHook(
+      ({ used, revision, settings: paceSettings }) =>
+        usePaceNotifications({
+          pluginsMeta: [plugin],
+          pluginSettings: { order: ["codex"], disabled: [] },
+          pluginStates: { codex: state(used, revision) },
+          settings: paceSettings,
+        }),
+      {
+        initialProps: {
+          used: 30,
+          revision: 1,
+          settings: { almostOut: true, closeToLimit: false, runningOut: true },
+        },
+      }
+    )
+
+    await waitFor(() => expect(invokeMock).not.toHaveBeenCalled())
+    rerender({
+      used: 45,
+      revision: 2,
+      settings: { almostOut: true, closeToLimit: false, runningOut: true },
+    })
+    await waitFor(() => expect(invokeMock).not.toHaveBeenCalled())
+
+    rerender({
+      used: 45,
+      revision: 2,
+      settings: { almostOut: true, closeToLimit: true, runningOut: true },
+    })
+    await waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(1))
+
+    rerender({
+      used: 45,
+      revision: 3,
+      settings: { almostOut: true, closeToLimit: true, runningOut: true },
+    })
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledTimes(2)
+      expect(invokeMock).toHaveBeenLastCalledWith("post_pace_notification", {
+        title: "接近上限",
+        subtitle: "Codex · Session",
+        body: "按当前速度，预计将在重置前接近额度上限。",
+      })
+    })
+  })
 })
