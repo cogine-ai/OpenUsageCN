@@ -1512,10 +1512,12 @@ describe("codex plugin", () => {
     expect(result.lines.find((line) => line.label === "5小时")).toMatchObject({
       used: 4,
       periodDurationMs: 18000000,
+      limitResourceKey: "session",
     })
     expect(result.lines.find((line) => line.label === "每周")).toMatchObject({
       used: 23,
       periodDurationMs: 604800000,
+      limitResourceKey: "weekly",
     })
   })
 

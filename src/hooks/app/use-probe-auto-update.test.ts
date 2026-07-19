@@ -561,4 +561,40 @@ describe("useProbeAutoUpdate", () => {
     expect(setErrorForPlugins).toHaveBeenCalledWith(["codex"], "无法开始刷新")
     consoleError.mockRestore()
   })
+
+  it("surfaces reset-boundary batch start failures to plugin state", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(10_000)
+
+    const resetAt = 20_000
+    const pluginStates = { codex: pluginStateWithReset("codex", resetAt) }
+    const setLoadingForPlugins = vi.fn()
+    const setErrorForPlugins = vi.fn()
+    const startBatch = vi.fn().mockRejectedValue(new Error("ipc unavailable"))
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    renderHook(() =>
+      useProbeAutoUpdate({
+        pluginSettings: { order: ["codex"], disabled: [] },
+        autoUpdateInterval: 5,
+        pluginStates,
+        pluginStatesRef: { current: pluginStates },
+        setLoadingForPlugins,
+        setErrorForPlugins,
+        isPluginLoading: vi.fn(() => false),
+        startBatch,
+      })
+    )
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(
+        resetAt + RESET_BOUNDARY_REFRESH_GRACE_MS - Date.now()
+      )
+    })
+
+    expect(setLoadingForPlugins).toHaveBeenCalledWith(["codex"])
+    expect(startBatch).toHaveBeenCalledWith(["codex"])
+    expect(setErrorForPlugins).toHaveBeenCalledWith(["codex"], "无法开始刷新")
+    consoleError.mockRestore()
+  })
 })
