@@ -902,7 +902,7 @@ fn inject_fs<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()> {
             ctx.clone(),
             move |ctx_inner: Ctx<'_>, path: String, content: String| -> rquickjs::Result<()> {
                 let expanded = expand_path(&path);
-                std::fs::write(&expanded, &content)
+                atomic_write_text(Path::new(&expanded), &content)
                     .map_err(|e| Exception::throw_message(&ctx_inner, &e.to_string()))
             },
         )?,
@@ -3074,6 +3074,74 @@ fn expand_path(path: &str) -> String {
     path.to_string()
 }
 
+/// Write `content` to `path` via temp file + rename so a failed/partial write cannot
+/// truncate an existing file (e.g. shared Codex/Kimi/Grok auth.json during token refresh).
+fn atomic_write_text(path: &Path, content: &str) -> std::io::Result<()> {
+    use std::io::Write as _;
+
+    let parent = match path.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => parent,
+        _ => Path::new("."),
+    };
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("write");
+    let tmp_path = parent.join(format!(
+        ".{}.{}.{}.tmp",
+        file_name,
+        std::process::id(),
+        uuid::Uuid::new_v4()
+    ));
+
+    let write_tmp = (|| {
+        let mut file = std::fs::File::create(&tmp_path)?;
+        file.write_all(content.as_bytes())?;
+        file.sync_all()?;
+        Ok::<(), std::io::Error>(())
+    })();
+    if let Err(error) = write_tmp {
+        let _ = std::fs::remove_file(&tmp_path);
+        return Err(error);
+    }
+
+    #[cfg(unix)]
+    if let Ok(metadata) = std::fs::metadata(path) {
+        let _ = std::fs::set_permissions(&tmp_path, metadata.permissions());
+    }
+
+    #[cfg(windows)]
+    {
+        // `rename` cannot replace an existing file on Windows. Move the original
+        // aside first so a failed final rename can restore it.
+        if path.exists() {
+            let backup_path = parent.join(format!(
+                ".{}.{}.{}.bak",
+                file_name,
+                std::process::id(),
+                uuid::Uuid::new_v4()
+            ));
+            if let Err(error) = std::fs::rename(path, &backup_path) {
+                let _ = std::fs::remove_file(&tmp_path);
+                return Err(error);
+            }
+            if let Err(error) = std::fs::rename(&tmp_path, path) {
+                let _ = std::fs::rename(&backup_path, path);
+                let _ = std::fs::remove_file(&tmp_path);
+                return Err(error);
+            }
+            let _ = std::fs::remove_file(&backup_path);
+            return Ok(());
+        }
+    }
+
+    if let Err(error) = std::fs::rename(&tmp_path, path) {
+        let _ = std::fs::remove_file(&tmp_path);
+        return Err(error);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3683,6 +3751,52 @@ mod tests {
         let expected = home.join(".claude-custom").to_string_lossy().to_string();
 
         assert_eq!(expand_path("~/.claude-custom"), expected);
+    }
+
+    #[test]
+    fn atomic_write_text_replaces_existing_file_contents() {
+        let dir = std::env::temp_dir().join(format!(
+            "openusagecn-atomic-write-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let path = dir.join("auth.json");
+        std::fs::write(&path, r#"{"refresh_token":"old"}"#).expect("seed file");
+
+        atomic_write_text(&path, r#"{"refresh_token":"new"}"#).expect("atomic write");
+
+        let written = std::fs::read_to_string(&path).expect("read replaced file");
+        assert_eq!(written, r#"{"refresh_token":"new"}"#);
+        let leftover_tmps: Vec<_> = std::fs::read_dir(&dir)
+            .expect("read dir")
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.file_name().to_string_lossy().contains(".tmp"))
+            .collect();
+        assert!(leftover_tmps.is_empty(), "temp files should be renamed away");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn atomic_write_text_preserves_original_when_rename_target_is_invalid() {
+        let dir = std::env::temp_dir().join(format!(
+            "openusagecn-atomic-write-fail-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let original_path = dir.join("auth.json");
+        let original = r#"{"refresh_token":"keep-me"}"#;
+        std::fs::write(&original_path, original).expect("seed file");
+
+        // Rename cannot replace a directory; the helper must fail without touching siblings.
+        let blocking_dest = dir.join("not-a-file");
+        std::fs::create_dir_all(&blocking_dest).expect("blocking dest");
+        assert!(atomic_write_text(&blocking_dest, r#"{"refresh_token":"new"}"#).is_err());
+        assert_eq!(
+            std::fs::read_to_string(&original_path).expect("read original"),
+            original
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

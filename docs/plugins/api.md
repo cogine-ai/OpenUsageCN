@@ -57,7 +57,7 @@ ctx.host.log.error("API request failed: " + error.message)
 ```typescript
 host.fs.exists(path: string): boolean
 host.fs.readText(path: string): string   // Throws on error
-host.fs.writeText(path: string, content: string): void  // Throws on error
+host.fs.writeText(path: string, content: string): void  // Throws on error; atomic replace
 host.fs.listDir(path: string): string[]  // Throws if directory cannot be opened; per-entry errors are silently skipped
 ```
 
@@ -65,6 +65,10 @@ host.fs.listDir(path: string): string[]  // Throws if directory cannot be opened
 
 - `~` expands to the user's home directory
 - `~/foo` expands to `$HOME/foo`
+
+### Writes
+
+`writeText` writes to a temporary sibling file, then renames it into place. If the write fails partway through, an existing file at `path` is left unchanged instead of being truncated.
 
 ### Error Handling
 
