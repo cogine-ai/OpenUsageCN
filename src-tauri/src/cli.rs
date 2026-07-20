@@ -163,6 +163,13 @@ mod tests {
     }
 
     #[test]
+    fn degraded_limits_envelope_maps_to_read_failed_exit() {
+        // usage_reader sets refresh_failed when envelope.errors is non-empty.
+        assert_eq!(exit_code_for_result(true, false), EXIT_READ_FAILED);
+        assert_eq!(exit_code_for_result(true, true), EXIT_READ_FAILED);
+    }
+
+    #[test]
     fn detects_cli_invocation_without_decoding_arguments() {
         assert!(should_run(
             Some(OsStr::new("/usr/local/bin/openusage")),
