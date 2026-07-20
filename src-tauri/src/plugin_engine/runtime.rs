@@ -836,6 +836,27 @@ mod tests {
     }
 
     #[test]
+    fn probe_error_message_reads_error_badge_only() {
+        let plugin = test_plugin("");
+        let output = error_output(&plugin, "Auth expired".to_string());
+        assert_eq!(probe_error_message(&output), Some("Auth expired"));
+
+        let healthy = PluginOutput {
+            provider_id: "test".to_string(),
+            display_name: "Test".to_string(),
+            plan: None,
+            lines: vec![MetricLine::Text {
+                label: "Usage".to_string(),
+                value: "42%".to_string(),
+                color: None,
+                subtitle: None,
+            }],
+            icon_url: plugin.icon_data_url.clone(),
+        };
+        assert_eq!(probe_error_message(&healthy), None);
+    }
+
+    #[test]
     fn run_probe_times_out_cpu_bound_script() {
         let plugin = test_plugin(
             r#"
