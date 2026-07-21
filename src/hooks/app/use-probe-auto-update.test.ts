@@ -106,6 +106,51 @@ describe("getResetBoundaryRefreshPlan", () => {
     })
   })
 
+  it("dedupes duplicate reset boundaries within a plugin", () => {
+    const boundaryAt = 60_000
+    const state = pluginStateWithReset("codex", boundaryAt)
+    const firstLine = state.data?.lines[0]
+    if (firstLine?.type === "progress") {
+      state.data?.lines.push({
+        ...firstLine,
+        label: "Weekly",
+      })
+    }
+
+    const plan = getResetBoundaryRefreshPlan({
+      enabledIds: ["codex"],
+      pluginStates: { codex: state },
+      attemptedBoundaries: new Map(),
+      nextAutoUpdateAt: 5 * 60_000,
+    })
+
+    expect(plan).toEqual({
+      refreshAt: boundaryAt + RESET_BOUNDARY_REFRESH_GRACE_MS,
+      candidates: [{ pluginId: "codex", boundaryAt }],
+    })
+  })
+
+  it("groups providers that share the earliest reset boundary", () => {
+    const boundaryAt = 60_000
+    const plan = getResetBoundaryRefreshPlan({
+      enabledIds: ["codex", "claude"],
+      pluginStates: {
+        codex: pluginStateWithReset("codex", boundaryAt),
+        claude: pluginStateWithReset("claude", boundaryAt),
+      },
+      attemptedBoundaries: new Map(),
+      nextAutoUpdateAt: 5 * 60_000,
+    })
+
+    expect(plan).toEqual({
+      refreshAt: boundaryAt + RESET_BOUNDARY_REFRESH_GRACE_MS,
+      candidates: [
+        { pluginId: "codex", boundaryAt },
+        { pluginId: "claude", boundaryAt },
+      ],
+    })
+  })
+
   it("keeps only the latest attempted reset boundaries per provider", () => {
     const attemptedBoundaries = new Map<string, Set<number>>()
 
@@ -528,6 +573,42 @@ describe("useProbeAutoUpdate", () => {
       await vi.advanceTimersByTimeAsync(1)
     })
     expect(startBatch).toHaveBeenCalledWith(["codex"])
+  })
+
+  it("surfaces reset-boundary batch start failures to plugin state", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(10_000)
+
+    const resetAt = 20_000
+    const pluginStates = { codex: pluginStateWithReset("codex", resetAt) }
+    const setLoadingForPlugins = vi.fn()
+    const setErrorForPlugins = vi.fn()
+    const startBatch = vi.fn().mockRejectedValue(new Error("ipc unavailable"))
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    renderHook(() =>
+      useProbeAutoUpdate({
+        pluginSettings: { order: ["codex"], disabled: [] },
+        autoUpdateInterval: 5,
+        pluginStates,
+        pluginStatesRef: { current: pluginStates },
+        setLoadingForPlugins,
+        setErrorForPlugins,
+        isPluginLoading: vi.fn(() => false),
+        startBatch,
+      })
+    )
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(
+        resetAt + RESET_BOUNDARY_REFRESH_GRACE_MS - Date.now()
+      )
+    })
+
+    expect(setLoadingForPlugins).toHaveBeenCalledWith(["codex"])
+    expect(startBatch).toHaveBeenCalledWith(["codex"])
+    expect(setErrorForPlugins).toHaveBeenCalledWith(["codex"], "无法开始刷新")
+    consoleError.mockRestore()
   })
 
   it("surfaces auto-update batch start failures to plugin state", async () => {
