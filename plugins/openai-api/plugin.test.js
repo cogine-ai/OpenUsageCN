@@ -93,4 +93,31 @@ describe("openai-api plugin", () => {
     expect(credits.format).toEqual({ kind: "dollars" })
     expect(result.lines.find((line) => line.label === "Balance").value).toBe("$75.00")
   })
+
+  it("treats an explicit zero total_available as a real balance", async () => {
+    const ctx = makeCtx()
+    setEnv(ctx, { OPENAI_API_KEY: "standard-api-key" })
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (opts.url.includes("/organization/")) return { status: 403, bodyText: "{}" }
+      if (opts.url.includes("/dashboard/billing/credit_grants")) {
+        return {
+          status: 200,
+          // Public credit_grants examples show total_available can diverge from
+          // total_granted - total_used once grants expire.
+          bodyText: JSON.stringify({
+            total_granted: 23,
+            total_used: 3.07,
+            total_available: 0,
+          }),
+        }
+      }
+      throw new Error("unexpected URL " + opts.url)
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBe("Legacy API Key")
+    expect(result.lines.find((line) => line.label === "Balance").value).toBe("$0.00")
+  })
 })

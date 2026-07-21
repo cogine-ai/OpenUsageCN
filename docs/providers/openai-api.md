@@ -25,6 +25,7 @@ API keys entered in Settings are stored as plaintext in `~/.openusagecn/provider
 | Tokens        | Last 7 days of input plus output tokens      |
 | Cached Tokens | Cached input tokens, when returned           |
 | Credits       | Legacy credit-grants fallback, when present  |
+| Balance       | Spendable credits from `total_available` (legacy fallback) |
 
 ## Endpoint
 
