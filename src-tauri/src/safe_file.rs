@@ -195,7 +195,39 @@ fn replace_windows_guarded(
         None
     };
 
-    replace_windows(source, destination).map(|_| true)
+    if expected_sha256.is_some() {
+        // MoveFileExW rejects the still-open digest guard. ReplaceFileW can replace
+        // the guarded path and also carries its metadata onto the temporary file.
+        replace_windows_preserving_destination(source, destination).map(|_| true)
+    } else {
+        replace_windows(source, destination).map(|_| true)
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn replace_windows_preserving_destination(source: &Path, destination: &Path) -> io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::ReplaceFileW;
+
+    let mut source_wide: Vec<u16> = source.as_os_str().encode_wide().collect();
+    source_wide.push(0);
+    let mut destination_wide: Vec<u16> = destination.as_os_str().encode_wide().collect();
+    destination_wide.push(0);
+    let replaced = unsafe {
+        ReplaceFileW(
+            destination_wide.as_ptr(),
+            source_wide.as_ptr(),
+            std::ptr::null(),
+            0,
+            std::ptr::null(),
+            std::ptr::null(),
+        )
+    };
+    if replaced == 0 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
 }
 
 #[cfg(target_os = "windows")]

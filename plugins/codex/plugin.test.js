@@ -154,6 +154,7 @@ describe("codex plugin", () => {
     const plugin = await loadPlugin()
     plugin.probe(ctx)
 
+    expect(ctx.host.http.request).toHaveBeenCalledTimes(1)
     expect(ctx.host.keychain.readGenericPassword).not.toHaveBeenCalled()
     expect(ctx.host.ccusage.query).not.toHaveBeenCalled()
   })
