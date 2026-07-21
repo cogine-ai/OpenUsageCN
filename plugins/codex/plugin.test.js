@@ -910,6 +910,7 @@ describe("codex plugin", () => {
       "Could not save refreshed credentials. Try again; if the problem continues, run `codex` to log in again."
     )
     expect(ctx.host.http.request).toHaveBeenCalledTimes(1)
+    expect(ctx.host.fs.writeTextIfUnchanged).toHaveBeenCalledTimes(1)
     expect(ctx.host.log.error).toHaveBeenCalledWith(
       expect.stringContaining("failed to save auth")
     )
@@ -989,7 +990,10 @@ describe("codex plugin", () => {
         return {
           status: 200,
           headers: {},
-          bodyText: JSON.stringify({ access_token: "openusage-refresh" }),
+          bodyText: JSON.stringify({
+            access_token: "openusage-refresh",
+            refresh_token: "openusage-rotated-refresh",
+          }),
         }
       }
       if (opts.headers.Authorization === "Bearer stale-access") {
@@ -1004,6 +1008,61 @@ describe("codex plugin", () => {
 
     expect(ctx.host.fs.readText(authPath)).toBe(newerAuth)
     expect(ctx.host.fs.readText(authPath)).not.toContain("openusage-refresh")
+  })
+
+  it("merges rotated tokens after an unrelated concurrent auth file change", async () => {
+    const ctx = makeCtx()
+    const authPath = "~/.codex/auth.json"
+    const staleAuth = JSON.stringify({
+      tokens: {
+        access_token: "stale-access",
+        refresh_token: "stale-refresh",
+        account_id: "account",
+      },
+      last_refresh: "2000-01-01T00:00:00.000Z",
+    })
+    const concurrentlyUpdatedAuth = JSON.stringify({
+      auth_mode: "chatgpt",
+      tokens: {
+        access_token: "stale-access",
+        refresh_token: "stale-refresh",
+        account_id: "account",
+      },
+      last_refresh: "2000-01-01T00:00:00.000Z",
+    })
+    ctx.host.fs.writeText(authPath, staleAuth)
+    const conditionalWrite = ctx.host.fs.writeTextIfUnchanged
+    ctx.host.fs.writeTextIfUnchanged = vi.fn((path, content, expectedSha256) => {
+      if (ctx.host.fs.writeTextIfUnchanged.mock.calls.length === 1) {
+        ctx.host.fs.writeText(authPath, concurrentlyUpdatedAuth)
+      }
+      return conditionalWrite(path, content, expectedSha256)
+    })
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("oauth/token")) {
+        return {
+          status: 200,
+          headers: {},
+          bodyText: JSON.stringify({
+            access_token: "refreshed-access",
+            refresh_token: "rotated-refresh",
+            id_token: "rotated-id",
+          }),
+        }
+      }
+      expect(opts.headers.Authorization).toBe("Bearer refreshed-access")
+      return { status: 200, headers: {}, bodyText: JSON.stringify({}) }
+    })
+
+    const plugin = await loadPlugin()
+    plugin.probe(ctx)
+
+    const saved = JSON.parse(ctx.host.fs.readText(authPath))
+    expect(ctx.host.fs.writeTextIfUnchanged).toHaveBeenCalledTimes(2)
+    expect(saved.auth_mode).toBe("chatgpt")
+    expect(saved.tokens.access_token).toBe("refreshed-access")
+    expect(saved.tokens.refresh_token).toBe("rotated-refresh")
+    expect(saved.tokens.id_token).toBe("rotated-id")
   })
 
   it("reloads newer auth after a proactive refresh error and usage 401", async () => {

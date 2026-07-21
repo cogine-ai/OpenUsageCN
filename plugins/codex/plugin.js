@@ -256,6 +256,43 @@
     return { status: "unchanged", authState }
   }
 
+  function mergeRefreshResponse(auth, body) {
+    const updatedAuth = JSON.parse(JSON.stringify(auth))
+    updatedAuth.tokens.access_token = body.access_token
+    if (body.refresh_token) updatedAuth.tokens.refresh_token = body.refresh_token
+    if (body.id_token) updatedAuth.tokens.id_token = body.id_token
+    updatedAuth.last_refresh = new Date().toISOString()
+    return updatedAuth
+  }
+
+  function persistRefreshedAuth(ctx, authState, usedRefreshToken, body) {
+    let currentState = authState
+    const refreshTokenRotated = !!body.refresh_token && body.refresh_token !== usedRefreshToken
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const currentRefreshToken = currentState.auth.tokens && currentState.auth.tokens.refresh_token
+      if (currentRefreshToken !== usedRefreshToken) throw ERR_TOKEN_CONFLICT
+
+      const updatedAuth = mergeRefreshResponse(currentState.auth, body)
+      const updatedState = Object.assign({}, currentState, { auth: updatedAuth })
+
+      try {
+        if (!saveAuth(ctx, updatedState)) throw ERR_AUTH_SAVE
+        authState.auth = updatedAuth
+        authState.rawDigest = updatedState.rawDigest
+        return true
+      } catch (e) {
+        if (attempt === 1 || e === ERR_AUTH_SAVE || !refreshTokenRotated) throw e
+        const reload = reloadAuthState(ctx, currentState)
+        if (reload.status === "error") throw reload.error
+        currentState = reload.authState
+        ctx.host.log.warn("refresh persistence changed or was temporarily unavailable, retrying once")
+      }
+    }
+
+    return false
+  }
+
   function refreshToken(ctx, authState) {
     const auth = authState.auth
     if (!auth.tokens || !auth.tokens.refresh_token) {
@@ -310,16 +347,9 @@
         return null
       }
 
-      const updatedAuth = JSON.parse(JSON.stringify(auth))
-      updatedAuth.tokens.access_token = newAccessToken
-      if (body.refresh_token) updatedAuth.tokens.refresh_token = body.refresh_token
-      if (body.id_token) updatedAuth.tokens.id_token = body.id_token
-      updatedAuth.last_refresh = new Date().toISOString()
-      const updatedAuthState = Object.assign({}, authState, { auth: updatedAuth })
-
       let saved = false
       try {
-        saved = saveAuth(ctx, updatedAuthState)
+        saved = persistRefreshedAuth(ctx, authState, auth.tokens.refresh_token, body)
         if (saved) {
           ctx.host.log.info("refresh succeeded, auth persisted to " + authState.source)
         }
@@ -332,9 +362,6 @@
         ctx.host.log.error("refresh succeeded but auth persistence was not available")
         throw ERR_AUTH_SAVE
       }
-
-      authState.auth = updatedAuth
-      authState.rawDigest = updatedAuthState.rawDigest
 
       return newAccessToken
     } catch (e) {
