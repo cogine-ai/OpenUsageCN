@@ -96,8 +96,31 @@ vi.mock("@/lib/settings", () => ({
 
 import { useSettingsBootstrap } from "@/hooks/app/use-settings-bootstrap"
 
+const macosCapabilities = {
+  platform: "macos",
+  localHttpApi: true,
+  autostart: true,
+  cli: true,
+  paceNotifications: true,
+  globalShortcuts: true,
+  nativeTrayTitle: true,
+  dynamicTrayIconSettings: true,
+}
+
+const windowsCapabilities = {
+  platform: "windows",
+  localHttpApi: true,
+  autostart: true,
+  cli: false,
+  paceNotifications: false,
+  globalShortcuts: false,
+  nativeTrayTitle: false,
+  dynamicTrayIconSettings: false,
+}
+
 function createArgs() {
   return {
+    platformCapabilities: macosCapabilities,
     setPluginSettings: vi.fn(),
     setPluginsMeta: vi.fn(),
     setAutoUpdateInterval: vi.fn(),
@@ -186,6 +209,19 @@ describe("useSettingsBootstrap", () => {
     expect(enableAutostartMock).not.toHaveBeenCalled()
   })
 
+  it("quotes the Windows startup command even when autostart is already enabled", async () => {
+    const args = {
+      ...createArgs(),
+      platformCapabilities: windowsCapabilities,
+    }
+    const { result } = renderHook(() => useSettingsBootstrap(args))
+
+    await result.current.applyStartOnLogin(true)
+
+    expect(enableAutostartMock).not.toHaveBeenCalled()
+    expect(invokeMock).toHaveBeenCalledWith("repair_windows_autostart_command")
+  })
+
   it("falls back to default reset timer mode when loading fails", async () => {
     const resetModeError = new Error("reset timer mode unavailable")
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
@@ -265,5 +301,24 @@ describe("useSettingsBootstrap", () => {
       expect(args.setPluginSettings).toHaveBeenCalledWith(migratedSettings)
       expect(args.startBatch).toHaveBeenCalledWith(["devin"])
     })
+  })
+
+  it("does not load unsupported Windows-only settings behavior", async () => {
+    const args = {
+      ...createArgs(),
+      platformCapabilities: windowsCapabilities,
+    }
+
+    renderHook(() => useSettingsBootstrap(args))
+
+    await waitFor(() => {
+      expect(args.startBatch).toHaveBeenCalledWith(["codex"])
+      expect(args.setStartOnLogin).toHaveBeenCalledWith(true)
+    })
+    expect(loadGlobalShortcutMock).not.toHaveBeenCalled()
+    expect(migrateLegacyTraySettingsMock).not.toHaveBeenCalled()
+    expect(loadMenubarIconStyleMock).not.toHaveBeenCalled()
+    expect(loadMenubarMetricMock).not.toHaveBeenCalled()
+    expect(loadPaceNotificationSettingsMock).not.toHaveBeenCalled()
   })
 })

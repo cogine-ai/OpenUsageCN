@@ -18,8 +18,10 @@ import type {
   ThemeMode,
   TimeFormatMode,
 } from "@/lib/settings"
+import type { PlatformCapabilities } from "@/lib/platform-capabilities"
 
 type AppContentDerivedProps = {
+  platformCapabilities: PlatformCapabilities | null
   displayPlugins: DisplayPluginState[]
   settingsPlugins: SettingsPluginState[]
   selectedPlugin: DisplayPluginState | null
@@ -47,6 +49,7 @@ export type AppContentActionProps = {
 export type AppContentProps = AppContentDerivedProps & AppContentActionProps
 
 export function AppContent({
+  platformCapabilities,
   displayPlugins,
   settingsPlugins,
   selectedPlugin,
@@ -115,6 +118,7 @@ export function AppContent({
   if (activeView === "settings") {
     return (
       <SettingsPage
+        platformCapabilities={platformCapabilities}
         plugins={settingsPlugins}
         onReorder={onReorder}
         onToggle={onToggle}

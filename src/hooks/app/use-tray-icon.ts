@@ -12,6 +12,8 @@ import type { PluginState } from "@/hooks/app/types"
 type TrayUpdateReason = "probe" | "settings" | "init"
 
 type UseTrayIconArgs = {
+  dynamicTrayIconSettings: boolean
+  nativeTrayTitle: boolean
   pluginsMeta: PluginMeta[]
   pluginSettings: PluginSettings | null
   pluginStates: Record<string, PluginState>
@@ -51,6 +53,8 @@ function isSameTraySettingsPreview(a: TraySettingsPreview, b: TraySettingsPrevie
 }
 
 export function useTrayIcon({
+  dynamicTrayIconSettings,
+  nativeTrayTitle,
   pluginsMeta,
   pluginSettings,
   pluginStates,
@@ -110,6 +114,8 @@ export function useTrayIcon({
     _reason: TrayUpdateReason,
     delayMs = 0,
   ) => {
+    if (!dynamicTrayIconSettings) return
+
     if (trayUpdateTimerRef.current !== null) {
       window.clearTimeout(trayUpdateTimerRef.current)
       trayUpdateTimerRef.current = null
@@ -139,12 +145,10 @@ export function useTrayIcon({
       const maybeSetTitle = (tray as TrayIcon & { setTitle?: (value: string) => Promise<void> }).setTitle
       const setTitleFn =
         typeof maybeSetTitle === "function" ? (value: string) => maybeSetTitle.call(tray, value) : null
-      const supportsNativeTrayTitle = setTitleFn !== null
       const setTrayTitle = (title: string) => {
-        if (setTitleFn) {
-          return setTitleFn(title)
-        }
-        return Promise.resolve()
+        if (!nativeTrayTitle) return Promise.resolve()
+        if (setTitleFn) return setTitleFn(title)
+        return Promise.reject(new Error("Native tray titles are supported but unavailable"))
       }
 
       const maybeSetTooltip = (tray as TrayIcon & { setTooltip?: (value: string) => Promise<void> }).setTooltip
@@ -310,7 +314,7 @@ export function useTrayIcon({
         bars: providerBars,
         sizePx,
         style: "provider",
-        percentText: supportsNativeTrayTitle ? undefined : providerPercentText,
+        percentText: nativeTrayTitle ? undefined : providerPercentText,
         providerIconUrl,
       })
         .then(async (img) => {
@@ -326,10 +330,11 @@ export function useTrayIcon({
           finalizeUpdate()
         })
     }, delayMs)
-  }, [])
+  }, [dynamicTrayIconSettings, nativeTrayTitle])
 
   const trayInitializedRef = useRef(false)
   useEffect(() => {
+    if (!dynamicTrayIconSettings) return
     if (trayInitializedRef.current) return
     let cancelled = false
 
@@ -356,7 +361,7 @@ export function useTrayIcon({
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [dynamicTrayIconSettings])
 
   useEffect(() => {
     if (!trayReady) return

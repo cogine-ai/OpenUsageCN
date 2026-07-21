@@ -63,6 +63,7 @@ describe("usePaceNotifications", () => {
     const { rerender } = renderHook(
       ({ used, revision, disabled }) =>
         usePaceNotifications({
+          supported: true,
           pluginsMeta: [plugin],
           pluginSettings: { order: ["codex"], disabled: disabled ? ["codex"] : [] },
           pluginStates: { codex: state(used, revision) },
@@ -83,5 +84,22 @@ describe("usePaceNotifications", () => {
 
     rerender({ used: 60, revision: 3, disabled: true })
     await waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(1))
+  })
+
+  it("does not evaluate or post notifications when the platform does not support them", async () => {
+    const { rerender } = renderHook(
+      ({ used, revision }) =>
+        usePaceNotifications({
+          supported: false,
+          pluginsMeta: [plugin],
+          pluginSettings: { order: ["codex"], disabled: [] },
+          pluginStates: { codex: state(used, revision) },
+          settings,
+        }),
+      { initialProps: { used: 30, revision: 1 } }
+    )
+
+    rerender({ used: 60, revision: 2 })
+    await waitFor(() => expect(invokeMock).not.toHaveBeenCalled())
   })
 })

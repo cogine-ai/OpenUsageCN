@@ -25,3 +25,49 @@ jobs:
 
       - name: Run tests
         run: bun run test
+
+      - name: Test updater signature script
+        run: node --test scripts/verify-updater-signature.test.mjs
+
+  windows:
+    name: Windows Build And NSIS
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install
+
+      - name: Bundle plugins
+        run: bun run bundle:plugins
+
+      - name: Run tests
+        run: bun run test --run
+
+      - name: Type-check and build frontend
+        run: bun run build
+
+      - name: Test Rust library
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib
+
+      - name: Check Windows binaries
+        run: cargo check --manifest-path src-tauri/Cargo.toml --target x86_64-pc-windows-msvc --bins
+
+      - name: Build unsigned NSIS installer
+        run: >-
+          bun tauri build
+          --target x86_64-pc-windows-msvc
+          --bundles nsis
+          --config '{"bundle":{"createUpdaterArtifacts":false}}'
+          --ci

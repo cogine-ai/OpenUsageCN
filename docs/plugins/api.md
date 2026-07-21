@@ -34,6 +34,12 @@ Application metadata:
 
 The `pluginDataDir` is unique per plugin (`{appDataDir}/plugins_data/{pluginId}/`) and is automatically created when the plugin runs. Use it to store config files, cached data, or state.
 
+On Windows, `appDataDir` is under `%LOCALAPPDATA%\ai.cogine.openusagecn`; non-secret app preferences are stored separately under `%APPDATA%\ai.cogine.openusagecn`. Plugins should use the provided paths instead of constructing an OpenUsageCN data path themselves.
+
+### Windows MVP Limits
+
+The Windows MVP runs only `codex`, `bigmodel-cn`, `openai-api`, `openrouter`, and `zai`. Codex is enabled by default. Windows launch plugins may use filesystem, environment, provider config, HTTP, crypto, and line-building APIs, but must not depend on the macOS Keychain or `ccusage`. Use `ctx.app.platform === "windows"` when a plugin needs a platform-specific credential path or optional metric.
+
 ## Logging
 
 ```typescript
@@ -58,17 +64,18 @@ ctx.host.log.error("API request failed: " + error.message)
 host.fs.exists(path: string): boolean
 host.fs.readText(path: string): string   // Throws on error
 host.fs.writeText(path: string, content: string): void  // Throws on error
+host.fs.writeTextIfUnchanged(path: string, content: string, expectedSha256: string): boolean  // Throws on I/O error
 host.fs.listDir(path: string): string[]  // Throws if directory cannot be opened; per-entry errors are silently skipped
 ```
 
 ### Path Expansion
 
 - `~` expands to the user's home directory
-- `~/foo` expands to `$HOME/foo`
+- `~/foo` expands under the user's home directory on macOS and Windows
 
 ### Error Handling
 
-Both `readText` and `writeText` throw on errors. Always wrap in try/catch:
+Filesystem reads and writes throw on I/O errors. Always wrap them in try/catch:
 
 ```javascript
 try {
@@ -79,6 +86,8 @@ try {
   throw "Failed to read settings. Check your config."
 }
 ```
+
+Use `writeTextIfUnchanged` when updating a credential file owned by another process. Pass the SHA-256 of the exact text previously read. It returns `false` without writing if the file changed before replacement. On Windows, transient sharing violations are retried while the expected content still matches.
 
 ### Directory Listing
 
@@ -161,9 +170,12 @@ Reads an environment variable by name.
 
 ```javascript
 const codexHome = ctx.host.env.get("CODEX_HOME")
+const defaultAuthPath = ctx.app.platform === "windows"
+  ? "~/.codex/auth.json"
+  : "~/.config/codex/auth.json"
 const authPath = codexHome
   ? codexHome.replace(/\/+$/, "") + "/auth.json"
-  : "~/.config/codex/auth.json"
+  : defaultAuthPath
 ```
 
 ## Provider Config
@@ -558,6 +570,8 @@ ctx.line.progress({
 ```
 
 ## ccusage (Token Usage)
+
+> macOS only for bundled launch plugins. The Windows MVP does not run `ccusage`; plugins must omit these local token metrics on Windows.
 
 ```typescript
 host.ccusage.query(opts: {

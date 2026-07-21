@@ -60,17 +60,16 @@ fn secret_input(value: &str) -> HashMap<String, Value> {
 
 #[cfg(unix)]
 #[test]
-fn private_temp_file_is_private_before_writes() {
+fn safe_provider_file_is_private() {
     use std::os::unix::fs::PermissionsExt;
 
-    let path = temp_path("private-temp");
-    let file = create_private_temp_file(&path).expect("create temp file");
+    let path = temp_path("private-file");
+    crate::safe_file::write_text(&path, "secret").expect("write private file");
     let mode = std::fs::metadata(&path)
         .expect("metadata")
         .permissions()
         .mode()
         & 0o777;
-    drop(file);
     let _ = std::fs::remove_file(&path);
 
     assert_eq!(mode, 0o600);

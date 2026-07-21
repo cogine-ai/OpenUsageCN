@@ -18,6 +18,7 @@ import {
 const LOCAL_EVALUATION_INTERVAL_MS = 5 * 60_000
 
 type UsePaceNotificationsArgs = {
+  supported: boolean
   pluginsMeta: PluginMeta[]
   pluginSettings: PluginSettings | null
   pluginStates: Record<string, PluginState>
@@ -34,6 +35,7 @@ const notificationCopy: Record<
 }
 
 export function usePaceNotifications({
+  supported,
   pluginsMeta,
   pluginSettings,
   pluginStates,
@@ -49,6 +51,7 @@ export function usePaceNotifications({
   }, [pluginSettings, pluginStates, pluginsMeta, settings])
 
   const evaluate = useCallback(() => {
+    if (!supported) return
     queueRef.current = queueRef.current.then(async () => {
       const inputs = inputsRef.current
       const names = new Map(inputs.pluginsMeta.map((plugin) => [plugin.id, plugin.name]))
@@ -112,7 +115,7 @@ export function usePaceNotifications({
     }).catch((error) => {
       console.error("Failed to evaluate pace notifications:", error)
     })
-  }, [])
+  }, [supported])
 
   useEffect(() => {
     let hasNewSuccessfulData = false
@@ -137,7 +140,8 @@ export function usePaceNotifications({
   }, [evaluate, pluginSettings, settings])
 
   useEffect(() => {
+    if (!supported) return
     const timer = window.setInterval(evaluate, LOCAL_EVALUATION_INTERVAL_MS)
     return () => window.clearInterval(timer)
-  }, [evaluate])
+  }, [evaluate, supported])
 }

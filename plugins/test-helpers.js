@@ -24,6 +24,14 @@ export const makeCtx = () => {
         },
         readText: (path) => files.get(path),
         writeText: vi.fn((path, text) => files.set(path, text)),
+        writeTextIfUnchanged: vi.fn((path, text, expectedSha256) => {
+          const current = files.get(path)
+          if (typeof current !== "string") return false
+          const currentSha256 = crypto.createHash("sha256").update(current).digest("hex")
+          if (currentSha256 !== expectedSha256) return false
+          files.set(path, text)
+          return true
+        }),
         listDir: (path) => {
           const base = String(path).replace(/\/+$/, "")
           const out = new Set()

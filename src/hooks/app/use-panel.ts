@@ -10,6 +10,7 @@ const MAX_HEIGHT_FALLBACK_PX = 600
 const MAX_HEIGHT_FRACTION_OF_MONITOR = 0.8
 
 type UsePanelArgs = {
+  platform: string | null
   activeView: ActiveView
   setActiveView: (view: ActiveView) => void
   showAbout: boolean
@@ -29,6 +30,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
 }
 
 export function usePanel({
+  platform,
   activeView,
   setActiveView,
   showAbout,
@@ -121,7 +123,10 @@ export function usePanel({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return
-      if (!event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return
+      const usesExpectedModifier = platform === "windows"
+        ? event.ctrlKey && !event.metaKey
+        : platform === "macos" && event.metaKey && !event.ctrlKey
+      if (!usesExpectedModifier || event.altKey || event.shiftKey) return
       if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return
       if (isEditableTarget(event.target)) return
 
@@ -147,7 +152,7 @@ export function usePanel({
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [activeView, displayPlugins, setActiveView, showAbout])
+  }, [activeView, displayPlugins, platform, setActiveView, showAbout])
 
   useEffect(() => {
     if (!isTauri()) return
@@ -191,6 +196,15 @@ export function usePanel({
         await currentWindow.setSize(new PhysicalSize(width, height))
       } catch (e) {
         console.error("Failed to resize window:", e)
+        return
+      }
+
+      if (platform === "windows") {
+        try {
+          await invoke("reposition_panel")
+        } catch (e) {
+          console.error("Failed to reposition panel:", e)
+        }
       }
     }
 
@@ -202,7 +216,7 @@ export function usePanel({
     observer.observe(container)
 
     return () => observer.disconnect()
-  }, [activeView, displayPlugins])
+  }, [activeView, displayPlugins, platform])
 
   useEffect(() => {
     const el = scrollRef.current

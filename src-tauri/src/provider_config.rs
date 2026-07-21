@@ -8,6 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 static LOAD_DEGRADED: AtomicBool = AtomicBool::new(false);
+static CONFIG_PATH: OnceLock<PathBuf> = OnceLock::new();
 
 const CONFIG_VERSION: u32 = 1;
 
@@ -62,14 +63,31 @@ fn default_file() -> ProviderConfigFile {
 }
 
 pub fn config_path() -> Result<PathBuf, String> {
+    if let Some(path) = CONFIG_PATH.get() {
+        return Ok(path.clone());
+    }
+
+    #[cfg(target_os = "windows")]
+    return dirs::data_local_dir()
+        .map(|base| base.join("ai.cogine.openusagecn").join("providers.json"))
+        .ok_or_else(|| "No local app data directory found".to_string());
+
+    #[cfg(not(target_os = "windows"))]
     dirs::home_dir()
         .map(|home| home.join(".openusagecn").join("providers.json"))
         .ok_or_else(|| "No home directory found".to_string())
 }
 
+#[cfg(target_os = "windows")]
+pub fn initialize_path(path: PathBuf) {
+    if CONFIG_PATH.set(path.clone()).is_err() && CONFIG_PATH.get() != Some(&path) {
+        log::error!("provider config path was initialized more than once");
+    }
+}
+
 fn load_from_default_path() -> ProviderConfigFile {
     let Ok(path) = config_path() else {
-        log::warn!("[provider-config] no home directory, using empty provider config");
+        log::warn!("[provider-config] no provider config directory, using empty provider config");
         return default_file();
     };
     load_from_path(&path)
@@ -85,7 +103,7 @@ fn load_from_path(path: &Path) -> ProviderConfigFile {
         Err(err) => {
             log::warn!(
                 "[provider-config] failed to read {}: {}, using empty provider config",
-                path.display(),
+                host_api::redact_log_message(&path.display().to_string()),
                 err
             );
             LOAD_DEGRADED.store(true, Ordering::Release);
@@ -101,7 +119,7 @@ fn load_from_path(path: &Path) -> ProviderConfigFile {
         Err(err) => {
             log::warn!(
                 "[provider-config] failed to parse {}: {}, using empty provider config",
-                path.display(),
+                host_api::redact_log_message(&path.display().to_string()),
                 err
             );
             let backup = path.with_extension("json.bak");
@@ -109,7 +127,7 @@ fn load_from_path(path: &Path) -> ProviderConfigFile {
                 if let Err(copy_err) = std::fs::copy(path, &backup) {
                     log::warn!(
                         "[provider-config] failed to back up damaged config {}: {}",
-                        path.display(),
+                        host_api::redact_log_message(&path.display().to_string()),
                         copy_err
                     );
                 }
@@ -134,6 +152,10 @@ fn has_recoverable_disk_config(path: &Path) -> bool {
     [path, backup.as_path()]
         .iter()
         .any(|source| try_parse_config_file(source).is_some())
+}
+
+fn damaged_config_message(_path: &Path) -> String {
+    "Provider config file is damaged and cannot be recovered automatically. Rename or remove the provider config file and its .bak backup, then try again.".to_string()
 }
 
 fn try_parse_config_file(path: &Path) -> Option<ProviderConfigFile> {
@@ -166,36 +188,10 @@ fn save_to_path(path: &Path, config: &ProviderConfigFile) -> Result<(), String> 
 
     let text = serde_json::to_string_pretty(config)
         .map_err(|err| format!("Failed to encode provider config: {err}"))?;
-    let temp = path.with_extension(format!("json.tmp-{}", uuid::Uuid::new_v4()));
-    {
-        use std::io::Write as _;
-
-        let mut file = create_private_temp_file(&temp)?;
-        file.write_all(text.as_bytes())
-            .map_err(|err| format!("Failed to write provider config: {err}"))?;
-        file.sync_all()
-            .map_err(|err| format!("Failed to sync provider config: {err}"))?;
-    }
-    set_private_permissions(&temp);
-    std::fs::rename(&temp, path)
+    crate::safe_file::write_text(path, &text)
         .map_err(|err| format!("Failed to replace provider config: {err}"))?;
     set_private_permissions(path);
     Ok(())
-}
-
-fn create_private_temp_file(path: &Path) -> Result<std::fs::File, String> {
-    let mut options = std::fs::OpenOptions::new();
-    options.write(true).create_new(true);
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-
-    options
-        .open(path)
-        .map_err(|err| format!("Failed to create provider config temp file: {err}"))
 }
 
 #[cfg(unix)]
@@ -294,11 +290,7 @@ fn save_plugin_values_to_path(
     };
     merge_persisted_providers_if_degraded(path, &mut next_config);
     if LOAD_DEGRADED.load(Ordering::Acquire) && !has_recoverable_disk_config(path) {
-        return Err(
-            "Provider config file is damaged and cannot be recovered automatically. \
-             Rename or remove ~/.openusagecn/providers.json and providers.json.bak, then try again."
-                .to_string(),
-        );
+        return Err(damaged_config_message(path));
     }
 
     let existing = next_config
@@ -356,11 +348,7 @@ fn delete_plugin_field_from_path(
     };
     merge_persisted_providers_if_degraded(path, &mut next_config);
     if LOAD_DEGRADED.load(Ordering::Acquire) && !has_recoverable_disk_config(path) {
-        return Err(
-            "Provider config file is damaged and cannot be recovered automatically. \
-             Rename or remove ~/.openusagecn/providers.json and providers.json.bak, then try again."
-                .to_string(),
-        );
+        return Err(damaged_config_message(path));
     }
     if let Some(values) = next_config.providers.get_mut(plugin_id) {
         values.remove(field_id);

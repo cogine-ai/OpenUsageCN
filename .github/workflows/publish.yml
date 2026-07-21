@@ -151,9 +151,127 @@ jobs:
       - name: Verify updater signatures
         run: bun run verify:updater-signature
 
+  windows:
+    name: Build Windows x64
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "latest"
+
+      - run: bun install
+
+      - name: Bundle plugins
+        run: bun run bundle:plugins
+
+      - name: Verify bundled plugins
+        shell: pwsh
+        run: |
+          $plugins = @(Get-ChildItem "src-tauri/resources/bundled_plugins" -Filter "plugin.json" -File -Recurse)
+          if ($plugins.Count -lt 1) {
+            throw "No bundled plugins found under src-tauri/resources/bundled_plugins."
+          }
+
+      - name: Validate release tag and versions
+        shell: pwsh
+        run: |
+          if ($env:RELEASE_TAG -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') {
+            throw "Invalid RELEASE_TAG: $env:RELEASE_TAG (expected vMAJOR.MINOR.PATCH)"
+          }
+
+          $tagVersion = $env:RELEASE_TAG.Substring(1)
+          $tauriVersion = (Get-Content "src-tauri/tauri.conf.json" -Raw | ConvertFrom-Json).version
+          $packageVersion = (Get-Content "package.json" -Raw | ConvertFrom-Json).version
+          $cargoMatch = Select-String -Path "src-tauri/Cargo.toml" -Pattern '^version = "([^"]+)"' | Select-Object -First 1
+          if (-not $cargoMatch) {
+            throw "Could not read the package version from src-tauri/Cargo.toml"
+          }
+          $cargoVersion = $cargoMatch.Matches[0].Groups[1].Value
+
+          if ($tauriVersion -ne $tagVersion) {
+            throw "src-tauri/tauri.conf.json version ($tauriVersion) != tag version ($tagVersion)"
+          }
+          if ($cargoVersion -ne $tagVersion) {
+            throw "src-tauri/Cargo.toml version ($cargoVersion) != tag version ($tagVersion)"
+          }
+          if ($packageVersion -ne $tagVersion) {
+            throw "package.json version ($packageVersion) != tag version ($tagVersion)"
+          }
+
+      - name: Validate updater signing secrets
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
+            throw "Missing required GitHub Secret: TAURI_SIGNING_PRIVATE_KEY"
+          }
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD)) {
+            throw "Missing required GitHub Secret: TAURI_SIGNING_PRIVATE_KEY_PASSWORD"
+          }
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ env.RELEASE_TAG }}
+          releaseName: ${{ env.RELEASE_TAG }}
+          releaseDraft: true
+          prerelease: false
+          includeUpdaterJson: true
+          updaterJsonPreferNsis: true
+          args: "--target x86_64-pc-windows-msvc --bundles nsis"
+
+      - name: Verify updater signatures
+        run: bun run verify:updater-signature
+
+      - name: Publish setup checksum
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $bundleDir = "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis"
+          $setups = @(Get-ChildItem $bundleDir -Filter "*-setup.exe" -File)
+          if ($setups.Count -ne 1) {
+            throw "Expected exactly one NSIS setup executable under $bundleDir, found $($setups.Count)."
+          }
+
+          $setup = $setups[0]
+          $hash = (Get-FileHash $setup.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          $checksumPath = "$($setup.FullName).sha256"
+          $checksum = "$hash  $($setup.Name)`n"
+          [System.IO.File]::WriteAllText(
+            $checksumPath,
+            $checksum,
+            [System.Text.UTF8Encoding]::new($false)
+          )
+
+          gh release upload $env:RELEASE_TAG $checksumPath --repo $env:GITHUB_REPOSITORY --clobber
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to upload the Windows setup checksum."
+          }
+
   publish:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: [build, windows]
     runs-on: ubuntu-latest
     env:
       RELEASE_TAG: ${{ github.ref_name }}
@@ -162,13 +280,47 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ASSETS=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | tr -d '\r')
-          ARCHIVE_COUNT=$(printf '%s\n' "$ASSETS" | grep -Ec '\.app\.tar\.gz$' || true)
-          SIGNATURE_COUNT=$(printf '%s\n' "$ASSETS" | grep -Ec '\.sig$' || true)
+          mkdir release-assets
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir release-assets
 
-          printf '%s\n' "$ASSETS" | grep -Fxq 'latest.json' || { echo "Missing updater manifest: latest.json"; exit 1; }
-          [[ "$ARCHIVE_COUNT" -ge 2 ]] || { echo "Missing updater archives for both macOS architectures."; exit 1; }
-          [[ "$SIGNATURE_COUNT" -ge 2 ]] || { echo "Missing updater signatures for both macOS architectures."; exit 1; }
+          mapfile -t MAC_ARCHIVES < <(find release-assets -maxdepth 1 -type f -name '*.app.tar.gz')
+          mapfile -t WINDOWS_ARCHIVES < <(find release-assets -maxdepth 1 -type f -name '*.nsis.zip')
+          mapfile -t WINDOWS_SETUPS < <(find release-assets -maxdepth 1 -type f -name '*-setup.exe')
+          mapfile -t WINDOWS_CHECKSUMS < <(find release-assets -maxdepth 1 -type f -name '*-setup.exe.sha256')
+          mapfile -t WINDOWS_MSIS < <(find release-assets -maxdepth 1 -type f \( -name '*.msi' -o -name '*.msi.zip' \))
+
+          [[ -f release-assets/latest.json ]] || { echo "Missing updater manifest: latest.json"; exit 1; }
+          [[ "${#MAC_ARCHIVES[@]}" -eq 2 ]] || { echo "Expected updater archives for both macOS architectures."; exit 1; }
+          [[ "${#WINDOWS_ARCHIVES[@]}" -eq 1 ]] || { echo "Expected exactly one Windows NSIS updater archive."; exit 1; }
+          [[ "${#WINDOWS_SETUPS[@]}" -eq 1 ]] || { echo "Expected exactly one Windows NSIS setup executable."; exit 1; }
+          [[ "${#WINDOWS_CHECKSUMS[@]}" -eq 1 ]] || { echo "Expected exactly one Windows setup checksum."; exit 1; }
+          [[ "${#WINDOWS_MSIS[@]}" -eq 0 ]] || { echo "Unexpected MSI assets found in the NSIS-only release."; exit 1; }
+
+          for archive in "${MAC_ARCHIVES[@]}" "${WINDOWS_ARCHIVES[@]}"; do
+            [[ -f "$archive.sig" ]] || { echo "Missing updater signature: $archive.sig"; exit 1; }
+          done
+
+          (
+            cd release-assets
+            sha256sum --check "$(basename "${WINDOWS_CHECKSUMS[0]}")"
+          )
+
+          jq -e '
+            .platforms["darwin-aarch64"] and
+            .platforms["darwin-x86_64"] and
+            .platforms["windows-x86_64"]
+          ' release-assets/latest.json >/dev/null
+
+          WINDOWS_URL=$(jq -er '.platforms["windows-x86_64"].url' release-assets/latest.json)
+          WINDOWS_SIGNATURE=$(jq -er '.platforms["windows-x86_64"].signature' release-assets/latest.json)
+          [[ "$WINDOWS_URL" == *"/releases/download/$RELEASE_TAG/"* ]] || { echo "Windows updater URL does not point to $RELEASE_TAG."; exit 1; }
+
+          WINDOWS_ARCHIVE_NAME=$(basename "${WINDOWS_URL%%\?*}")
+          [[ -f "release-assets/$WINDOWS_ARCHIVE_NAME" ]] || { echo "Windows updater URL names a missing asset: $WINDOWS_ARCHIVE_NAME"; exit 1; }
+          [[ "$WINDOWS_ARCHIVE_NAME" == *.nsis.zip ]] || { echo "Windows updater URL does not point to an NSIS archive."; exit 1; }
+
+          UPLOADED_SIGNATURE=$(cat "release-assets/$WINDOWS_ARCHIVE_NAME.sig")
+          [[ "$WINDOWS_SIGNATURE" == "$UPLOADED_SIGNATURE" ]] || { echo "Windows latest.json signature does not match the uploaded signature."; exit 1; }
 
       - name: Publish verified release
         env:

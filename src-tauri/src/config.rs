@@ -3,7 +3,7 @@ use serde::Deserialize;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
-/// Proxy configuration loaded from ~/.openusagecn/config.json
+/// Proxy configuration loaded from the platform-specific application config path.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ProxyConfig {
     pub enabled: bool,
@@ -25,15 +25,34 @@ pub struct ResolvedProxy {
 
 /// Global resolved proxy: Some(active) or None(disabled).
 static RESOLVED_PROXY: OnceLock<Option<ResolvedProxy>> = OnceLock::new();
+static CONFIG_PATH: OnceLock<PathBuf> = OnceLock::new();
+
+#[cfg(target_os = "windows")]
+pub fn initialize_path(path: PathBuf) {
+    if CONFIG_PATH.set(path.clone()).is_err() && CONFIG_PATH.get() != Some(&path) {
+        log::error!("proxy config path was initialized more than once");
+    }
+}
 
 /// Returns the resolved proxy, or None if disabled/invalid/missing.
 /// Loaded once from disk on first call; subsequent calls are zero-cost.
 pub fn get_resolved_proxy() -> Option<&'static ResolvedProxy> {
-    RESOLVED_PROXY.get_or_init(|| load_and_resolve_proxy()).as_ref()
+    RESOLVED_PROXY
+        .get_or_init(|| load_and_resolve_proxy())
+        .as_ref()
 }
 
-/// Config file path: ~/.openusagecn/config.json
+/// Config file path (initialized from the Tauri app path on Windows).
 fn config_path() -> Option<PathBuf> {
+    if let Some(path) = CONFIG_PATH.get() {
+        return Some(path.clone());
+    }
+
+    #[cfg(target_os = "windows")]
+    return dirs::data_local_dir()
+        .map(|base| base.join("ai.cogine.openusagecn").join("config.json"));
+
+    #[cfg(not(target_os = "windows"))]
     dirs::home_dir().map(|home| home.join(".openusagecn").join("config.json"))
 }
 
@@ -47,12 +66,19 @@ fn load_and_resolve_proxy() -> Option<ResolvedProxy> {
         Ok(contents) => match serde_json::from_str::<AppConfig>(&contents) {
             Ok(cfg) => cfg,
             Err(e) => {
-                log::warn!("[config] failed to parse {}: {}, using defaults", path.display(), e);
+                log::warn!(
+                    "[config] failed to parse {}: {}, using defaults",
+                    crate::plugin_engine::host_api::redact_log_message(&path.display().to_string()),
+                    e
+                );
                 return None;
             }
         },
         Err(_) => {
-            log::debug!("[config] no config file at {}, using defaults", path.display());
+            log::debug!(
+                "[config] no config file at {}, using defaults",
+                crate::plugin_engine::host_api::redact_log_message(&path.display().to_string())
+            );
             return None;
         }
     };

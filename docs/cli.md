@@ -1,5 +1,7 @@
 # Command-Line Tool
 
+> macOS only. The Windows MVP keeps the tray app and local HTTP API, but does not install or run the `openusage` CLI.
+
 The global `openusage` command prints the same stable `openusage.limits.v1` JSON contract as `/v1/limits`. It runs independently, so the menu-bar app and local HTTP server do not need to be open.
 
 ## Install

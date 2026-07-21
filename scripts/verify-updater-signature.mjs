@@ -1,6 +1,7 @@
 import { createHash, createPublicKey, verify as verifySignature } from "node:crypto"
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs"
 import { join } from "node:path"
+import { pathToFileURL } from "node:url"
 
 const PUBLIC_KEY_DER_PREFIX = Buffer.from("302a300506032b6570032100", "hex")
 const CONFIG_PATH = "src-tauri/tauri.conf.json"
@@ -77,6 +78,10 @@ function parseSignature(signaturePath) {
   }
 }
 
+export function isUpdaterArchive(path) {
+  return path.endsWith(".app.tar.gz") || path.endsWith(".nsis.zip")
+}
+
 function findUpdaterArchives(dir) {
   if (!existsSync(dir)) return []
 
@@ -86,7 +91,7 @@ function findUpdaterArchives(dir) {
     const stat = statSync(path)
     if (stat.isDirectory()) {
       archives.push(...findUpdaterArchives(path))
-    } else if (path.endsWith(".app.tar.gz")) {
+    } else if (isUpdaterArchive(path)) {
       archives.push(path)
     }
   }
@@ -125,12 +130,18 @@ function verifyArchive(publicKey, archivePath) {
   console.log(`Verified updater signature: ${archivePath}`)
 }
 
-const publicKey = parsePublicKey()
-const archives = findUpdaterArchives(BUNDLE_ROOT)
-if (archives.length === 0) {
-  fail(`No updater archives found under ${BUNDLE_ROOT}`)
+function main() {
+  const publicKey = parsePublicKey()
+  const archives = findUpdaterArchives(BUNDLE_ROOT)
+  if (archives.length === 0) {
+    fail(`No updater archives found under ${BUNDLE_ROOT}`)
+  }
+
+  for (const archive of archives) {
+    verifyArchive(publicKey, archive)
+  }
 }
 
-for (const archive of archives) {
-  verifyArchive(publicKey, archive)
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main()
 }

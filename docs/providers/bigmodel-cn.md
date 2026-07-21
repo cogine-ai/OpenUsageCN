@@ -2,6 +2,8 @@
 
 Tracks BigModel CN usage quotas from the China mainland BigModel endpoint.
 
+BigModel CN is included in the Windows MVP and is disabled until you configure and enable it.
+
 BigModel CN and Z.ai are separate providers in OpenUsageCN. Enable this plugin when your plan and API key belong to
 `open.bigmodel.cn`. Keep using the Z.ai plugin for `api.z.ai`.
 
@@ -18,9 +20,11 @@ remain separate.
 The Settings value is used first. If the field is empty, `BIGMODEL_API_KEY` is supported as an environment fallback.
 `ZHIPUAI_API_KEY` is also supported as a second fallback. This plugin does not read `ZAI_API_KEY` or `GLM_API_KEY`.
 
-API keys entered in Settings are stored as plaintext in `~/.openusagecn/providers.json`, protected only by best-effort private file permissions (`0600` on macOS/Linux).
+API keys entered in Settings are stored as plaintext. macOS uses `~/.openusagecn/providers.json`; Windows uses `%LOCALAPPDATA%\ai.cogine.openusagecn\providers.json`. The file is limited by normal user-profile permissions, but another process running as the same user can read it.
 
 If you use environment variables, remember that OpenUsageCN is a GUI app. A one-off `export ...` in a terminal session will not be visible when you launch OpenUsageCN from Spotlight or Launchpad. Persist it, then restart OpenUsageCN.
+
+On Windows, set the variable for your user before launching OpenUsageCN, then fully exit and restart the app. A PowerShell `$env:` value is visible only when OpenUsageCN is launched from that same terminal session.
 
 zsh (`~/.zshrc`):
 

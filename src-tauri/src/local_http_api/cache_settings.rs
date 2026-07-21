@@ -36,7 +36,7 @@ fn read_plugin_settings(app_data_dir: &Path) -> (Vec<String>, HashSet<String>, b
 }
 
 pub(super) fn enabled_plugin_ids_ordered(state: &CacheState) -> Vec<String> {
-    let (settings_order, disabled, has_settings) = read_plugin_settings(&state.app_data_dir);
+    let (settings_order, disabled, has_settings) = read_plugin_settings(&state.settings_data_dir);
     let default_enabled: HashSet<&str> = DEFAULT_ENABLED_PLUGINS.iter().copied().collect();
     let is_enabled = |id: &str| {
         if has_settings {

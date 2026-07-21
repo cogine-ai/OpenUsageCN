@@ -14,12 +14,21 @@
   const ERR_TOKEN_CONFLICT = "Token conflict. Run `codex` to log in again."
   const ERR_TOKEN_REVOKED = "Token revoked. Run `codex` to log in again."
   const ERR_TOKEN_EXPIRED = "Token expired. Run `codex` to log in again."
+  const ERR_AUTH_SAVE = "Could not save refreshed credentials. Try again; if the problem continues, run `codex` to log in again."
   const ERR_USAGE_API_KEY = "Usage not available for API key."
   const ERR_USAGE_CONNECTION = "Usage request failed. Check your connection."
   const ERR_USAGE_AFTER_REFRESH = "Usage request failed after refresh. Try again."
 
   function joinPath(base, leaf) {
     return base.replace(/[\\/]+$/, "") + "/" + leaf
+  }
+
+  function isWindows(ctx) {
+    return !!(ctx.app && ctx.app.platform === "windows")
+  }
+
+  function rawDigest(ctx, text) {
+    return ctx.host.crypto.sha256Hex(String(text))
   }
 
   function readCodexHome(ctx) {
@@ -86,7 +95,8 @@
       return [joinPath(codexHome, AUTH_FILE)]
     }
 
-    return CONFIG_AUTH_PATHS.map((basePath) => joinPath(basePath, AUTH_FILE))
+    const authPaths = isWindows(ctx) ? ["~/.codex"] : CONFIG_AUTH_PATHS
+    return authPaths.map((basePath) => joinPath(basePath, AUTH_FILE))
   }
 
   function hasTokenLikeAuth(auth) {
@@ -111,6 +121,7 @@
   }
 
   function loadAuthFromKeychain(ctx) {
+    if (isWindows(ctx)) return null
     if (!ctx.host.keychain || typeof ctx.host.keychain.readGenericPassword !== "function") {
       return null
     }
@@ -136,7 +147,16 @@
     if (!auth) return false
 
     if (authState.source === "file" && authState.authPath) {
-      ctx.host.fs.writeText(authState.authPath, JSON.stringify(auth, null, 2))
+      const serialized = JSON.stringify(auth, null, 2)
+      const persisted = ctx.host.fs.writeTextIfUnchanged(
+        authState.authPath,
+        serialized,
+        authState.rawDigest
+      )
+      if (!persisted) {
+        throw ERR_TOKEN_CONFLICT
+      }
+      authState.rawDigest = rawDigest(ctx, serialized)
       return true
     }
 
@@ -170,7 +190,7 @@
           continue
         }
         ctx.host.log.info("auth loaded from file: " + authPath)
-        candidates.push({ auth, authPath, source: "file" })
+        candidates.push({ auth, authPath, source: "file", rawDigest: rawDigest(ctx, text) })
       } catch (e) {
         ctx.host.log.warn("auth file read failed: " + authPath + ": " + String(e))
       }
@@ -200,9 +220,15 @@
     let reloaded = null
     if (authState.source === "file" && authState.authPath) {
       try {
-        const auth = tryParseAuthJson(ctx, ctx.host.fs.readText(authState.authPath))
+        const text = ctx.host.fs.readText(authState.authPath)
+        const auth = tryParseAuthJson(ctx, text)
         if (hasTokenLikeAuth(auth)) {
-          reloaded = { auth, authPath: authState.authPath, source: "file" }
+          reloaded = {
+            auth,
+            authPath: authState.authPath,
+            source: "file",
+            rawDigest: rawDigest(ctx, text),
+          }
         }
       } catch (e) {
         ctx.host.log.warn("auth reload failed for file " + authState.authPath + ": " + String(e))
@@ -222,7 +248,8 @@
       return { status: "error", error: ERR_TOKEN_CONFLICT }
     }
 
-    if (JSON.stringify(reloaded.auth) !== JSON.stringify(authState.auth)) {
+    const fileChanged = authState.source === "file" && reloaded.rawDigest !== authState.rawDigest
+    if (fileChanged || JSON.stringify(reloaded.auth) !== JSON.stringify(authState.auth)) {
       ctx.host.log.info("auth changed during guarded reload, using updated credentials")
       return { status: "changed", authState: reloaded }
     }
@@ -283,21 +310,31 @@
         return null
       }
 
-      auth.tokens.access_token = newAccessToken
-      if (body.refresh_token) auth.tokens.refresh_token = body.refresh_token
-      if (body.id_token) auth.tokens.id_token = body.id_token
-      auth.last_refresh = new Date().toISOString()
+      const updatedAuth = JSON.parse(JSON.stringify(auth))
+      updatedAuth.tokens.access_token = newAccessToken
+      if (body.refresh_token) updatedAuth.tokens.refresh_token = body.refresh_token
+      if (body.id_token) updatedAuth.tokens.id_token = body.id_token
+      updatedAuth.last_refresh = new Date().toISOString()
+      const updatedAuthState = Object.assign({}, authState, { auth: updatedAuth })
 
+      let saved = false
       try {
-        const saved = saveAuth(ctx, authState)
+        saved = saveAuth(ctx, updatedAuthState)
         if (saved) {
           ctx.host.log.info("refresh succeeded, auth persisted to " + authState.source)
-        } else {
-          ctx.host.log.warn("refresh succeeded but auth persistence was not possible")
         }
       } catch (e) {
-        ctx.host.log.warn("refresh succeeded but failed to save auth: " + String(e))
+        if (e === ERR_TOKEN_CONFLICT) throw e
+        ctx.host.log.error("refresh succeeded but failed to save auth: " + String(e))
+        throw ERR_AUTH_SAVE
       }
+      if (!saved) {
+        ctx.host.log.error("refresh succeeded but auth persistence was not available")
+        throw ERR_AUTH_SAVE
+      }
+
+      authState.auth = updatedAuth
+      authState.rawDigest = updatedAuthState.rawDigest
 
       return newAccessToken
     } catch (e) {
@@ -439,6 +476,9 @@
   }
 
   function queryTokenUsage(ctx) {
+    if (isWindows(ctx)) {
+      return { status: "no_runner", data: null }
+    }
     if (!ctx.host.ccusage || typeof ctx.host.ccusage.query !== "function") {
       return { status: "no_runner", data: null }
     }

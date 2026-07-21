@@ -1,10 +1,23 @@
 # Local HTTP API
 
-OpenUsageCN exposes a read-only HTTP API on the loopback interface so other local apps can consume the same usage data shown in the menu bar.
+OpenUsageCN exposes a read-only HTTP API on the loopback interface so other local apps can consume the same usage data shown in its tray panel.
 
 **Base URL:** `http://127.0.0.1:6736`
 
 The server starts automatically with the app. If the port is already in use, the API is disabled for that session and Settings shows the bind failure.
+
+The API works the same on macOS and Windows and always listens on loopback only. On Windows, use the real curl executable rather than PowerShell's historical `curl` alias:
+
+```powershell
+curl.exe http://127.0.0.1:6736/health
+curl.exe http://127.0.0.1:6736/v1/usage
+```
+
+PowerShell can also return parsed objects:
+
+```powershell
+Invoke-RestMethod -Uri http://127.0.0.1:6736/v1/limits
+```
 
 ## Routes
 
@@ -39,6 +52,8 @@ Example:
 ```
 
 `providers.cached` and `cache.ready` only count enabled providers that would appear in `GET /v1/usage`. `cache.ready` is `false` on a clean launch until at least one enabled provider has refreshed successfully. That is not a service failure.
+
+The Windows MVP reports five known providers: Codex, BigModel CN, OpenAI API, OpenRouter, and Z.ai.
 
 ### `GET /v1/usage`
 
@@ -167,6 +182,8 @@ If a refresh fails, the last successful provider snapshot remains available and 
 
 These identifiers are the stable keys currently exported by bundled plugins. New keys may be added without changing the schema.
 
+On Windows, only the five Windows MVP providers are present; the rest of this table describes the full macOS catalog.
+
 | Provider | Resource keys |
 |---|---|
 | `alibaba-coding-plan` | `session`, `weekly`, `monthly` |
@@ -200,7 +217,7 @@ These identifiers are the stable keys currently exported by bundled plugins. New
 - Only **successful** probe results are cached. A failed probe never overwrites a previous successful snapshot.
 - The single-provider endpoint (`/v1/usage/:providerId`) works for any known provider, including disabled ones.
 - The limits collection follows the same enabled-provider selection. `providers` is an object, so consumers must not rely on key order. Its single-provider route also works for disabled providers.
-- Limits freshness is five minutes. The HTTP API never triggers a refresh; use the app or the [`openusage` CLI](cli.md) when fresh data is required.
+- Limits freshness is five minutes. The HTTP API never triggers a refresh. Use the app when fresh data is required; on macOS, the [`openusage` CLI](cli.md) can also refresh it.
 
 ## CORS
 
