@@ -1,12 +1,12 @@
 use crate::plugin_engine::manifest::PluginConfigField;
 use crate::provider_config;
 use aes_gcm::{
-    aead::{generic_array::typenum::U16, rand_core::RngCore, Aead, KeyInit, OsRng},
-    aes::Aes256,
     AesGcm, Nonce,
+    aead::{Aead, KeyInit, OsRng, generic_array::typenum::U16, rand_core::RngCore},
+    aes::Aes256,
 };
-use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
-use rquickjs::{function::Rest, Ctx, Exception, Function, Object};
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
+use rquickjs::{Ctx, Exception, Function, Object, function::Rest};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::ffi::{OsStr, OsString};
@@ -634,6 +634,24 @@ pub(crate) fn redact_log_message(msg: &str) -> String {
     {
         result = path_re.replace_all(&result, "[PATH]").to_string();
     }
+    if let Ok(windows_drive_path_re) =
+        regex_lite::Regex::new(r#"(?i)(^|[\s=\"'(])((?:\\\\\?\\)?[a-z]:[\\/][^,;\r\n\"')]+)"#)
+    {
+        result = windows_drive_path_re
+            .replace_all(&result, |caps: &regex_lite::Captures| {
+                format!("{}[PATH]", &caps[1])
+            })
+            .to_string();
+    }
+    if let Ok(windows_unc_path_re) = regex_lite::Regex::new(
+        r#"(?i)(^|[\s=\"'(])(\\\\(?:\?\\UNC\\)?[^\\/\s]+[\\/][^,;\r\n\"')]+)"#,
+    ) {
+        result = windows_unc_path_re
+            .replace_all(&result, |caps: &regex_lite::Captures| {
+                format!("{}[PATH]", &caps[1])
+            })
+            .to_string();
+    }
     result
 }
 
@@ -909,6 +927,26 @@ fn inject_fs<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()> {
     )?;
 
     fs_obj.set(
+        "writeTextIfUnchanged",
+        Function::new(
+            ctx.clone(),
+            move |ctx_inner: Ctx<'_>,
+                  path: String,
+                  content: String,
+                  expected_sha256: String|
+                  -> rquickjs::Result<bool> {
+                let expanded = expand_path(&path);
+                crate::safe_file::write_text_if_unchanged(
+                    std::path::Path::new(&expanded),
+                    &content,
+                    &expected_sha256,
+                )
+                .map_err(|e| Exception::throw_message(&ctx_inner, &e))
+            },
+        )?,
+    )?;
+
+    fs_obj.set(
         "listDir",
         Function::new(
             ctx.clone(),
@@ -1060,7 +1098,8 @@ fn inject_http<'js>(
                 let mut builder = reqwest::blocking::Client::builder()
                     .timeout(timeout)
                     .connect_timeout(timeout)
-                    .redirect(reqwest::redirect::Policy::none());
+                    .redirect(reqwest::redirect::Policy::none())
+                    .no_proxy();
 
                 // Apply pre-resolved proxy (localhost bypass already configured)
                 if let Some(resolved) = crate::config::get_resolved_proxy() {
@@ -3314,6 +3353,41 @@ mod tests {
     }
 
     #[test]
+    fn fs_conditional_write_reports_conflicts_without_overwriting() {
+        let dir = std::env::temp_dir().join(format!(
+            "openusage-host-fs-conditional-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&dir).expect("create temp directory");
+        let path = dir.join("auth.json");
+        std::fs::write(&path, "original").expect("seed auth file");
+        let path_json = serde_json::to_string(&path.to_string_lossy()).expect("encode path");
+        let original_digest = crate::safe_file::sha256_hex(b"original");
+
+        let rt = Runtime::new().expect("runtime");
+        let ctx = Context::full(&rt).expect("context");
+        ctx.with(|ctx| {
+            inject_host_api(&ctx, "test", &dir, "0.0.0").expect("inject host api");
+            let first: bool = ctx
+                .eval(format!(
+                    "__openusage_ctx.host.fs.writeTextIfUnchanged({path_json}, 'first', '{original_digest}')"
+                ))
+                .expect("matching conditional write");
+            let stale: bool = ctx
+                .eval(format!(
+                    "__openusage_ctx.host.fs.writeTextIfUnchanged({path_json}, 'stale', '{original_digest}')"
+                ))
+                .expect("stale conditional write");
+
+            assert!(first);
+            assert!(!stale);
+        });
+
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "first");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn keychain_api_exposes_write_variants() {
         let rt = Runtime::new().expect("runtime");
         let ctx = Context::full(&rt).expect("context");
@@ -4155,6 +4229,40 @@ mod tests {
             "expected redacted path, got: {}",
             redacted
         );
+    }
+
+    #[test]
+    fn redact_log_message_redacts_windows_drive_and_unc_paths() {
+        let msg = r#"auth path=C:\Users\张 三\.codex\auth.json, backup=\\server\AI Team\auth.json, extended=\\?\C:\Users\Name\auth.json"#;
+        let redacted = redact_log_message(msg);
+
+        assert!(
+            !redacted.contains(r#"C:\Users\张 三"#),
+            "drive path leaked: {redacted}"
+        );
+        assert!(
+            !redacted.contains(r#"\\server\AI Team"#),
+            "UNC path leaked: {redacted}"
+        );
+        assert!(
+            !redacted.contains(r#"\\?\C:\Users\Name"#),
+            "extended path leaked: {redacted}"
+        );
+        assert_eq!(
+            redacted.matches("[PATH]").count(),
+            3,
+            "unexpected redaction: {redacted}"
+        );
+    }
+
+    #[test]
+    fn redact_log_message_redacts_forward_slash_windows_path_without_hiding_url() {
+        let msg = "url=https://chatgpt.com/usage path=D:/Codex Data/auth.json";
+        let redacted = redact_log_message(msg);
+
+        assert!(redacted.contains("https://chatgpt.com/usage"));
+        assert!(!redacted.contains("D:/Codex Data/auth.json"));
+        assert!(redacted.contains("path=[PATH]"));
     }
 
     #[test]

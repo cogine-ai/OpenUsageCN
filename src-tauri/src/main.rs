@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
+    #[cfg(not(target_os = "windows"))]
     if openusagecn_lib::cli::should_run_from_env() {
         std::process::exit(openusagecn_lib::cli::run_from_env());
     }

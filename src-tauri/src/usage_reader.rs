@@ -40,6 +40,7 @@ pub(crate) fn read_limits_once(
     let catalog = local_http_api::limits::catalog_from_plugins(&plugins);
     local_http_api::init_with_catalog(
         &app_data_dir,
+        &app_data_dir,
         known_provider_ids.clone(),
         catalog,
         env!("CARGO_PKG_VERSION").to_string(),

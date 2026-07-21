@@ -8,10 +8,12 @@ import { useAppVersion } from "@/hooks/app/use-app-version"
 import { usePanel } from "@/hooks/app/use-panel"
 import { useAppUpdate } from "@/hooks/use-app-update"
 import { useAppUiStore } from "@/stores/app-ui-store"
+import type { PlatformCapabilities } from "@/lib/platform-capabilities"
 
 const ARROW_OVERHEAD_PX = 37
 
 type AppShellProps = {
+  platformCapabilities: PlatformCapabilities | null
   onRefreshAll: () => void
   navPlugins: NavPlugin[]
   displayPlugins: DisplayPluginState[]
@@ -25,6 +27,7 @@ type AppShellProps = {
 }
 
 export function AppShell({
+  platformCapabilities,
   onRefreshAll,
   navPlugins,
   displayPlugins,
@@ -56,6 +59,7 @@ export function AppShell({
     canScrollDown,
     maxPanelHeightPx,
   } = usePanel({
+    platform: platformCapabilities?.platform ?? null,
     activeView,
     setActiveView,
     showAbout,
@@ -91,6 +95,7 @@ export function AppShell({
               <div ref={scrollRef} className="h-full overflow-y-auto scrollbar-none">
                 <AppContent
                   {...appContentProps}
+                  platformCapabilities={platformCapabilities}
                   displayPlugins={displayPlugins}
                   settingsPlugins={settingsPlugins}
                   selectedPlugin={selectedPlugin}

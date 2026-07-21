@@ -1,5 +1,7 @@
 # Quota Pace Notifications
 
+> macOS only. Quota pace notifications are not available in the Windows MVP.
+
 OpenUsageCN can send macOS notifications when a provider's quota gets worse during the current reset window.
 
 The three alerts are:

@@ -6,6 +6,7 @@ import {
   isEnabled as isAutostartEnabled,
 } from "@tauri-apps/plugin-autostart"
 import type { PluginMeta } from "@/lib/plugin-types"
+import type { PlatformCapabilities } from "@/lib/platform-capabilities"
 import {
   arePluginSettingsEqual,
   DEFAULT_AUTO_UPDATE_INTERVAL,
@@ -47,6 +48,7 @@ import {
 } from "@/lib/settings"
 
 type UseSettingsBootstrapArgs = {
+  platformCapabilities: PlatformCapabilities | null
   setPluginSettings: (value: PluginSettings | null) => void
   setPluginsMeta: (value: PluginMeta[]) => void
   setAutoUpdateInterval: (value: AutoUpdateIntervalMinutes) => void
@@ -65,6 +67,7 @@ type UseSettingsBootstrapArgs = {
 }
 
 export function useSettingsBootstrap({
+  platformCapabilities,
   setPluginSettings,
   setPluginsMeta,
   setAutoUpdateInterval,
@@ -81,18 +84,25 @@ export function useSettingsBootstrap({
   setErrorForPlugins,
   startBatch,
 }: UseSettingsBootstrapArgs) {
-  const applyStartOnLogin = useCallback(async (value: boolean) => {
-    if (!isTauri()) return
-    const currentlyEnabled = await isAutostartEnabled()
-    if (currentlyEnabled === value) return
+  const applyStartOnLogin = useCallback(
+    async (value: boolean) => {
+      if (!isTauri()) return
+      const currentlyEnabled = await isAutostartEnabled()
 
-    if (value) {
-      await enableAutostart()
-      return
-    }
+      if (currentlyEnabled !== value) {
+        if (value) {
+          await enableAutostart()
+        } else {
+          await disableAutostart()
+        }
+      }
 
-    await disableAutostart()
-  }, [])
+      if (value && platformCapabilities?.platform === "windows") {
+        await invoke("repair_windows_autostart_command")
+      }
+    },
+    [platformCapabilities?.platform]
+  )
 
   useEffect(() => {
     let isMounted = true
@@ -145,52 +155,6 @@ export function useSettingsBootstrap({
           console.error("Failed to load time format mode:", error)
         }
 
-        let storedGlobalShortcut = DEFAULT_GLOBAL_SHORTCUT
-        try {
-          storedGlobalShortcut = await loadGlobalShortcut()
-        } catch (error) {
-          console.error("Failed to load global shortcut:", error)
-        }
-
-        let storedStartOnLogin = DEFAULT_START_ON_LOGIN
-        try {
-          storedStartOnLogin = await loadStartOnLogin()
-        } catch (error) {
-          console.error("Failed to load start on login:", error)
-        }
-
-        try {
-          await applyStartOnLogin(storedStartOnLogin)
-        } catch (error) {
-          console.error("Failed to apply start on login setting:", error)
-        }
-        try {
-          await migrateLegacyTraySettings()
-        } catch (error) {
-          console.error("Failed to migrate legacy tray settings:", error)
-        }
-
-        let storedMenubarIconStyle = DEFAULT_MENUBAR_ICON_STYLE
-        try {
-          storedMenubarIconStyle = await loadMenubarIconStyle()
-        } catch (error) {
-          console.error("Failed to load menubar icon style:", error)
-        }
-
-        let storedMenubarMetric = DEFAULT_MENUBAR_METRIC
-        try {
-          storedMenubarMetric = await loadMenubarMetric()
-        } catch (error) {
-          console.error("Failed to load menubar metric:", error)
-        }
-
-        let storedPaceNotifications = DEFAULT_PACE_NOTIFICATION_SETTINGS
-        try {
-          storedPaceNotifications = await loadPaceNotificationSettings()
-        } catch (error) {
-          console.error("Failed to load pace notification settings:", error)
-        }
-
         if (isMounted) {
           setPluginSettings(normalized)
           setAutoUpdateInterval(storedInterval)
@@ -198,12 +162,6 @@ export function useSettingsBootstrap({
           setDisplayMode(storedDisplayMode)
           setResetTimerDisplayMode(storedResetTimerDisplayMode)
           setTimeFormatMode(storedTimeFormatMode)
-          setGlobalShortcut(storedGlobalShortcut)
-          setStartOnLogin(storedStartOnLogin)
-          setMenubarIconStyle(storedMenubarIconStyle)
-          setMenubarMetric(storedMenubarMetric)
-          setPaceNotifications(storedPaceNotifications)
-
           const enabledIds = getEnabledPluginIds(normalized)
           setLoadingForPlugins(enabledIds)
           try {
@@ -226,24 +184,97 @@ export function useSettingsBootstrap({
       isMounted = false
     }
   }, [
-    applyStartOnLogin,
     setAutoUpdateInterval,
     setDisplayMode,
     setErrorForPlugins,
-    setGlobalShortcut,
     setLoadingForPlugins,
-    setMenubarIconStyle,
-    setMenubarMetric,
-    setPaceNotifications,
     migrateWindsurfToDevin,
-    migrateLegacyTraySettings,
     setPluginSettings,
     setPluginsMeta,
     setResetTimerDisplayMode,
-    setStartOnLogin,
     setThemeMode,
     setTimeFormatMode,
     startBatch,
+  ])
+
+  useEffect(() => {
+    if (!platformCapabilities) return
+    let isMounted = true
+
+    const loadPlatformSettings = async () => {
+      if (platformCapabilities.globalShortcuts) {
+        let storedGlobalShortcut = DEFAULT_GLOBAL_SHORTCUT
+        try {
+          storedGlobalShortcut = await loadGlobalShortcut()
+        } catch (error) {
+          console.error("Failed to load global shortcut:", error)
+        }
+        if (isMounted) setGlobalShortcut(storedGlobalShortcut)
+      }
+
+      if (platformCapabilities.autostart) {
+        let storedStartOnLogin = DEFAULT_START_ON_LOGIN
+        try {
+          storedStartOnLogin = await loadStartOnLogin()
+        } catch (error) {
+          console.error("Failed to load start on login:", error)
+        }
+        if (isMounted) setStartOnLogin(storedStartOnLogin)
+        try {
+          await applyStartOnLogin(storedStartOnLogin)
+        } catch (error) {
+          console.error("Failed to apply start on login setting:", error)
+        }
+      }
+
+      if (platformCapabilities.dynamicTrayIconSettings) {
+        try {
+          await migrateLegacyTraySettings()
+        } catch (error) {
+          console.error("Failed to migrate legacy tray settings:", error)
+        }
+
+        let storedMenubarIconStyle = DEFAULT_MENUBAR_ICON_STYLE
+        try {
+          storedMenubarIconStyle = await loadMenubarIconStyle()
+        } catch (error) {
+          console.error("Failed to load menubar icon style:", error)
+        }
+        if (isMounted) setMenubarIconStyle(storedMenubarIconStyle)
+
+        let storedMenubarMetric = DEFAULT_MENUBAR_METRIC
+        try {
+          storedMenubarMetric = await loadMenubarMetric()
+        } catch (error) {
+          console.error("Failed to load menubar metric:", error)
+        }
+        if (isMounted) setMenubarMetric(storedMenubarMetric)
+      }
+
+      if (platformCapabilities.paceNotifications) {
+        let storedPaceNotifications = DEFAULT_PACE_NOTIFICATION_SETTINGS
+        try {
+          storedPaceNotifications = await loadPaceNotificationSettings()
+        } catch (error) {
+          console.error("Failed to load pace notification settings:", error)
+        }
+        if (isMounted) setPaceNotifications(storedPaceNotifications)
+      }
+    }
+
+    void loadPlatformSettings()
+
+    return () => {
+      isMounted = false
+    }
+  }, [
+    applyStartOnLogin,
+    platformCapabilities,
+    setGlobalShortcut,
+    setMenubarIconStyle,
+    setMenubarMetric,
+    setPaceNotifications,
+    setStartOnLogin,
   ])
 
   return {

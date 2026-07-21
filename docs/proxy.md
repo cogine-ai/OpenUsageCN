@@ -3,13 +3,14 @@
 OpenUsageCN can route provider and plugin HTTP requests through an optional proxy.
 
 - Supported proxy types: `socks5://`, `http://`, `https://`
-- Config file: `~/.openusagecn/config.json`
+- macOS config: `~/.openusagecn/config.json`
+- Windows config: `%LOCALAPPDATA%\ai.cogine.openusagecn\config.json`
 - Default: off
 - UI: none
 
 ## Config File
 
-Create `~/.openusagecn/config.json`:
+Create the config file for your platform. On Windows, create the `ai.cogine.openusagecn` folder first if it does not exist.
 
 ```json
 {
@@ -38,9 +39,10 @@ You can also use an authenticated proxy URL:
 - `localhost`, `127.0.0.1`, and `::1` always bypass the proxy.
 - Missing, disabled, invalid, or unreadable config leaves proxying off.
 - Proxy credentials are redacted in logs.
+- Proxy credentials remain plaintext in this file. On Windows, normal user-profile permissions limit access, but other processes running as the same user can still read it.
 
 ## Scope
 
 This applies to provider, plugin, and provider-status HTTP requests that go through OpenUsageCN's built-in HTTP client.
 
-It is not a general macOS system proxy setting and does not automatically proxy unrelated subprocess network traffic.
+OpenUsageCN uses only this manual proxy configuration. It does not automatically use macOS or Windows system proxy settings, `HTTP_PROXY`-style environment variables, PAC/WPAD, or integrated enterprise proxy authentication. It also does not proxy unrelated subprocess network traffic.

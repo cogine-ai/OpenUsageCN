@@ -6,7 +6,7 @@
 
 - 应用名称：`OpenUsageCN`
 - 包名：`openusagecn`
-- macOS bundle identifier：`ai.cogine.openusagecn`
+- 应用标识：`ai.cogine.openusagecn`
 - GitHub 仓库：`https://github.com/cogine-ai/OpenUsageCN`
 - 更新地址：`https://github.com/cogine-ai/OpenUsageCN/releases/latest/download/latest.json`
 
@@ -22,11 +22,16 @@ Tauri updater 公钥写在 `src-tauri/tauri.conf.json`。对应私钥保存在�
 
 ## GitHub Secrets
 
-发布 workflow 需要这些 Secrets：
+macOS 和 Windows updater 都需要：
 
 ```text
 TAURI_SIGNING_PRIVATE_KEY
 TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+```
+
+macOS 签名和公证还需要：
+
+```text
 APPLE_CERTIFICATE
 APPLE_CERTIFICATE_PASSWORD
 KEYCHAIN_PASSWORD
@@ -47,12 +52,37 @@ APPLE_TEAM_ID
 3. 运行 `bun run test --run`。
 4. 运行 `bun run build`。
 5. 运行 `CARGO_NET_GIT_FETCH_WITH_CLI=true cargo test --manifest-path src-tauri/Cargo.toml`。
-6. 运行 `bun run build:release` 或 `bun run build:release -- --skip-stapling`。
-7. 运行 `bun run verify:updater-signature`，确认 updater 包能被 `src-tauri/tauri.conf.json` 里的公钥验签。
-8. 打包运行应用后，替换 `README.md` 使用的 `screenshot.png`。
+
+macOS 发布还需要：
+
+1. 运行 `bun run build:release` 或 `bun run build:release -- --skip-stapling`。
+2. 运行 `bun run verify:updater-signature`，确认 updater 包能被 `src-tauri/tauri.conf.json` 里的公钥验签。
+3. 打包运行应用后，替换 `README.md` 使用的 `screenshot.png`。
+
+Windows 发布还需要：
+
+1. 在 Windows 10 22H2 x64 和当前 Windows 11 x64 上完成安装、托盘、更新和卸载检查。
+2. 运行 `bun tauri build --target x86_64-pc-windows-msvc --bundles nsis`。
+3. 确认生成 current-user NSIS 安装包、`.nsis.zip` updater 包及其 `.sig`。
+4. 运行 `bun run verify:updater-signature`。
+5. 为 setup `.exe` 生成并上传 SHA-256 校验文件。
+
+Windows 安装器使用在线 WebView2 bootstrapper。没有 WebView2 Runtime 的电脑需要联网完成安装。
 
 ## 发布方式
 
-推送 `vMAJOR.MINOR.PATCH` tag 后，`Publish` workflow 会先构建 Apple Silicon 和 Intel 两个 macOS 包，并把 updater 所需的 `latest.json` 和 `.sig` 文件上传到草稿 release。两个架构都通过本地 updater 验签后，workflow 才会发布正式 release。
+推送 `vMAJOR.MINOR.PATCH` tag 后，`Publish` workflow 会分别构建 Apple Silicon、Intel 和 Windows x64 包。Windows 产物是只为当前用户安装的 NSIS setup `.exe`，并包含 `.nsis.zip` updater 包、签名和 setup SHA-256。所有平台通过 updater 验签与发布校验后，workflow 才会发布正式 release。
 
 发布失败时，先看 workflow 里的 `Validate release secrets` 和 `Validate app version matches tag` 两步。它们会直接指出缺少的 Secret 或版本不一致问题。
+
+## Windows 未签名安装包
+
+Windows MVP 不要求 Authenticode 证书。未签名安装包仍可安装，但 SmartScreen 可能警告，企业策略或 Smart App Control 也可能直接阻止运行。发布说明和下载页必须明确这一点，并提供 setup `.exe` 的 SHA-256。
+
+用户可在 PowerShell 中校验：
+
+```powershell
+Get-FileHash .\OpenUsageCN_*_x64-setup.exe -Algorithm SHA256
+```
+
+计算结果必须与同一 Release 中的 `.sha256` 文件完全一致。Tauri updater 自身的 `.sig` 仍是发布硬门槛；SHA-256 不能替代 updater 签名。

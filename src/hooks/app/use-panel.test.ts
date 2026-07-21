@@ -66,6 +66,7 @@ describe("usePanel", () => {
 
     renderHook(() =>
       usePanel({
+        platform: "macos",
         activeView: "home",
         setActiveView: vi.fn(),
         showAbout: false,
@@ -100,6 +101,7 @@ describe("usePanel", () => {
 
     const { unmount } = renderHook(() =>
       usePanel({
+        platform: "macos",
         activeView: "home",
         setActiveView: vi.fn(),
         showAbout: false,
@@ -132,6 +134,7 @@ describe("usePanel", () => {
 
     const { unmount } = renderHook(() =>
       usePanel({
+        platform: "macos",
         activeView: "home",
         setActiveView: vi.fn(),
         showAbout: false,
@@ -157,6 +160,7 @@ describe("usePanel", () => {
 
     const firstHook = renderHook(() =>
       usePanel({
+        platform: "macos",
         activeView: "home",
         setActiveView,
         showAbout: false,
@@ -191,6 +195,7 @@ describe("usePanel", () => {
 
     const secondHook = renderHook(() =>
       usePanel({
+        platform: "macos",
         activeView: "b",
         setActiveView,
         showAbout: false,
@@ -222,10 +227,44 @@ describe("usePanel", () => {
     secondHook.unmount()
   })
 
+  it("uses Ctrl+Arrow navigation on Windows and ignores Command", () => {
+    const setActiveView = vi.fn()
+
+    renderHook(() =>
+      usePanel({
+        platform: "windows",
+        activeView: "home",
+        setActiveView,
+        showAbout: false,
+        setShowAbout: vi.fn(),
+        displayPlugins: [
+          {
+            meta: { id: "a" },
+            data: null,
+            loading: false,
+            error: null,
+            lastManualRefreshAt: null,
+          } as any,
+        ],
+      })
+    )
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", metaKey: true }))
+    })
+    expect(setActiveView).not.toHaveBeenCalled()
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", ctrlKey: true }))
+    })
+    expect(setActiveView).toHaveBeenCalledWith("a")
+  })
+
   it("ignores Cmd+Arrow navigation from editable targets", () => {
     const setActiveView = vi.fn()
     const { result } = renderHook(() =>
       usePanel({
+        platform: "macos",
         activeView: "a",
         setActiveView,
         showAbout: false,
@@ -268,6 +307,7 @@ describe("usePanel", () => {
 
     renderHook(() =>
       usePanel({
+        platform: "macos",
         activeView: "settings",
         setActiveView,
         showAbout: false,
@@ -306,6 +346,64 @@ describe("usePanel", () => {
     expect(setActiveView).toHaveBeenCalledWith("b")
   })
 
+  it("repositions the Windows panel after resizing it", async () => {
+    const setSize = vi.fn().mockResolvedValue(undefined)
+    getCurrentWindowMock.mockReturnValue({ setSize })
+    let activeView = "home" as any
+    const { result, rerender } = renderHook(() =>
+      usePanel({
+        platform: "windows",
+        activeView,
+        setActiveView: vi.fn(),
+        showAbout: false,
+        setShowAbout: vi.fn(),
+        displayPlugins: [],
+      })
+    )
+
+    act(() => {
+      result.current.containerRef.current = document.createElement("div")
+      activeView = "settings"
+    })
+    rerender()
+
+    await waitFor(() => expect(setSize).toHaveBeenCalled())
+    await waitFor(() => expect(invokeMock).toHaveBeenCalledWith("reposition_panel"))
+    expect(setSize.mock.invocationCallOrder[0]).toBeLessThan(
+      invokeMock.mock.invocationCallOrder.at(-1)!
+    )
+  })
+
+  it("logs Windows panel reposition failures after a successful resize", async () => {
+    const error = new Error("reposition failed")
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    getCurrentWindowMock.mockReturnValue({ setSize: vi.fn().mockResolvedValue(undefined) })
+    invokeMock.mockImplementation((command: string) =>
+      command === "reposition_panel" ? Promise.reject(error) : Promise.resolve(undefined)
+    )
+    let activeView = "home" as any
+    const { result, rerender } = renderHook(() =>
+      usePanel({
+        platform: "windows",
+        activeView,
+        setActiveView: vi.fn(),
+        showAbout: false,
+        setShowAbout: vi.fn(),
+        displayPlugins: [],
+      })
+    )
+
+    act(() => {
+      result.current.containerRef.current = document.createElement("div")
+      activeView = "settings"
+    })
+    rerender()
+
+    await waitFor(() => {
+      expect(errorSpy).toHaveBeenCalledWith("Failed to reposition panel:", error)
+    })
+  })
+
   it("focuses the panel container when the window regains focus", () => {
     const requestAnimationFrameSpy = vi
       .spyOn(window, "requestAnimationFrame")
@@ -316,6 +414,7 @@ describe("usePanel", () => {
 
     const { result } = renderHook(() =>
       usePanel({
+        platform: "macos",
         activeView: "home",
         setActiveView: vi.fn(),
         showAbout: false,

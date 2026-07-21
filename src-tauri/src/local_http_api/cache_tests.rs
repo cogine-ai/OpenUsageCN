@@ -289,6 +289,34 @@ fn enabled_snapshots_ordered_uses_default_enabled_plugins_without_settings() {
 
 #[test]
 #[serial]
+fn enabled_providers_read_preferences_from_a_separate_settings_directory() {
+    let cache_dir = temp_dir("local-cache");
+    let settings_dir = temp_dir("roaming-settings");
+    std::fs::create_dir_all(&cache_dir).unwrap();
+    std::fs::create_dir_all(&settings_dir).unwrap();
+    std::fs::write(
+        settings_dir.join(SETTINGS_FILE_NAME),
+        r#"{"plugins":{"order":["codex","zai"],"disabled":["codex"]}}"#,
+    )
+    .unwrap();
+
+    init_with_catalog(
+        &cache_dir,
+        &settings_dir,
+        vec!["codex".to_string(), "zai".to_string()],
+        Vec::new(),
+        "test-version".to_string(),
+    );
+
+    assert_eq!(enabled_provider_ids(), vec!["zai"]);
+    assert!(!cache_dir.join(SETTINGS_FILE_NAME).exists());
+
+    let _ = std::fs::remove_dir_all(&cache_dir);
+    let _ = std::fs::remove_dir_all(&settings_dir);
+}
+
+#[test]
+#[serial]
 fn cache_successful_output_debounces_disk_writes() {
     let dir = temp_dir("debounced-cache");
     std::fs::create_dir_all(&dir).unwrap();

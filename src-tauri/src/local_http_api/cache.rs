@@ -44,6 +44,7 @@ struct UsageApiCacheFile {
 pub(super) struct CacheState {
     pub snapshots: HashMap<String, CachedPluginSnapshot>,
     pub app_data_dir: PathBuf,
+    pub settings_data_dir: PathBuf,
     pub known_plugin_ids: Vec<String>,
     pub limit_catalog: HashMap<String, ProviderLimitCatalog>,
     pub errors: HashMap<String, String>,
@@ -93,6 +94,7 @@ pub(super) fn cache_state() -> &'static Mutex<CacheState> {
         Mutex::new(CacheState {
             snapshots: HashMap::new(),
             app_data_dir: PathBuf::new(),
+            settings_data_dir: PathBuf::new(),
             known_plugin_ids: Vec::new(),
             limit_catalog: HashMap::new(),
             errors: HashMap::new(),
@@ -168,20 +170,13 @@ fn save_cache(
         snapshots: merged_snapshots,
     };
     let path = app_data_dir.join(CACHE_FILE_NAME);
-    let tmp_path = app_data_dir.join(format!(
-        ".usage-api-cache.{}.{}.tmp",
-        std::process::id(),
-        uuid::Uuid::new_v4()
-    ));
     let json = serde_json::to_string(&file)
         .map_err(|e| format!("failed to serialize usage cache: {}", e))?;
-    std::fs::write(&tmp_path, &json)
-        .map_err(|e| format!("failed to write temp cache file: {}", e))?;
-    if let Err(e) = std::fs::rename(&tmp_path, &path) {
-        let _ = std::fs::remove_file(&tmp_path);
-        return Err(format!("failed to rename cache file: {}", e));
-    }
-    unlock_cache_file(&lock_file)?;
+    let write_result = crate::safe_file::write_text(&path, &json)
+        .map_err(|e| format!("failed to save usage cache: {e}"));
+    let unlock_result = unlock_cache_file(&lock_file);
+    write_result?;
+    unlock_result?;
     Ok(())
 }
 
@@ -365,11 +360,18 @@ fn flush_pending_cache_once() -> CacheFlushResult {
 
 #[cfg(test)]
 fn init(app_data_dir: &Path, known_plugin_ids: Vec<String>, app_version: String) {
-    init_with_catalog(app_data_dir, known_plugin_ids, Vec::new(), app_version);
+    init_with_catalog(
+        app_data_dir,
+        app_data_dir,
+        known_plugin_ids,
+        Vec::new(),
+        app_version,
+    );
 }
 
 pub fn init_with_catalog(
     app_data_dir: &Path,
+    settings_data_dir: &Path,
     known_plugin_ids: Vec<String>,
     catalog: Vec<ProviderLimitCatalog>,
     app_version: String,
@@ -378,6 +380,7 @@ pub fn init_with_catalog(
     let mut state = cache_state().lock().expect("cache state poisoned");
     state.snapshots = snapshots;
     state.app_data_dir = app_data_dir.to_path_buf();
+    state.settings_data_dir = settings_data_dir.to_path_buf();
     state.known_plugin_ids = known_plugin_ids;
     state.limit_catalog = catalog
         .into_iter()

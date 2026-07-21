@@ -2,6 +2,8 @@
 
 Tracks OpenAI Platform API spend and usage for your organization.
 
+OpenAI API is included in the Windows MVP and is disabled until you configure and enable it.
+
 This is for the OpenAI API platform, not ChatGPT subscription quota and not Codex app quota.
 
 ## Setup
@@ -14,7 +16,9 @@ This is for the OpenAI API platform, not ChatGPT subscription quota and not Code
 The Settings value is used first. If it is empty, `OPENAI_ADMIN_KEY` is used, then `OPENAI_API_KEY`.
 `OPENAI_PROJECT_ID` is supported for the optional project scope.
 
-API keys entered in Settings are stored as plaintext in `~/.openusagecn/providers.json`, protected only by best-effort private file permissions (`0600` on macOS/Linux).
+API keys entered in Settings are stored as plaintext. macOS uses `~/.openusagecn/providers.json`; Windows uses `%LOCALAPPDATA%\ai.cogine.openusagecn\providers.json`. The file is limited by normal user-profile permissions, but another process running as the same user can read it.
+
+On Windows, environment fallbacks must be present before the app starts. Set them for your user and fully exit and restart OpenUsageCN; a PowerShell `$env:` value is visible only when the app is launched from that terminal session.
 
 ## Displayed Lines
 

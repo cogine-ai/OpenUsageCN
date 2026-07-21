@@ -55,7 +55,30 @@ vi.mock("@/lib/provider-config", () => ({
 
 import { SettingsPage } from "@/pages/settings"
 
+const macosCapabilities = {
+  platform: "macos",
+  localHttpApi: true,
+  autostart: true,
+  cli: true,
+  paceNotifications: true,
+  globalShortcuts: true,
+  nativeTrayTitle: true,
+  dynamicTrayIconSettings: true,
+}
+
+const windowsCapabilities = {
+  platform: "windows",
+  localHttpApi: true,
+  autostart: true,
+  cli: false,
+  paceNotifications: false,
+  globalShortcuts: false,
+  nativeTrayTitle: false,
+  dynamicTrayIconSettings: false,
+}
+
 const defaultProps = {
+  platformCapabilities: macosCapabilities,
   plugins: [{ id: "a", name: "Alpha", enabled: true }],
   onReorder: vi.fn(),
   onToggle: vi.fn(),
@@ -106,6 +129,27 @@ afterEach(() => {
 })
 
 describe("SettingsPage", () => {
+  it("hides unsupported Windows settings while retaining core settings", () => {
+    render(
+      <SettingsPage
+        {...defaultProps}
+        platformCapabilities={windowsCapabilities}
+      />
+    )
+
+    expect(screen.queryByText("额度通知")).not.toBeInTheDocument()
+    expect(screen.queryByText("菜单栏图标")).not.toBeInTheDocument()
+    expect(screen.queryByText("全局快捷键")).not.toBeInTheDocument()
+    expect(screen.queryByText("命令行")).not.toBeInTheDocument()
+    expect(screen.queryByText(/Cmd|Opt/)).not.toBeInTheDocument()
+    expect(screen.getByText("本地 API")).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "登录时启动" })).toBeInTheDocument()
+    expect(screen.getByText("自动刷新")).toBeInTheDocument()
+    expect(screen.getByText("用量显示")).toBeInTheDocument()
+    expect(screen.getByText("应用主题")).toBeInTheDocument()
+    expect(screen.getByText("插件")).toBeInTheDocument()
+  })
+
   it("toggles plugins", async () => {
     const onToggle = vi.fn()
     render(

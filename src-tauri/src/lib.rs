@@ -1,24 +1,38 @@
 #[cfg(target_os = "macos")]
 mod app_nap;
+mod app_paths;
 pub mod cli;
 mod cli_installer;
 mod config;
 mod local_http_api;
 mod log_path;
 mod notifications;
+#[cfg(target_os = "macos")]
 mod panel;
+#[cfg(not(target_os = "macos"))]
+#[path = "panel_standard.rs"]
+mod panel;
+#[cfg(all(test, target_os = "macos"))]
+#[allow(dead_code)]
+#[path = "panel_standard.rs"]
+mod panel_standard_tests;
+mod platform_capabilities;
 mod plugin_engine;
 mod provider_config;
 mod provider_status;
+mod safe_file;
 mod tray;
 mod usage_reader;
 #[cfg(target_os = "macos")]
 mod webkit_config;
+mod windows_autostart;
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
+#[cfg(target_os = "macos")]
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex};
 
 use serde::Serialize;
 use tauri::Emitter;
@@ -26,13 +40,18 @@ use tauri_plugin_aptabase::EventTracker;
 use tauri_plugin_log::{Target, TargetKind};
 use uuid::Uuid;
 
-#[cfg(desktop)]
+#[cfg(target_os = "macos")]
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
+#[cfg(target_os = "macos")]
 const GLOBAL_SHORTCUT_STORE_KEY: &str = "globalShortcut";
 const DAILY_ACTIVE_TRACKED_DAY_KEY: &str = "analytics.daily_active_day";
 const DAILY_ACTIVE_EVENT_NAME: &str = "app_started";
 const MAX_CONCURRENT_PROBES: usize = 4;
+
+fn is_autostart_launch(arguments: &[String]) -> bool {
+    arguments.iter().any(|argument| argument == "--autostart")
+}
 
 fn probe_worker_count(plugin_count: usize) -> usize {
     plugin_count.min(MAX_CONCURRENT_PROBES)
@@ -126,14 +145,14 @@ fn spawn_daily_active_rollover_tracker(app_handle: tauri::AppHandle) {
     });
 }
 
-#[cfg(desktop)]
+#[cfg(target_os = "macos")]
 fn managed_shortcut_slot() -> &'static Mutex<Option<String>> {
     static SLOT: OnceLock<Mutex<Option<String>>> = OnceLock::new();
     SLOT.get_or_init(|| Mutex::new(None))
 }
 
 /// Shared shortcut handler that toggles the panel when the shortcut is pressed.
-#[cfg(desktop)]
+#[cfg(target_os = "macos")]
 fn handle_global_shortcut(
     app: &tauri::AppHandle,
     event: tauri_plugin_global_shortcut::ShortcutEvent,
@@ -239,16 +258,21 @@ pub struct ProbeBatchComplete {
 }
 
 #[tauri::command]
-fn init_panel(app_handle: tauri::AppHandle) {
-    panel::init(&app_handle).expect("Failed to initialize panel");
+fn init_panel(app_handle: tauri::AppHandle) -> Result<(), String> {
+    panel::init(&app_handle).map_err(|error| {
+        log::error!("failed to initialize panel: {error}");
+        error.to_string()
+    })
 }
 
 #[tauri::command]
 fn hide_panel(app_handle: tauri::AppHandle) {
-    use tauri_nspanel::ManagerExt;
-    if let Ok(panel) = app_handle.get_webview_panel("main") {
-        panel.hide();
-    }
+    panel::hide_panel(&app_handle);
+}
+
+#[tauri::command]
+fn reposition_panel(app_handle: tauri::AppHandle) {
+    panel::reposition_visible_panel(&app_handle);
 }
 
 #[tauri::command]
@@ -531,7 +555,7 @@ fn get_local_http_api_status() -> local_http_api::LocalHttpApiServiceStatus {
 
 /// Update the global shortcut registration.
 /// Pass `null` to disable the shortcut, or a shortcut string like "CommandOrControl+Shift+U".
-#[cfg(desktop)]
+#[cfg(target_os = "macos")]
 #[tauri::command]
 fn update_global_shortcut(
     app_handle: tauri::AppHandle,
@@ -586,6 +610,15 @@ fn update_global_shortcut(
     }
 
     Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+fn update_global_shortcut(
+    _app_handle: tauri::AppHandle,
+    _shortcut: Option<String>,
+) -> Result<(), String> {
+    Err("Global shortcuts are not supported on this platform.".to_string())
 }
 
 #[tauri::command]
@@ -657,16 +690,24 @@ pub fn run() {
     let runtime = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
     let _guard = runtime.enter();
 
-    tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+    let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            if is_autostart_launch(&args) {
+                log::info!("Ignoring duplicate autostart activation");
+                return;
+            }
             log::info!("Secondary OpenUsageCN instance requested; showing existing panel");
             panel::show_panel(app);
         }))
         .plugin(tauri_plugin_aptabase::Builder::new("A-US-6435241436").build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
-        .plugin(tauri_plugin_store::Builder::default().build())
-        .plugin(tauri_nspanel::init())
+        .plugin(tauri_plugin_store::Builder::default().build());
+
+    #[cfg(target_os = "macos")]
+    let builder = builder.plugin(tauri_nspanel::init());
+
+    let builder = builder
         .plugin(
             tauri_plugin_log::Builder::new()
                 .targets([
@@ -681,12 +722,21 @@ pub fn run() {
                 .level_for("tauri_plugin_updater", log::LevelFilter::Info)
                 .build(),
         )
-        .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .plugin(tauri_plugin_autostart::Builder::new().build())
+        .plugin(tauri_plugin_process::init());
+
+    #[cfg(target_os = "macos")]
+    let builder = builder.plugin(tauri_plugin_global_shortcut::Builder::new().build());
+
+    builder
+        .plugin(
+            tauri_plugin_autostart::Builder::new()
+                .arg("--autostart")
+                .build(),
+        )
         .invoke_handler(tauri::generate_handler![
             init_panel,
             hide_panel,
+            reposition_panel,
             open_devtools,
             start_probe_batch,
             list_plugins,
@@ -695,6 +745,8 @@ pub fn run() {
             delete_provider_config_field,
             get_log_path,
             get_local_http_api_status,
+            platform_capabilities::get_platform_capabilities,
+            windows_autostart::repair_windows_autostart_command,
             provider_status::get_provider_status,
             cli_installer::get_cli_install_status,
             cli_installer::set_cli_installed,
@@ -720,6 +772,18 @@ pub fn run() {
             let version = app.package_info().version.to_string();
             log::info!("OpenUsageCN v{} starting", version);
 
+            #[cfg(not(target_os = "macos"))]
+            panel::init(app.handle())?;
+
+            let app_data_dir =
+                app_paths::sensitive_data_dir(app.handle()).expect("no sensitive app data dir");
+            let settings_data_dir = app.path().app_data_dir().expect("no settings app data dir");
+            #[cfg(target_os = "windows")]
+            {
+                provider_config::initialize_path(app_data_dir.join("providers.json"));
+                config::initialize_path(app_data_dir.join("config.json"));
+            }
+
             // Load config early (lazy init via OnceLock, zero-cost after)
             let _proxy = config::get_resolved_proxy();
 
@@ -727,7 +791,6 @@ pub fn run() {
             #[cfg(desktop)]
             spawn_daily_active_rollover_tracker(app.handle().clone());
 
-            let app_data_dir = app.path().app_data_dir().expect("no app data dir");
             let resource_dir = app.path().resource_dir().expect("no resource dir");
             let app_data_dir_tail = app_data_dir
                 .file_name()
@@ -742,6 +805,7 @@ pub fn run() {
             );
 
             let (_, plugins) = plugin_engine::initialize_plugins(&app_data_dir, &resource_dir);
+            let plugins = plugin_engine::plugins_for_current_platform(plugins);
             let known_plugin_ids: Vec<String> =
                 plugins.iter().map(|p| p.manifest.id.clone()).collect();
             let limit_catalog = local_http_api::limits::catalog_from_plugins(&plugins);
@@ -754,6 +818,7 @@ pub fn run() {
 
             local_http_api::init_with_catalog(
                 &app_data_dir,
+                &settings_data_dir,
                 known_plugin_ids,
                 limit_catalog,
                 version.clone(),
@@ -762,11 +827,16 @@ pub fn run() {
 
             tray::create(app.handle())?;
 
+            #[cfg(target_os = "windows")]
+            if !is_autostart_launch(&std::env::args().collect::<Vec<_>>()) {
+                panel::show_panel(app.handle());
+            }
+
             app.handle()
                 .plugin(tauri_plugin_updater::Builder::new().build())?;
 
             // Register global shortcut from stored settings
-            #[cfg(desktop)]
+            #[cfg(target_os = "macos")]
             {
                 use tauri_plugin_store::StoreExt;
 
@@ -814,8 +884,9 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::{
-        DAILY_ACTIVE_TRACKED_DAY_KEY, MAX_CONCURRENT_PROBES, plugin_config_dto, probe_worker_count,
-        seconds_until_next_utc_day, should_track_daily_active,
+        DAILY_ACTIVE_TRACKED_DAY_KEY, MAX_CONCURRENT_PROBES, is_autostart_launch,
+        plugin_config_dto, probe_worker_count, seconds_until_next_utc_day,
+        should_track_daily_active,
     };
     use crate::plugin_engine::manifest::{
         PluginConfig, PluginConfigField, PluginConfigFieldType, PluginConfigOption,
@@ -868,6 +939,18 @@ mod tests {
             probe_worker_count(MAX_CONCURRENT_PROBES + 1),
             MAX_CONCURRENT_PROBES
         );
+    }
+
+    #[test]
+    fn recognizes_only_explicit_autostart_argument() {
+        assert!(is_autostart_launch(&[
+            "openusagecn".into(),
+            "--autostart".into()
+        ]));
+        assert!(!is_autostart_launch(&[
+            "openusagecn".into(),
+            "--autostart-debug".into()
+        ]));
     }
 
     #[test]

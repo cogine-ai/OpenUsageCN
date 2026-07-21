@@ -11,6 +11,7 @@ import { useSettingsSystemActions } from "@/hooks/app/use-settings-system-action
 import { useSettingsTheme } from "@/hooks/app/use-settings-theme"
 import { useTrayIcon } from "@/hooks/app/use-tray-icon"
 import { usePaceNotifications } from "@/hooks/app/use-pace-notifications"
+import { usePlatformCapabilities } from "@/hooks/app/use-platform-capabilities"
 import { REFRESH_COOLDOWN_MS, savePluginSettings } from "@/lib/settings"
 import { type PluginContextAction } from "@/components/side-nav"
 import { useAppPluginStore } from "@/stores/app-plugin-store"
@@ -21,6 +22,8 @@ const TRAY_PROBE_DEBOUNCE_MS = 500
 const TRAY_SETTINGS_DEBOUNCE_MS = 2000
 
 function App() {
+  const platformCapabilities = usePlatformCapabilities()
+
   const {
     activeView,
     setActiveView,
@@ -106,6 +109,7 @@ function App() {
   })
 
   usePaceNotifications({
+    supported: platformCapabilities?.paceNotifications === true,
     pluginsMeta,
     pluginSettings,
     pluginStates,
@@ -113,6 +117,8 @@ function App() {
   })
 
   const { scheduleTrayIconUpdate, traySettingsPreview } = useTrayIcon({
+    dynamicTrayIconSettings: platformCapabilities?.dynamicTrayIconSettings === true,
+    nativeTrayTitle: platformCapabilities?.nativeTrayTitle === true,
     pluginsMeta,
     pluginSettings,
     pluginStates,
@@ -129,6 +135,7 @@ function App() {
   }, [scheduleTrayIconUpdate])
 
   const { applyStartOnLogin } = useSettingsBootstrap({
+    platformCapabilities,
     setPluginSettings,
     setPluginsMeta,
     setAutoUpdateInterval,
@@ -268,6 +275,7 @@ function App() {
 
   return (
     <AppShell
+      platformCapabilities={platformCapabilities}
       onRefreshAll={handleRefreshAll}
       navPlugins={navPlugins}
       displayPlugins={displayPlugins}

@@ -4,6 +4,16 @@ import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest"
 
 const state = vi.hoisted(() => ({
+  platformCapabilities: {
+    platform: "macos",
+    localHttpApi: true,
+    autostart: true,
+    cli: true,
+    paceNotifications: true,
+    globalShortcuts: true,
+    nativeTrayTitle: true,
+    dynamicTrayIconSettings: true,
+  },
   invokeMock: vi.fn(),
   isTauriMock: vi.fn(() => false),
   setSizeMock: vi.fn(),
@@ -215,6 +225,10 @@ vi.mock("@/hooks/use-probe-events", () => ({
   },
 }))
 
+vi.mock("@/hooks/app/use-platform-capabilities", () => ({
+  usePlatformCapabilities: () => state.platformCapabilities,
+}))
+
 vi.mock("@/lib/settings", async () => {
   const actual = await vi.importActual<typeof import("@/lib/settings")>("@/lib/settings")
   return {
@@ -248,6 +262,16 @@ import { useAppUiStore } from "@/stores/app-ui-store"
 
 describe("App", () => {
   beforeEach(() => {
+    state.platformCapabilities = {
+      platform: "macos",
+      localHttpApi: true,
+      autostart: true,
+      cli: true,
+      paceNotifications: true,
+      globalShortcuts: true,
+      nativeTrayTitle: true,
+      dynamicTrayIconSettings: true,
+    }
     useAppUiStore.getState().resetState()
     useAppPluginStore.getState().resetState()
     useAppPreferencesStore.getState().resetState()
@@ -407,6 +431,34 @@ describe("App", () => {
     await waitFor(() => expect(state.migrateLegacyTraySettingsMock).toHaveBeenCalled())
     expect(screen.getByText("Alpha")).toBeInTheDocument()
     expect(state.setSizeMock).toHaveBeenCalled()
+  })
+
+  it("uses the static tray and hides unsupported settings on Windows", async () => {
+    state.platformCapabilities = {
+      platform: "windows",
+      localHttpApi: true,
+      autostart: true,
+      cli: false,
+      paceNotifications: false,
+      globalShortcuts: false,
+      nativeTrayTitle: false,
+      dynamicTrayIconSettings: false,
+    }
+
+    render(<App />)
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+    expect(state.trayGetByIdMock).not.toHaveBeenCalled()
+    expect(state.resolveResourceMock).not.toHaveBeenCalled()
+
+    const settingsButtons = await screen.findAllByRole("button", { name: "设置" })
+    await userEvent.click(settingsButtons[0])
+
+    expect(screen.queryByText("额度通知")).not.toBeInTheDocument()
+    expect(screen.queryByText("菜单栏图标")).not.toBeInTheDocument()
+    expect(screen.queryByText("全局快捷键")).not.toBeInTheDocument()
+    expect(screen.queryByText("命令行")).not.toBeInTheDocument()
+    expect(screen.getByText("本地 API")).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "登录时启动" })).toBeInTheDocument()
   })
 
   it("calls migrateLegacyTraySettings before loadMenubarIconStyle during bootstrap", async () => {
@@ -620,6 +672,10 @@ describe("App", () => {
   })
 
   it("renders percent text in tray icon when native title is unavailable", async () => {
+    state.platformCapabilities = {
+      ...state.platformCapabilities,
+      nativeTrayTitle: false,
+    }
     state.trayGetByIdMock.mockResolvedValueOnce({
       setIcon: state.traySetIconMock.mockResolvedValue(undefined),
       setIconAsTemplate: state.traySetIconAsTemplateMock.mockResolvedValue(undefined),

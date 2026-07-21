@@ -319,7 +319,10 @@ pub async fn post_pace_notification(
         return result;
     }
     #[cfg(not(target_os = "macos"))]
-    Err("当前平台暂不支持额度节奏通知。".to_string())
+    {
+        let _ = (title, subtitle, body);
+        Err("当前平台暂不支持额度节奏通知。".to_string())
+    }
 }
 
 #[tauri::command]

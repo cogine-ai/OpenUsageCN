@@ -12,6 +12,8 @@
 - **Timestamps:** unix seconds
 - **Window durations:** seconds (18000 = 5h, 604800 = 7d)
 
+Codex is enabled by default in the Windows MVP. Windows reads the same remote quota, credits, and manual reset data, but does not run `ccusage`; the local `今日`, `昨日`, `近30天`, and `用量趋势` lines are therefore omitted.
+
 ## Endpoints
 
 ### GET /backend-api/wham/usage
@@ -123,16 +125,25 @@ Codex CLI supports multiple credential storage modes:
 
 For `keyring`/`auto`, Codex may not keep `auth.json` on disk. If keyring save succeeds, Codex removes the fallback `auth.json`.
 
-OpenUsageCN Codex plugin auth lookup order:
+OpenUsageCN Codex plugin auth lookup order on macOS:
 
 1. `CODEX_HOME/auth.json` (when `CODEX_HOME` is set)
 2. `~/.config/codex/auth.json`
 3. `~/.codex/auth.json`
 4. macOS keychain service `Codex Auth` (fallback)
 
+On Windows:
+
+1. `CODEX_HOME/auth.json` when `CODEX_HOME` is set.
+2. `%USERPROFILE%\.codex\auth.json` otherwise.
+
+The Windows MVP does not read Windows Credential Manager or use the macOS Keychain API. If the file is missing or invalid, run `codex` to sign in and create file-based credentials.
+
+On Windows, set `CODEX_HOME` for your user before the app starts, then fully exit and restart OpenUsageCN. A PowerShell `$env:CODEX_HOME` value is visible only when OpenUsageCN is launched from that terminal session.
+
 If file-based OAuth credentials are missing, invalid, or fail with an auth/session error during refresh or usage lookup, OpenUsageCN tries the macOS keychain fallback. Non-auth usage failures, such as server errors or invalid responses, are shown directly.
 
-Keychain fallback is available on macOS only.
+Keychain fallback is available on macOS only. If `auth.json` changes while OpenUsageCN is refreshing a token, it reloads the file and saves the refreshed tokens only when the account and original refresh token still match. It never overwrites credentials already rotated by Codex.
 
 Expected auth payload shape (file or keychain JSON value):
 

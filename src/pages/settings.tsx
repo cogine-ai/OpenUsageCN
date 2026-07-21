@@ -42,8 +42,10 @@ import {
 import { getTimeFormatter } from "@/lib/reset-tooltip";
 import type { TraySettingsPreview } from "@/hooks/app/use-tray-icon";
 import { cn } from "@/lib/utils";
+import type { PlatformCapabilities } from "@/lib/platform-capabilities";
 
 interface SettingsPageProps {
+  platformCapabilities: PlatformCapabilities | null;
   plugins: SettingsPluginConfig[];
   onReorder: (orderedIds: string[]) => void;
   onToggle: (id: string) => void;
@@ -72,6 +74,7 @@ interface SettingsPageProps {
 }
 
 export function SettingsPage({
+  platformCapabilities,
   plugins,
   onReorder,
   onToggle,
@@ -146,10 +149,12 @@ export function SettingsPage({
           </div>
         </div>
       </section>
-      <PaceNotificationSettingsSection
-        value={paceNotifications}
-        onChange={onPaceNotificationsChange}
-      />
+      {platformCapabilities?.paceNotifications ? (
+        <PaceNotificationSettingsSection
+          value={paceNotifications}
+          onChange={onPaceNotificationsChange}
+        />
+      ) : null}
       <section>
         <h3 className="text-lg font-semibold mb-0">用量显示</h3>
         <p className="text-sm text-muted-foreground mb-2">
@@ -251,61 +256,63 @@ export function SettingsPage({
           </div>
         </div>
       </section>
-      <section>
-        <h3 className="text-lg font-semibold mb-0">菜单栏图标</h3>
-        <p className="text-sm text-muted-foreground mb-2">
-          设置菜单栏显示样式
-        </p>
-        <div className="bg-muted/50 rounded-lg p-1">
-          <div className="flex gap-1" role="radiogroup" aria-label="菜单栏图标样式">
-            {MENUBAR_ICON_STYLE_OPTIONS.map((option) => {
-              const isActive = option.value === menubarIconStyle;
-              return (
-                <Button
-                  key={option.value}
-                  type="button"
-                  role="radio"
-                  aria-label={option.label}
-                  aria-checked={isActive}
-                  variant={isActive ? "default" : "outline"}
-                  size="sm"
-                  className="flex-1 h-9 flex items-center justify-center"
-                  onClick={() => onMenubarIconStyleChange(option.value)}
-                >
-                  <MenubarIconStylePreview
-                    style={option.value}
-                    isActive={isActive}
-                    traySettingsPreview={traySettingsPreview}
-                  />
-                </Button>
-              );
-            })}
+      {platformCapabilities?.dynamicTrayIconSettings ? (
+        <section>
+          <h3 className="text-lg font-semibold mb-0">菜单栏图标</h3>
+          <p className="text-sm text-muted-foreground mb-2">
+            设置菜单栏显示样式
+          </p>
+          <div className="bg-muted/50 rounded-lg p-1">
+            <div className="flex gap-1" role="radiogroup" aria-label="菜单栏图标样式">
+              {MENUBAR_ICON_STYLE_OPTIONS.map((option) => {
+                const isActive = option.value === menubarIconStyle;
+                return (
+                  <Button
+                    key={option.value}
+                    type="button"
+                    role="radio"
+                    aria-label={option.label}
+                    aria-checked={isActive}
+                    variant={isActive ? "default" : "outline"}
+                    size="sm"
+                    className="flex-1 h-9 flex items-center justify-center"
+                    onClick={() => onMenubarIconStyleChange(option.value)}
+                  >
+                    <MenubarIconStylePreview
+                      style={option.value}
+                      isActive={isActive}
+                      traySettingsPreview={traySettingsPreview}
+                    />
+                  </Button>
+                );
+              })}
+            </div>
           </div>
-        </div>
-        <p className="text-sm text-muted-foreground mt-3 mb-2">指标</p>
-        <div className="bg-muted/50 rounded-lg p-1">
-          <div className="flex gap-1" role="radiogroup" aria-label="菜单栏指标">
-            {MENUBAR_METRIC_OPTIONS.map((option) => {
-              const isActive = option.value === menubarMetric;
-              return (
-                <Button
-                  key={option.value}
-                  type="button"
-                  role="radio"
-                  aria-label={option.label}
-                  aria-checked={isActive}
-                  variant={isActive ? "default" : "outline"}
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => onMenubarMetricChange(option.value)}
-                >
-                  {option.label}
-                </Button>
-              );
-            })}
+          <p className="text-sm text-muted-foreground mt-3 mb-2">指标</p>
+          <div className="bg-muted/50 rounded-lg p-1">
+            <div className="flex gap-1" role="radiogroup" aria-label="菜单栏指标">
+              {MENUBAR_METRIC_OPTIONS.map((option) => {
+                const isActive = option.value === menubarMetric;
+                return (
+                  <Button
+                    key={option.value}
+                    type="button"
+                    role="radio"
+                    aria-label={option.label}
+                    aria-checked={isActive}
+                    variant={isActive ? "default" : "outline"}
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => onMenubarMetricChange(option.value)}
+                  >
+                    {option.label}
+                  </Button>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      ) : null}
       <section>
         <h3 className="text-lg font-semibold mb-0">应用主题</h3>
         <p className="text-sm text-muted-foreground mb-2">
@@ -333,27 +340,31 @@ export function SettingsPage({
           </div>
         </div>
       </section>
-      <GlobalShortcutSection
-        globalShortcut={globalShortcut}
-        onGlobalShortcutChange={onGlobalShortcutChange}
-      />
-      <LocalHttpApiSection />
-      <CliSection />
-      <section>
-        <h3 className="text-lg font-semibold mb-0">登录时启动</h3>
-        <p className="text-sm text-muted-foreground mb-2">
-          登录后自动打开 OpenUsageCN
-        </p>
-        <label className="flex items-center gap-2 text-sm select-none text-foreground">
-          <Checkbox
-            aria-label="登录时启动"
-            key={`start-on-login-${startOnLogin}`}
-            checked={startOnLogin}
-            onCheckedChange={(checked) => onStartOnLoginChange(checked === true)}
-          />
-          登录时启动
-        </label>
-      </section>
+      {platformCapabilities?.globalShortcuts ? (
+        <GlobalShortcutSection
+          globalShortcut={globalShortcut}
+          onGlobalShortcutChange={onGlobalShortcutChange}
+        />
+      ) : null}
+      {platformCapabilities?.localHttpApi ? <LocalHttpApiSection /> : null}
+      {platformCapabilities?.cli ? <CliSection /> : null}
+      {platformCapabilities?.autostart ? (
+        <section>
+          <h3 className="text-lg font-semibold mb-0">登录时启动</h3>
+          <p className="text-sm text-muted-foreground mb-2">
+            登录后自动打开 OpenUsageCN
+          </p>
+          <label className="flex items-center gap-2 text-sm select-none text-foreground">
+            <Checkbox
+              aria-label="登录时启动"
+              key={`start-on-login-${startOnLogin}`}
+              checked={startOnLogin}
+              onCheckedChange={(checked) => onStartOnLoginChange(checked === true)}
+            />
+            登录时启动
+          </label>
+        </section>
+      ) : null}
       <section>
         <h3 className="text-lg font-semibold mb-0">插件</h3>
         <p className="text-sm text-muted-foreground mb-2">

@@ -85,9 +85,6 @@ macro_rules! get_or_init_panel {
     };
 }
 
-// Export macro for use in other modules
-pub(crate) use get_or_init_panel;
-
 /// Retrieve the tray icon rect and position the panel beneath it.
 /// No-ops gracefully if the tray icon or its rect is unavailable.
 fn position_panel_from_tray(app_handle: &AppHandle) {
@@ -112,6 +109,26 @@ fn position_panel_from_tray(app_handle: &AppHandle) {
 pub fn show_panel(app_handle: &AppHandle) {
     if let Some(panel) = get_or_init_panel!(app_handle) {
         panel.show_and_make_key();
+        position_panel_from_tray(app_handle);
+    }
+}
+
+/// Hide the native macOS panel if it exists.
+pub fn hide_panel(app_handle: &AppHandle) {
+    if let Ok(panel) = app_handle.get_webview_panel("main") {
+        panel.hide();
+    }
+}
+
+pub fn is_panel_visible(app_handle: &AppHandle) -> bool {
+    app_handle
+        .get_webview_panel("main")
+        .map(|panel| panel.is_visible())
+        .unwrap_or(false)
+}
+
+pub fn reposition_visible_panel(app_handle: &AppHandle) {
+    if is_panel_visible(app_handle) {
         position_panel_from_tray(app_handle);
     }
 }

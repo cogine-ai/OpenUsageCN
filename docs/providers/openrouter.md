@@ -2,6 +2,8 @@
 
 Tracks OpenRouter API credits and key usage.
 
+OpenRouter is included in the Windows MVP and is disabled until you configure and enable it.
+
 ## Setup
 
 1. Create an OpenRouter API key.
@@ -12,7 +14,9 @@ The Settings value is used first. If it is empty, `OPENROUTER_API_KEY` is used.
 `OPENROUTER_API_URL` can override the API base URL, and must use HTTPS.
 `OPENROUTER_HTTP_REFERER` and `OPENROUTER_X_TITLE` are passed through when present.
 
-API keys entered in Settings are stored as plaintext in `~/.openusagecn/providers.json`, protected only by best-effort private file permissions (`0600` on macOS/Linux).
+API keys entered in Settings are stored as plaintext. macOS uses `~/.openusagecn/providers.json`; Windows uses `%LOCALAPPDATA%\ai.cogine.openusagecn\providers.json`. The file is limited by normal user-profile permissions, but another process running as the same user can read it.
+
+On Windows, environment fallbacks must be present before the app starts. Set them for your user and fully exit and restart OpenUsageCN; a PowerShell `$env:` value is visible only when the app is launched from that terminal session.
 
 ## Displayed Lines
 

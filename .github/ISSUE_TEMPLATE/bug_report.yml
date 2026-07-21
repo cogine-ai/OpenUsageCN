@@ -55,13 +55,50 @@ body:
       options:
         - macOS (Apple Silicon)
         - macOS (Intel)
+        - Windows 10 22H2 (x64)
+        - Windows 11 (x64)
     validations:
       required: true
+  - type: input
+    id: windows_version
+    attributes:
+      label: Windows 版本与 OS Build
+      description: 仅 Windows 需要。运行 winver 后填写，例如 Windows 11 24H2，OS Build 26100.x。
+  - type: input
+    id: webview2_version
+    attributes:
+      label: WebView2 Runtime 版本
+      description: 仅 Windows 需要。可在“设置 > 应用 > 已安装的应用”中查看 Microsoft Edge WebView2 Runtime。
+  - type: input
+    id: display_scale
+    attributes:
+      label: 显示缩放
+      description: 仅 Windows 需要，例如 100%、125% 或 150%；多显示器请分别填写。
+  - type: input
+    id: taskbar
+    attributes:
+      label: 任务栏位置
+      description: 仅 Windows 需要。请说明位置以及是否开启自动隐藏。
+  - type: input
+    id: installer_version
+    attributes:
+      label: Windows 安装包
+      description: 仅 Windows 需要。请填写安装包文件名或版本，以及下载来源。
+  - type: input
+    id: providers
+    attributes:
+      label: 受影响的服务商
+      placeholder: 例如 Codex、OpenRouter
   - type: textarea
     id: screenshots
     attributes:
       label: 截图
       description: 如果方便，请拖入或粘贴截图。
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志
+      description: 请按 https://github.com/cogine-ai/OpenUsageCN/blob/main/docs/capture-logs.md 附上 OpenUsageCN.log；公开发送前先检查其中是否包含隐私信息。
   - type: textarea
     id: additional
     attributes:

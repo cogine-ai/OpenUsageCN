@@ -9,6 +9,31 @@ use std::sync::{Mutex, OnceLock};
 
 const RETIRED_BUNDLED_PLUGIN_IDS: &[&str] = &["windsurf"];
 const PLUGIN_INSTALL_LOCK_FILE: &str = ".plugin-install.lock";
+#[cfg(any(target_os = "windows", test))]
+const WINDOWS_MVP_PLUGIN_IDS: &[&str] =
+    &["codex", "bigmodel-cn", "openai-api", "openrouter", "zai"];
+
+pub fn plugins_for_current_platform(plugins: Vec<LoadedPlugin>) -> Vec<LoadedPlugin> {
+    #[cfg(target_os = "windows")]
+    {
+        return plugins
+            .into_iter()
+            .filter(|plugin| windows_mvp_supports_plugin(&plugin.manifest.id))
+            .collect();
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    plugins
+}
+
+#[cfg(any(target_os = "windows", test))]
+fn windows_mvp_supports_plugin(plugin_id: &str) -> bool {
+    WINDOWS_MVP_PLUGIN_IDS.contains(&plugin_id)
+}
+
+fn redacted_path(path: &Path) -> String {
+    host_api::redact_log_message(&path.display().to_string())
+}
 
 pub fn initialize_plugins(
     app_data_dir: &Path,
@@ -31,7 +56,7 @@ pub fn initialize_installed_plugins(
     if let Err(err) = std::fs::create_dir_all(app_data_dir) {
         log::error!(
             "failed to create app data dir {} before plugin sync: {}",
-            app_data_dir.display(),
+            redacted_path(app_data_dir),
             err
         );
     }
@@ -39,7 +64,7 @@ pub fn initialize_installed_plugins(
     if let Err(err) = std::fs::create_dir_all(&install_dir) {
         log::warn!(
             "failed to create install dir {}: {}",
-            install_dir.display(),
+            redacted_path(&install_dir),
             err
         );
     }
@@ -82,7 +107,7 @@ fn acquire_plugin_install_lock(app_data_dir: &Path) -> Option<File> {
         .map_err(|error| {
             log::error!(
                 "failed to open plugin install lock {}: {}",
-                path.display(),
+                redacted_path(&path),
                 error
             );
         })
@@ -121,6 +146,21 @@ fn is_retired_bundled_plugin_id(id: &str) -> bool {
     RETIRED_BUNDLED_PLUGIN_IDS.contains(&id)
 }
 
+#[cfg(test)]
+mod platform_tests {
+    use super::windows_mvp_supports_plugin;
+
+    #[test]
+    fn windows_allowlist_is_exact() {
+        for plugin_id in ["codex", "bigmodel-cn", "openai-api", "openrouter", "zai"] {
+            assert!(windows_mvp_supports_plugin(plugin_id));
+        }
+        for plugin_id in ["claude", "cursor", "custom", "Codex"] {
+            assert!(!windows_mvp_supports_plugin(plugin_id));
+        }
+    }
+}
+
 fn find_dev_plugins_dir() -> Option<PathBuf> {
     let cwd = std::env::current_dir().ok()?;
     let direct = cwd.join("plugins");
@@ -147,7 +187,7 @@ fn is_dir_empty(path: &Path) -> bool {
     match std::fs::read_dir(path) {
         Ok(mut entries) => entries.next().is_none(),
         Err(err) => {
-            log::warn!("failed to read dir {}: {}", path.display(), err);
+            log::warn!("failed to read dir {}: {}", redacted_path(path), err);
             true
         }
     }
@@ -163,7 +203,7 @@ fn remove_retired_bundled_plugins(install_dir: &Path) {
         if let Err(err) = std::fs::remove_dir_all(&plugin_dir) {
             log::warn!(
                 "failed to remove retired bundled plugin {}: {}",
-                plugin_dir.display(),
+                redacted_path(&plugin_dir),
                 err
             );
         }
@@ -191,7 +231,7 @@ fn copy_dir_recursive(src: &Path, dst: &Path) {
                 let entry = match entry {
                     Ok(entry) => entry,
                     Err(err) => {
-                        log::warn!("failed to read entry in {}: {}", src.display(), err);
+                        log::warn!("failed to read entry in {}: {}", redacted_path(src), err);
                         continue;
                     }
                 };
@@ -202,7 +242,7 @@ fn copy_dir_recursive(src: &Path, dst: &Path) {
                     Err(err) => {
                         log::warn!(
                             "failed to read file type for {}: {}",
-                            src_path.display(),
+                            redacted_path(&src_path),
                             err
                         );
                         continue;
@@ -213,7 +253,7 @@ fn copy_dir_recursive(src: &Path, dst: &Path) {
                 }
                 if file_type.is_dir() {
                     if let Err(err) = std::fs::create_dir_all(&dst_path) {
-                        log::warn!("failed to create dir {}: {}", dst_path.display(), err);
+                        log::warn!("failed to create dir {}: {}", redacted_path(&dst_path), err);
                         continue;
                     }
                     copy_dir_recursive(&src_path, &dst_path);
@@ -221,8 +261,8 @@ fn copy_dir_recursive(src: &Path, dst: &Path) {
                     if let Err(err) = std::fs::copy(&src_path, &dst_path) {
                         log::warn!(
                             "failed to copy {} to {}: {}",
-                            src_path.display(),
-                            dst_path.display(),
+                            redacted_path(&src_path),
+                            redacted_path(&dst_path),
                             err
                         );
                     }
@@ -230,7 +270,7 @@ fn copy_dir_recursive(src: &Path, dst: &Path) {
             }
         }
         Err(err) => {
-            log::warn!("failed to read dir {}: {}", src.display(), err);
+            log::warn!("failed to read dir {}: {}", redacted_path(src), err);
         }
     }
 }

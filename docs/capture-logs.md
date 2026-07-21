@@ -4,12 +4,12 @@
 
 - 适用对象：普通用户
 - 预计耗时：约 2 分钟
-- 平台：macOS
+- 平台：macOS、Windows
 
 ## 1. 将日志级别切到调试
 
-1. 在 macOS 菜单栏找到 OpenUsageCN 图标。
-2. 右键点击图标，或按住 `Control` 再点击。
+1. 在 macOS 菜单栏或 Windows 系统托盘找到 OpenUsageCN 图标。Windows 可能把图标收在托盘的隐藏区域。
+2. 右键点击图标；macOS 也可以按住 `Control` 再点击。
 3. 打开 `日志级别`。
 4. 选择 `调试`。
 
@@ -21,7 +21,9 @@
 2. 等到错误出现。
 3. 做 1-2 次即可，避免日志太多。
 
-## 3. 在 Finder 打开日志目录
+## 3. 打开日志目录
+
+macOS：
 
 1. 打开 Finder。
 2. 按 `Shift` + `Command` + `G`。
@@ -32,6 +34,17 @@
 ```
 
 4. 按 `Enter`。
+
+Windows：
+
+1. 打开文件资源管理器。
+2. 在地址栏粘贴：
+
+```text
+%LOCALAPPDATA%\ai.cogine.openusagecn\logs
+```
+
+3. 按 `Enter`。
 
 ## 4. 将日志附到 GitHub 问题
 
@@ -49,6 +62,17 @@
 发生时间（本地时间 + 时区）：
 受影响的服务商（Codex / Claude / Cursor / 等）：
 OpenUsageCN 版本：
+操作系统版本：
+```
+
+Windows 用户还请补充：
+
+```text
+Windows 版本和 OS Build（运行 winver 查看）：
+Microsoft Edge WebView2 Runtime 版本：
+显示缩放（例如 100% / 125% / 150%）：
+任务栏位置及是否自动隐藏：
+安装包文件名或版本：
 ```
 
 ## 隐私提醒
