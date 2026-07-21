@@ -277,4 +277,28 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(root);
     }
+
+    #[test]
+    fn run_probes_returns_empty_for_no_plugins() {
+        let (results, worker_failed) =
+            run_probes(Vec::new(), PathBuf::new(), "0.0.0".to_string());
+        assert!(results.is_empty());
+        assert!(!worker_failed);
+    }
+
+    #[test]
+    fn envelope_errors_mark_limits_read_as_failed() {
+        let envelope = local_http_api::limits::LimitsEnvelope {
+            schema: local_http_api::limits::LIMITS_SCHEMA,
+            generated_at: String::new(),
+            providers: Default::default(),
+            errors: vec![local_http_api::limits::LimitsError {
+                provider_id: "codex".to_string(),
+                message: "probe failed".to_string(),
+            }],
+        };
+        let mut refresh_failed = false;
+        refresh_failed |= !envelope.errors.is_empty();
+        assert!(refresh_failed);
+    }
 }

@@ -289,6 +289,35 @@ fn enabled_snapshots_ordered_uses_default_enabled_plugins_without_settings() {
 
 #[test]
 #[serial]
+fn cache_successful_output_clears_recorded_probe_error() {
+    let dir = temp_dir("probe-error-clear");
+    std::fs::create_dir_all(&dir).unwrap();
+
+    init(&dir, vec!["codex".to_string()], "test".to_string());
+    record_probe_error("codex", "Auth expired");
+    {
+        let state = cache_state().lock().unwrap();
+        assert_eq!(
+            state.errors.get("codex").map(String::as_str),
+            Some("Auth expired")
+        );
+    }
+
+    cache_successful_output(&make_output("codex", "Codex"));
+
+    {
+        let state = cache_state().lock().unwrap();
+        assert!(!state.errors.contains_key("codex"));
+        assert!(state.snapshots.contains_key("codex"));
+    }
+
+    wait_for_cache_writer_idle();
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+#[serial]
 fn cache_successful_output_debounces_disk_writes() {
     let dir = temp_dir("debounced-cache");
     std::fs::create_dir_all(&dir).unwrap();
