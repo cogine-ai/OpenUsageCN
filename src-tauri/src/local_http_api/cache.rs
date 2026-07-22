@@ -433,6 +433,22 @@ pub(crate) fn enabled_provider_ids() -> Vec<String> {
     enabled_plugin_ids_ordered(&state)
 }
 
+#[cfg(test)]
+pub(super) fn test_cache_state() -> CacheState {
+    CacheState {
+        snapshots: HashMap::new(),
+        app_data_dir: PathBuf::from("/tmp/openusage-test"),
+        settings_data_dir: PathBuf::from("/tmp/openusage-test"),
+        known_plugin_ids: Vec::new(),
+        limit_catalog: HashMap::new(),
+        errors: HashMap::new(),
+        app_version: "test".to_string(),
+        dirty_generation: 0,
+        flushed_generation: 0,
+        flush_scheduled: false,
+    }
+}
+
 pub(crate) fn snapshot_for_provider(provider_id: &str) -> Option<CachedPluginSnapshot> {
     cache_state()
         .lock()

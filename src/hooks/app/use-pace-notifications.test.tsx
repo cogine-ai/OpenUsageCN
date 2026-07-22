@@ -102,4 +102,31 @@ describe("usePaceNotifications", () => {
     rerender({ used: 60, revision: 2 })
     await waitFor(() => expect(invokeMock).not.toHaveBeenCalled())
   })
+
+  it("re-evaluates closeToLimit after the setting is re-enabled at already-worsened usage", async () => {
+    const { rerender } = renderHook(
+      ({ used, revision, closeToLimit }) =>
+        usePaceNotifications({
+          supported: true,
+          pluginsMeta: [plugin],
+          pluginSettings: { order: ["codex"], disabled: [] },
+          pluginStates: { codex: state(used, revision) },
+          settings: { almostOut: true, closeToLimit, runningOut: true },
+        }),
+      { initialProps: { used: 30, revision: 1, closeToLimit: false } }
+    )
+
+    await waitFor(() => expect(invokeMock).not.toHaveBeenCalled())
+    rerender({ used: 45, revision: 2, closeToLimit: false })
+    await waitFor(() => expect(invokeMock).not.toHaveBeenCalled())
+
+    rerender({ used: 45, revision: 2, closeToLimit: true })
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("post_pace_notification", {
+        title: "接近上限",
+        subtitle: "Codex · Session",
+        body: "按当前速度，预计将在重置前接近额度上限。",
+      })
+    })
+  })
 })

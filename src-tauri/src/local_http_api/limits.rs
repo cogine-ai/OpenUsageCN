@@ -478,4 +478,71 @@ mod tests {
             vec!["Resource 'requests': count resource is missing a stable unit"]
         );
     }
+
+    #[test]
+    fn envelope_from_state_redacts_probe_errors() {
+        let mut state = super::cache::test_cache_state();
+        state.errors.insert(
+            "codex".to_string(),
+            "token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U".to_string(),
+        );
+
+        let envelope = envelope_from_state(&["codex".to_string()], &state);
+
+        assert_eq!(envelope.errors.len(), 1);
+        assert_eq!(envelope.errors[0].provider_id, "codex");
+        assert!(
+            !envelope.errors[0].message.contains("eyJhbGci"),
+            "probe errors must be redacted before exposure: {}",
+            envelope.errors[0].message
+        );
+        assert!(envelope.providers.is_empty());
+    }
+
+    #[test]
+    fn envelope_from_state_keeps_valid_resources_when_siblings_fail_projection() {
+        let mut state = super::cache::test_cache_state();
+        let mut snapshot = snapshot();
+        snapshot.lines.push(MetricLine::Progress {
+            label: "Requests".to_string(),
+            limit_resource_key: None,
+            used: 12.0,
+            limit: 100.0,
+            format: ProgressFormat::Count {
+                suffix: "req".to_string(),
+            },
+            resets_at: None,
+            period_duration_ms: None,
+            color: None,
+        });
+        state.snapshots.insert("codex".to_string(), snapshot);
+        state.limit_catalog.insert(
+            "codex".to_string(),
+            ProviderLimitCatalog {
+                provider_id: "codex".to_string(),
+                resources: vec![
+                    LimitCatalogResource {
+                        key: "session".to_string(),
+                        metric_label: "Session".to_string(),
+                        kind: LimitResourceKind::Consumption,
+                        count_unit: None,
+                    },
+                    LimitCatalogResource {
+                        key: "requests".to_string(),
+                        metric_label: "Requests".to_string(),
+                        kind: LimitResourceKind::Consumption,
+                        count_unit: None,
+                    },
+                ],
+            },
+        );
+
+        let envelope = envelope_from_state(&["codex".to_string()], &state);
+
+        let provider = envelope.providers.get("codex").expect("provider projected");
+        assert!(provider.resources.contains_key("session"));
+        assert!(!provider.resources.contains_key("requests"));
+        assert_eq!(envelope.errors.len(), 1);
+        assert!(envelope.errors[0].message.contains("requests"));
+    }
 }

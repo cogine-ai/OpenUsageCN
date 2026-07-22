@@ -937,4 +937,57 @@ mod tests {
             MAX_BAR_CHART_POINTS
         );
     }
+
+    #[test]
+    fn probe_error_message_reads_error_badge_only() {
+        let output = PluginOutput {
+            provider_id: "codex".to_string(),
+            display_name: "Codex".to_string(),
+            plan: None,
+            lines: vec![
+                MetricLine::Badge {
+                    label: "Plan".to_string(),
+                    text: "Plus".to_string(),
+                    color: None,
+                },
+                MetricLine::Badge {
+                    label: "Error".to_string(),
+                    text: "token expired".to_string(),
+                    color: Some("#ef4444".to_string()),
+                },
+            ],
+            icon_url: String::new(),
+        };
+
+        assert_eq!(probe_error_message(&output), Some("token expired"));
+    }
+
+    #[test]
+    fn probe_error_message_ignores_non_error_badges_and_success_lines() {
+        let output = PluginOutput {
+            provider_id: "codex".to_string(),
+            display_name: "Codex".to_string(),
+            plan: None,
+            lines: vec![
+                MetricLine::Progress {
+                    label: "Session".to_string(),
+                    limit_resource_key: None,
+                    used: 10.0,
+                    limit: 100.0,
+                    format: ProgressFormat::Percent,
+                    resets_at: None,
+                    period_duration_ms: None,
+                    color: None,
+                },
+                MetricLine::Badge {
+                    label: "Warning".to_string(),
+                    text: "rate limited".to_string(),
+                    color: None,
+                },
+            ],
+            icon_url: String::new(),
+        };
+
+        assert_eq!(probe_error_message(&output), None);
+    }
 }
