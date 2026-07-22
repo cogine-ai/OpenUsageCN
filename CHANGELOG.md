@@ -4,6 +4,34 @@
 
 暂无。
 
+## v0.6.36
+
+### New Features
+
+- Add the Windows MVP with tray panel behavior, platform-aware capabilities, autostart, Codex usage collection, local HTTP API support, and Windows x64 NSIS publishing ([#127](https://github.com/cogine-ai/OpenUsageCN/pull/127)) by @lc708
+
+### Bug Fixes
+
+- Repair Windows credential replacement and preserve rotated Codex refresh tokens during guarded concurrent auth updates ([#127](https://github.com/cogine-ai/OpenUsageCN/pull/127)) by @lc708
+
+### Chores
+
+- Add Feishu merge notifications and link notifications to the relevant commit pages ([#112](https://github.com/cogine-ai/OpenUsageCN/pull/112)) by @lc708
+
+---
+
+### Changelog
+
+**Full Changelog**: [v0.6.35...v0.6.36](https://github.com/cogine-ai/OpenUsageCN/compare/v0.6.35...v0.6.36)
+
+- [7e0e23b](https://github.com/cogine-ai/OpenUsageCN/commit/7e0e23b6ebffe21d52ec6f689642bf3286190ff0) Merge pull request #127 from cogine-ai/cliq/windows-mvp by @lc708
+- [3fdb7a4](https://github.com/cogine-ai/OpenUsageCN/commit/3fdb7a4a8b41b31770c0c68032e4d95921951bae) fix: preserve rotated Codex tokens by @lc708
+- [fb3ecd0](https://github.com/cogine-ai/OpenUsageCN/commit/fb3ecd06cc9cc807185f2284a9634c0868d61bb6) fix: repair Windows credential replacement by @lc708
+- [0d9ced2](https://github.com/cogine-ai/OpenUsageCN/commit/0d9ced2b5f4975cd318add56040ed90f5e2bb2ab) Update application functionality and supporting tests by @lc708
+- [c79e7b9](https://github.com/cogine-ai/OpenUsageCN/commit/c79e7b9dbec3914b51f48f00f23a7d9e6eb7f80c) Merge pull request #112 from cogine-ai/cliq/add-feishu-notifications by @lc708
+- [b8a1850](https://github.com/cogine-ai/OpenUsageCN/commit/b8a185069e2cac73d19de7ff691c60e3d2158cd8) fix(ci): link Feishu pushes to commit pages by @lc708
+- [68de827](https://github.com/cogine-ai/OpenUsageCN/commit/68de827a702fc8c4e49f625f15bcff4f96c10238) ci: add Feishu notifications workflow by @lc708
+
 ## v0.6.35
 
 ### New Features
