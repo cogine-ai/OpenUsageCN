@@ -1098,16 +1098,8 @@ fn inject_http<'js>(
                 let mut builder = reqwest::blocking::Client::builder()
                     .timeout(timeout)
                     .connect_timeout(timeout)
-                    .redirect(reqwest::redirect::Policy::none())
-                    .no_proxy();
-
-                // Apply pre-resolved proxy (localhost bypass already configured)
-                if let Some(resolved) = crate::config::get_resolved_proxy() {
-                    builder = builder.proxy(resolved.proxy.clone());
-                    log::debug!("[http] proxy active");
-                } else {
-                    log::debug!("[http] proxy not used");
-                }
+                    .redirect(reqwest::redirect::Policy::none());
+                builder = crate::config::configure_http_client(builder, &req.url);
 
                 if req.dangerously_ignore_tls.unwrap_or(false) {
                     builder = builder.danger_accept_invalid_certs(true);
