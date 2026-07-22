@@ -79,7 +79,7 @@ function parseSignature(signaturePath) {
 }
 
 export function isUpdaterArchive(path) {
-  return path.endsWith(".app.tar.gz") || path.endsWith(".nsis.zip")
+  return path.endsWith(".app.tar.gz") || path.endsWith("-setup.exe")
 }
 
 function findUpdaterArchives(dir) {

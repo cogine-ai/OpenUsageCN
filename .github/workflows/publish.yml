@@ -9,8 +9,26 @@ permissions:
   contents: write
 
 jobs:
+  prepare:
+    name: Prepare Draft Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - name: Ensure draft release exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if RELEASE_IS_DRAFT=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft' 2>/dev/null); then
+            [[ "$RELEASE_IS_DRAFT" == "true" ]] || { echo "Release $RELEASE_TAG is already published."; exit 1; }
+          else
+            gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "$RELEASE_TAG" --draft
+          fi
+
   build:
     if: startsWith(github.ref, 'refs/tags/v')
+    needs: prepare
     strategy:
       fail-fast: false
       matrix:
@@ -154,6 +172,7 @@ jobs:
   windows:
     name: Build Windows x64
     if: startsWith(github.ref, 'refs/tags/v')
+    needs: prepare
     runs-on: windows-latest
     env:
       RELEASE_TAG: ${{ github.ref_name }}
@@ -285,19 +304,17 @@ jobs:
           gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir release-assets
 
           mapfile -t MAC_ARCHIVES < <(find release-assets -maxdepth 1 -type f -name '*.app.tar.gz')
-          mapfile -t WINDOWS_ARCHIVES < <(find release-assets -maxdepth 1 -type f -name '*.nsis.zip')
           mapfile -t WINDOWS_SETUPS < <(find release-assets -maxdepth 1 -type f -name '*-setup.exe')
           mapfile -t WINDOWS_CHECKSUMS < <(find release-assets -maxdepth 1 -type f -name '*-setup.exe.sha256')
           mapfile -t WINDOWS_MSIS < <(find release-assets -maxdepth 1 -type f \( -name '*.msi' -o -name '*.msi.zip' \))
 
           [[ -f release-assets/latest.json ]] || { echo "Missing updater manifest: latest.json"; exit 1; }
           [[ "${#MAC_ARCHIVES[@]}" -eq 2 ]] || { echo "Expected updater archives for both macOS architectures."; exit 1; }
-          [[ "${#WINDOWS_ARCHIVES[@]}" -eq 1 ]] || { echo "Expected exactly one Windows NSIS updater archive."; exit 1; }
           [[ "${#WINDOWS_SETUPS[@]}" -eq 1 ]] || { echo "Expected exactly one Windows NSIS setup executable."; exit 1; }
           [[ "${#WINDOWS_CHECKSUMS[@]}" -eq 1 ]] || { echo "Expected exactly one Windows setup checksum."; exit 1; }
           [[ "${#WINDOWS_MSIS[@]}" -eq 0 ]] || { echo "Unexpected MSI assets found in the NSIS-only release."; exit 1; }
 
-          for archive in "${MAC_ARCHIVES[@]}" "${WINDOWS_ARCHIVES[@]}"; do
+          for archive in "${MAC_ARCHIVES[@]}" "${WINDOWS_SETUPS[@]}"; do
             [[ -f "$archive.sig" ]] || { echo "Missing updater signature: $archive.sig"; exit 1; }
           done
 
@@ -316,11 +333,11 @@ jobs:
           WINDOWS_SIGNATURE=$(jq -er '.platforms["windows-x86_64"].signature' release-assets/latest.json)
           [[ "$WINDOWS_URL" == *"/releases/download/$RELEASE_TAG/"* ]] || { echo "Windows updater URL does not point to $RELEASE_TAG."; exit 1; }
 
-          WINDOWS_ARCHIVE_NAME=$(basename "${WINDOWS_URL%%\?*}")
-          [[ -f "release-assets/$WINDOWS_ARCHIVE_NAME" ]] || { echo "Windows updater URL names a missing asset: $WINDOWS_ARCHIVE_NAME"; exit 1; }
-          [[ "$WINDOWS_ARCHIVE_NAME" == *.nsis.zip ]] || { echo "Windows updater URL does not point to an NSIS archive."; exit 1; }
+          WINDOWS_INSTALLER_NAME=$(basename "${WINDOWS_URL%%\?*}")
+          [[ -f "release-assets/$WINDOWS_INSTALLER_NAME" ]] || { echo "Windows updater URL names a missing asset: $WINDOWS_INSTALLER_NAME"; exit 1; }
+          [[ "$WINDOWS_INSTALLER_NAME" == *-setup.exe ]] || { echo "Windows updater URL does not point to an NSIS setup executable."; exit 1; }
 
-          UPLOADED_SIGNATURE=$(cat "release-assets/$WINDOWS_ARCHIVE_NAME.sig")
+          UPLOADED_SIGNATURE=$(cat "release-assets/$WINDOWS_INSTALLER_NAME.sig")
           [[ "$WINDOWS_SIGNATURE" == "$UPLOADED_SIGNATURE" ]] || { echo "Windows latest.json signature does not match the uploaded signature."; exit 1; }
 
       - name: Publish verified release
