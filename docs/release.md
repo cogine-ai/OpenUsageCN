@@ -63,7 +63,7 @@ Windows 发布还需要：
 
 1. 在 Windows 10 22H2 x64 和当前 Windows 11 x64 上完成安装、托盘、更新和卸载检查。
 2. 运行 `bun tauri build --target x86_64-pc-windows-msvc --bundles nsis`。
-3. 确认生成 current-user NSIS 安装包、`.nsis.zip` updater 包及其 `.sig`。
+3. 确认生成 current-user NSIS `*-setup.exe` 及其 updater `.sig`。
 4. 运行 `bun run verify:updater-signature`。
 5. 为 setup `.exe` 生成并上传 SHA-256 校验文件。
 
@@ -71,7 +71,7 @@ Windows 安装器使用在线 WebView2 bootstrapper。没有 WebView2 Runtime �
 
 ## 发布方式
 
-推送 `vMAJOR.MINOR.PATCH` tag 后，`Publish` workflow 会分别构建 Apple Silicon、Intel 和 Windows x64 包。Windows 产物是只为当前用户安装的 NSIS setup `.exe`，并包含 `.nsis.zip` updater 包、签名和 setup SHA-256。所有平台通过 updater 验签与发布校验后，workflow 才会发布正式 release。
+推送 `vMAJOR.MINOR.PATCH` tag 后，`Publish` workflow 会先创建一份草稿 release，再分别构建 Apple Silicon、Intel 和 Windows x64 包。Windows 的 NSIS `*-setup.exe` 同时作为安装包和 updater 产物，并附带 updater 签名与 setup SHA-256。所有平台通过 updater 验签与发布校验后，workflow 才会发布正式 release。
 
 发布失败时，先看 workflow 里的 `Validate release secrets` 和 `Validate app version matches tag` 两步。它们会直接指出缺少的 Secret 或版本不一致问题。
 
