@@ -31,6 +31,7 @@ jobs:
     needs: prepare
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         include:
           - platform: macos-latest
@@ -172,7 +173,7 @@ jobs:
   windows:
     name: Build Windows x64
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: prepare
+    needs: build
     runs-on: windows-latest
     env:
       RELEASE_TAG: ${{ github.ref_name }}
