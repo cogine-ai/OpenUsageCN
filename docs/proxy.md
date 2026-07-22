@@ -40,7 +40,7 @@ You can also use an authenticated proxy URL:
 - A valid enabled manual proxy overrides the Windows system proxy.
 - If no manual proxy is configured on Windows, OpenUsageCN follows the enabled fixed proxy in Windows system settings.
 - Setting `enabled` to `false` forces direct connections.
-- Invalid or unreadable config forces direct connections and writes a warning to the app log.
+- Invalid or unreadable config forces direct connections and writes an error to the app log.
 - Proxy credentials are redacted in logs.
 - Proxy credentials remain plaintext in this file. On Windows, normal user-profile permissions limit access, but other processes running as the same user can still read it.
 

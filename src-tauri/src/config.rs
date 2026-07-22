@@ -92,7 +92,7 @@ fn load_and_resolve_proxy() -> ProxyMode {
         Ok(contents) => match serde_json::from_str::<AppConfig>(&contents) {
             Ok(cfg) => cfg,
             Err(e) => {
-                log::warn!(
+                log::error!(
                     "[config] failed to parse {}: {}, proxy disabled",
                     crate::plugin_engine::host_api::redact_log_message(&path.display().to_string()),
                     e
@@ -105,7 +105,7 @@ fn load_and_resolve_proxy() -> ProxyMode {
             return default_proxy_mode();
         }
         Err(error) => {
-            log::warn!(
+            log::error!(
                 "[config] failed to read {}: {}, proxy disabled",
                 crate::plugin_engine::host_api::redact_log_message(&path.display().to_string()),
                 error
@@ -140,7 +140,7 @@ fn resolve_config(config: AppConfig) -> ProxyMode {
             ProxyMode::Manual(proxy)
         }
         Err(e) => {
-            log::warn!("[config] proxy disabled due to invalid URL: {}", e);
+            log::error!("[config] proxy disabled due to invalid URL: {}", e);
             ProxyMode::Direct
         }
     }
@@ -172,7 +172,7 @@ fn is_loopback_url(target_url: &str) -> bool {
     host.trim_end_matches('.').eq_ignore_ascii_case("localhost")
         || host
             .parse::<IpAddr>()
-            .is_ok_and(|address| address.is_loopback())
+            .is_ok_and(|address| address.to_canonical().is_loopback())
 }
 
 /// Redacts user info from a proxy URL for safe logging.
@@ -260,6 +260,9 @@ mod tests {
         assert!(is_loopback_url("http://127.0.0.1:6736/v1/limits"));
         assert!(is_loopback_url("http://127.42.0.1/test"));
         assert!(is_loopback_url("http://[::1]:6736/v1/limits"));
+        assert!(is_loopback_url(
+            "http://[::ffff:127.0.0.1]:6736/v1/limits"
+        ));
         assert!(!is_loopback_url("https://chatgpt.com/backend-api/wham/usage"));
     }
 }
