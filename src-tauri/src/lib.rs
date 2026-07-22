@@ -785,7 +785,7 @@ pub fn run() {
             }
 
             // Load config early (lazy init via OnceLock, zero-cost after)
-            let _proxy = config::get_resolved_proxy();
+            config::initialize_proxy();
 
             track_daily_active_if_needed(app.handle());
             #[cfg(desktop)]
