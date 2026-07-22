@@ -64,6 +64,9 @@ pub fn init(app_handle: &AppHandle) -> tauri::Result<()> {
     window.set_skip_taskbar(true)?;
     window.set_always_on_top(true)?;
 
+    #[cfg(target_os = "windows")]
+    window.set_shadow(false)?;
+
     let event_window = window.clone();
     INIT.call_once(move || {
         let hide_window = event_window.clone();

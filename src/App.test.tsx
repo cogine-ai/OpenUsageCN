@@ -447,6 +447,9 @@ describe("App", () => {
 
     render(<App />)
     await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+    const trayArrow = document.querySelector(".tray-arrow")
+    expect(trayArrow).toHaveAttribute("data-side", "bottom")
+    expect(trayArrow?.parentElement).toHaveClass("pt-6", "pb-1.5")
     expect(state.trayGetByIdMock).not.toHaveBeenCalled()
     expect(state.resolveResourceMock).not.toHaveBeenCalled()
 
