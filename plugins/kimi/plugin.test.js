@@ -159,6 +159,48 @@ describe("kimi plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("Session expired")
   })
 
+  it("aborts refresh when rotated credentials cannot be saved", async () => {
+    const ctx = makeCtx()
+    const original = {
+      access_token: "old-token",
+      refresh_token: "refresh-token",
+      expires_at: 1,
+    }
+    ctx.host.fs.writeText(CRED_PATH, JSON.stringify(original))
+
+    ctx.host.http.request.mockImplementation((opts) => {
+      const url = String(opts.url)
+      if (url.includes("/api/oauth/token")) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            access_token: "new-token",
+            refresh_token: "new-refresh",
+            expires_in: 3600,
+          }),
+        }
+      }
+      throw new Error("usage should not run after a failed credential save")
+    })
+
+    const writeText = ctx.host.fs.writeText
+    ctx.host.fs.writeText = vi.fn((path, text) => {
+      if (path === CRED_PATH && String(text).includes("new-refresh")) {
+        throw new Error("disk full")
+      }
+      return writeText(path, text)
+    })
+
+    const plugin = await loadPlugin()
+    expect(() => plugin.probe(ctx)).toThrow("Could not save refreshed credentials")
+
+    const persisted = JSON.parse(ctx.host.fs.readText(CRED_PATH))
+    expect(persisted).toEqual(original)
+    expect(ctx.host.http.request.mock.calls.every((call) => !String(call[0].url).includes("/usages"))).toBe(
+      true
+    )
+  })
+
   it("throws on invalid usage payload", async () => {
     const ctx = makeCtx()
     const nowSec = Math.floor(Date.now() / 1000)

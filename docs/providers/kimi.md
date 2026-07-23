@@ -96,5 +96,6 @@ refresh_token=<refresh_token>
 ## Notes
 
 - The plugin refreshes tokens when near expiry (5-minute buffer).
+- Refresh responses may rotate `refresh_token`. The plugin only keeps the new tokens after they are written to the credentials file; a failed save aborts the refresh so the old refresh token is not left behind as the only copy.
 - If refresh is rejected (401/403), user must run `kimi login` again.
 - `limits[0].window.duration=300` and `TIME_UNIT_MINUTE` maps to the 5-hour session window.
