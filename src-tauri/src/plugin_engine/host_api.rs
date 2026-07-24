@@ -1098,8 +1098,7 @@ fn inject_http<'js>(
                 let mut builder = reqwest::blocking::Client::builder()
                     .timeout(timeout)
                     .connect_timeout(timeout)
-                    .redirect(reqwest::redirect::Policy::none())
-                    .no_proxy();
+                    .redirect(reqwest::redirect::Policy::none());
 
                 // Apply pre-resolved proxy (localhost bypass already configured)
                 if let Some(resolved) = crate::config::get_resolved_proxy() {

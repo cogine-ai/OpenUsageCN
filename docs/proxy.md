@@ -5,7 +5,7 @@ OpenUsageCN can route provider and plugin HTTP requests through an optional prox
 - Supported proxy types: `socks5://`, `http://`, `https://`
 - macOS config: `~/.openusagecn/config.json`
 - Windows config: `%LOCALAPPDATA%\ai.cogine.openusagecn\config.json`
-- Default: off
+- Default: environment proxy variables, then direct
 - UI: none
 
 ## Config File
@@ -36,8 +36,9 @@ You can also use an authenticated proxy URL:
 
 - Config is loaded once when the app starts.
 - Restart OpenUsageCN after changing the file.
-- `localhost`, `127.0.0.1`, and `::1` always bypass the proxy.
-- Missing, disabled, invalid, or unreadable config leaves proxying off.
+- A valid enabled manual proxy overrides environment proxy variables.
+- Manual proxies always bypass `localhost`, `127.0.0.1`, and `::1`.
+- Without a valid enabled manual proxy, OpenUsageCN honors `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, and `NO_PROXY`; requests are direct when none apply.
 - Proxy credentials are redacted in logs.
 - Proxy credentials remain plaintext in this file. On Windows, normal user-profile permissions limit access, but other processes running as the same user can still read it.
 
@@ -45,4 +46,4 @@ You can also use an authenticated proxy URL:
 
 This applies to provider, plugin, and provider-status HTTP requests that go through OpenUsageCN's built-in HTTP client.
 
-OpenUsageCN uses only this manual proxy configuration. It does not automatically use macOS or Windows system proxy settings, `HTTP_PROXY`-style environment variables, PAC/WPAD, or integrated enterprise proxy authentication. It also does not proxy unrelated subprocess network traffic.
+OpenUsageCN does not automatically use macOS or Windows native system proxy settings, PAC/WPAD, or integrated enterprise proxy authentication. It also does not proxy unrelated subprocess network traffic.
