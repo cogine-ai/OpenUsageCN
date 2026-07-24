@@ -86,6 +86,36 @@ describe("usePaceNotifications", () => {
     await waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(1))
   })
 
+  it("fires closeToLimit after the setting is re-enabled", async () => {
+    const disabledSettings = { almostOut: false, closeToLimit: false, runningOut: false }
+    const enabledSettings = { almostOut: false, closeToLimit: true, runningOut: false }
+
+    const { rerender } = renderHook(
+      ({ used, revision, paceSettings }) =>
+        usePaceNotifications({
+          supported: true,
+          pluginsMeta: [plugin],
+          pluginSettings: { order: ["codex"], disabled: [] },
+          pluginStates: { codex: state(used, revision) },
+          settings: paceSettings,
+        }),
+      { initialProps: { used: 30, revision: 1, paceSettings: disabledSettings } }
+    )
+
+    await waitFor(() => expect(invokeMock).not.toHaveBeenCalled())
+    rerender({ used: 45, revision: 2, paceSettings: disabledSettings })
+    await waitFor(() => expect(invokeMock).not.toHaveBeenCalled())
+
+    rerender({ used: 45, revision: 2, paceSettings: enabledSettings })
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("post_pace_notification", {
+        title: "接近上限",
+        subtitle: "Codex · Session",
+        body: "按当前速度，预计将在重置前接近额度上限。",
+      })
+    })
+  })
+
   it("does not evaluate or post notifications when the platform does not support them", async () => {
     const { rerender } = renderHook(
       ({ used, revision }) =>

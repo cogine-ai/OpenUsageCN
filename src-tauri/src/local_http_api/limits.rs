@@ -278,6 +278,8 @@ fn format_timestamp(value: OffsetDateTime) -> String {
 mod tests {
     use super::*;
     use crate::plugin_engine::runtime::MetricLine;
+    use std::collections::HashMap;
+    use std::path::PathBuf;
 
     fn snapshot() -> CachedPluginSnapshot {
         CachedPluginSnapshot {
@@ -425,6 +427,100 @@ mod tests {
 
         assert!(provider.resources.contains_key("session"));
         assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn envelope_from_state_redacts_probe_errors() {
+        let state = CacheState {
+            snapshots: HashMap::new(),
+            app_data_dir: PathBuf::new(),
+            settings_data_dir: PathBuf::new(),
+            known_plugin_ids: vec!["codex".to_string()],
+            limit_catalog: HashMap::new(),
+            errors: HashMap::from([(
+                "codex".to_string(),
+                "refresh failed: token=sk-1234567890abcdefghij".to_string(),
+            )]),
+            app_version: "test".to_string(),
+            dirty_generation: 0,
+            flushed_generation: 0,
+            flush_scheduled: false,
+        };
+
+        let envelope = envelope_from_state(&["codex".to_string()], &state);
+
+        assert!(envelope.providers.is_empty());
+        assert_eq!(envelope.errors.len(), 1);
+        assert_eq!(envelope.errors[0].provider_id, "codex");
+        assert!(
+            envelope.errors[0].message.contains("sk-1...ghij"),
+            "probe error should be redacted, got: {}",
+            envelope.errors[0].message
+        );
+        assert!(
+            !envelope.errors[0]
+                .message
+                .contains("sk-1234567890abcdefghij"),
+            "raw token should not leak in limits envelope"
+        );
+    }
+
+    #[test]
+    fn envelope_from_state_keeps_valid_resources_when_projection_partially_fails() {
+        let mut snapshot = snapshot();
+        snapshot.lines.push(MetricLine::Progress {
+            label: "Requests".to_string(),
+            limit_resource_key: None,
+            used: 12.0,
+            limit: 100.0,
+            format: ProgressFormat::Count {
+                suffix: "req".to_string(),
+            },
+            resets_at: None,
+            period_duration_ms: None,
+            color: None,
+        });
+        let catalog = ProviderLimitCatalog {
+            provider_id: "codex".to_string(),
+            resources: vec![
+                LimitCatalogResource {
+                    key: "session".to_string(),
+                    metric_label: "Session".to_string(),
+                    kind: LimitResourceKind::Consumption,
+                    count_unit: None,
+                },
+                LimitCatalogResource {
+                    key: "requests".to_string(),
+                    metric_label: "Requests".to_string(),
+                    kind: LimitResourceKind::Consumption,
+                    count_unit: None,
+                },
+            ],
+        };
+        let state = CacheState {
+            snapshots: HashMap::from([("codex".to_string(), snapshot)]),
+            app_data_dir: PathBuf::new(),
+            settings_data_dir: PathBuf::new(),
+            known_plugin_ids: vec!["codex".to_string()],
+            limit_catalog: HashMap::from([("codex".to_string(), catalog)]),
+            errors: HashMap::new(),
+            app_version: "test".to_string(),
+            dirty_generation: 0,
+            flushed_generation: 0,
+            flush_scheduled: false,
+        };
+
+        let envelope = envelope_from_state(&["codex".to_string()], &state);
+
+        assert!(envelope.providers["codex"].resources.contains_key("session"));
+        assert!(!envelope.providers["codex"].resources.contains_key("requests"));
+        assert_eq!(
+            envelope.errors,
+            vec![LimitsError {
+                provider_id: "codex".to_string(),
+                message: "Resource 'requests': count resource is missing a stable unit".to_string(),
+            }]
+        );
     }
 
     #[test]

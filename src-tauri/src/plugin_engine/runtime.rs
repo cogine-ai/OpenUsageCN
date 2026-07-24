@@ -912,6 +912,62 @@ mod tests {
     }
 
     #[test]
+    fn probe_error_message_reads_only_the_error_badge() {
+        let output = PluginOutput {
+            provider_id: "codex".to_string(),
+            display_name: "Codex".to_string(),
+            plan: None,
+            icon_url: String::new(),
+            lines: vec![
+                MetricLine::Badge {
+                    label: "Warning".to_string(),
+                    text: "stale cache".to_string(),
+                    color: None,
+                    subtitle: None,
+                },
+                MetricLine::Badge {
+                    label: "Error".to_string(),
+                    text: "Token expired".to_string(),
+                    color: Some("#ef4444".to_string()),
+                    subtitle: None,
+                },
+            ],
+        };
+
+        assert_eq!(probe_error_message(&output), Some("Token expired"));
+    }
+
+    #[test]
+    fn probe_error_message_ignores_progress_and_non_error_badges() {
+        let output = PluginOutput {
+            provider_id: "codex".to_string(),
+            display_name: "Codex".to_string(),
+            plan: None,
+            icon_url: String::new(),
+            lines: vec![
+                MetricLine::Progress {
+                    label: "Session".to_string(),
+                    limit_resource_key: None,
+                    used: 42.0,
+                    limit: 100.0,
+                    format: ProgressFormat::Percent,
+                    resets_at: None,
+                    period_duration_ms: None,
+                    color: None,
+                },
+                MetricLine::Badge {
+                    label: "Status".to_string(),
+                    text: "No usage data".to_string(),
+                    color: None,
+                    subtitle: None,
+                },
+            ],
+        };
+
+        assert_eq!(probe_error_message(&output), None);
+    }
+
+    #[test]
     fn bar_chart_caps_excessive_points() {
         // A plugin-controlled points array must not parse unbounded: this path
         // is native and runs after the JS deadline interrupt can fire.
