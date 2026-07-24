@@ -3115,6 +3115,10 @@ fn expand_path(path: &str) -> String {
 }
 
 #[cfg(test)]
+#[path = "host_api_proxy_tests.rs"]
+mod proxy_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use rquickjs::{Context, Function, Object, Runtime};
