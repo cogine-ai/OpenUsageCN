@@ -1189,7 +1189,7 @@ describe("claude plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("Token expired")
   })
 
-  it("logs when saving keychain credentials fails", async () => {
+  it("aborts refresh when saving keychain credentials fails", async () => {
     const ctx = makeCtx()
     ctx.host.fs.exists = () => false
     ctx.host.keychain.readGenericPassword.mockReturnValue(
@@ -1208,15 +1208,10 @@ describe("claude plugin", () => {
       if (String(opts.url).includes("/v1/oauth/token")) {
         return { status: 200, bodyText: JSON.stringify({ access_token: "new-token", expires_in: 3600 }) }
       }
-      return {
-        status: 200,
-        bodyText: JSON.stringify({
-          five_hour: { utilization: 10, resets_at: "2099-01-01T00:00:00.000Z" },
-        }),
-      }
+      throw new Error("usage should not run after a failed credential save")
     })
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).not.toThrow()
+    expect(() => plugin.probe(ctx)).toThrow("Could not save refreshed credentials")
     expect(ctx.host.log.error).toHaveBeenCalled()
   })
 
@@ -1283,7 +1278,7 @@ describe("claude plugin", () => {
     expect(ctx.host.keychain.writeGenericPasswordForCurrentUser).not.toHaveBeenCalled()
   })
 
-  it("logs when saving credentials file fails", async () => {
+  it("aborts refresh when saving credentials file fails", async () => {
     const ctx = makeCtx()
     ctx.host.fs.exists = () => true
     ctx.host.fs.readText = () =>
@@ -1301,15 +1296,10 @@ describe("claude plugin", () => {
       if (String(opts.url).includes("/v1/oauth/token")) {
         return { status: 200, bodyText: JSON.stringify({ access_token: "new-token", expires_in: 3600 }) }
       }
-      return {
-        status: 200,
-        bodyText: JSON.stringify({
-          five_hour: { utilization: 10, resets_at: "2099-01-01T00:00:00.000Z" },
-        }),
-      }
+      throw new Error("usage should not run after a failed credential save")
     })
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).not.toThrow()
+    expect(() => plugin.probe(ctx)).toThrow("Could not save refreshed credentials")
     expect(ctx.host.log.error).toHaveBeenCalled()
   })
 
