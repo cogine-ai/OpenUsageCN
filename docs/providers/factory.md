@@ -142,3 +142,7 @@ droid
 ```
 
 This creates auth data in the droid auth store (file and/or keychain, depending on droid version/configuration).
+
+## Notes
+
+- WorkOS refresh responses include a new `refresh_token`. The plugin only keeps the new tokens after they are written back to the auth store; a failed save aborts the refresh so the old refresh token is not left behind as the only copy.

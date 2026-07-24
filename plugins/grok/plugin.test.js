@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { makeCtx } from "../test-helpers.js"
 
 const AUTH_PATH = "~/.grok/auth.json"
@@ -144,6 +144,47 @@ describe("grok plugin", () => {
     expect(entry.key).toBe("new-token")
     expect(entry.refresh_token).toBe("new-refresh")
     expect(entry.expires_at).toBe("2026-02-02T01:00:00.000Z")
+  })
+
+  it("aborts refresh when rotated credentials cannot be saved", async () => {
+    const ctx = makeCtx()
+    const original = {
+      key: "expired-token",
+      refresh_token: "refresh-token",
+      email: "user@example.com",
+      oidc_client_id: "client-id",
+      expires_at: "2026-01-01T00:00:00Z",
+    }
+    writeAuth(ctx, original)
+
+    ctx.host.http.request.mockImplementation((req) => {
+      if (req.url === REFRESH_URL) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            access_token: "new-token",
+            refresh_token: "new-refresh",
+            expires_in: 3600,
+          }),
+        }
+      }
+      throw new Error("billing should not run after a failed credential save")
+    })
+
+    const writeText = ctx.host.fs.writeText
+    ctx.host.fs.writeText = vi.fn((path, text) => {
+      if (path === AUTH_PATH && String(text).includes("new-refresh")) {
+        throw new Error("disk full")
+      }
+      return writeText(path, text)
+    })
+
+    const plugin = await loadPlugin()
+    expect(() => plugin.probe(ctx)).toThrow("Could not save refreshed credentials")
+
+    const persisted = JSON.parse(ctx.host.fs.readText(AUTH_PATH))
+    expect(persisted["https://auth.x.ai::client"]).toEqual(original)
+    expect(ctx.host.http.request.mock.calls.every((call) => call[0].url !== BILLING_URL)).toBe(true)
   })
 
   it("refreshes and retries once when billing returns an auth error", async () => {

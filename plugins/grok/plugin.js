@@ -7,6 +7,8 @@
   const TOKEN_AUTH_HEADER = "xai-grok-cli"
   const AUTH_REFRESH_BUFFER_MS = 5 * 60 * 1000
   const LOGIN_HINT = "Grok auth expired. Run `grok login` again."
+  const ERR_AUTH_SAVE =
+    "Could not save refreshed credentials. Try again; if the problem continues, run `grok login` to authenticate."
 
   function readJson(ctx, path) {
     if (!ctx.host.fs.exists(path)) return null
@@ -112,12 +114,13 @@
       }
 
       const accessToken = body.access_token.trim()
-      entry.key = accessToken
+      const nextEntry = Object.assign({}, entry)
+      nextEntry.key = accessToken
       if (typeof body.refresh_token === "string" && body.refresh_token.trim()) {
-        entry.refresh_token = body.refresh_token.trim()
+        nextEntry.refresh_token = body.refresh_token.trim()
       }
       if (typeof body.id_token === "string" && body.id_token.trim()) {
-        entry.id_token = body.id_token.trim()
+        nextEntry.id_token = body.id_token.trim()
       }
 
       const refreshedAtMs = nowMs(ctx)
@@ -126,15 +129,19 @@
       const expiresAtMs = Number.isFinite(expiresIn) && expiresIn > 0
         ? refreshedAtMs + expiresIn * 1000
         : tokenExpiryMs || refreshedAtMs + 3600 * 1000
-      entry.expires_at = new Date(expiresAtMs).toISOString()
+      nextEntry.expires_at = new Date(expiresAtMs).toISOString()
 
+      const nextAuth = Object.assign({}, auth)
+      nextAuth[entryKey] = nextEntry
       try {
-        ctx.host.fs.writeText(AUTH_PATH, JSON.stringify(auth, null, 2))
-        ctx.host.log.info("Grok auth refresh succeeded, token persisted")
+        ctx.host.fs.writeText(AUTH_PATH, JSON.stringify(nextAuth, null, 2))
       } catch (e) {
-        ctx.host.log.warn("Grok auth refresh succeeded but failed to save auth: " + String(e))
+        ctx.host.log.error("Grok auth refresh succeeded but failed to save auth: " + String(e))
+        throw ERR_AUTH_SAVE
       }
 
+      Object.assign(entry, nextEntry)
+      ctx.host.log.info("Grok auth refresh succeeded, token persisted")
       return accessToken
     } catch (e) {
       if (typeof e === "string") throw e

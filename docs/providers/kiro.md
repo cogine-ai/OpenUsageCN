@@ -166,3 +166,7 @@ Observed response fields:
 3. Read the latest `q-client.log` `GetUsageLimitsCommand` response for plan and overage metadata.
 4. If the local cache is missing, incomplete, or older than the app's staleness threshold, call the live refresh/API path.
 5. If live fetch fails but the local cache is usable, keep showing the last local snapshot.
+
+## Notes
+
+- Live refresh responses may rotate `refreshToken`. The plugin only keeps the new tokens after they are written to the Kiro auth token file; a failed save aborts the refresh so the old refresh token is not left behind as the only copy.

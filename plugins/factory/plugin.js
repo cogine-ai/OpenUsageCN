@@ -7,6 +7,8 @@
   const WORKOS_AUTH_URL = "https://api.workos.com/user_management/authenticate"
   const USAGE_URL = "https://api.factory.ai/api/organization/subscription/usage"
   const TOKEN_REFRESH_THRESHOLD_MS = 24 * 60 * 60 * 1000 // 24 hours before expiry
+  const ERR_AUTH_SAVE =
+    "Could not save refreshed credentials. Try again; if the problem continues, run `droid` to authenticate."
 
   function decodeHexUtf8(hex) {
     try {
@@ -295,14 +297,20 @@
         return null
       }
 
-      // Update auth object with new tokens
-      auth.access_token = newAccessToken
+      const nextAuth = Object.assign({}, auth)
+      nextAuth.access_token = newAccessToken
       if (body.refresh_token) {
-        auth.refresh_token = body.refresh_token
+        nextAuth.refresh_token = body.refresh_token
       }
 
-      // Save updated auth
-      saveAuth(ctx, authState)
+      const nextAuthState = Object.assign({}, authState, { auth: nextAuth })
+      if (!saveAuth(ctx, nextAuthState)) {
+        ctx.host.log.error("refresh succeeded but failed to save auth")
+        throw ERR_AUTH_SAVE
+      }
+
+      Object.assign(auth, nextAuth)
+      authState.auth = auth
       ctx.host.log.info("refresh succeeded")
 
       return newAccessToken

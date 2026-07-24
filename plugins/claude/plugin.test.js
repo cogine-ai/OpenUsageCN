@@ -967,6 +967,43 @@ describe("claude plugin", () => {
     expect(ctx.host.fs.writeText).toHaveBeenCalled()
   })
 
+  it("aborts refresh when rotated credentials cannot be saved", async () => {
+    const ctx = makeCtx()
+    const original = {
+      claudeAiOauth: {
+        accessToken: "old-token",
+        refreshToken: "refresh",
+        expiresAt: Date.now() - 1000,
+        subscriptionType: "pro",
+      },
+    }
+    ctx.host.fs.exists = () => true
+    ctx.host.fs.readText = () => JSON.stringify(original)
+
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("/v1/oauth/token")) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            access_token: "new-token",
+            expires_in: 3600,
+            refresh_token: "refresh2",
+          }),
+        }
+      }
+      throw new Error("usage should not run after a failed credential save")
+    })
+
+    ctx.host.fs.writeText = vi.fn(() => {
+      throw new Error("disk full")
+    })
+
+    expect(() => plugin.probe(ctx)).toThrow("Could not save refreshed credentials")
+    expect(ctx.host.http.request.mock.calls.every((call) => !String(call[0].url).includes("/api/oauth/usage"))).toBe(
+      true
+    )
+  })
+
   it("includes user:file_upload in the OAuth refresh scope", async () => {
     const ctx = makeCtx()
     ctx.host.fs.exists = () => true
