@@ -1098,15 +1098,16 @@ fn inject_http<'js>(
                 let mut builder = reqwest::blocking::Client::builder()
                     .timeout(timeout)
                     .connect_timeout(timeout)
-                    .redirect(reqwest::redirect::Policy::none())
-                    .no_proxy();
+                    .redirect(reqwest::redirect::Policy::none());
 
                 // Apply pre-resolved proxy (localhost bypass already configured)
                 if let Some(resolved) = crate::config::get_resolved_proxy() {
                     builder = builder.proxy(resolved.proxy.clone());
                     log::debug!("[http] proxy active");
                 } else {
-                    log::debug!("[http] proxy not used");
+                    log::debug!(
+                        "[http] no manual proxy configured; automatic proxy discovery may apply"
+                    );
                 }
 
                 if req.dangerously_ignore_tls.unwrap_or(false) {
@@ -3112,6 +3113,10 @@ fn expand_path(path: &str) -> String {
     }
     path.to_string()
 }
+
+#[cfg(test)]
+#[path = "host_api_proxy_tests.rs"]
+mod proxy_tests;
 
 #[cfg(test)]
 mod tests {

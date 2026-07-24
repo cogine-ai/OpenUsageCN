@@ -4,6 +4,20 @@
 
 暂无。
 
+## v0.6.37
+
+### Bug Fixes
+
+- Restore `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, and `NO_PROXY` inheritance for provider and provider-status requests by @lc708
+
+---
+
+### Changelog
+
+**Full Changelog**: [v0.6.36...v0.6.37](https://github.com/cogine-ai/OpenUsageCN/compare/v0.6.36...v0.6.37)
+
+- [c204e86](https://github.com/cogine-ai/OpenUsageCN/commit/c204e8602f333f9ccd07fff3382e8185dc123ef3) fix: restore environment proxy inheritance by @lc708
+
 ## v0.6.36
 
 ### New Features
