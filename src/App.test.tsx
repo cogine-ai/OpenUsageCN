@@ -1211,17 +1211,17 @@ describe("App", () => {
     fireEvent.contextMenu(pluginButton)
     await waitFor(() => expect(menuState.menuPopupMock).toHaveBeenCalled())
 
-    expect(menuState.iconMenuItemConfigs).toHaveLength(3)
+    expect(menuState.iconMenuItemConfigs).toHaveLength(import.meta.env.DEV ? 3 : 2)
     for (const config of menuState.iconMenuItemConfigs) {
       expect(config.icon).toBeUndefined()
     }
 
     await waitFor(() => expect(menuState.menuCloseMock).toHaveBeenCalledTimes(1))
-    expect(menuState.iconMenuItemCloseMock).toHaveBeenCalledTimes(3)
-    expect(menuState.predefinedMenuItemCloseMock).toHaveBeenCalledTimes(1)
+    expect(menuState.iconMenuItemCloseMock).toHaveBeenCalledTimes(import.meta.env.DEV ? 3 : 2)
+    expect(menuState.predefinedMenuItemCloseMock).toHaveBeenCalledTimes(import.meta.env.DEV ? 1 : 0)
   })
 
-  it("opens devtools from sidebar context menu inspect action", async () => {
+  it.skipIf(!import.meta.env.DEV)("opens devtools from sidebar context menu inspect action", async () => {
     render(<App />)
     await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
     state.invokeMock.mockClear()
