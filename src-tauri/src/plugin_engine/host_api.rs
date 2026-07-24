@@ -1105,7 +1105,9 @@ fn inject_http<'js>(
                     builder = builder.proxy(resolved.proxy.clone());
                     log::debug!("[http] proxy active");
                 } else {
-                    log::debug!("[http] proxy not used");
+                    log::debug!(
+                        "[http] no manual proxy configured; automatic proxy discovery may apply"
+                    );
                 }
 
                 if req.dangerously_ignore_tls.unwrap_or(false) {
