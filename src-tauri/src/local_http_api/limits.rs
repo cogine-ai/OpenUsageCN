@@ -478,4 +478,98 @@ mod tests {
             vec!["Resource 'requests': count resource is missing a stable unit"]
         );
     }
+
+    #[test]
+    #[serial_test::serial]
+    fn envelope_from_state_redacts_probe_errors() {
+        use crate::local_http_api::cache::cache_state;
+        use std::collections::HashMap;
+
+        let jwt =
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
+        {
+            let mut state = cache_state().lock().expect("cache state poisoned");
+            state.snapshots.clear();
+            state.known_plugin_ids = vec!["codex".to_string()];
+            state.limit_catalog.clear();
+            state.errors.clear();
+            state.errors.insert(
+                "codex".to_string(),
+                format!("refresh failed with token={jwt}"),
+            );
+        }
+
+        let envelope = {
+            let state = cache_state().lock().expect("cache state poisoned");
+            envelope_from_state(&["codex".to_string()], &state)
+        };
+
+        assert!(envelope.providers.is_empty());
+        assert_eq!(envelope.errors.len(), 1);
+        assert_eq!(envelope.errors[0].provider_id, "codex");
+        assert!(
+            !envelope.errors[0].message.contains(jwt),
+            "probe errors must be redacted in limits envelope"
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn envelope_from_state_keeps_valid_resources_when_projection_degrades() {
+        use crate::local_http_api::cache::cache_state;
+        use std::collections::HashMap;
+
+        let mut snapshot = snapshot();
+        snapshot.lines.push(MetricLine::Progress {
+            label: "Requests".to_string(),
+            limit_resource_key: None,
+            used: 12.0,
+            limit: 100.0,
+            format: ProgressFormat::Count {
+                suffix: "req".to_string(),
+            },
+            resets_at: None,
+            period_duration_ms: None,
+            color: None,
+        });
+        let catalog = ProviderLimitCatalog {
+            provider_id: "codex".to_string(),
+            resources: vec![
+                LimitCatalogResource {
+                    key: "session".to_string(),
+                    metric_label: "Session".to_string(),
+                    kind: LimitResourceKind::Consumption,
+                    count_unit: None,
+                },
+                LimitCatalogResource {
+                    key: "requests".to_string(),
+                    metric_label: "Requests".to_string(),
+                    kind: LimitResourceKind::Consumption,
+                    count_unit: None,
+                },
+            ],
+        };
+        {
+            let mut state = cache_state().lock().expect("cache state poisoned");
+            state.snapshots = HashMap::from([("codex".to_string(), snapshot)]);
+            state.known_plugin_ids = vec!["codex".to_string()];
+            state.limit_catalog = HashMap::from([("codex".to_string(), catalog)]);
+            state.errors.clear();
+        }
+
+        let envelope = {
+            let state = cache_state().lock().expect("cache state poisoned");
+            envelope_from_state(&["codex".to_string()], &state)
+        };
+
+        assert!(envelope.providers["codex"].resources.contains_key("session"));
+        assert!(!envelope.providers["codex"].resources.contains_key("requests"));
+        assert_eq!(
+            envelope.errors,
+            vec![LimitsError {
+                provider_id: "codex".to_string(),
+                message: "Resource 'requests': count resource is missing a stable unit".to_string(),
+            }]
+        );
+    }
 }

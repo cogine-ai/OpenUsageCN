@@ -303,3 +303,45 @@ fn header_value_is_case_insensitive() {
         Some("127.0.0.1:6736")
     );
 }
+
+#[test]
+#[serial]
+fn route_limits_probe_error_returns_redacted_error_payload() {
+    use crate::local_http_api::limits::{LimitCatalogResource, ProviderLimitCatalog};
+    use crate::plugin_engine::manifest::LimitResourceKind;
+    use std::collections::HashMap;
+
+    let jwt =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
+    {
+        let mut state = cache_state().lock().unwrap();
+        state.known_plugin_ids = vec!["codex".to_string()];
+        state.snapshots.clear();
+        state.errors.insert(
+            "codex".to_string(),
+            format!("refresh failed with token={jwt}"),
+        );
+        state.limit_catalog = HashMap::from([(
+            "codex".to_string(),
+            ProviderLimitCatalog {
+                provider_id: "codex".to_string(),
+                resources: vec![LimitCatalogResource {
+                    key: "session".to_string(),
+                    metric_label: "Session".to_string(),
+                    kind: LimitResourceKind::Consumption,
+                    count_unit: None,
+                }],
+            },
+        )]);
+    }
+
+    let resp = route("GET", "/v1/limits/codex", None, None);
+
+    assert!(resp.starts_with("HTTP/1.1 200"));
+    assert!(resp.contains(r#""schema":"openusage.limits.v1""#));
+    assert!(resp.contains(r#""providerId":"codex""#));
+    assert!(
+        !resp.contains(jwt),
+        "limits response must redact probe error secrets"
+    );
+}

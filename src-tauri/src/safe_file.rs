@@ -260,6 +260,18 @@ mod tests {
     use super::*;
 
     #[test]
+    fn sha256_hex_matches_known_vectors() {
+        assert_eq!(
+            sha256_hex(b""),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+        assert_eq!(
+            sha256_hex(b"original"),
+            "0682c5f2076f099c34cfdd15a9e063849ed437a49677e6fcc5b4198c76575be5"
+        );
+    }
+
+    #[test]
     fn repeated_writes_replace_existing_content() {
         let dir =
             std::env::temp_dir().join(format!("openusage-safe-file-{}", uuid::Uuid::new_v4()));
