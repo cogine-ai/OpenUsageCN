@@ -295,6 +295,39 @@ fn route_rejects_ipv6_host_without_allowed_port() {
 }
 
 #[test]
+#[serial]
+fn route_limits_provider_with_probe_error_returns_redacted_message() {
+    {
+        let mut state = cache_state().lock().unwrap();
+        state.known_plugin_ids = vec!["codex".to_string()];
+        state.snapshots.clear();
+        state.errors.clear();
+        state.errors.insert(
+            "codex".to_string(),
+            "Not logged in: sk-1234567890abcdefghij".to_string(),
+        );
+    }
+
+    let resp = route("GET", "/v1/limits/codex", None, None);
+
+    {
+        let mut state = cache_state().lock().unwrap();
+        state.errors.clear();
+    }
+
+    assert!(resp.starts_with("HTTP/1.1 200"), "unexpected response: {resp}");
+    assert!(resp.contains(r#""providerId":"codex""#));
+    assert!(
+        !resp.contains("sk-1234567890abcdefghij"),
+        "probe error leaked secret in HTTP response: {resp}"
+    );
+    assert!(
+        resp.contains("sk-1...ghij"),
+        "expected redacted token in HTTP response: {resp}"
+    );
+}
+
+#[test]
 fn header_value_is_case_insensitive() {
     let request = "GET /health HTTP/1.1\r\nHoSt: 127.0.0.1:6736\r\n\r\n";
 

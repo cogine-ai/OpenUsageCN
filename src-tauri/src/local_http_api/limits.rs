@@ -277,7 +277,9 @@ fn format_timestamp(value: OffsetDateTime) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::local_http_api::cache::cache_state;
     use crate::plugin_engine::runtime::MetricLine;
+    use serial_test::serial;
 
     fn snapshot() -> CachedPluginSnapshot {
         CachedPluginSnapshot {
@@ -425,6 +427,42 @@ mod tests {
 
         assert!(provider.resources.contains_key("session"));
         assert!(errors.is_empty());
+    }
+
+    #[test]
+    #[serial]
+    fn envelope_redacts_sensitive_probe_errors() {
+        let sensitive = "refresh failed: token=sk-1234567890abcdefghij";
+        {
+            let mut state = cache_state().lock().expect("cache state poisoned");
+            state.errors.clear();
+            state
+                .errors
+                .insert("codex".to_string(), sensitive.to_string());
+        }
+
+        let envelope = {
+            let state = cache_state().lock().expect("cache state poisoned");
+            envelope_from_state(&["codex".to_string()], &state)
+        };
+
+        {
+            let mut state = cache_state().lock().expect("cache state poisoned");
+            state.errors.clear();
+        }
+
+        assert_eq!(envelope.errors.len(), 1);
+        assert_eq!(envelope.errors[0].provider_id, "codex");
+        assert!(
+            !envelope.errors[0].message.contains("sk-1234567890abcdefghij"),
+            "probe error leaked secret: {}",
+            envelope.errors[0].message
+        );
+        assert!(
+            envelope.errors[0].message.contains("sk-1...ghij"),
+            "expected redacted token, got: {}",
+            envelope.errors[0].message
+        );
     }
 
     #[test]
