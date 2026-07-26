@@ -1,5 +1,6 @@
 use reqwest::Proxy;
 use serde::Deserialize;
+use std::net::IpAddr;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
@@ -40,6 +41,49 @@ pub fn get_resolved_proxy() -> Option<&'static ResolvedProxy> {
     RESOLVED_PROXY
         .get_or_init(|| load_and_resolve_proxy())
         .as_ref()
+}
+
+/// Apply proxy policy for an outbound HTTP client.
+///
+/// Loopback targets always bypass proxies (manual and environment/system) so
+/// CSRF-bearing local language-server calls cannot be observed or spoofed by
+/// a shared HTTP_PROXY. Manual proxy wins for non-loopback URLs; otherwise
+/// reqwest may discover environment/native proxies.
+pub fn configure_http_client(
+    builder: reqwest::blocking::ClientBuilder,
+    target_url: &str,
+) -> reqwest::blocking::ClientBuilder {
+    if is_loopback_url(target_url) {
+        log::debug!("[http] proxy bypassed for loopback address");
+        return builder.no_proxy();
+    }
+
+    if let Some(resolved) = get_resolved_proxy() {
+        log::debug!("[http] proxy active");
+        builder.proxy(resolved.proxy.clone())
+    } else {
+        log::debug!(
+            "[http] no manual proxy configured; automatic proxy discovery may apply"
+        );
+        builder
+    }
+}
+
+/// True when the URL host is localhost or any IP loopback address.
+pub fn is_loopback_url(target_url: &str) -> bool {
+    let Ok(url) = reqwest::Url::parse(target_url) else {
+        return false;
+    };
+    let Some(host) = url.host_str() else {
+        return false;
+    };
+
+    let host = host.trim_start_matches('[').trim_end_matches(']');
+
+    host.trim_end_matches('.').eq_ignore_ascii_case("localhost")
+        || host
+            .parse::<IpAddr>()
+            .is_ok_and(|address| address.to_canonical().is_loopback())
 }
 
 /// Config file path (initialized from the Tauri app path on Windows).
@@ -161,5 +205,19 @@ mod tests {
             }),
         };
         assert!(config.proxy.as_ref().filter(|p| p.enabled).is_some());
+    }
+
+    #[test]
+    fn loopback_urls_bypass_proxy() {
+        assert!(is_loopback_url("http://localhost:6736/v1/limits"));
+        assert!(is_loopback_url("http://localhost.:6736/v1/limits"));
+        assert!(is_loopback_url("http://127.0.0.1:42001/GetUnleashData"));
+        assert!(is_loopback_url("http://127.42.0.1/test"));
+        assert!(is_loopback_url("http://[::1]:6736/v1/limits"));
+        assert!(is_loopback_url(
+            "http://[::ffff:127.0.0.1]:6736/v1/limits"
+        ));
+        assert!(!is_loopback_url("https://chatgpt.com/backend-api/wham/usage"));
+        assert!(!is_loopback_url("not a url"));
     }
 }
