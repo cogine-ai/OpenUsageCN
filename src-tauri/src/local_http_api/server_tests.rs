@@ -295,6 +295,28 @@ fn route_rejects_ipv6_host_without_allowed_port() {
 }
 
 #[test]
+#[serial]
+fn route_limits_redacts_probe_errors_for_known_provider() {
+    let sensitive = "refresh failed: bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
+    {
+        let mut state = cache_state().lock().unwrap();
+        state.known_plugin_ids = vec!["codex".to_string()];
+        state.snapshots.clear();
+        state.errors.clear();
+        state
+            .errors
+            .insert("codex".to_string(), sensitive.to_string());
+    }
+
+    let resp = route("GET", "/v1/limits/codex", None, None);
+
+    assert!(resp.starts_with("HTTP/1.1 200"));
+    assert!(resp.contains(r#""providerId":"codex""#));
+    assert!(!resp.contains("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"));
+    assert!(resp.contains("refresh failed"));
+}
+
+#[test]
 fn header_value_is_case_insensitive() {
     let request = "GET /health HTTP/1.1\r\nHoSt: 127.0.0.1:6736\r\n\r\n";
 

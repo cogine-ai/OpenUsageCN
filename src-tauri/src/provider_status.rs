@@ -186,6 +186,16 @@ mod tests {
     }
 
     #[test]
+    fn rejects_empty_description() {
+        let body = br#"{
+            "page": { "updated_at": "2026-07-14T00:00:00Z" },
+            "status": { "indicator": "none", "description": "   " }
+        }"#;
+        let error = parse_statuspage_status(body).expect_err("empty descriptions must fail");
+        assert!(error.contains("empty description"));
+    }
+
+    #[test]
     fn rejects_malformed_responses() {
         let error = parse_statuspage_status(br#"{"status":{}}"#)
             .expect_err("malformed response must fail loudly");
