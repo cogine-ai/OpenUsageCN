@@ -87,7 +87,7 @@ try {
 }
 ```
 
-Use `writeTextIfUnchanged` when updating a credential file owned by another process. Pass the SHA-256 of the exact text previously read. It returns `false` without writing when the file digest no longer matches at the final check. On Windows, in-place writers are blocked during replacement and transient sharing violations are retried. It cannot provide atomic coordination with a separate program that replaces the whole file path.
+Use `writeTextIfUnchanged` when updating a credential file owned by another process. Pass the SHA-256 of the exact text previously read. It returns `false` without writing when the file digest no longer matches at the final check. On Windows, in-place writers are blocked during replacement and transient sharing violations are retried. Failed Windows replaces use a backup name and will promote the synced temp file if the destination was removed mid-replace, so credential bytes are not discarded. It cannot provide atomic coordination with a separate program that replaces the whole file path.
 
 ### Directory Listing
 
