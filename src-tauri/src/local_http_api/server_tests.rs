@@ -97,6 +97,30 @@ fn route_unknown_limits_provider_returns_404() {
 
 #[test]
 #[serial]
+fn route_limits_redacts_probe_errors_before_serialization() {
+    let jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
+    {
+        let mut state = cache_state().lock().unwrap();
+        state.known_plugin_ids = vec!["codex".to_string()];
+        state.snapshots.clear();
+        state.errors.insert(
+            "codex".to_string(),
+            format!("auth refresh failed: token={jwt}"),
+        );
+    }
+
+    let resp = route("GET", "/v1/limits/codex", None, None);
+
+    assert!(resp.starts_with("HTTP/1.1 200"), "unexpected response: {resp}");
+    assert!(resp.contains(r#""providerId":"codex""#));
+    assert!(
+        !resp.contains(jwt),
+        "probe errors must be redacted before limits serialization"
+    );
+}
+
+#[test]
+#[serial]
 fn route_known_uncached_limits_provider_returns_204() {
     {
         let mut state = cache_state().lock().unwrap();
