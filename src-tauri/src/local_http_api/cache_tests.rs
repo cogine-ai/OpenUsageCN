@@ -277,12 +277,57 @@ fn enabled_snapshots_ordered_uses_default_enabled_plugins_without_settings() {
     }
 
     let snapshots = {
-        let state = cache_state().lock().unwrap();
-        enabled_snapshots_ordered(&state)
+        let mut state = cache_state().lock().unwrap();
+        enabled_snapshots_ordered(&mut state)
     };
 
     assert_eq!(snapshots.len(), 1);
     assert_eq!(snapshots[0].provider_id, "codex");
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+#[serial]
+fn enabled_providers_keep_last_known_settings_when_settings_json_is_temporarily_invalid() {
+    let dir = temp_dir("settings-mid-write");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join(SETTINGS_FILE_NAME),
+        r#"{"plugins":{"order":["gemini","claude"],"disabled":["claude","codex","cursor"]}}"#,
+    )
+    .unwrap();
+
+    init(
+        &dir,
+        vec![
+            "claude".to_string(),
+            "codex".to_string(),
+            "cursor".to_string(),
+            "gemini".to_string(),
+        ],
+        "test-version".to_string(),
+    );
+
+    assert_eq!(enabled_provider_ids(), vec!["gemini"]);
+
+    // Simulate tauri-plugin-store's non-atomic fs::write truncate window.
+    std::fs::write(dir.join(SETTINGS_FILE_NAME), "{").unwrap();
+    assert_eq!(enabled_provider_ids(), vec!["gemini"]);
+
+    std::fs::write(dir.join(SETTINGS_FILE_NAME), "").unwrap();
+    assert_eq!(enabled_provider_ids(), vec!["gemini"]);
+
+    // A readable file without plugin preferences clears the cache and uses defaults.
+    std::fs::write(dir.join(SETTINGS_FILE_NAME), r#"{"theme":"dark"}"#).unwrap();
+    assert_eq!(
+        enabled_provider_ids(),
+        vec![
+            "claude".to_string(),
+            "codex".to_string(),
+            "cursor".to_string()
+        ]
+    );
 
     let _ = std::fs::remove_dir_all(&dir);
 }

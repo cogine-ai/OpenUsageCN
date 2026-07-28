@@ -250,8 +250,8 @@ fn handle_get_health(origin: Option<&str>) -> String {
 
 fn handle_get_usage_collection(origin: Option<&str>) -> String {
     let snapshots = {
-        let state = cache_state().lock().expect("cache state poisoned");
-        enabled_snapshots_ordered(&state)
+        let mut state = cache_state().lock().expect("cache state poisoned");
+        enabled_snapshots_ordered(&mut state)
     };
     match serde_json::to_string(&snapshots) {
         Ok(body) => response_json(origin, 200, "OK", &body),
@@ -287,8 +287,8 @@ fn handle_get_usage_single(provider_id: &str, origin: Option<&str>) -> String {
 
 fn handle_get_limits_collection(origin: Option<&str>) -> String {
     let envelope = {
-        let state = cache_state().lock().expect("cache state poisoned");
-        let provider_ids = enabled_plugin_ids_ordered(&state);
+        let mut state = cache_state().lock().expect("cache state poisoned");
+        let provider_ids = enabled_plugin_ids_ordered(&mut state);
         envelope_from_state(&provider_ids, &state)
     };
     match serde_json::to_string(&envelope) {
