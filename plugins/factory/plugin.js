@@ -70,10 +70,18 @@
     const hasRefresh = typeof refreshToken === "string" && refreshToken
     if (!hasAccess && !(allowPartial && hasRefresh)) return null
 
-    return {
+    // droid stores the selected org as active_organization_id and sends it as
+    // X-Factory-Org-Id. Keep it through refresh so we do not wipe the user's
+    // org selection when rewriting auth.v2 / legacy auth files.
+    const orgId = raw.active_organization_id || raw.activeOrganizationId
+    const normalized = {
       access_token: hasAccess ? accessToken : null,
       refresh_token: hasRefresh ? refreshToken : null,
     }
+    if (typeof orgId === "string" && orgId) {
+      normalized.active_organization_id = orgId
+    }
+    return normalized
   }
 
   function parseAuthPayload(ctx, rawText, opts) {
@@ -299,6 +307,15 @@
       auth.access_token = newAccessToken
       if (body.refresh_token) {
         auth.refresh_token = body.refresh_token
+      }
+      // Prefer the org already selected in the droid credential store; fall back
+      // to WorkOS organization_id when the local field was missing.
+      if (
+        !auth.active_organization_id &&
+        typeof body.organization_id === "string" &&
+        body.organization_id
+      ) {
+        auth.active_organization_id = body.organization_id
       }
 
       // Save updated auth
