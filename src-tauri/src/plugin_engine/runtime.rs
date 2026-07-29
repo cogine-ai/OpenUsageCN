@@ -912,6 +912,68 @@ mod tests {
     }
 
     #[test]
+    fn probe_error_message_reads_error_badge_only() {
+        let output = PluginOutput {
+            provider_id: "test".to_string(),
+            display_name: "Test".to_string(),
+            plan: None,
+            lines: vec![
+                MetricLine::Badge {
+                    label: "Warning".to_string(),
+                    text: "slow response".to_string(),
+                    color: Some("#f59e0b".to_string()),
+                    subtitle: None,
+                },
+                MetricLine::Progress {
+                    label: "Session".to_string(),
+                    limit_resource_key: None,
+                    used: 1.0,
+                    limit: 100.0,
+                    format: ProgressFormat::Percent,
+                    resets_at: None,
+                    period_duration_ms: None,
+                    color: None,
+                },
+                MetricLine::Badge {
+                    label: "Error".to_string(),
+                    text: "auth failed".to_string(),
+                    color: Some("#ef4444".to_string()),
+                    subtitle: None,
+                },
+            ],
+            icon_url: String::new(),
+        };
+
+        assert_eq!(probe_error_message(&output), Some("auth failed"));
+    }
+
+    #[test]
+    fn probe_error_message_ignores_non_error_badges() {
+        let output = PluginOutput {
+            provider_id: "test".to_string(),
+            display_name: "Test".to_string(),
+            plan: None,
+            lines: vec![
+                MetricLine::Badge {
+                    label: "Warning".to_string(),
+                    text: "rate limited".to_string(),
+                    color: Some("#f59e0b".to_string()),
+                    subtitle: None,
+                },
+                MetricLine::Text {
+                    label: "Status".to_string(),
+                    value: "ok".to_string(),
+                    color: None,
+                    subtitle: None,
+                },
+            ],
+            icon_url: String::new(),
+        };
+
+        assert_eq!(probe_error_message(&output), None);
+    }
+
+    #[test]
     fn bar_chart_caps_excessive_points() {
         // A plugin-controlled points array must not parse unbounded: this path
         // is native and runs after the JS deadline interrupt can fire.
