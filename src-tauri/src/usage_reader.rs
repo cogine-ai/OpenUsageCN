@@ -216,7 +216,6 @@ fn is_packaged_resource_dir(path: &Path) -> bool {
 mod tests {
     use super::*;
     use crate::plugin_engine::manifest::{LoadedPlugin, PluginManifest};
-    use crate::plugin_engine::runtime::{MetricLine, ProgressFormat};
     use std::path::PathBuf;
 
     fn cli_test_plugin(id: &str, entry_script: &str) -> LoadedPlugin {
@@ -261,12 +260,7 @@ mod tests {
                     probe(ctx) {
                         return {
                             lines: [
-                                ctx.line.progress({
-                                    label: "Session",
-                                    used: 1,
-                                    limit: 100,
-                                    format: "percent"
-                                })
+                                ctx.line.text({ label: "Status", value: "ok" })
                             ]
                         };
                     }
@@ -292,10 +286,10 @@ mod tests {
         assert_eq!(results.len(), 2);
         let mut by_id: HashMap<String, PluginOutput> = results.into_iter().collect();
         let alpha = by_id.remove("alpha").expect("alpha output");
-        assert!(matches!(
-            alpha.lines.first(),
-            Some(MetricLine::Progress { .. })
-        ));
+        assert!(
+            probe_error_message(&alpha).is_none(),
+            "successful probes must not report an error badge"
+        );
         let beta = by_id.remove("beta").expect("beta output");
         assert_eq!(
             probe_error_message(&beta),
