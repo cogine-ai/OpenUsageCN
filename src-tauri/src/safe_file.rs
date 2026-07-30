@@ -310,6 +310,27 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    fn rejects_symlink_loops_when_resolving_destination() {
+        use std::os::unix::fs::symlink;
+
+        let dir =
+            std::env::temp_dir().join(format!("openusage-safe-loop-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let a = dir.join("a.json");
+        let b = dir.join("b.json");
+        symlink("b.json", &a).unwrap();
+        symlink("a.json", &b).unwrap();
+
+        let error = write_text(&a, "loop").expect_err("symlink loop must fail");
+        assert!(
+            error.contains("too many symbolic links"),
+            "unexpected error: {error}"
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn writes_through_a_symlink_without_replacing_the_link() {
         use std::os::unix::fs::symlink;
 
