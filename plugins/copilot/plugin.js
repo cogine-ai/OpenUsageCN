@@ -34,13 +34,27 @@
     writeJson(ctx, ctx.app.pluginDataDir + "/auth.json", { token: token });
   }
 
-  function clearCachedToken(ctx) {
+  function clearCachedToken(ctx, staleToken) {
     try {
+      if (
+        !ctx.host.keychain ||
+        typeof ctx.host.keychain.deleteGenericPassword !== "function"
+      ) {
+        throw new Error("keychain deleteGenericPassword is unavailable");
+      }
       ctx.host.keychain.deleteGenericPassword(KEYCHAIN_SERVICE);
     } catch (e) {
       ctx.host.log.info("keychain delete failed: " + String(e));
     }
-    writeJson(ctx, ctx.app.pluginDataDir + "/auth.json", null);
+
+    // Only clear the state file when it still holds the same stale token.
+    // A newer state-only token must survive so loadToken() can reach it after
+    // the keychain entry is removed (or after a later successful delete).
+    const statePath = ctx.app.pluginDataDir + "/auth.json";
+    const data = readJson(ctx, statePath);
+    if (data && data.token === staleToken) {
+      writeJson(ctx, statePath, null);
+    }
   }
 
   function loadTokenFromKeychain(ctx) {
@@ -164,8 +178,8 @@
       // If cached token is stale, clear it and try fallback sources
       if (source === "keychain") {
         ctx.host.log.info("cached token invalid, trying fallback sources");
-        clearCachedToken(ctx);
-        const fallback = loadTokenFromGhCli(ctx);
+        clearCachedToken(ctx, token);
+        const fallback = loadTokenFromGhCli(ctx) || loadTokenFromStateFile(ctx);
         if (fallback) {
           try {
             resp = fetchUsage(ctx, fallback.token);

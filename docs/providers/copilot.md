@@ -26,6 +26,8 @@ Choose "GitHub.com" and follow the prompts. The plugin will automatically read t
 
 Once authenticated via gh CLI, the plugin caches the token in the OpenUsageCN keychain for faster access on subsequent probes.
 
+If the cached OpenUsageCN keychain token is rejected (HTTP 401/403), the plugin deletes that keychain item, clears a matching stale `auth.json` token, and retries with the GitHub CLI keychain or a newer state-file token.
+
 ## API
 
 **Endpoint:** `https://api.github.com/copilot_internal/user`

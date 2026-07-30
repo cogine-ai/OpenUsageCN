@@ -274,15 +274,18 @@ const resp = ctx.host.http.request({
 
 ```typescript
 host.keychain.readGenericPassword(service: string, account?: string): string
+host.keychain.writeGenericPassword(service: string, value: string): void
+host.keychain.deleteGenericPassword(service: string, account?: string): void
 ```
 
-Reads a generic password from the macOS Keychain. Pass `account` when the service stores multiple accounts and the plugin must avoid a service-wide match.
+Reads, writes, or deletes a generic password in the macOS Keychain. Pass `account` when the service stores multiple accounts and the plugin must avoid a service-wide match.
 
 ### Behavior
 
 - **macOS only**: Throws on other platforms
-- **Throws if not found**: Returns the password string if found, throws otherwise
-- **Optional account scope**: When `account` is set, lookup uses both service and account
+- **Read throws if not found**: Returns the password string if found, throws otherwise
+- **Delete throws on failure**: Including when the item is missing
+- **Optional account scope**: When `account` is set, lookup/delete uses both service and account
 
 ### Example
 
@@ -299,6 +302,15 @@ if (ctx.host.fs.exists("~/.myapp/credentials.json")) {
   } catch {
     throw "Login required. Sign in to continue."
   }
+}
+```
+
+```javascript
+// Clear a stale cached token so a later probe can fall back to another source
+try {
+  ctx.host.keychain.deleteGenericPassword("OpenUsageCN-copilot")
+} catch {
+  // Item may already be gone
 }
 ```
 
