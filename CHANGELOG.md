@@ -4,6 +4,22 @@
 
 暂无。
 
+## v0.6.38
+
+### Bug Fixes
+
+- Reject invalid or ambiguous OpenRouter API base URLs before sending API credentials, while preserving valid custom HTTPS hosts, ports, and base paths ([#162](https://github.com/cogine-ai/OpenUsageCN/pull/162)) by @lc708
+- Ensure overlapping provider refreshes publish only the latest usage result and preserve correct loading and manual-refresh state when batch starts fail ([#162](https://github.com/cogine-ai/OpenUsageCN/pull/162)) by @lc708
+
+---
+
+### Changelog
+
+**Full Changelog**: [v0.6.37...v0.6.38](https://github.com/cogine-ai/OpenUsageCN/compare/v0.6.37...v0.6.38)
+
+- [67b6330](https://github.com/cogine-ai/OpenUsageCN/commit/67b63300a1ac8ef13496750fa679ee7422fd8b46) fix: harden OpenRouter URLs and probe ordering by @lc708
+- [5a4519e](https://github.com/cogine-ai/OpenUsageCN/commit/5a4519e38eeda2801389feaac4114d6700234787) Merge pull request #162 from cogine-ai/cliq/openrouter-latest-probes by @lc708
+
 ## v0.6.37
 
 ### Bug Fixes
