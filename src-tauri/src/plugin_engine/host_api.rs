@@ -1114,16 +1114,7 @@ fn inject_http<'js>(
                     .timeout(timeout)
                     .connect_timeout(timeout)
                     .redirect(reqwest::redirect::Policy::none());
-
-                // Apply pre-resolved proxy (localhost bypass already configured)
-                if let Some(resolved) = crate::config::get_resolved_proxy() {
-                    builder = builder.proxy(resolved.proxy.clone());
-                    log::debug!("[http] proxy active");
-                } else {
-                    log::debug!(
-                        "[http] no manual proxy configured; automatic proxy discovery may apply"
-                    );
-                }
+                builder = crate::config::configure_http_client(builder, &req.url);
 
                 if req.dangerously_ignore_tls.unwrap_or(false) {
                     builder = builder.danger_accept_invalid_certs(true);

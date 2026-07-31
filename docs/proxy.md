@@ -37,8 +37,8 @@ You can also use an authenticated proxy URL:
 - Config is loaded once when the app starts.
 - Restart OpenUsageCN after changing the file.
 - A valid enabled manual proxy overrides automatic proxy discovery.
-- Manual proxies always bypass `localhost`, `127.0.0.1`, and `::1`.
-- Without a valid enabled manual proxy, OpenUsageCN first honors `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, and `NO_PROXY`.
+- Loopback targets (`localhost`, `127.0.0.1`, `::1`, and other loopback IPs) always bypass every proxy path, including environment and native system proxies. This keeps local language-server probes (for example Antigravity CSRF calls to `127.0.0.1`) off the shared proxy.
+- Without a valid enabled manual proxy, OpenUsageCN first honors `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, and `NO_PROXY` for non-loopback requests.
 - On macOS and Windows, native static HTTP/HTTPS proxy settings are used when the matching environment proxy variable is absent.
 - Requests are direct when no environment or native system proxy applies.
 - Proxy credentials are redacted in logs.

@@ -73,9 +73,7 @@ fn fetch_statuspage_status(api_url: &str) -> Result<ProviderStatus, String> {
         .redirect(reqwest::redirect::Policy::limited(3))
         .https_only(true)
         .user_agent("OpenUsageCN/provider-status");
-    if let Some(resolved) = crate::config::get_resolved_proxy() {
-        client_builder = client_builder.proxy(resolved.proxy.clone());
-    }
+    client_builder = crate::config::configure_http_client(client_builder, api_url);
     let client = client_builder
         .build()
         .map_err(|error| format!("failed to build status client: {error}"))?;
