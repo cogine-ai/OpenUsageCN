@@ -278,6 +278,7 @@ fn format_timestamp(value: OffsetDateTime) -> String {
 mod tests {
     use super::*;
     use crate::plugin_engine::runtime::MetricLine;
+    use serial_test::serial;
 
     fn snapshot() -> CachedPluginSnapshot {
         CachedPluginSnapshot {
@@ -296,6 +297,28 @@ mod tests {
             }],
             fetched_at: "2026-07-14T02:00:00Z".to_string(),
         }
+    }
+
+    #[test]
+    #[serial]
+    fn envelope_from_state_redacts_probe_errors() {
+        use crate::local_http_api::record_probe_error;
+
+        let provider_id = format!("codex-test-{}", uuid::Uuid::new_v4());
+        record_probe_error(
+            &provider_id,
+            "auth failed at /Users/secret/.codex/auth.json",
+        );
+
+        let envelope = current_envelope(&[provider_id.clone()]);
+
+        assert_eq!(envelope.errors.len(), 1);
+        assert_eq!(envelope.errors[0].provider_id, provider_id);
+        assert!(
+            !envelope.errors[0].message.contains("/Users/secret"),
+            "probe errors must be redacted before limits serialization, got: {}",
+            envelope.errors[0].message
+        );
     }
 
     #[test]

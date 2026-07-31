@@ -288,12 +288,38 @@ mod tests {
     }
 
     #[test]
+    fn sha256_hex_matches_known_digest() {
+        assert_eq!(
+            sha256_hex(b"hello"),
+            "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+        );
+    }
+
+    #[test]
     fn relative_destination_does_not_require_a_parent_directory() {
         let filename = format!("openusage-safe-file-{}.json", uuid::Uuid::new_v4());
         let path = Path::new(&filename);
         write_text(path, "relative").expect("write relative file");
         assert_eq!(std::fs::read_to_string(path).unwrap(), "relative");
         let _ = std::fs::remove_file(path);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_symlink_loops() {
+        use std::os::unix::fs::symlink;
+
+        let dir =
+            std::env::temp_dir().join(format!("openusage-safe-loop-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let a = dir.join("a");
+        let b = dir.join("b");
+        symlink("b", &a).unwrap();
+        symlink("a", &b).unwrap();
+
+        let error = write_text(&a, "content").expect_err("symlink loop should fail");
+        assert!(error.contains("too many symbolic links"));
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[cfg(unix)]

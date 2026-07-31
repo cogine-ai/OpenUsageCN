@@ -252,6 +252,76 @@ mod tests {
         );
     }
 
+    fn test_plugin(id: &str, entry_script: &str) -> plugin_engine::manifest::LoadedPlugin {
+        use plugin_engine::manifest::{LoadedPlugin, PluginManifest};
+        use std::path::PathBuf;
+
+        LoadedPlugin {
+            manifest: PluginManifest {
+                schema_version: 1,
+                id: id.to_string(),
+                name: id.to_string(),
+                version: "0.0.0".to_string(),
+                entry: "plugin.js".to_string(),
+                icon: "icon.svg".to_string(),
+                brand_color: None,
+                lines: vec![],
+                links: vec![],
+                status_page: None,
+                config: None,
+            },
+            plugin_dir: PathBuf::from("."),
+            entry_script: entry_script.to_string(),
+            icon_data_url: "data:image/svg+xml;base64,".to_string(),
+        }
+    }
+
+    #[test]
+    fn run_probes_collects_success_and_error_outputs() {
+        use std::collections::HashMap;
+
+        let plugins = vec![
+            test_plugin(
+                "ok",
+                r#"
+                globalThis.__openusage_plugin = {
+                    probe(ctx) {
+                        return {
+                            lines: [ctx.line.text({ label: "Status", value: "ok" })]
+                        };
+                    }
+                };
+                "#,
+            ),
+            test_plugin(
+                "bad",
+                r#"
+                globalThis.__openusage_plugin = {
+                    probe() {
+                        throw "refresh failed";
+                    }
+                };
+                "#,
+            ),
+        ];
+        let app_dir = std::env::temp_dir().join(format!(
+            "openusage-run-probes-{}",
+            uuid::Uuid::new_v4()
+        ));
+
+        let (results, worker_failed) =
+            run_probes(plugins, app_dir, env!("CARGO_PKG_VERSION").to_string());
+
+        assert!(!worker_failed);
+        assert_eq!(results.len(), 2);
+        let by_id: HashMap<_, _> = results.into_iter().collect();
+        assert!(probe_error_message(by_id.get("ok").unwrap()).is_none());
+        assert_eq!(
+            probe_error_message(by_id.get("bad").unwrap()),
+            Some("refresh failed")
+        );
+    }
+
     #[cfg(unix)]
     #[test]
     fn resolves_an_installed_cli_symlink_back_to_the_app_bundle() {
