@@ -49,6 +49,9 @@ pub(super) struct CacheState {
     pub limit_catalog: HashMap<String, ProviderLimitCatalog>,
     pub errors: HashMap<String, String>,
     pub app_version: String,
+    /// Last successfully loaded plugin preferences from settings.json.
+    /// Retained across transient read/parse failures (non-atomic saves).
+    pub last_plugin_settings: Option<super::cache_settings::CachedPluginSettings>,
     dirty_generation: u64,
     flushed_generation: u64,
     flush_scheduled: bool,
@@ -99,6 +102,7 @@ pub(super) fn cache_state() -> &'static Mutex<CacheState> {
             limit_catalog: HashMap::new(),
             errors: HashMap::new(),
             app_version: String::new(),
+            last_plugin_settings: None,
             dirty_generation: 0,
             flushed_generation: 0,
             flush_scheduled: false,
@@ -388,6 +392,7 @@ pub fn init_with_catalog(
         .collect();
     state.errors.clear();
     state.app_version = app_version;
+    state.last_plugin_settings = None;
     state.dirty_generation = 0;
     state.flushed_generation = 0;
     state.flush_scheduled = false;
@@ -429,8 +434,8 @@ pub fn flush_cache() -> Result<(), String> {
 }
 
 pub(crate) fn enabled_provider_ids() -> Vec<String> {
-    let state = cache_state().lock().expect("cache state poisoned");
-    enabled_plugin_ids_ordered(&state)
+    let mut state = cache_state().lock().expect("cache state poisoned");
+    enabled_plugin_ids_ordered(&mut state)
 }
 
 pub(crate) fn snapshot_for_provider(provider_id: &str) -> Option<CachedPluginSnapshot> {
@@ -443,7 +448,7 @@ pub(crate) fn snapshot_for_provider(provider_id: &str) -> Option<CachedPluginSna
 }
 
 /// Build the ordered list of enabled cached snapshots for GET /v1/usage.
-pub(super) fn enabled_snapshots_ordered(state: &CacheState) -> Vec<CachedPluginSnapshot> {
+pub(super) fn enabled_snapshots_ordered(state: &mut CacheState) -> Vec<CachedPluginSnapshot> {
     enabled_plugin_ids_ordered(state)
         .into_iter()
         .filter_map(|id| state.snapshots.get(&id).cloned())
@@ -451,8 +456,8 @@ pub(super) fn enabled_snapshots_ordered(state: &CacheState) -> Vec<CachedPluginS
 }
 
 pub(super) fn health_cache_state() -> HealthCacheState {
-    let state = cache_state().lock().expect("cache state poisoned");
-    let enabled_plugin_ids = enabled_plugin_ids_ordered(&state);
+    let mut state = cache_state().lock().expect("cache state poisoned");
+    let enabled_plugin_ids = enabled_plugin_ids_ordered(&mut state);
     let enabled_cached_snapshots: Vec<&CachedPluginSnapshot> = enabled_plugin_ids
         .iter()
         .filter_map(|id| state.snapshots.get(id))

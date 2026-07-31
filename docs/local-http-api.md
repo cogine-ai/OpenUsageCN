@@ -59,6 +59,8 @@ The Windows MVP reports five known providers: Codex, BigModel CN, OpenAI API, Op
 
 Returns an array of cached usage snapshots for all **enabled** providers, ordered by your plugin settings.
 
+If `settings.json` is briefly unreadable while the app is saving settings, the API keeps using the last successfully loaded plugin preferences instead of falling back to the default enabled set.
+
 - **200 OK** — JSON array (may be empty `[]` if no cached data exists yet).
 
 ### `GET /v1/usage/:providerId`
