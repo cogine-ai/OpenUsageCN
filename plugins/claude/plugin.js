@@ -9,6 +9,8 @@
   const SCOPES =
     "user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload"
   const REFRESH_BUFFER_MS = 5 * 60 * 1000 // refresh 5 minutes before expiration
+  const ERR_AUTH_SAVE =
+    "Could not save refreshed credentials. Try again; if the problem continues, run `claude` to authenticate."
 
   // Rate-limit state persisted across probe() calls (module scope survives re-invocations).
   const MIN_USAGE_FETCH_INTERVAL_MS = 5 * 60 * 1000  // never poll more than once per 5 min
@@ -358,34 +360,25 @@
     // which Claude Code can't read back, causing it to invalidate the session.
     const text = JSON.stringify(fullData)
     if (source === "file") {
-      try {
-        ctx.host.fs.writeText(getClaudeCredentialsPath(ctx), text)
-      } catch (e) {
-        ctx.host.log.error("Failed to write Claude credentials file: " + String(e))
-      }
+      ctx.host.fs.writeText(getClaudeCredentialsPath(ctx), text)
       return
     }
     if (!serviceName) {
-      ctx.host.log.error("Refusing keychain write: missing service name (source=" + source + ")")
-      return
+      throw "Refusing keychain write: missing service name (source=" + source + ")"
     }
     if (source === "keychain-current-user") {
-      try {
-        if (typeof ctx.host.keychain.writeGenericPasswordForCurrentUser === "function") {
-          ctx.host.keychain.writeGenericPasswordForCurrentUser(serviceName, text)
-        } else {
-          ctx.host.keychain.writeGenericPassword(serviceName, text)
-        }
-      } catch (e) {
-        ctx.host.log.error("Failed to write Claude credentials keychain: " + String(e))
-      }
-    } else if (source === "keychain-legacy" || source === "keychain") {
-      try {
+      if (typeof ctx.host.keychain.writeGenericPasswordForCurrentUser === "function") {
+        ctx.host.keychain.writeGenericPasswordForCurrentUser(serviceName, text)
+      } else {
         ctx.host.keychain.writeGenericPassword(serviceName, text)
-      } catch (e) {
-        ctx.host.log.error("Failed to write Claude credentials keychain: " + String(e))
       }
+      return
     }
+    if (source === "keychain-legacy" || source === "keychain") {
+      ctx.host.keychain.writeGenericPassword(serviceName, text)
+      return
+    }
+    throw "Unsupported Claude credential source: " + String(source)
   }
 
   function needsRefresh(ctx, oauth, nowMs) {
@@ -445,16 +438,23 @@
         return null
       }
 
-      // Update oauth credentials
-      oauth.accessToken = newAccessToken
-      if (body.refresh_token) oauth.refreshToken = body.refresh_token
+      const nextOauth = Object.assign({}, oauth)
+      nextOauth.accessToken = newAccessToken
+      if (body.refresh_token) nextOauth.refreshToken = body.refresh_token
       if (typeof body.expires_in === "number") {
-        oauth.expiresAt = Date.now() + body.expires_in * 1000
+        nextOauth.expiresAt = Date.now() + body.expires_in * 1000
       }
 
-      // Persist updated credentials back to the same source we read from.
+      const nextFullData = Object.assign({}, fullData, { claudeAiOauth: nextOauth })
+      try {
+        saveCredentials(ctx, source, creds.serviceName, nextFullData)
+      } catch (e) {
+        ctx.host.log.error("refresh succeeded but failed to save credentials: " + String(e))
+        throw ERR_AUTH_SAVE
+      }
+
+      Object.assign(oauth, nextOauth)
       fullData.claudeAiOauth = oauth
-      saveCredentials(ctx, source, creds.serviceName, fullData)
 
       ctx.host.log.info("refresh succeeded, new token expires in " + (body.expires_in || "unknown") + "s")
       return newAccessToken

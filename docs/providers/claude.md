@@ -117,3 +117,7 @@ Content-Type: application/json
   "expires_in": 3600                       // seconds
 }
 ```
+
+## Notes
+
+- Refresh responses may rotate `refreshToken`. The plugin only keeps the new tokens after they are written back to the same credential source (file or keychain); a failed save aborts the refresh so the old refresh token is not left behind as the only copy.

@@ -233,6 +233,46 @@ describe("kiro plugin", () => {
     expect(savedToken.refreshToken).toBe("refreshed-refresh-token")
   })
 
+  it("aborts refresh when rotated credentials cannot be saved", async () => {
+    const ctx = makeCtx()
+    const original = makeToken({ accessToken: "", expiresAt: "2026-02-01T00:00:00.000Z" })
+    writeToken(ctx, original)
+    writeProfile(ctx)
+
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("/refreshToken")) {
+        return {
+          status: 200,
+          headers: {},
+          bodyText: JSON.stringify({
+            accessToken: "refreshed-access-token",
+            refreshToken: "refreshed-refresh-token",
+            expiresIn: 3600,
+            profileArn: makeToken().profileArn,
+          }),
+        }
+      }
+      throw new Error("usage should not run after a failed credential save")
+    })
+
+    const writeText = ctx.host.fs.writeText
+    ctx.host.fs.writeText = vi.fn((path, text) => {
+      if (path === TOKEN_PATH && String(text).includes("refreshed-refresh-token")) {
+        throw new Error("disk full")
+      }
+      return writeText(path, text)
+    })
+
+    const plugin = await loadPlugin()
+    expect(() => plugin.probe(ctx)).toThrow("Could not save refreshed credentials")
+
+    const persisted = JSON.parse(ctx.host.fs.readText(TOKEN_PATH))
+    expect(persisted).toEqual(original)
+    expect(ctx.host.http.request.mock.calls.every((call) => !String(call[0].url).includes("getUsageLimits"))).toBe(
+      true
+    )
+  })
+
   it("adds TokenType for external IdP live requests", async () => {
     const ctx = makeCtx()
     writeToken(ctx, makeToken({

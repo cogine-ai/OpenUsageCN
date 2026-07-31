@@ -24,7 +24,7 @@ grok login
 
 2. Enable the Grok plugin in OpenUsageCN settings.
 
-OpenUsageCN reads the same local auth file that the Grok CLI uses. Access tokens are refreshed automatically before expiry when a `refresh_token` is present. If refresh fails, run `grok login` again.
+OpenUsageCN reads the same local auth file that the Grok CLI uses. Access tokens are refreshed automatically before expiry when a `refresh_token` is present. Refresh responses may rotate `refresh_token`. The plugin only keeps the new tokens after they are written to `~/.grok/auth.json`; a failed save aborts the refresh so the old refresh token is not left behind as the only copy. If refresh fails, run `grok login` again.
 
 ## Endpoint
 
@@ -88,6 +88,7 @@ Used fields:
 | Expired token with no refresh token | "Grok auth expired. Run `grok login` again." |
 | Refresh token rejected | "Grok auth expired. Run `grok login` again." |
 | 401/403 after retry | "Grok auth expired. Run `grok login` again." |
+| Could not save refreshed credentials | "Could not save refreshed credentials. Try again; if the problem continues, run `grok login` to authenticate." |
 | HTTP error | "Grok billing request failed (HTTP {status}). Try again later." |
 | Network error | "Grok billing request failed. Check your connection." |
 | Invalid response | "Grok billing response changed." |

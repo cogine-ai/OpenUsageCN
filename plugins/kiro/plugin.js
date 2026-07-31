@@ -13,6 +13,8 @@
   const LOGIN_HINT = "Open Kiro and sign in, then try again."
   const SESSION_HINT = "Kiro session expired. Open Kiro and sign in again."
   const DATA_HINT = "Kiro usage data unavailable. Open the Kiro account dashboard once and try again."
+  const ERR_AUTH_SAVE =
+    "Could not save refreshed credentials. Try again; if the problem continues, open Kiro and sign in again."
 
   function num(value) {
     if (typeof value === "number") return Number.isFinite(value) ? value : null
@@ -243,14 +245,19 @@
       return null
     }
     const expiresIn = first(json.expiresIn, json.expires_in)
-    authState.token = sanitizeAuth({
+    const nextToken = sanitizeAuth({
       ...authState.token,
       accessToken: json.accessToken,
       refreshToken: typeof json.refreshToken === "string" && json.refreshToken ? json.refreshToken : authState.token.refreshToken,
       profileArn: typeof json.profileArn === "string" && json.profileArn ? json.profileArn : authState.token.profileArn,
       expiresAt: expiresIn !== null && expiresIn > 0 ? new Date(nowMs + expiresIn * 1000).toISOString() : authState.token.expiresAt,
     })
-    saveAuthState(ctx, authState)
+    const nextAuthState = { path: authState.path, token: nextToken }
+    if (!saveAuthState(ctx, nextAuthState)) {
+      ctx.host.log.error("Kiro token refresh succeeded but failed to save auth")
+      throw ERR_AUTH_SAVE
+    }
+    authState.token = nextToken
     return authState.token.accessToken
   }
   function fetchLiveState(ctx, authState, nowMs) {
