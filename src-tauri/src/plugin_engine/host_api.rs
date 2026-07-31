@@ -6,7 +6,7 @@ use aes_gcm::{
     aes::Aes256,
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
-use rquickjs::{Ctx, Exception, Function, Object, function::Rest};
+use rquickjs::{Ctx, Exception, Function, IntoJs, Object, Value, function::Rest};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::ffi::{OsStr, OsString};
@@ -1044,6 +1044,16 @@ fn inject_env<'js>(ctx: &Ctx<'js>, host: &Object<'js>, plugin_id: &str) -> rquic
     Ok(())
 }
 
+fn normalize_https_base_url_for_js<'js>(
+    ctx: Ctx<'js>,
+    raw: String,
+) -> rquickjs::Result<Value<'js>> {
+    match super::endpoint_url::normalize_https_base_url(&raw) {
+        Some(value) => value.into_js(&ctx),
+        None => Ok(Value::new_null(ctx)),
+    }
+}
+
 fn inject_http<'js>(
     ctx: &Ctx<'js>,
     host: &Object<'js>,
@@ -1052,6 +1062,11 @@ fn inject_http<'js>(
 ) -> rquickjs::Result<()> {
     let http_obj = Object::new(ctx.clone())?;
     let pid = plugin_id.to_string();
+
+    http_obj.set(
+        "normalizeHttpsBaseUrl",
+        Function::new(ctx.clone(), normalize_https_base_url_for_js)?,
+    )?;
 
     http_obj.set(
         "_requestRaw",
@@ -3296,6 +3311,33 @@ mod tests {
             "__OPENUSAGECN_ENV_END__",
         );
         assert_eq!(value.as_deref(), Some("sk-test-key-12345"));
+    }
+
+    #[test]
+    fn http_api_exposes_https_base_url_normalization_to_quickjs() {
+        let rt = Runtime::new().expect("runtime");
+        let ctx = Context::full(&rt).expect("context");
+        ctx.with(|ctx| {
+            let app_data = std::env::temp_dir();
+            inject_host_api(&ctx, "test", &app_data, "0.0.0").expect("inject host api");
+
+            let normalized: Option<String> = ctx
+                .eval(
+                    r#"__openusage_ctx.host.http.normalizeHttpsBaseUrl(" https://Gateway.Example:8443/openrouter/v1/ ")"#,
+                )
+                .expect("normalize valid base URL");
+            assert_eq!(
+                normalized.as_deref(),
+                Some("https://gateway.example:8443/openrouter/v1")
+            );
+
+            let rejected_is_null: bool = ctx
+                .eval(
+                    r#"__openusage_ctx.host.http.normalizeHttpsBaseUrl("https://openrouter.ai@attacker.example/api/v1") === null"#,
+                )
+                .expect("reject endpoint userinfo");
+            assert!(rejected_is_null);
+        });
     }
 
     #[test]

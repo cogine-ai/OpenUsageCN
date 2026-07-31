@@ -11,6 +11,9 @@
 - `autoUpdateNextAt` is runtime scheduling state from `useProbe`.
 - Automatic refresh skips providers that are still loading or inside the short failure backoff. Manual refresh still retries immediately.
 - Reset-boundary refreshes are one-shot probes for providers whose reported quota reset arrives before the next automatic refresh.
+- If refreshes overlap for the same provider, only the last one started can update the displayed result or saved limits. Older refreshes may still finish, but their results are ignored.
+- If a newer refresh cannot start, the latest earlier refresh that is still running remains responsible for that provider. A start error is shown only when no running refresh can take over.
+- An older batch finishing does not end the loading state of a newer refresh.
 - `useProviderStatus` keeps the latest successful status-page result per supported provider; failed checks are logged without being shown as provider incidents.
 - `usePaceNotifications` keeps in-memory per-metric notification state. A provider is primed on its first successful data, removed when disabled, and re-armed after recovery or a real reset window.
 - `selectedPlugin` is computed by `useAppPluginViews`.

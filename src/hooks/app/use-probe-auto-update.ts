@@ -5,6 +5,10 @@ import {
   type PluginSettings,
 } from "@/lib/settings"
 import type { PluginState } from "@/hooks/app/types"
+import {
+  getProbeBatchStartFailedPluginIds,
+  type StartBatch,
+} from "@/hooks/use-probe-events"
 
 export const AUTO_UPDATE_FAILURE_BACKOFF_MS = 15 * 60_000
 export const RESET_BOUNDARY_REFRESH_GRACE_MS = 30_000
@@ -110,7 +114,7 @@ type UseProbeAutoUpdateArgs = {
   setLoadingForPlugins: (ids: string[]) => void
   setErrorForPlugins: (ids: string[], error: string) => void
   isPluginLoading: (id: string) => boolean
-  startBatch: (pluginIds?: string[]) => Promise<string[] | undefined>
+  startBatch: StartBatch
 }
 
 export function useProbeAutoUpdate({
@@ -164,7 +168,10 @@ export function useProbeAutoUpdate({
       setLoadingForPlugins(idleIds)
       startBatch(idleIds).catch((error) => {
         console.error("Failed to start auto-update batch:", error)
-        setErrorForPlugins(idleIds, "无法开始刷新")
+        const failedPluginIds = getProbeBatchStartFailedPluginIds(error, idleIds)
+        if (failedPluginIds.length > 0) {
+          setErrorForPlugins(failedPluginIds, "无法开始刷新")
+        }
       })
       scheduleNext()
     }, intervalMs)
@@ -226,7 +233,13 @@ export function useProbeAutoUpdate({
         setLoadingForPlugins(eligibleIds)
         startBatch(eligibleIds).catch((error) => {
           console.error("Failed to start reset-boundary refresh batch:", error)
-          setErrorForPlugins(eligibleIds, "无法开始刷新")
+          const failedPluginIds = getProbeBatchStartFailedPluginIds(
+            error,
+            eligibleIds
+          )
+          if (failedPluginIds.length > 0) {
+            setErrorForPlugins(failedPluginIds, "无法开始刷新")
+          }
         })
       }
 

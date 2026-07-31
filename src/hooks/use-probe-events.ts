@@ -17,13 +17,57 @@ type ProbeBatchStarted = {
   pluginIds: string[]
 }
 
+type ProbeBatchMeta = {
+  batchId: string
+  manual: boolean
+  previous: ProbeBatchMeta | undefined
+  failed: boolean
+  resultReceived: boolean
+}
+
+export type ProbeResultContext = {
+  manual: boolean
+}
+
+export type StartBatchOptions = {
+  manual?: boolean
+}
+
+export type StartBatch = (
+  pluginIds: string[],
+  options?: StartBatchOptions
+) => Promise<string[]>
+
+export class ProbeBatchStartError extends Error {
+  readonly cause: unknown
+  readonly pluginIds: string[]
+
+  constructor(cause: unknown, pluginIds: string[]) {
+    super(cause instanceof Error ? cause.message : String(cause))
+    this.name = "ProbeBatchStartError"
+    this.cause = cause
+    this.pluginIds = pluginIds
+  }
+}
+
+export function getProbeBatchStartFailedPluginIds(
+  error: unknown,
+  fallback: string[]
+): string[] {
+  return error instanceof ProbeBatchStartError ? error.pluginIds : fallback
+}
+
 type UseProbeEventsOptions = {
-  onResult: (output: PluginOutput) => void
+  onResult: (output: PluginOutput, context: ProbeResultContext) => void
   onBatchComplete: () => void
 }
 
 export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOptions) {
   const activeBatchIds = useRef<Set<string>>(new Set())
+  const latestBatchByProvider = useRef<Map<string, ProbeBatchMeta>>(new Map())
+  const startRequestTailByProvider = useRef<Map<string, Promise<void>>>(
+    new Map()
+  )
   const unlisteners = useRef<UnlistenFn[]>([])
   const listenersReadyRef = useRef<Promise<void> | null>(null)
   const listenersReadyResolveRef = useRef<(() => void) | null>(null)
@@ -38,8 +82,22 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
 
     const setup = async () => {
       const resultUnlisten = await listen<ProbeResult>("probe:result", (event) => {
-        if (activeBatchIds.current.has(event.payload.batchId)) {
-          onResult(event.payload.output)
+        const latestBatch = latestBatchByProvider.current.get(
+          event.payload.output.providerId
+        )
+        let eventBatch = latestBatch
+        while (eventBatch && eventBatch.batchId !== event.payload.batchId) {
+          eventBatch = eventBatch.previous
+        }
+        if (eventBatch) {
+          eventBatch.resultReceived = true
+        }
+        if (
+          activeBatchIds.current.has(event.payload.batchId) &&
+          eventBatch !== undefined &&
+          eventBatch === latestBatch
+        ) {
+          onResult(event.payload.output, { manual: latestBatch.manual })
         }
       })
 
@@ -80,27 +138,89 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
     }
   }, [onBatchComplete, onResult])
 
-  const startBatch = useCallback(async (pluginIds?: string[]) => {
-    // Wait for listeners to be ready before starting the batch
-    if (listenersReadyRef.current) {
-      await listenersReadyRef.current
-    }
-
+  const startBatch = useCallback(async (
+    pluginIds: string[],
+    options: StartBatchOptions = {}
+  ) => {
     const batchId =
       typeof crypto !== "undefined" && "randomUUID" in crypto
         ? crypto.randomUUID()
         : `batch-${Date.now()}-${Math.random().toString(16).slice(2)}`
 
     activeBatchIds.current.add(batchId)
-    const args = pluginIds
-      ? { batchId, pluginIds }
-      : { batchId }
+    const batchMetaByProvider = new Map<string, ProbeBatchMeta>()
+    for (const pluginId of new Set(pluginIds)) {
+      const batchMeta: ProbeBatchMeta = {
+        batchId,
+        manual: options.manual === true,
+        previous: latestBatchByProvider.current.get(pluginId),
+        failed: false,
+        resultReceived: false,
+      }
+      batchMetaByProvider.set(pluginId, batchMeta)
+      latestBatchByProvider.current.set(pluginId, batchMeta)
+    }
+
+    const previousStartRequests = new Set<Promise<void>>()
+    for (const pluginId of batchMetaByProvider.keys()) {
+      const previousStartRequest = startRequestTailByProvider.current.get(pluginId)
+      if (previousStartRequest) previousStartRequests.add(previousStartRequest)
+    }
+    let releaseStartRequest = () => {}
+    const startRequest = new Promise<void>((resolve) => {
+      releaseStartRequest = resolve
+    })
+    for (const pluginId of batchMetaByProvider.keys()) {
+      startRequestTailByProvider.current.set(pluginId, startRequest)
+    }
+
+    // Claim ownership before yielding so queued results from an older batch
+    // cannot arrive between the user's refresh action and listener readiness.
     try {
-      const result = await invoke<ProbeBatchStarted>("start_probe_batch", args)
+      if (listenersReadyRef.current) {
+        await listenersReadyRef.current
+      }
+      // Tauri commands can execute concurrently. Register batches in the same
+      // order that ownership was claimed so Rust and the UI agree on latest.
+      await Promise.all(previousStartRequests)
+      const result = await invoke<ProbeBatchStarted>("start_probe_batch", {
+        batchId,
+        pluginIds,
+      })
+      for (const batchMeta of batchMetaByProvider.values()) {
+        batchMeta.previous = undefined
+      }
       return result.pluginIds
     } catch (error) {
       activeBatchIds.current.delete(batchId)
-      throw error
+      const failedPluginIds: string[] = []
+      for (const [pluginId, batchMeta] of batchMetaByProvider) {
+        batchMeta.failed = true
+        if (latestBatchByProvider.current.get(pluginId) !== batchMeta) continue
+
+        let previousBatch = batchMeta.previous
+        while (previousBatch?.failed) {
+          previousBatch = previousBatch.previous
+        }
+        if (
+          previousBatch &&
+          !previousBatch.resultReceived &&
+          activeBatchIds.current.has(previousBatch.batchId)
+        ) {
+          latestBatchByProvider.current.set(pluginId, previousBatch)
+        } else {
+          latestBatchByProvider.current.delete(pluginId)
+          failedPluginIds.push(pluginId)
+        }
+      }
+      throw new ProbeBatchStartError(error, failedPluginIds)
+    } finally {
+      releaseStartRequest()
+      for (const pluginId of batchMetaByProvider.keys()) {
+        if (startRequestTailByProvider.current.get(pluginId) === startRequest) {
+          startRequestTailByProvider.current.delete(pluginId)
+        }
+      }
     }
   }, [])
 

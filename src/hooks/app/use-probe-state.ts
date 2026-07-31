@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { PluginOutput } from "@/lib/plugin-types"
 import type { PluginState } from "@/hooks/app/types"
+import type { ProbeResultContext } from "@/hooks/use-probe-events"
 
 type UseProbeStateArgs = {
   onProbeResult?: () => void
@@ -13,8 +14,6 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
   useEffect(() => {
     pluginStatesRef.current = pluginStates
   }, [pluginStates])
-
-  const manualRefreshIdsRef = useRef<Set<string>>(new Set())
 
   const updatePluginStates = useCallback(
     (
@@ -76,12 +75,8 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
   }, [updatePluginStates])
 
   const handleProbeResult = useCallback(
-    (output: PluginOutput) => {
+    (output: PluginOutput, { manual }: ProbeResultContext) => {
       const errorMessage = getErrorMessage(output)
-      const isManual = manualRefreshIdsRef.current.has(output.providerId)
-      if (isManual) {
-        manualRefreshIdsRef.current.delete(output.providerId)
-      }
 
       const now = Date.now()
       updatePluginStates((prev) => {
@@ -93,7 +88,7 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
             loading: false,
             error: errorMessage,
             lastErrorAt: errorMessage ? now : null,
-            lastManualRefreshAt: !errorMessage && isManual
+            lastManualRefreshAt: !errorMessage && manual
               ? now
               : existing?.lastManualRefreshAt ?? null,
             lastUpdatedAt: errorMessage ? (existing?.lastUpdatedAt ?? null) : now,
@@ -109,7 +104,6 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
   return {
     pluginStates,
     pluginStatesRef,
-    manualRefreshIdsRef,
     setLoadingForPlugins,
     setErrorForPlugins,
     handleProbeResult,

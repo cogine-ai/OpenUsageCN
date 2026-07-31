@@ -18,6 +18,7 @@ mod panel;
 mod panel_standard_tests;
 mod platform_capabilities;
 mod plugin_engine;
+mod probe_batches;
 mod provider_config;
 mod provider_status;
 mod safe_file;
@@ -167,6 +168,7 @@ pub struct AppState {
     pub plugins: Vec<plugin_engine::manifest::LoadedPlugin>,
     pub app_data_dir: PathBuf,
     pub app_version: String,
+    pub(crate) latest_probe_batches: Arc<probe_batches::LatestProbeBatches>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -304,12 +306,13 @@ async fn start_probe_batch(
         })
         .unwrap_or_else(|| Uuid::new_v4().to_string());
 
-    let (plugins, app_data_dir, app_version) = {
+    let (plugins, app_data_dir, app_version, latest_probe_batches) = {
         let locked = state.lock().map_err(|e| e.to_string())?;
         (
             locked.plugins.clone(),
             locked.app_data_dir.clone(),
             locked.app_version.clone(),
+            Arc::clone(&locked.latest_probe_batches),
         )
     };
 
@@ -342,14 +345,21 @@ async fn start_probe_batch(
         batch_id,
         response_plugin_ids
     );
+    latest_probe_batches.begin_batch(&batch_id, &response_plugin_ids);
 
     if selected_plugins.is_empty() {
-        let _ = app_handle.emit(
+        if let Err(error) = app_handle.emit(
             "probe:batch-complete",
             ProbeBatchComplete {
                 batch_id: batch_id.clone(),
             },
-        );
+        ) {
+            log::error!(
+                "probe batch {} completion event failed: {}",
+                batch_id,
+                error
+            );
+        }
         return Ok(ProbeBatchStarted {
             batch_id,
             plugin_ids: response_plugin_ids,
@@ -381,6 +391,7 @@ async fn start_probe_batch(
         let version = app_version.clone();
         let counter = Arc::clone(&remaining);
         let queue = Arc::clone(&probe_queue);
+        let latest_batches = Arc::clone(&latest_probe_batches);
 
         tauri::async_runtime::spawn_blocking(move || {
             loop {
@@ -400,56 +411,85 @@ async fn start_probe_batch(
                     plugin_engine::runtime::run_probe(&plugin, &data_dir, &version)
                 }));
 
-                match result {
-                    Ok(output) => {
-                        if let Some(message) = plugin_engine::runtime::probe_error_message(&output)
-                        {
-                            log::warn!("probe {} completed with error", plugin_id);
+                let committed =
+                    latest_batches.commit_if_latest(&bid, &plugin_id, || match result {
+                        Ok(output) => {
+                            if let Some(message) =
+                                plugin_engine::runtime::probe_error_message(&output)
+                            {
+                                log::warn!("probe {} completed with error", plugin_id);
+                                local_http_api::record_probe_error(
+                                    &plugin_id,
+                                    plugin_engine::host_api::redact_log_message(message),
+                                );
+                            } else {
+                                log::info!(
+                                    "probe {} completed ok ({} lines)",
+                                    plugin_id,
+                                    output.lines.len()
+                                );
+                                local_http_api::cache_successful_output(&output);
+                            }
+                            if let Err(error) = handle.emit(
+                                "probe:result",
+                                ProbeResult {
+                                    batch_id: bid.clone(),
+                                    output,
+                                },
+                            ) {
+                                log::error!(
+                                    "probe {} result event for batch {} failed: {}",
+                                    plugin_id,
+                                    bid,
+                                    error
+                                );
+                            }
+                        }
+                        Err(_) => {
+                            log::error!("probe {} panicked", plugin_id);
+                            let output = plugin_engine::runtime::panic_probe_output(&plugin);
                             local_http_api::record_probe_error(
                                 &plugin_id,
-                                plugin_engine::host_api::redact_log_message(message),
+                                "The plugin crashed during refresh.",
                             );
-                        } else {
-                            log::info!(
-                                "probe {} completed ok ({} lines)",
-                                plugin_id,
-                                output.lines.len()
-                            );
-                            local_http_api::cache_successful_output(&output);
+                            if let Err(error) = handle.emit(
+                                "probe:result",
+                                ProbeResult {
+                                    batch_id: bid.clone(),
+                                    output,
+                                },
+                            ) {
+                                log::error!(
+                                    "probe {} result event for batch {} failed: {}",
+                                    plugin_id,
+                                    bid,
+                                    error
+                                );
+                            }
                         }
-                        let _ = handle.emit(
-                            "probe:result",
-                            ProbeResult {
-                                batch_id: bid.clone(),
-                                output,
-                            },
-                        );
-                    }
-                    Err(_) => {
-                        log::error!("probe {} panicked", plugin_id);
-                        let output = plugin_engine::runtime::panic_probe_output(&plugin);
-                        local_http_api::record_probe_error(
-                            &plugin_id,
-                            "The plugin crashed during refresh.",
-                        );
-                        let _ = handle.emit(
-                            "probe:result",
-                            ProbeResult {
-                                batch_id: bid.clone(),
-                                output,
-                            },
-                        );
-                    }
+                    });
+                if committed.is_none() {
+                    log::debug!(
+                        "probe {} result from superseded batch {} ignored",
+                        plugin_id,
+                        bid
+                    );
                 }
 
                 if counter.fetch_sub(1, Ordering::SeqCst) == 1 {
                     log::info!("probe batch {} complete", completion_bid);
-                    let _ = completion_handle.emit(
+                    if let Err(error) = completion_handle.emit(
                         "probe:batch-complete",
                         ProbeBatchComplete {
                             batch_id: completion_bid.clone(),
                         },
-                    );
+                    ) {
+                        log::error!(
+                            "probe batch {} completion event failed: {}",
+                            completion_bid,
+                            error
+                        );
+                    }
                 }
             }
         });
@@ -814,6 +854,7 @@ pub fn run() {
                 plugins,
                 app_data_dir: app_data_dir.clone(),
                 app_version: app.package_info().version.to_string(),
+                latest_probe_batches: Arc::new(probe_batches::LatestProbeBatches::default()),
             }));
 
             local_http_api::init_with_catalog(

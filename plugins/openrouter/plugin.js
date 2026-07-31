@@ -36,11 +36,10 @@
     return getConfig(ctx, "apiKey") || getEnv(ctx, "OPENROUTER_API_KEY")
   }
 
-  function normalizeApiUrl(value) {
+  function normalizeApiUrl(ctx, value) {
     const raw = readString(value) || DEFAULT_API_URL
     const withScheme = raw.indexOf("://") === -1 ? "https://" + raw : raw
-    if (!/^https:\/\/[^/]+/i.test(withScheme)) return null
-    return withScheme.replace(/\/+$/, "")
+    return ctx.host.http.normalizeHttpsBaseUrl(withScheme)
   }
 
   function requestJson(ctx, opts) {
@@ -128,9 +127,9 @@
     if (!apiKey) {
       throw "No OpenRouter API key found. Add it in Settings or set OPENROUTER_API_KEY."
     }
-    const apiUrl = normalizeApiUrl(getConfig(ctx, "apiUrl") || getEnv(ctx, "OPENROUTER_API_URL"))
+    const apiUrl = normalizeApiUrl(ctx, getConfig(ctx, "apiUrl") || getEnv(ctx, "OPENROUTER_API_URL"))
     if (!apiUrl) {
-      throw "OpenRouter API URL must use HTTPS."
+      throw "OpenRouter API URL must be a valid HTTPS base URL without embedded credentials."
     }
 
     const requestHeaders = headers(ctx, apiKey)

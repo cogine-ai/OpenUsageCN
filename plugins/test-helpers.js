@@ -1,6 +1,33 @@
 import crypto from "node:crypto"
 import { vi } from "vitest"
 
+function normalizeHttpsBaseUrl(raw) {
+  if (typeof raw !== "string") return null
+  const trimmed = raw.trim()
+  if (!trimmed || /[\\\u0000-\u001f\u007f-\u009f]/.test(trimmed)) return null
+
+  let parsed
+  try {
+    parsed = new URL(trimmed)
+  } catch {
+    return null
+  }
+  const authority = trimmed.split("://", 2)[1]?.split(/[/?#]/, 1)[0] ?? ""
+  if (
+    parsed.protocol !== "https:" ||
+    !parsed.hostname ||
+    !authority ||
+    authority.includes("@") ||
+    parsed.username ||
+    parsed.password ||
+    trimmed.includes("?") ||
+    trimmed.includes("#")
+  ) {
+    return null
+  }
+  return parsed.toString().replace(/\/+$/, "")
+}
+
 export const makeCtx = () => {
   const files = new Map()
 
@@ -87,6 +114,7 @@ export const makeCtx = () => {
         exec: vi.fn(),
       },
       http: {
+        normalizeHttpsBaseUrl: vi.fn(normalizeHttpsBaseUrl),
         request: vi.fn(),
       },
       ls: {

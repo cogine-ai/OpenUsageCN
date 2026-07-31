@@ -42,7 +42,10 @@ const state = vi.hoisted(() => ({
   autostartDisableMock: vi.fn(),
   autostartIsEnabledMock: vi.fn(),
   renderTrayBarsIconMock: vi.fn(),
-  probeHandlers: null as null | { onResult: (output: any) => void; onBatchComplete: () => void },
+  probeHandlers: null as null | {
+    onResult: (output: any, context?: { manual: boolean }) => void
+    onBatchComplete: () => void
+  },
   trayGetByIdMock: vi.fn(),
   traySetIconMock: vi.fn(),
   traySetIconAsTemplateMock: vi.fn(),
@@ -219,8 +222,16 @@ vi.mock("@/lib/tray-bars-icon", async () => {
 })
 
 vi.mock("@/hooks/use-probe-events", () => ({
-  useProbeEvents: (handlers: { onResult: (output: any) => void; onBatchComplete: () => void }) => {
-    state.probeHandlers = handlers
+  getProbeBatchStartFailedPluginIds: (_error: unknown, fallback: string[]) => fallback,
+  useProbeEvents: (handlers: {
+    onResult: (output: any, context: { manual: boolean }) => void
+    onBatchComplete: () => void
+  }) => {
+    state.probeHandlers = {
+      onResult: (output, context = { manual: false }) =>
+        handlers.onResult(output, context),
+      onBatchComplete: handlers.onBatchComplete,
+    }
     return { startBatch: state.startBatchMock }
   },
 }))
@@ -1160,7 +1171,9 @@ describe("App", () => {
     expect(reloadConfig?.enabled).toBe(true)
     reloadAction()
 
-    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalledWith(["b"]))
+    await waitFor(() =>
+      expect(state.startBatchMock).toHaveBeenCalledWith(["b"], { manual: true })
+    )
   })
 
   it("respects manual refresh cooldown for sidebar context menu reload", async () => {
@@ -1185,14 +1198,16 @@ describe("App", () => {
     const firstReloadConfig = menuState.iconMenuItemConfigs.find((item) => item.id === "ctx-reload-b")
     expect(firstReloadConfig?.enabled).toBe(true)
     reloadAction()
-    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalledWith(["b"]))
+    await waitFor(() =>
+      expect(state.startBatchMock).toHaveBeenCalledWith(["b"], { manual: true })
+    )
 
     state.probeHandlers?.onResult({
       providerId: "b",
       displayName: "Beta",
       iconUrl: "icon-b",
       lines: [{ type: "text", label: "Now", value: "OK" }],
-    })
+    }, { manual: true })
     await waitFor(() => expect(screen.getAllByRole("button", { name: "刷新" })).toHaveLength(1))
 
     state.startBatchMock.mockClear()
@@ -1797,7 +1812,7 @@ describe("App", () => {
       displayName: "Alpha",
       iconUrl: "icon-a",
       lines: [{ type: "text", label: "Now", value: "OK" }],
-    })
+    }, { manual: true })
 
     // The result should be displayed (Now is the label from the provider-card)
     await screen.findByText("Now")
