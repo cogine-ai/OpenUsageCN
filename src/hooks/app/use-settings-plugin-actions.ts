@@ -1,5 +1,9 @@
 import { useCallback } from "react"
 import { savePluginSettings, type PluginSettings } from "@/lib/settings"
+import {
+  getProbeBatchStartFailedPluginIds,
+  type StartBatch,
+} from "@/hooks/use-probe-events"
 
 const TRAY_SETTINGS_DEBOUNCE_MS = 2000
 
@@ -10,7 +14,7 @@ type UseSettingsPluginActionsArgs = {
   setPluginSettings: (value: PluginSettings | null) => void
   setLoadingForPlugins: (ids: string[]) => void
   setErrorForPlugins: (ids: string[], error: string) => void
-  startBatch: (pluginIds?: string[]) => Promise<string[] | undefined>
+  startBatch: StartBatch
   scheduleTrayIconUpdate: ScheduleTrayIconUpdate
 }
 
@@ -64,7 +68,10 @@ export function useSettingsPluginActions({
       setLoadingForPlugins([id])
       startBatch([id]).catch((error) => {
         console.error("Failed to start probe for enabled plugin:", error)
-        setErrorForPlugins([id], "无法开始刷新")
+        const failedPluginIds = getProbeBatchStartFailedPluginIds(error, [id])
+        if (failedPluginIds.length > 0) {
+          setErrorForPlugins(failedPluginIds, "无法开始刷新")
+        }
       })
     } else {
       disabled.add(id)

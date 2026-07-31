@@ -11,7 +11,7 @@ OpenRouter is included in the Windows MVP and is disabled until you configure an
 3. Enable the OpenRouter plugin.
 
 The Settings value is used first. If it is empty, `OPENROUTER_API_KEY` is used.
-`OPENROUTER_API_URL` can override the API base URL, and must use HTTPS.
+`OPENROUTER_API_URL` can override the API base URL. Custom hosts, ports, and base paths are supported. The URL must use HTTPS and cannot contain embedded credentials, query parameters, or fragments. OpenUsageCN adds `https://` when the scheme is omitted.
 `OPENROUTER_HTTP_REFERER` and `OPENROUTER_X_TITLE` are passed through when present.
 
 API keys entered in Settings are stored as plaintext. macOS uses `~/.openusagecn/providers.json`; Windows uses `%LOCALAPPDATA%\ai.cogine.openusagecn\providers.json`. The file is limited by normal user-profile permissions, but another process running as the same user can read it.
@@ -46,6 +46,7 @@ If one endpoint is unavailable but the other succeeds, OpenUsageCN still shows t
 | Condition     | Message                                                  |
 |---------------|----------------------------------------------------------|
 | No API key    | "No OpenRouter API key found. Add it in Settings or set OPENROUTER_API_KEY." |
+| Invalid API URL | "OpenRouter API URL must be a valid HTTPS base URL without embedded credentials." |
 | 401/403       | "OpenRouter API key invalid. Check your OpenRouter API key." |
 | HTTP error    | "Usage request failed (HTTP {status}). Try again later." |
 | Network error | "Usage request failed. Check your connection."           |

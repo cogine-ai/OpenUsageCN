@@ -8,6 +8,10 @@ import {
 import type { PluginMeta } from "@/lib/plugin-types"
 import type { PlatformCapabilities } from "@/lib/platform-capabilities"
 import {
+  getProbeBatchStartFailedPluginIds,
+  type StartBatch,
+} from "@/hooks/use-probe-events"
+import {
   arePluginSettingsEqual,
   DEFAULT_AUTO_UPDATE_INTERVAL,
   DEFAULT_DISPLAY_MODE,
@@ -63,7 +67,7 @@ type UseSettingsBootstrapArgs = {
   setPaceNotifications: (value: PaceNotificationSettings) => void
   setLoadingForPlugins: (ids: string[]) => void
   setErrorForPlugins: (ids: string[], error: string) => void
-  startBatch: (pluginIds?: string[]) => Promise<string[] | undefined>
+  startBatch: StartBatch
 }
 
 export function useSettingsBootstrap({
@@ -169,7 +173,13 @@ export function useSettingsBootstrap({
           } catch (error) {
             console.error("Failed to start probe batch:", error)
             if (isMounted) {
-              setErrorForPlugins(enabledIds, "无法开始刷新")
+              const failedPluginIds = getProbeBatchStartFailedPluginIds(
+                error,
+                enabledIds
+              )
+              if (failedPluginIds.length > 0) {
+                setErrorForPlugins(failedPluginIds, "无法开始刷新")
+              }
             }
           }
         }

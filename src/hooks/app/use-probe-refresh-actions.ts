@@ -2,21 +2,23 @@ import { useCallback } from "react"
 import type { MutableRefObject } from "react"
 import { REFRESH_COOLDOWN_MS, getEnabledPluginIds, type PluginSettings } from "@/lib/settings"
 import type { PluginState } from "@/hooks/app/types"
+import {
+  getProbeBatchStartFailedPluginIds,
+  type StartBatch,
+} from "@/hooks/use-probe-events"
 
 type UseProbeRefreshActionsArgs = {
   pluginSettings: PluginSettings | null
   pluginStatesRef: MutableRefObject<Record<string, PluginState>>
-  manualRefreshIdsRef: MutableRefObject<Set<string>>
   resetAutoUpdateSchedule: () => void
   setLoadingForPlugins: (ids: string[]) => void
   setErrorForPlugins: (ids: string[], error: string) => void
-  startBatch: (pluginIds?: string[]) => Promise<string[] | undefined>
+  startBatch: StartBatch
 }
 
 export function useProbeRefreshActions({
   pluginSettings,
   pluginStatesRef,
-  manualRefreshIdsRef,
   resetAutoUpdateSchedule,
   setLoadingForPlugins,
   setErrorForPlugins,
@@ -24,34 +26,29 @@ export function useProbeRefreshActions({
 }: UseProbeRefreshActionsArgs) {
   const startManualRefresh = useCallback(
     (ids: string[], errorMessage: string) => {
-      for (const id of ids) {
-        manualRefreshIdsRef.current.add(id)
-      }
-
       setLoadingForPlugins(ids)
-      startBatch(ids).catch((error) => {
-        for (const id of ids) {
-          manualRefreshIdsRef.current.delete(id)
-        }
+      startBatch(ids, { manual: true }).catch((error) => {
         console.error(errorMessage, error)
-        setErrorForPlugins(ids, "无法开始刷新")
+        const failedPluginIds = getProbeBatchStartFailedPluginIds(error, ids)
+        if (failedPluginIds.length > 0) {
+          setErrorForPlugins(failedPluginIds, "无法开始刷新")
+        }
       })
     },
-    [manualRefreshIdsRef, setLoadingForPlugins, setErrorForPlugins, startBatch]
+    [setLoadingForPlugins, setErrorForPlugins, startBatch]
   )
 
   const handleRetryPlugin = useCallback(
     (id: string) => {
       const currentState = pluginStatesRef.current[id]
       if (currentState?.loading) return
-      if (manualRefreshIdsRef.current.has(id)) return
       const lastManualRefreshAt = currentState?.lastManualRefreshAt
       if (lastManualRefreshAt && Date.now() - lastManualRefreshAt < REFRESH_COOLDOWN_MS) return
 
       resetAutoUpdateSchedule()
       startManualRefresh([id], "Failed to retry plugin:")
     },
-    [manualRefreshIdsRef, pluginStatesRef, resetAutoUpdateSchedule, startManualRefresh]
+    [pluginStatesRef, resetAutoUpdateSchedule, startManualRefresh]
   )
 
   const handleRefreshAll = useCallback(() => {
@@ -63,7 +60,6 @@ export function useProbeRefreshActions({
     const eligibleIds = enabledIds.filter((id) => {
       const currentState = pluginStatesRef.current[id]
       if (currentState?.loading) return false
-      if (manualRefreshIdsRef.current.has(id)) return false
       const lastManualRefreshAt = currentState?.lastManualRefreshAt
       if (!lastManualRefreshAt) return true
       return now - lastManualRefreshAt >= REFRESH_COOLDOWN_MS
@@ -72,7 +68,7 @@ export function useProbeRefreshActions({
 
     resetAutoUpdateSchedule()
     startManualRefresh(eligibleIds, "Failed to start refresh batch:")
-  }, [pluginSettings, pluginStatesRef, manualRefreshIdsRef, resetAutoUpdateSchedule, startManualRefresh])
+  }, [pluginSettings, pluginStatesRef, resetAutoUpdateSchedule, startManualRefresh])
 
   return {
     handleRetryPlugin,

@@ -22,7 +22,6 @@ export function useProbe({
   const {
     pluginStates,
     pluginStatesRef,
-    manualRefreshIdsRef,
     setLoadingForPlugins,
     setErrorForPlugins,
     handleProbeResult,
@@ -58,7 +57,6 @@ export function useProbe({
   const { handleRetryPlugin, handleRefreshAll } = useProbeRefreshActions({
     pluginSettings,
     pluginStatesRef,
-    manualRefreshIdsRef,
     resetAutoUpdateSchedule,
     setLoadingForPlugins,
     setErrorForPlugins,

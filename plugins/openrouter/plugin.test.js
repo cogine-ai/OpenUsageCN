@@ -40,6 +40,65 @@ describe("openrouter plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("No OpenRouter API key found.")
   })
 
+  it("rejects ambiguous base URLs before sending the API key", async () => {
+    const plugin = await loadPlugin()
+    const invalidUrls = [
+      "https://openrouter.ai@attacker.example/api/v1",
+      "https:///api/v1",
+      "https://openrouter.ai/api/v1?route=credits",
+      "https://openrouter.ai/api/v1?",
+      "https://openrouter.ai/api/v1#",
+      "https://openrouter.ai\\@attacker.example/api/v1",
+      "https://openrouter.ai/api/\u0085v1",
+    ]
+
+    for (const apiUrl of invalidUrls) {
+      const ctx = makeCtx()
+      ctx.host.config.get.mockImplementation((name) => {
+        if (name === "apiKey") return "openrouter-api-key"
+        if (name === "apiUrl") return apiUrl
+        return null
+      })
+      setEnv(ctx, {})
+      ctx.host.http.request.mockReturnValue({ status: 200, bodyText: JSON.stringify({ data: {} }) })
+
+      expect(() => plugin.probe(ctx)).toThrow("OpenRouter API URL must be a valid HTTPS base URL")
+      expect(ctx.host.http.request).not.toHaveBeenCalled()
+    }
+  })
+
+  it("preserves custom HTTPS base paths and scheme-less compatibility", async () => {
+    const plugin = await loadPlugin()
+    const cases = [
+      {
+        apiUrl: " https://Gateway.Example:8443/openrouter/v1/// ",
+        expectedBase: "https://gateway.example:8443/openrouter/v1",
+      },
+      {
+        apiUrl: "gateway.example/openrouter/v1/",
+        expectedBase: "https://gateway.example/openrouter/v1",
+      },
+    ]
+
+    for (const { apiUrl, expectedBase } of cases) {
+      const ctx = makeCtx()
+      ctx.host.config.get.mockImplementation((name) => {
+        if (name === "apiKey") return "openrouter-api-key"
+        if (name === "apiUrl") return apiUrl
+        return null
+      })
+      setEnv(ctx, {})
+      ctx.host.http.request.mockReturnValue({ status: 200, bodyText: JSON.stringify({ data: {} }) })
+
+      plugin.probe(ctx)
+
+      expect(ctx.host.http.request.mock.calls.map(([opts]) => opts.url)).toEqual([
+        expectedBase + "/credits",
+        expectedBase + "/key",
+      ])
+    }
+  })
+
   it("loads credits and key usage", async () => {
     const ctx = makeCtx()
     setEnv(ctx, {

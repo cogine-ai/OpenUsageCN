@@ -212,6 +212,8 @@ if (!apiKey) {
 ## HTTP
 
 ```typescript
+host.http.normalizeHttpsBaseUrl(raw: string): string | null
+
 host.http.request({
   method?: string,           // Default: "GET"
   url: string,
@@ -227,6 +229,7 @@ host.http.request({
 
 ### Behavior
 
+- **Base URL validation**: `normalizeHttpsBaseUrl` returns a normalized HTTPS base URL without trailing slashes, or `null` for invalid URLs, embedded credentials, query parameters, or fragments. It does not restrict which valid HTTPS host a plugin may use.
 - **No redirects**: The HTTP client does not follow redirects (policy: none)
 - **Throws on network errors**: Connection failures, DNS errors, and timeouts throw
 - **No domain allowlist**: Any URL is allowed (for now)

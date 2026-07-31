@@ -25,12 +25,15 @@ describe("useProbeState", () => {
     const { result } = renderHook(() => useProbeState({}))
 
     act(() => {
-      result.current.handleProbeResult({
-        providerId: "codex",
-        displayName: "Codex",
-        iconUrl: "",
-        lines: [{ type: "badge", label: "Error", text: "" }],
-      })
+      result.current.handleProbeResult(
+        {
+          providerId: "codex",
+          displayName: "Codex",
+          iconUrl: "",
+          lines: [{ type: "badge", label: "Error", text: "" }],
+        },
+        { manual: false }
+      )
     })
 
     expect(result.current.pluginStates.codex?.error).toBe("无法更新数据，请重试。")
@@ -42,24 +45,30 @@ describe("useProbeState", () => {
     const { result } = renderHook(() => useProbeState({}))
 
     act(() => {
-      result.current.handleProbeResult({
-        providerId: "codex",
-        displayName: "Codex",
-        iconUrl: "",
-        lines: [{ type: "badge", label: "Error", text: "Auth expired" }],
-      })
+      result.current.handleProbeResult(
+        {
+          providerId: "codex",
+          displayName: "Codex",
+          iconUrl: "",
+          lines: [{ type: "badge", label: "Error", text: "Auth expired" }],
+        },
+        { manual: false }
+      )
     })
 
     expect(result.current.pluginStates.codex?.lastErrorAt).toBe(123_000)
 
     vi.setSystemTime(456_000)
     act(() => {
-      result.current.handleProbeResult({
-        providerId: "codex",
-        displayName: "Codex",
-        iconUrl: "",
-        lines: [{ type: "text", label: "Now", value: "OK" }],
-      })
+      result.current.handleProbeResult(
+        {
+          providerId: "codex",
+          displayName: "Codex",
+          iconUrl: "",
+          lines: [{ type: "text", label: "Now", value: "OK" }],
+        },
+        { manual: false }
+      )
     })
 
     expect(result.current.pluginStates.codex?.error).toBeNull()
@@ -86,21 +95,27 @@ describe("useProbeState", () => {
     const { result } = renderHook(() => useProbeState({}))
 
     act(() => {
-      result.current.handleProbeResult({
-        providerId: "codex",
-        displayName: "Codex",
-        iconUrl: "",
-        lines: [{ type: "text", label: "Usage", value: "42%" }],
-      })
+      result.current.handleProbeResult(
+        {
+          providerId: "codex",
+          displayName: "Codex",
+          iconUrl: "",
+          lines: [{ type: "text", label: "Usage", value: "42%" }],
+        },
+        { manual: false }
+      )
     })
 
     act(() => {
-      result.current.handleProbeResult({
-        providerId: "codex",
-        displayName: "Codex",
-        iconUrl: "",
-        lines: [{ type: "badge", label: "Error", text: "Auth expired" }],
-      })
+      result.current.handleProbeResult(
+        {
+          providerId: "codex",
+          displayName: "Codex",
+          iconUrl: "",
+          lines: [{ type: "badge", label: "Error", text: "Auth expired" }],
+        },
+        { manual: false }
+      )
     })
 
     const state = result.current.pluginStates.codex
@@ -114,27 +129,33 @@ describe("useProbeState", () => {
     const { result } = renderHook(() => useProbeState({}))
 
     act(() => {
-      result.current.handleProbeResult({
-        providerId: "codex",
-        displayName: "Codex",
-        iconUrl: "",
-        lines: [{ type: "text", label: "Usage", value: "42%" }],
-      })
+      result.current.handleProbeResult(
+        {
+          providerId: "codex",
+          displayName: "Codex",
+          iconUrl: "",
+          lines: [{ type: "text", label: "Usage", value: "42%" }],
+        },
+        { manual: false }
+      )
     })
 
     act(() => {
-      result.current.handleProbeResult({
-        providerId: "codex",
-        displayName: "Codex",
-        iconUrl: "",
-        lines: [
-          {
-            type: "badge",
-            label: "Error",
-            text: "The plugin crashed during refresh. Try again or update the plugin.",
-          },
-        ],
-      })
+      result.current.handleProbeResult(
+        {
+          providerId: "codex",
+          displayName: "Codex",
+          iconUrl: "",
+          lines: [
+            {
+              type: "badge",
+              label: "Error",
+              text: "The plugin crashed during refresh. Try again or update the plugin.",
+            },
+          ],
+        },
+        { manual: false }
+      )
     })
 
     const state = result.current.pluginStates.codex
@@ -150,28 +171,52 @@ describe("useProbeState", () => {
     const { result } = renderHook(() => useProbeState({}))
 
     act(() => {
-      result.current.manualRefreshIdsRef.current.add("codex")
-      result.current.handleProbeResult({
-        providerId: "codex",
-        displayName: "Codex",
-        iconUrl: "",
-        lines: [{ type: "text", label: "Usage", value: "42%" }],
-      })
+      result.current.handleProbeResult(
+        {
+          providerId: "codex",
+          displayName: "Codex",
+          iconUrl: "",
+          lines: [{ type: "text", label: "Usage", value: "42%" }],
+        },
+        { manual: true }
+      )
     })
 
     expect(result.current.pluginStates.codex?.lastManualRefreshAt).toBe(300_000)
 
     act(() => {
-      result.current.manualRefreshIdsRef.current.add("codex")
-      result.current.handleProbeResult({
-        providerId: "codex",
-        displayName: "Codex",
-        iconUrl: "",
-        lines: [{ type: "badge", label: "Error", text: "Auth expired" }],
-      })
+      result.current.handleProbeResult(
+        {
+          providerId: "codex",
+          displayName: "Codex",
+          iconUrl: "",
+          lines: [{ type: "badge", label: "Error", text: "Auth expired" }],
+        },
+        { manual: true }
+      )
     })
 
     expect(result.current.pluginStates.codex?.lastManualRefreshAt).toBe(300_000)
+  })
+
+  it("does not attribute a newer non-manual result to an older manual refresh", () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(400_000)
+    const { result } = renderHook(() => useProbeState({}))
+
+    act(() => {
+      result.current.handleProbeResult(
+        {
+          providerId: "codex",
+          displayName: "Codex",
+          iconUrl: "",
+          lines: [{ type: "text", label: "Usage", value: "42%" }],
+        },
+        { manual: false }
+      )
+    })
+
+    expect(result.current.pluginStates.codex?.lastManualRefreshAt).toBeNull()
   })
 
   it("calls onProbeResult after each probe result", () => {
@@ -179,12 +224,15 @@ describe("useProbeState", () => {
     const { result } = renderHook(() => useProbeState({ onProbeResult }))
 
     act(() => {
-      result.current.handleProbeResult({
-        providerId: "codex",
-        displayName: "Codex",
-        iconUrl: "",
-        lines: [{ type: "text", label: "Usage", value: "42%" }],
-      })
+      result.current.handleProbeResult(
+        {
+          providerId: "codex",
+          displayName: "Codex",
+          iconUrl: "",
+          lines: [{ type: "text", label: "Usage", value: "42%" }],
+        },
+        { manual: false }
+      )
     })
 
     expect(onProbeResult).toHaveBeenCalledTimes(1)

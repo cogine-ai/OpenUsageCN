@@ -12,6 +12,7 @@ import { useSettingsTheme } from "@/hooks/app/use-settings-theme"
 import { useTrayIcon } from "@/hooks/app/use-tray-icon"
 import { usePaceNotifications } from "@/hooks/app/use-pace-notifications"
 import { usePlatformCapabilities } from "@/hooks/app/use-platform-capabilities"
+import { getProbeBatchStartFailedPluginIds } from "@/hooks/use-probe-events"
 import { REFRESH_COOLDOWN_MS, savePluginSettings } from "@/lib/settings"
 import { type PluginContextAction } from "@/components/side-nav"
 import { useAppPluginStore } from "@/stores/app-plugin-store"
@@ -214,7 +215,10 @@ function App() {
       setLoadingForPlugins([pluginId])
       startBatch([pluginId]).catch((error) => {
         console.error("Failed to refresh plugin after config save:", error)
-        setErrorForPlugins([pluginId], "无法开始刷新")
+        const failedPluginIds = getProbeBatchStartFailedPluginIds(error, [pluginId])
+        if (failedPluginIds.length > 0) {
+          setErrorForPlugins(failedPluginIds, "无法开始刷新")
+        }
       })
     },
     [setErrorForPlugins, setLoadingForPlugins, startBatch]
