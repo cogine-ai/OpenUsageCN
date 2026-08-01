@@ -444,3 +444,28 @@ fn snapshot_with_progress_line_round_trips() {
     assert_eq!(deserialized.provider_id, "claude");
     assert_eq!(deserialized.lines.len(), 1);
 }
+
+#[test]
+#[serial]
+fn limits_envelope_redacts_probe_errors_before_serialization() {
+    use crate::local_http_api::limits::current_envelope;
+
+    let dir = temp_dir("limits-redact");
+    init_with_catalog(
+        &dir,
+        &dir,
+        vec!["codex".to_string()],
+        vec![],
+        "0.0.0".to_string(),
+    );
+    let secret =
+        "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
+    record_probe_error("codex", format!("request failed with token {secret}"));
+
+    let envelope = current_envelope(&["codex".to_string()]);
+
+    assert_eq!(envelope.errors.len(), 1);
+    assert_eq!(envelope.errors[0].provider_id, "codex");
+    assert!(!envelope.errors[0].message.contains(secret));
+    assert!(envelope.errors[0].message.contains("request failed with token"));
+}
