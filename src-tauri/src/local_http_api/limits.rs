@@ -362,6 +362,72 @@ mod tests {
     }
 
     #[test]
+    fn rejects_invalid_numeric_limits() {
+        let descriptor = LimitCatalogResource {
+            key: "session".to_string(),
+            metric_label: "Session".to_string(),
+            kind: LimitResourceKind::Consumption,
+            count_unit: None,
+        };
+        let negative_used = MetricLine::Progress {
+            label: "Session".to_string(),
+            limit_resource_key: None,
+            used: -1.0,
+            limit: 100.0,
+            format: ProgressFormat::Percent,
+            resets_at: None,
+            period_duration_ms: None,
+            color: None,
+        };
+        let zero_limit = MetricLine::Progress {
+            label: "Session".to_string(),
+            limit_resource_key: None,
+            used: 10.0,
+            limit: 0.0,
+            format: ProgressFormat::Percent,
+            resets_at: None,
+            period_duration_ms: None,
+            color: None,
+        };
+
+        assert_eq!(
+            resource_from_line(&descriptor, &negative_used).unwrap_err(),
+            "contains invalid numeric limits"
+        );
+        assert_eq!(
+            resource_from_line(&descriptor, &zero_limit).unwrap_err(),
+            "contains invalid numeric limits"
+        );
+    }
+
+    #[test]
+    fn balance_resources_expose_available_instead_of_used() {
+        let resource = resource_from_line(
+            &LimitCatalogResource {
+                key: "credits".to_string(),
+                metric_label: "Credits".to_string(),
+                kind: LimitResourceKind::Balance,
+                count_unit: None,
+            },
+            &MetricLine::Progress {
+                label: "Credits".to_string(),
+                limit_resource_key: None,
+                used: 42.0,
+                limit: 100.0,
+                format: ProgressFormat::Dollars,
+                resets_at: None,
+                period_duration_ms: None,
+                color: None,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(resource.used, None);
+        assert_eq!(resource.available, Some(42.0));
+        assert_eq!(resource.unit, "usd");
+    }
+
+    #[test]
     fn count_resources_require_a_stable_unit() {
         let line = MetricLine::Progress {
             label: "Requests".to_string(),

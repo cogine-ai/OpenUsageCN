@@ -69,6 +69,7 @@ mod tests {
             "https://openrouter.ai/\napi/v1",
             "https:///api/v1",
             "https://openrouter.ai:not-a-port/api/v1",
+            "https://openrouter.ai/api/\u{0085}v1",
         ];
         for raw in invalid {
             assert_eq!(
