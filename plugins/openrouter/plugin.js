@@ -101,13 +101,31 @@
     }
   }
 
+  function keyLimitUsed(key) {
+    const limit = readNumber(key && key.limit)
+    if (limit === null || limit <= 0) return null
+
+    // OpenRouter's authoritative remaining balance for the per-key cap.
+    // `usage` is lifetime spend and diverges once limit_reset rolls over.
+    const remaining = readNumber(key && key.limit_remaining)
+    if (remaining !== null) {
+      return Math.min(limit, Math.max(0, limit - remaining))
+    }
+
+    const reset = readString(key && key.limit_reset)
+    if (reset === "daily") return readNumber(key && key.usage_daily)
+    if (reset === "weekly") return readNumber(key && key.usage_weekly)
+    if (reset === "monthly") return readNumber(key && key.usage_monthly)
+    return readNumber(key && key.usage)
+  }
+
   function pushKeyLines(ctx, lines, key) {
     const limit = readNumber(key && key.limit)
-    const usage = readNumber(key && key.usage)
-    if (limit !== null && limit > 0 && usage !== null) {
+    const used = keyLimitUsed(key)
+    if (limit !== null && limit > 0 && used !== null) {
       lines.push(ctx.line.progress({
         label: "Key Limit",
-        used: usage,
+        used,
         limit,
         format: { kind: "dollars" },
       }))

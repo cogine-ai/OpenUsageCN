@@ -116,6 +116,8 @@ describe("openrouter plugin", () => {
           bodyText: JSON.stringify({
             data: {
               limit: 50,
+              limit_remaining: 40,
+              limit_reset: "monthly",
               usage: 10,
               usage_daily: 1,
               usage_weekly: 2,
@@ -138,7 +140,69 @@ describe("openrouter plugin", () => {
     expect(result.lines.find((line) => line.label === "Credits").limit).toBe(100.5)
     expect(result.lines.find((line) => line.label === "Balance").value).toBe("$74.75")
     expect(result.lines.find((line) => line.label === "Key Limit").used).toBe(10)
+    expect(result.lines.find((line) => line.label === "Key Limit").limit).toBe(50)
     expect(result.lines.find((line) => line.label === "Monthly Spend").value).toBe("$3.00")
+  })
+
+  it("uses limit_remaining instead of lifetime usage for Key Limit", async () => {
+    const ctx = makeCtx()
+    setEnv(ctx, { OPENROUTER_API_KEY: "openrouter-api-key" })
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (opts.url.endsWith("/credits")) {
+        return { status: 200, bodyText: JSON.stringify({ data: { total_credits: 200, total_usage: 120 } }) }
+      }
+      return {
+        status: 200,
+        bodyText: JSON.stringify({
+          data: {
+            limit: 10,
+            limit_remaining: 8,
+            limit_reset: "daily",
+            usage: 100,
+            usage_daily: 2,
+            usage_weekly: 12,
+            usage_monthly: 40,
+            include_byok_in_limit: false,
+          },
+        }),
+      }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    const keyLimit = result.lines.find((line) => line.label === "Key Limit")
+
+    expect(keyLimit.used).toBe(2)
+    expect(keyLimit.limit).toBe(10)
+  })
+
+  it("falls back to the reset-window spend when limit_remaining is missing", async () => {
+    const ctx = makeCtx()
+    setEnv(ctx, { OPENROUTER_API_KEY: "openrouter-api-key" })
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (opts.url.endsWith("/credits")) return { status: 403, bodyText: "{}" }
+      return {
+        status: 200,
+        bodyText: JSON.stringify({
+          data: {
+            limit: 25,
+            limit_reset: "weekly",
+            usage: 80,
+            usage_daily: 1,
+            usage_weekly: 4,
+            usage_monthly: 20,
+          },
+        }),
+      }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    const keyLimit = result.lines.find((line) => line.label === "Key Limit")
+
+    expect(keyLimit.used).toBe(4)
+    expect(keyLimit.limit).toBe(25)
+    expect(result.lines.find((line) => line.label === "Credits")).toBeUndefined()
   })
 
   it("keeps key data when credits endpoint is not available", async () => {
@@ -146,13 +210,19 @@ describe("openrouter plugin", () => {
     setEnv(ctx, { OPENROUTER_API_KEY: "openrouter-api-key" })
     ctx.host.http.request.mockImplementation((opts) => {
       if (opts.url.endsWith("/credits")) return { status: 403, bodyText: "{}" }
-      return { status: 200, bodyText: JSON.stringify({ data: { limit: 25, usage: 5, usage_daily: 1 } }) }
+      return {
+        status: 200,
+        bodyText: JSON.stringify({
+          data: { limit: 25, limit_remaining: 20, usage: 5, usage_daily: 1 },
+        }),
+      }
     })
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
     expect(result.lines.find((line) => line.label === "Key Limit").limit).toBe(25)
+    expect(result.lines.find((line) => line.label === "Key Limit").used).toBe(5)
     expect(result.lines.find((line) => line.label === "Credits")).toBeUndefined()
   })
 })
