@@ -267,7 +267,7 @@ mod tests {
         );
         assert_eq!(
             sha256_hex(b"abc"),
-            "ba7816bf8f630cfe844b1cb6e6b6fa382b0422d35aefd8041e82a3eaf9977ad8"
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         );
     }
 
