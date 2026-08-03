@@ -317,8 +317,10 @@ mod tests {
                 "ok-a",
                 r#"
                 globalThis.__openusage_plugin = {
-                    probe() {
-                        return { lines: [] };
+                    probe(ctx) {
+                        return {
+                            lines: [ctx.line.text({ label: "Status", value: "ok" })]
+                        };
                     }
                 };
                 "#,
@@ -327,8 +329,10 @@ mod tests {
                 "ok-b",
                 r#"
                 globalThis.__openusage_plugin = {
-                    probe() {
-                        return { lines: [] };
+                    probe(ctx) {
+                        return {
+                            lines: [ctx.line.text({ label: "Status", value: "ok" })]
+                        };
                     }
                 };
                 "#,
