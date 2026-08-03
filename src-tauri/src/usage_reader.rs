@@ -354,10 +354,10 @@ mod tests {
             .map(|(provider_id, output)| (provider_id, output))
             .collect();
         assert_eq!(by_id.len(), 3);
-        assert_eq!(probe_error_message(by_id.remove("ok-a").unwrap()), None);
-        assert_eq!(probe_error_message(by_id.remove("ok-b").unwrap()), None);
+        assert_eq!(probe_error_message(&by_id.remove("ok-a").unwrap()), None);
+        assert_eq!(probe_error_message(&by_id.remove("ok-b").unwrap()), None);
         assert_eq!(
-            probe_error_message(by_id.remove("bad").unwrap()),
+            probe_error_message(&by_id.remove("bad").unwrap()),
             Some("boom")
         );
     }
