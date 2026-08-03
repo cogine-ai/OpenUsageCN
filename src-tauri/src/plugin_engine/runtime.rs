@@ -836,6 +836,60 @@ mod tests {
     }
 
     #[test]
+    fn probe_error_message_reads_only_error_badge() {
+        let output = PluginOutput {
+            provider_id: "test".to_string(),
+            display_name: "Test".to_string(),
+            plan: None,
+            lines: vec![
+                MetricLine::Badge {
+                    label: "Warning".to_string(),
+                    text: "stale cache".to_string(),
+                    color: Some("#f59e0b".to_string()),
+                    subtitle: None,
+                },
+                MetricLine::Progress {
+                    label: "Session".to_string(),
+                    limit_resource_key: None,
+                    used: 1.0,
+                    limit: 100.0,
+                    format: ProgressFormat::Percent,
+                    resets_at: None,
+                    period_duration_ms: None,
+                    color: None,
+                },
+                MetricLine::Badge {
+                    label: "Error".to_string(),
+                    text: "auth expired".to_string(),
+                    color: Some("#ef4444".to_string()),
+                    subtitle: None,
+                },
+            ],
+            icon_url: String::new(),
+        };
+
+        assert_eq!(probe_error_message(&output), Some("auth expired"));
+    }
+
+    #[test]
+    fn probe_error_message_returns_none_without_error_badge() {
+        let output = PluginOutput {
+            provider_id: "test".to_string(),
+            display_name: "Test".to_string(),
+            plan: None,
+            lines: vec![MetricLine::Text {
+                label: "Usage".to_string(),
+                value: "42%".to_string(),
+                color: None,
+                subtitle: None,
+            }],
+            icon_url: String::new(),
+        };
+
+        assert_eq!(probe_error_message(&output), None);
+    }
+
+    #[test]
     fn run_probe_times_out_cpu_bound_script() {
         let plugin = test_plugin(
             r#"
