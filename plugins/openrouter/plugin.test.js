@@ -155,4 +155,66 @@ describe("openrouter plugin", () => {
     expect(result.lines.find((line) => line.label === "Key Limit").limit).toBe(25)
     expect(result.lines.find((line) => line.label === "Credits")).toBeUndefined()
   })
+
+  it("throws when both endpoints reject the API key", async () => {
+    const ctx = makeCtx()
+    setEnv(ctx, { OPENROUTER_API_KEY: "openrouter-api-key" })
+    ctx.host.http.request.mockReturnValue({ status: 401, bodyText: "{}" })
+
+    const plugin = await loadPlugin()
+    expect(() => plugin.probe(ctx)).toThrow("OpenRouter API key invalid. Check your OpenRouter API key.")
+  })
+
+  it("shows no usage data when both endpoints succeed with empty payloads", async () => {
+    const ctx = makeCtx()
+    setEnv(ctx, { OPENROUTER_API_KEY: "openrouter-api-key" })
+    ctx.host.http.request.mockReturnValue({ status: 200, bodyText: JSON.stringify({ data: {} }) })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.lines).toEqual([
+      expect.objectContaining({ type: "badge", label: "Status", text: "No usage data" }),
+    ])
+    expect(result.plan).toBeNull()
+  })
+
+  it("reports free tier plan when key endpoint marks the account as free", async () => {
+    const ctx = makeCtx()
+    setEnv(ctx, { OPENROUTER_API_KEY: "openrouter-api-key" })
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (opts.url.endsWith("/credits")) return { status: 403, bodyText: "{}" }
+      return {
+        status: 200,
+        bodyText: JSON.stringify({
+          data: { limit: 10, usage: 1, usage_daily: 1, is_free_tier: true },
+        }),
+      }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBe("Free Tier")
+  })
+
+  it("throws a connection error when the transport layer fails", async () => {
+    const ctx = makeCtx()
+    setEnv(ctx, { OPENROUTER_API_KEY: "openrouter-api-key" })
+    ctx.host.http.request.mockImplementation(() => {
+      throw new Error("network down")
+    })
+
+    const plugin = await loadPlugin()
+    expect(() => plugin.probe(ctx)).toThrow("Usage request failed. Check your connection.")
+  })
+
+  it("throws when usage responses are not valid JSON", async () => {
+    const ctx = makeCtx()
+    setEnv(ctx, { OPENROUTER_API_KEY: "openrouter-api-key" })
+    ctx.host.http.request.mockReturnValue({ status: 200, bodyText: "not-json" })
+
+    const plugin = await loadPlugin()
+    expect(() => plugin.probe(ctx)).toThrow("Usage response invalid. Try again later.")
+  })
 })
