@@ -491,6 +491,9 @@ fn redact_body(body: &str) -> String {
         "idToken",
         "accessToken",
         "refreshToken",
+        "authorization_code",
+        "authorizationCode",
+        "authkit_authorization_code",
         "user_id",
         "userId",
         "account_id",
@@ -499,6 +502,8 @@ fn redact_body(body: &str) -> String {
         "teamId",
         "org_id",
         "orgId",
+        "organization_id",
+        "organizationId",
         "account_display_name",
         "accountDisplayName",
         "payment_id",
@@ -3991,6 +3996,41 @@ mod tests {
         assert!(
             !redacted.contains("supersecretpassword123"),
             "password should be redacted, got: {}",
+            redacted
+        );
+    }
+
+    #[test]
+    fn redact_body_redacts_workos_authkit_authorization_code() {
+        // WorkOS AuthKit authenticate/refresh responses include an authorization
+        // code that another app can exchange for tokens. Factory token refresh
+        // hits this endpoint, and HTTP response body previews are logged.
+        let body = r#"{
+            "user":{"object":"user","id":"user_01E4ZCR3C56J083X43JQXF3JK5","email":"user@example.com"},
+            "organization_id":"org_01H945H0YD4F97JN9MATX7BYAG",
+            "authkit_authorization_code":"authkit_authz_code_abc123xyz",
+            "access_token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload.sig",
+            "refresh_token":"yAjhKk123NLIjdrBdGZPf8pLIDvK"
+        }"#;
+        let redacted = redact_body(body);
+        assert!(
+            !redacted.contains("authkit_authz_code_abc123xyz"),
+            "WorkOS authkit_authorization_code should be redacted, got: {}",
+            redacted
+        );
+        assert!(
+            !redacted.contains("org_01H945H0YD4F97JN9MATX7BYAG"),
+            "organization_id should be redacted, got: {}",
+            redacted
+        );
+        assert!(
+            redacted.contains("auth...3xyz"),
+            "authkit_authorization_code should use first4...last4 redaction, got: {}",
+            redacted
+        );
+        assert!(
+            redacted.contains("org_...BYAG"),
+            "organization_id should use first4...last4 redaction, got: {}",
             redacted
         );
     }
