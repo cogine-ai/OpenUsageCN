@@ -434,10 +434,14 @@ describe("codex plugin", () => {
 
   it("refreshes keychain auth and writes back to keychain", async () => {
     const ctx = makeCtx()
-    ctx.host.keychain.readGenericPassword.mockReturnValue(JSON.stringify({
+    let keychainValue = JSON.stringify({
       tokens: { access_token: "old", refresh_token: "refresh", account_id: "acc" },
       last_refresh: "2000-01-01T00:00:00.000Z",
-    }))
+    })
+    ctx.host.keychain.readGenericPassword.mockImplementation(() => keychainValue)
+    ctx.host.keychain.writeGenericPassword.mockImplementation((_service, value) => {
+      keychainValue = String(value)
+    })
     ctx.host.http.request.mockImplementation((opts) => {
       if (String(opts.url).includes("oauth/token")) {
         return { status: 200, bodyText: JSON.stringify({ access_token: "new" }) }
@@ -452,6 +456,108 @@ describe("codex plugin", () => {
     const [service, payload] = ctx.host.keychain.writeGenericPassword.mock.calls[0]
     expect(service).toBe("Codex Auth")
     expect(String(payload)).toContain("\"access_token\":\"new\"")
+    expect(JSON.parse(keychainValue).tokens.access_token).toBe("new")
+  })
+
+  it("preserves a newer keychain auth when it changes immediately before refresh persistence", async () => {
+    const ctx = makeCtx()
+    const staleAuth = JSON.stringify({
+      tokens: {
+        access_token: "stale-access",
+        refresh_token: "stale-refresh",
+        account_id: "account",
+      },
+      last_refresh: "2000-01-01T00:00:00.000Z",
+    })
+    const newerAuth = JSON.stringify({
+      tokens: {
+        access_token: "newer-access",
+        refresh_token: "newer-refresh",
+        account_id: "account",
+      },
+      last_refresh: new Date().toISOString(),
+    })
+    let keychainValue = staleAuth
+    ctx.host.keychain.readGenericPassword.mockImplementation(() => keychainValue)
+    ctx.host.keychain.writeGenericPassword.mockImplementation((_service, value) => {
+      keychainValue = String(value)
+    })
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("oauth/token")) {
+        keychainValue = newerAuth
+        return {
+          status: 200,
+          headers: {},
+          bodyText: JSON.stringify({
+            access_token: "openusage-refresh",
+            refresh_token: "openusage-rotated-refresh",
+          }),
+        }
+      }
+      if (opts.headers.Authorization === "Bearer stale-access") {
+        return { status: 401, headers: {}, bodyText: "" }
+      }
+      expect(opts.headers.Authorization).toBe("Bearer newer-access")
+      return { status: 200, headers: {}, bodyText: JSON.stringify({}) }
+    })
+
+    const plugin = await loadPlugin()
+    plugin.probe(ctx)
+
+    expect(keychainValue).toBe(newerAuth)
+    expect(keychainValue).not.toContain("openusage-refresh")
+  })
+
+  it("merges rotated tokens after an unrelated concurrent keychain change", async () => {
+    const ctx = makeCtx()
+    const staleAuth = JSON.stringify({
+      tokens: {
+        access_token: "stale-access",
+        refresh_token: "stale-refresh",
+        account_id: "account",
+      },
+      last_refresh: "2000-01-01T00:00:00.000Z",
+    })
+    const concurrentlyUpdatedAuth = JSON.stringify({
+      auth_mode: "chatgpt",
+      tokens: {
+        access_token: "stale-access",
+        refresh_token: "stale-refresh",
+        account_id: "account",
+      },
+      last_refresh: "2000-01-01T00:00:00.000Z",
+    })
+    let keychainValue = staleAuth
+    ctx.host.keychain.readGenericPassword.mockImplementation(() => keychainValue)
+    ctx.host.keychain.writeGenericPassword.mockImplementation((_service, value) => {
+      keychainValue = String(value)
+    })
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("oauth/token")) {
+        keychainValue = concurrentlyUpdatedAuth
+        return {
+          status: 200,
+          headers: {},
+          bodyText: JSON.stringify({
+            access_token: "refreshed-access",
+            refresh_token: "rotated-refresh",
+            id_token: "rotated-id",
+          }),
+        }
+      }
+      expect(opts.headers.Authorization).toBe("Bearer refreshed-access")
+      return { status: 200, headers: {}, bodyText: JSON.stringify({}) }
+    })
+
+    const plugin = await loadPlugin()
+    plugin.probe(ctx)
+
+    const saved = JSON.parse(keychainValue)
+    expect(ctx.host.keychain.writeGenericPassword).toHaveBeenCalledTimes(1)
+    expect(saved.auth_mode).toBe("chatgpt")
+    expect(saved.tokens.access_token).toBe("refreshed-access")
+    expect(saved.tokens.refresh_token).toBe("rotated-refresh")
+    expect(saved.tokens.id_token).toBe("rotated-id")
   })
 
   it("omits token lines when ccusage reports no_runner", async () => {

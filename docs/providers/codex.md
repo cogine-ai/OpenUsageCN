@@ -143,7 +143,7 @@ On Windows, set `CODEX_HOME` for your user before the app starts, then fully exi
 
 If file-based OAuth credentials are missing, invalid, or fail with an auth/session error during refresh or usage lookup, OpenUsageCN tries the macOS keychain fallback. Non-auth usage failures, such as server errors or invalid responses, are shown directly.
 
-Keychain fallback is available on macOS only. If `auth.json` changes while OpenUsageCN is refreshing a token, it reloads the file and saves the refreshed tokens only when the account and original refresh token still match. It never overwrites credentials already rotated by Codex.
+Keychain fallback is available on macOS only. If `auth.json` or the macOS `Codex Auth` keychain item changes while OpenUsageCN is refreshing a token, it reloads that source and saves the refreshed tokens only when the account and original refresh token still match. It never overwrites credentials already rotated by Codex.
 
 Expected auth payload shape (file or keychain JSON value):
 
