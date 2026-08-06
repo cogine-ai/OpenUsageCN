@@ -29,6 +29,7 @@
 
 - The menu-bar app and one-shot CLI both run the same plugin probes and read the same provider settings.
 - Plugin installation and successful snapshot writes use cross-process locks, so simultaneous app and CLI runs do not read partial plugin updates or overwrite newer provider data.
+- Snapshot ordering uses each probe's start time, so a slower older refresh cannot replace a newer refresh that finished first. Completion time is still stored for freshness checks.
 - `/v1/limits` projects that cache into stable numeric resources. The CLI can also refresh stale data without starting the Tauri UI or local HTTP server.
 
 ## Guardrails
