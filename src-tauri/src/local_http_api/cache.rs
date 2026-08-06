@@ -280,14 +280,6 @@ fn snapshot_is_at_least_as_new(
                 );
                 false
             }
-            (_, Err(error)) => {
-                log::warn!(
-                    "stored usage cache fetched_at is invalid (provider={}): {}",
-                    current.provider_id,
-                    error
-                );
-                true
-            }
         },
         (Err(error), _) => {
             log::warn!(

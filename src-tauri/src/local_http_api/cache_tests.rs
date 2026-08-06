@@ -404,6 +404,10 @@ fn cache_successful_output_ignores_older_probe_after_newer_disk_snapshot() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+#[serial]
+fn cache_successful_output_debounces_disk_writes() {
     let dir = temp_dir("debounced-cache");
     std::fs::create_dir_all(&dir).unwrap();
 
