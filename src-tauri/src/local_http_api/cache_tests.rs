@@ -9,6 +9,7 @@ fn make_snapshot(id: &str, name: &str) -> CachedPluginSnapshot {
         display_name: name.to_string(),
         plan: Some("Pro".to_string()),
         lines: vec![],
+        started_at: "2026-03-26T08:15:30Z".to_string(),
         fetched_at: "2026-03-26T08:15:30Z".to_string(),
     }
 }
@@ -101,8 +102,10 @@ fn snapshot_serializes_with_fetched_at() {
     let snap = make_snapshot("claude", "Claude");
     let json: serde_json::Value = serde_json::to_value(&snap).unwrap();
     assert!(json.get("fetchedAt").is_some());
+    assert!(json.get("startedAt").is_some());
     assert!(json.get("fetched_at").is_none());
     assert_eq!(json["fetchedAt"], "2026-03-26T08:15:30Z");
+    assert_eq!(json["startedAt"], "2026-03-26T08:15:30Z");
 }
 
 #[test]
@@ -189,6 +192,7 @@ fn cache_save_merges_providers_without_replacing_a_newer_snapshot() {
 fn cache_merge_rejects_an_invalid_incoming_timestamp() {
     let current = make_snapshot("provider-a", "Current");
     let mut incoming = make_snapshot("provider-a", "Invalid Incoming");
+    incoming.started_at = "not-a-timestamp".to_string();
     incoming.fetched_at = "not-a-timestamp".to_string();
 
     assert!(!snapshot_is_at_least_as_new(&incoming, &current));
@@ -197,13 +201,17 @@ fn cache_merge_rejects_an_invalid_incoming_timestamp() {
 #[test]
 fn cache_merge_does_not_let_a_future_stored_timestamp_block_current_data() {
     let mut current = make_snapshot("provider-a", "Future Stored");
-    current.fetched_at = (time::OffsetDateTime::now_utc() + time::Duration::hours(1))
+    let future = (time::OffsetDateTime::now_utc() + time::Duration::hours(1))
         .format(&time::format_description::well_known::Rfc3339)
         .unwrap();
+    current.started_at = future.clone();
+    current.fetched_at = future;
     let mut incoming = make_snapshot("provider-a", "Current Incoming");
-    incoming.fetched_at = time::OffsetDateTime::now_utc()
+    let now = time::OffsetDateTime::now_utc()
         .format(&time::format_description::well_known::Rfc3339)
         .unwrap();
+    incoming.started_at = now.clone();
+    incoming.fetched_at = now;
 
     assert!(snapshot_is_at_least_as_new(&incoming, &current));
 }
@@ -212,11 +220,47 @@ fn cache_merge_does_not_let_a_future_stored_timestamp_block_current_data() {
 fn cache_merge_rejects_an_incoming_timestamp_far_in_the_future() {
     let current = make_snapshot("provider-a", "Current");
     let mut incoming = make_snapshot("provider-a", "Future Incoming");
-    incoming.fetched_at = (time::OffsetDateTime::now_utc() + time::Duration::hours(1))
+    let future = (time::OffsetDateTime::now_utc() + time::Duration::hours(1))
         .format(&time::format_description::well_known::Rfc3339)
         .unwrap();
+    incoming.started_at = future.clone();
+    incoming.fetched_at = future;
 
     assert!(!snapshot_is_at_least_as_new(&incoming, &current));
+}
+
+#[test]
+fn cache_merge_prefers_later_probe_start_over_later_completion() {
+    let mut earlier_start_later_finish = make_snapshot("provider-a", "Stale Slow Probe");
+    earlier_start_later_finish.started_at = "2026-03-26T08:00:00Z".to_string();
+    earlier_start_later_finish.fetched_at = "2026-03-26T08:20:00Z".to_string();
+
+    let mut later_start_earlier_finish = make_snapshot("provider-a", "Fresh Fast Probe");
+    later_start_earlier_finish.started_at = "2026-03-26T08:05:00Z".to_string();
+    later_start_earlier_finish.fetched_at = "2026-03-26T08:06:00Z".to_string();
+
+    assert!(snapshot_is_at_least_as_new(
+        &later_start_earlier_finish,
+        &earlier_start_later_finish
+    ));
+    assert!(!snapshot_is_at_least_as_new(
+        &earlier_start_later_finish,
+        &later_start_earlier_finish
+    ));
+}
+
+#[test]
+fn cache_merge_falls_back_to_fetched_at_when_started_at_missing() {
+    let mut legacy_current = make_snapshot("provider-a", "Legacy Current");
+    legacy_current.started_at.clear();
+    legacy_current.fetched_at = "2026-03-26T09:00:00Z".to_string();
+
+    let mut legacy_older = make_snapshot("provider-a", "Legacy Older");
+    legacy_older.started_at.clear();
+    legacy_older.fetched_at = "2026-03-26T08:00:00Z".to_string();
+
+    assert!(!snapshot_is_at_least_as_new(&legacy_older, &legacy_current));
+    assert!(snapshot_is_at_least_as_new(&legacy_current, &legacy_older));
 }
 
 #[test]
@@ -317,7 +361,49 @@ fn enabled_providers_read_preferences_from_a_separate_settings_directory() {
 
 #[test]
 #[serial]
-fn cache_successful_output_debounces_disk_writes() {
+fn cache_successful_output_ignores_older_probe_after_newer_disk_snapshot() {
+    let dir = temp_dir("older-probe-ignored");
+    std::fs::create_dir_all(&dir).unwrap();
+
+    let mut newer_from_cli = make_snapshot("claude", "CLI Fresh");
+    newer_from_cli.started_at = "2026-03-26T08:10:00Z".to_string();
+    newer_from_cli.fetched_at = "2026-03-26T08:11:00Z".to_string();
+    save_cache(
+        &dir,
+        &HashMap::from([("claude".to_string(), newer_from_cli.clone())]),
+    )
+    .unwrap();
+
+    init(&dir, vec!["claude".to_string()], "test".to_string());
+    {
+        let mut older_in_memory = make_snapshot("claude", "App Stale Memory");
+        older_in_memory.started_at = "2026-03-26T08:00:00Z".to_string();
+        older_in_memory.fetched_at = "2026-03-26T08:01:00Z".to_string();
+        let mut state = cache_state().lock().unwrap();
+        state
+            .snapshots
+            .insert("claude".to_string(), older_in_memory);
+    }
+
+    let late_app_finish = time::OffsetDateTime::parse(
+        "2026-03-26T08:00:00Z",
+        &time::format_description::well_known::Rfc3339,
+    )
+    .unwrap();
+    cache_successful_output(&make_output("claude", "App Stale Slow"), late_app_finish);
+
+    {
+        let state = cache_state().lock().unwrap();
+        assert_eq!(state.snapshots["claude"].display_name, "CLI Fresh");
+        assert_eq!(state.snapshots["claude"].started_at, "2026-03-26T08:10:00Z");
+        assert_eq!(state.dirty_generation, 0);
+    }
+
+    let loaded = load_cache(&dir);
+    assert_eq!(loaded["claude"].display_name, "CLI Fresh");
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
     let dir = temp_dir("debounced-cache");
     std::fs::create_dir_all(&dir).unwrap();
 
@@ -326,8 +412,14 @@ fn cache_successful_output_debounces_disk_writes() {
         vec!["claude".to_string(), "codex".to_string()],
         "test".to_string(),
     );
-    cache_successful_output(&make_output("claude", "Claude"));
-    cache_successful_output(&make_output("codex", "Codex"));
+    cache_successful_output(
+        &make_output("claude", "Claude"),
+        time::OffsetDateTime::now_utc(),
+    );
+    cache_successful_output(
+        &make_output("codex", "Codex"),
+        time::OffsetDateTime::now_utc(),
+    );
 
     {
         let state = cache_state().lock().unwrap();
@@ -356,7 +448,10 @@ fn flush_cache_persists_pending_write_synchronously() {
     std::fs::create_dir_all(&dir).unwrap();
 
     init(&dir, vec!["claude".to_string()], "test".to_string());
-    cache_successful_output(&make_output("claude", "Claude"));
+    cache_successful_output(
+        &make_output("claude", "Claude"),
+        time::OffsetDateTime::now_utc(),
+    );
     assert!(
         !dir.join(CACHE_FILE_NAME).exists(),
         "cache write should be pending before explicit flush"
@@ -436,6 +531,7 @@ fn snapshot_with_progress_line_round_trips() {
             period_duration_ms: Some(14400000),
             color: None,
         }],
+        started_at: "2026-03-26T08:00:00Z".to_string(),
         fetched_at: "2026-03-26T08:00:00Z".to_string(),
     };
 

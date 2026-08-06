@@ -82,14 +82,14 @@ pub(crate) fn read_limits_once(
     );
 
     let mut refresh_failed = worker_failed;
-    for (provider_id, output) in results {
+    for (provider_id, output, started_at) in results {
         if let Some(message) = probe_error_message(&output) {
             refresh_failed = true;
             let redacted = plugin_engine::host_api::redact_log_message(message);
             eprintln!("openusage: refresh failed for {provider_id}: {redacted}");
             local_http_api::record_probe_error(&provider_id, redacted);
         } else {
-            local_http_api::cache_successful_output(&output);
+            local_http_api::cache_successful_output(&output, started_at);
         }
     }
     if let Err(error) = local_http_api::flush_cache() {
@@ -113,7 +113,10 @@ fn run_probes(
     plugins: Vec<LoadedPlugin>,
     app_data_dir: PathBuf,
     app_version: String,
-) -> (Vec<(String, PluginOutput)>, bool) {
+) -> (
+    Vec<(String, PluginOutput, time::OffsetDateTime)>,
+    bool,
+) {
     if plugins.is_empty() {
         return (Vec::new(), false);
     }
@@ -135,6 +138,7 @@ fn run_probes(
                     .pop_front();
                 let Some(plugin) = plugin else { break };
                 let provider_id = plugin.manifest.id.clone();
+                let started_at = time::OffsetDateTime::now_utc();
                 let output = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     plugin_engine::runtime::run_probe(&plugin, &app_data_dir, &app_version)
                 }))
@@ -142,7 +146,7 @@ fn run_probes(
                 results
                     .lock()
                     .unwrap_or_else(|poisoned| poisoned.into_inner())
-                    .push((provider_id, output));
+                    .push((provider_id, output, started_at));
             }
         }));
     }

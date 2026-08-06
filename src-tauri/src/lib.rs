@@ -407,6 +407,7 @@ async fn start_probe_batch(
                 };
 
                 let plugin_id = plugin.manifest.id.clone();
+                let probe_started_at = time::OffsetDateTime::now_utc();
                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     plugin_engine::runtime::run_probe(&plugin, &data_dir, &version)
                 }));
@@ -428,7 +429,7 @@ async fn start_probe_batch(
                                     plugin_id,
                                     output.lines.len()
                                 );
-                                local_http_api::cache_successful_output(&output);
+                                local_http_api::cache_successful_output(&output, probe_started_at);
                             }
                             if let Err(error) = handle.emit(
                                 "probe:result",

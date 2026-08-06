@@ -31,6 +31,11 @@ pub struct CachedPluginSnapshot {
     pub display_name: String,
     pub plan: Option<String>,
     pub lines: Vec<MetricLine>,
+    /// When the probe that produced this snapshot started.
+    /// Used for cross-process latest-wins; falls back to `fetched_at` for legacy rows.
+    #[serde(default)]
+    pub started_at: String,
+    /// When the snapshot was published into the cache (probe completion).
     pub fetched_at: String,
 }
 
@@ -218,16 +223,32 @@ fn unlock_cache_file(_file: &std::fs::File) -> Result<(), String> {
     Ok(())
 }
 
+fn parse_rfc3339(value: &str) -> Result<time::OffsetDateTime, time::error::Parse> {
+    time::OffsetDateTime::parse(value, &time::format_description::well_known::Rfc3339)
+}
+
+/// Prefer probe start time for ordering so a slow older refresh cannot overwrite a
+/// newer refresh that finished first (app vs CLI, or any cross-process pair).
+fn snapshot_ordering_timestamp(
+    snapshot: &CachedPluginSnapshot,
+) -> Result<time::OffsetDateTime, time::error::Parse> {
+    let started = snapshot.started_at.trim();
+    if !started.is_empty() {
+        return parse_rfc3339(started);
+    }
+    parse_rfc3339(snapshot.fetched_at.trim())
+}
+
 fn snapshot_is_at_least_as_new(
     incoming: &CachedPluginSnapshot,
     current: &CachedPluginSnapshot,
 ) -> bool {
-    let parse = |value: &str| {
-        time::OffsetDateTime::parse(value, &time::format_description::well_known::Rfc3339)
-    };
     let now = time::OffsetDateTime::now_utc();
     let latest_credible_timestamp = now + time::Duration::minutes(5);
-    match (parse(&incoming.fetched_at), parse(&current.fetched_at)) {
+    match (
+        snapshot_ordering_timestamp(incoming),
+        snapshot_ordering_timestamp(current),
+    ) {
         (Ok(incoming_at), _) if incoming_at > latest_credible_timestamp => {
             log::warn!(
                 "incoming usage cache timestamp is unexpectedly in the future (provider={})",
@@ -242,7 +263,32 @@ fn snapshot_is_at_least_as_new(
             );
             true
         }
-        (Ok(incoming_at), Ok(current_at)) => incoming_at >= current_at,
+        (Ok(incoming_at), Ok(current_at)) if incoming_at != current_at => {
+            incoming_at >= current_at
+        }
+        (Ok(_), Ok(_)) => match (
+            parse_rfc3339(incoming.fetched_at.trim()),
+            parse_rfc3339(current.fetched_at.trim()),
+        ) {
+            (Ok(incoming_fetched), Ok(current_fetched)) => incoming_fetched >= current_fetched,
+            (Ok(_), Err(_)) => true,
+            (Err(error), _) => {
+                log::warn!(
+                    "incoming usage cache fetched_at is invalid (provider={}): {}",
+                    incoming.provider_id,
+                    error
+                );
+                false
+            }
+            (_, Err(error)) => {
+                log::warn!(
+                    "stored usage cache fetched_at is invalid (provider={}): {}",
+                    current.provider_id,
+                    error
+                );
+                true
+            }
+        },
         (Err(error), _) => {
             log::warn!(
                 "incoming usage cache timestamp is invalid (provider={}): {}",
@@ -259,6 +305,25 @@ fn snapshot_is_at_least_as_new(
             );
             true
         }
+    }
+}
+
+fn adopt_disk_snapshot_if_newer(state: &mut CacheState, provider_id: &str) {
+    if state.app_data_dir.as_os_str().is_empty() {
+        return;
+    }
+    let Some(disk_snapshot) = load_cache(&state.app_data_dir).remove(provider_id) else {
+        return;
+    };
+    let should_adopt = state
+        .snapshots
+        .get(provider_id)
+        .map(|current| snapshot_is_at_least_as_new(&disk_snapshot, current))
+        .unwrap_or(true);
+    if should_adopt {
+        state
+            .snapshots
+            .insert(provider_id.to_string(), disk_snapshot);
     }
 }
 
@@ -393,20 +458,37 @@ pub fn init_with_catalog(
     state.flush_scheduled = false;
 }
 
-pub fn cache_successful_output(output: &PluginOutput) {
-    let fetched_at = time::OffsetDateTime::now_utc()
-        .format(&time::format_description::well_known::Rfc3339)
-        .unwrap_or_default();
-
+pub fn cache_successful_output(output: &PluginOutput, started_at: time::OffsetDateTime) {
+    let format_timestamp = |value: time::OffsetDateTime| {
+        value
+            .format(&time::format_description::well_known::Rfc3339)
+            .unwrap_or_default()
+    };
     let snapshot = CachedPluginSnapshot {
         provider_id: output.provider_id.clone(),
         display_name: output.display_name.clone(),
         plan: output.plan.clone(),
         lines: output.lines.clone(),
-        fetched_at,
+        started_at: format_timestamp(started_at),
+        fetched_at: format_timestamp(time::OffsetDateTime::now_utc()),
     };
 
+    // Serialize with disk flush/merge so a concurrent CLI write is visible before we
+    // decide whether this probe still owns the provider snapshot.
+    let _write_guard = cache_write_lock()
+        .lock()
+        .expect("cache write lock poisoned");
     let mut state = cache_state().lock().expect("cache state poisoned");
+    adopt_disk_snapshot_if_newer(&mut state, &output.provider_id);
+    if let Some(existing) = state.snapshots.get(&output.provider_id) {
+        if !snapshot_is_at_least_as_new(&snapshot, existing) {
+            log::debug!(
+                "usage cache ignored older probe result for {}",
+                output.provider_id
+            );
+            return;
+        }
+    }
     state.snapshots.insert(output.provider_id.clone(), snapshot);
     state.errors.remove(&output.provider_id);
     state.dirty_generation = state.dirty_generation.wrapping_add(1);
