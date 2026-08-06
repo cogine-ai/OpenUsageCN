@@ -365,4 +365,12 @@ mod tests {
             Some("boom")
         );
     }
+
+    #[test]
+    fn run_probes_returns_empty_without_spawning_workers() {
+        let app_data_dir = temp_app_dir("run-probes-empty");
+        let (results, worker_failed) = run_probes(Vec::new(), app_data_dir, "0.0.0".to_string());
+        assert!(results.is_empty());
+        assert!(!worker_failed);
+    }
 }
