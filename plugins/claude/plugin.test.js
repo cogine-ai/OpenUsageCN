@@ -1213,6 +1213,83 @@ describe("claude plugin", () => {
     expect(ctx.host.keychain.writeGenericPassword).not.toHaveBeenCalled()
   })
 
+  it("preserves a newer keychain auth when it changes immediately before refresh persistence", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.exists = () => false
+    const staleAuth = JSON.stringify({
+      claudeAiOauth: {
+        accessToken: "stale-access",
+        refreshToken: "stale-refresh",
+        expiresAt: Date.now() - 1000,
+      },
+    })
+    const newerAuth = JSON.stringify({
+      claudeAiOauth: {
+        accessToken: "newer-access",
+        refreshToken: "newer-refresh",
+        expiresAt: Date.now() + 60_000,
+      },
+    })
+    let keychainValue = staleAuth
+    ctx.host.keychain.readGenericPasswordForCurrentUser.mockImplementation(() => keychainValue)
+    ctx.host.keychain.writeGenericPasswordForCurrentUser.mockImplementation((_service, value) => {
+      keychainValue = String(value)
+    })
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("/v1/oauth/token")) {
+        keychainValue = newerAuth
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            access_token: "openusage-refresh",
+            refresh_token: "openusage-rotated-refresh",
+            expires_in: 3600,
+          }),
+        }
+      }
+      throw new Error("usage should not run after a keychain credential conflict")
+    })
+
+    const plugin = await loadPlugin()
+    expect(() => plugin.probe(ctx)).toThrow("Token conflict")
+    expect(keychainValue).toBe(newerAuth)
+    expect(keychainValue).not.toContain("openusage-refresh")
+    expect(ctx.host.keychain.writeGenericPasswordForCurrentUser).not.toHaveBeenCalled()
+  })
+
+  it("preserves a newer credentials file when it changes immediately before refresh persistence", async () => {
+    const ctx = makeCtx()
+    const credPath = "~/.claude/.credentials.json"
+    const staleAuth = JSON.stringify({
+      claudeAiOauth: {
+        accessToken: "stale-access",
+        refreshToken: "stale-refresh",
+        expiresAt: Date.now() - 1000,
+      },
+    })
+    ctx.host.fs.exists = (path) => path === credPath
+    ctx.host.fs.readText = () => staleAuth
+    ctx.host.fs.writeTextIfUnchanged.mockImplementation(() => false)
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("/v1/oauth/token")) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            access_token: "openusage-refresh",
+            refresh_token: "openusage-rotated-refresh",
+            expires_in: 3600,
+          }),
+        }
+      }
+      throw new Error("usage should not run after a credentials file conflict")
+    })
+
+    const plugin = await loadPlugin()
+    expect(() => plugin.probe(ctx)).toThrow("Token conflict")
+    expect(ctx.host.fs.writeText).not.toHaveBeenCalled()
+    expect(ctx.host.fs.writeTextIfUnchanged).toHaveBeenCalled()
+  })
+
   it("writes refreshed credentials back to the legacy keychain source after fallback", async () => {
     const ctx = makeCtx()
     ctx.host.fs.exists = () => false

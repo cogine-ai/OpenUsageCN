@@ -92,6 +92,8 @@ Keychain values use the same JSON structure as the legacy credentials file:
 
 **Fallback:** `~/.claude/.credentials.json`. This file can be left behind by older Claude Code versions, so it is treated as a fallback when Keychain does not contain usable credentials.
 
+If the Keychain item or credentials file changes while OpenUsageCN is refreshing a token, it refuses to overwrite the newer credentials and surfaces a token conflict instead.
+
 ### Token Refresh
 
 Access tokens are short-lived JWTs. Refreshed proactively 5 minutes before expiration, or reactively on 401/403.

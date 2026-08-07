@@ -9,6 +9,7 @@
   const SCOPES =
     "user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload"
   const REFRESH_BUFFER_MS = 5 * 60 * 1000 // refresh 5 minutes before expiration
+  const ERR_TOKEN_CONFLICT = "Token conflict. Run `claude` to log in again."
 
   // Rate-limit state persisted across probe() calls (module scope survives re-invocations).
   const MIN_USAGE_FETCH_INTERVAL_MS = 5 * 60 * 1000  // never poll more than once per 5 min
@@ -203,6 +204,10 @@
     }
   }
 
+  function rawDigest(ctx, text) {
+    return ctx.host.crypto.sha256Hex(String(text))
+  }
+
   function buildClaudeBaseKeychainService(ctx) {
     return KEYCHAIN_SERVICE_PREFIX + getOauthConfig(ctx).oauthFileSuffix + "-credentials"
   }
@@ -276,7 +281,12 @@
           const oauth = parsed.claudeAiOauth
           if (oauth && oauth.accessToken) {
             ctx.host.log.info("credentials loaded from file")
-            return { oauth, source: "file", fullData: parsed }
+            return {
+              oauth,
+              source: "file",
+              fullData: parsed,
+              rawDigest: rawDigest(ctx, text),
+            }
           }
         }
         ctx.host.log.warn("credentials file exists but no valid oauth data")
@@ -298,7 +308,13 @@
           const oauth = parsed.claudeAiOauth
           if (oauth && oauth.accessToken) {
             ctx.host.log.info("credentials loaded from keychain (service=" + service + ")")
-            return { oauth, source: keychainResult.source, serviceName: service, fullData: parsed }
+            return {
+              oauth,
+              source: keychainResult.source,
+              serviceName: service,
+              fullData: parsed,
+              rawDigest: rawDigest(ctx, keychainResult.value),
+            }
           }
         }
         ctx.host.log.warn("keychain has data for " + service + " but no valid oauth")
@@ -307,6 +323,42 @@
     }
 
     return null
+  }
+
+  function readKeychainRawValue(ctx, source, serviceName) {
+    const keychain = ctx.host.keychain
+    if (!keychain || !serviceName) return null
+
+    try {
+      if (source === "keychain-current-user") {
+        if (typeof keychain.readGenericPasswordForCurrentUser === "function") {
+          const value = keychain.readGenericPasswordForCurrentUser(serviceName)
+          return value ? String(value) : null
+        }
+        if (typeof keychain.readGenericPassword === "function") {
+          const value = keychain.readGenericPassword(serviceName)
+          return value ? String(value) : null
+        }
+        return null
+      }
+
+      if (typeof keychain.readGenericPassword !== "function") return null
+      const value = keychain.readGenericPassword(serviceName)
+      return value ? String(value) : null
+    } catch (e) {
+      return null
+    }
+  }
+
+  function assertKeychainUnchanged(ctx, source, serviceName, expectedDigest) {
+    if (!expectedDigest) return
+    const currentValue = readKeychainRawValue(ctx, source, serviceName)
+    if (
+      currentValue != null &&
+      rawDigest(ctx, currentValue) !== expectedDigest
+    ) {
+      throw ERR_TOKEN_CONFLICT
+    }
   }
 
   function loadStoredCredentials(ctx, suppressMissingWarn) {
@@ -338,6 +390,7 @@
       source: stored ? stored.source : null,
       serviceName: stored ? stored.serviceName : null,
       fullData: stored ? stored.fullData : null,
+      rawDigest: stored ? stored.rawDigest : null,
       inferenceOnly: true,
     }
   }
@@ -353,14 +406,29 @@
     return true
   }
 
-  function saveCredentials(ctx, source, serviceName, fullData) {
+  function saveCredentials(ctx, creds, fullData) {
     // MUST use minified JSON - macOS `security -w` hex-encodes values with newlines,
     // which Claude Code can't read back, causing it to invalidate the session.
+    const source = creds && creds.source
+    const serviceName = creds && creds.serviceName
+    const expectedDigest = creds && creds.rawDigest
     const text = JSON.stringify(fullData)
     if (source === "file") {
       try {
-        ctx.host.fs.writeText(getClaudeCredentialsPath(ctx), text)
+        const credFile = getClaudeCredentialsPath(ctx)
+        if (
+          expectedDigest &&
+          ctx.host.fs &&
+          typeof ctx.host.fs.writeTextIfUnchanged === "function"
+        ) {
+          const persisted = ctx.host.fs.writeTextIfUnchanged(credFile, text, expectedDigest)
+          if (!persisted) throw ERR_TOKEN_CONFLICT
+        } else {
+          ctx.host.fs.writeText(credFile, text)
+        }
+        creds.rawDigest = rawDigest(ctx, text)
       } catch (e) {
+        if (e === ERR_TOKEN_CONFLICT) throw e
         ctx.host.log.error("Failed to write Claude credentials file: " + String(e))
       }
       return
@@ -369,6 +437,8 @@
       ctx.host.log.error("Refusing keychain write: missing service name (source=" + source + ")")
       return
     }
+    // Match file-auth CAS: refuse to overwrite credentials Claude Code changed mid-refresh.
+    assertKeychainUnchanged(ctx, source, serviceName, expectedDigest)
     if (source === "keychain-current-user") {
       try {
         if (typeof ctx.host.keychain.writeGenericPasswordForCurrentUser === "function") {
@@ -376,13 +446,17 @@
         } else {
           ctx.host.keychain.writeGenericPassword(serviceName, text)
         }
+        creds.rawDigest = rawDigest(ctx, text)
       } catch (e) {
+        if (e === ERR_TOKEN_CONFLICT) throw e
         ctx.host.log.error("Failed to write Claude credentials keychain: " + String(e))
       }
     } else if (source === "keychain-legacy" || source === "keychain") {
       try {
         ctx.host.keychain.writeGenericPassword(serviceName, text)
+        creds.rawDigest = rawDigest(ctx, text)
       } catch (e) {
+        if (e === ERR_TOKEN_CONFLICT) throw e
         ctx.host.log.error("Failed to write Claude credentials keychain: " + String(e))
       }
     }
@@ -397,7 +471,7 @@
   }
 
   function refreshToken(ctx, creds) {
-    const { oauth, source, fullData } = creds
+    const { oauth, fullData } = creds
     if (!oauth.refreshToken) {
       ctx.host.log.warn("refresh skipped: no refresh token")
       return null
@@ -454,7 +528,7 @@
 
       // Persist updated credentials back to the same source we read from.
       fullData.claudeAiOauth = oauth
-      saveCredentials(ctx, source, creds.serviceName, fullData)
+      saveCredentials(ctx, creds, fullData)
 
       ctx.host.log.info("refresh succeeded, new token expires in " + (body.expires_in || "unknown") + "s")
       return newAccessToken

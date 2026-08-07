@@ -106,7 +106,7 @@ Premium tokens (`premium.totalAllowance > 0`) are only available on Max/Enterpri
 
 ### Token Refresh
 
-Access tokens have a 7-day lifetime. Refreshed when within 24 hours of expiry or on 401/403.
+Access tokens have a 7-day lifetime. Refreshed when within 24 hours of expiry or on 401/403. If the macOS keychain item changes while OpenUsageCN is refreshing, it refuses to overwrite the newer credentials.
 
 ```
 POST https://api.workos.com/user_management/authenticate
