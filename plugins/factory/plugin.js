@@ -8,6 +8,10 @@
   const USAGE_URL = "https://api.factory.ai/api/organization/subscription/usage"
   const TOKEN_REFRESH_THRESHOLD_MS = 24 * 60 * 60 * 1000 // 24 hours before expiry
 
+  function rawDigest(ctx, text) {
+    return ctx.host.crypto.sha256Hex(String(text))
+  }
+
   function decodeHexUtf8(hex) {
     try {
       const bytes = []
@@ -165,7 +169,13 @@
         }
 
         ctx.host.log.info("auth loaded from keychain: " + service)
-        return { auth, source: "keychain", authPath: null, keychainService: service }
+        return {
+          auth,
+          source: "keychain",
+          authPath: null,
+          keychainService: service,
+          rawDigest: rawDigest(ctx, value),
+        }
       } catch (e) {
         ctx.host.log.info("keychain read failed (may not exist): " + String(e))
       }
@@ -224,7 +234,27 @@
         ctx.host.keychain &&
         typeof ctx.host.keychain.writeGenericPassword === "function"
       ) {
-        ctx.host.keychain.writeGenericPassword(authState.keychainService, JSON.stringify(auth))
+        // Match Claude/Codex CAS: refuse to overwrite credentials droid changed mid-refresh.
+        if (authState.rawDigest) {
+          let currentValue = null
+          try {
+            currentValue = ctx.host.keychain.readGenericPassword(authState.keychainService)
+          } catch (e) {
+            currentValue = null
+          }
+          if (
+            currentValue != null &&
+            rawDigest(ctx, currentValue) !== authState.rawDigest
+          ) {
+            ctx.host.log.warn(
+              "auth keychain changed mid-refresh; refusing overwrite: " + authState.keychainService
+            )
+            return false
+          }
+        }
+        const serialized = JSON.stringify(auth)
+        ctx.host.keychain.writeGenericPassword(authState.keychainService, serialized)
+        authState.rawDigest = rawDigest(ctx, serialized)
         ctx.host.log.info("auth keychain item updated: " + authState.keychainService)
         return true
       }

@@ -422,14 +422,16 @@ describe("factory plugin", () => {
     const ctx = makeCtx()
     const nearExp = Math.floor(Date.now() / 1000) + 12 * 60 * 60 // force proactive refresh
     const futureExp = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60
+    let keychainValue = JSON.stringify({
+      access_token: makeJwt(nearExp),
+      refresh_token: "refresh",
+    })
     ctx.host.keychain.readGenericPassword.mockImplementation((service) => {
-      if (service === "Factory Token") {
-        return JSON.stringify({
-          access_token: makeJwt(nearExp),
-          refresh_token: "refresh",
-        })
-      }
+      if (service === "Factory Token") return keychainValue
       return null
+    })
+    ctx.host.keychain.writeGenericPassword.mockImplementation((_service, value) => {
+      keychainValue = String(value)
     })
 
     ctx.host.http.request.mockImplementation((opts) => {
@@ -463,6 +465,61 @@ describe("factory plugin", () => {
     expect(service).toBe("Factory Token")
     const parsed = JSON.parse(writtenPayload)
     expect(parsed.refresh_token).toBe("new-refresh")
+  })
+
+  it("preserves a newer keychain auth when it changes immediately before refresh persistence", async () => {
+    const ctx = makeCtx()
+    const nearExp = Math.floor(Date.now() / 1000) + 12 * 60 * 60
+    const futureExp = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60
+    const staleAuth = JSON.stringify({
+      access_token: makeJwt(nearExp),
+      refresh_token: "stale-refresh",
+    })
+    const newerAuth = JSON.stringify({
+      access_token: makeJwt(futureExp),
+      refresh_token: "newer-refresh",
+    })
+    let keychainValue = staleAuth
+    ctx.host.keychain.readGenericPassword.mockImplementation((service) => {
+      if (service === "Factory Token") return keychainValue
+      return null
+    })
+    ctx.host.keychain.writeGenericPassword.mockImplementation((_service, value) => {
+      keychainValue = String(value)
+    })
+
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("workos.com")) {
+        keychainValue = newerAuth
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            access_token: makeJwt(futureExp),
+            refresh_token: "openusage-rotated-refresh",
+          }),
+        }
+      }
+      return {
+        status: 200,
+        headers: {},
+        bodyText: JSON.stringify({
+          usage: {
+            startDate: 1770623326000,
+            endDate: 1772956800000,
+            standard: { orgTotalTokensUsed: 0, totalAllowance: 20000000 },
+            premium: { orgTotalTokensUsed: 0, totalAllowance: 0 },
+          },
+        }),
+      }
+    })
+
+    const plugin = await loadPlugin()
+    plugin.probe(ctx)
+
+    expect(keychainValue).toBe(newerAuth)
+    expect(keychainValue).not.toContain("openusage-rotated-refresh")
+    expect(ctx.host.keychain.writeGenericPassword).not.toHaveBeenCalled()
+    expect(ctx.host.log.warn).toHaveBeenCalled()
   })
 
   it("fetches usage and formats standard tokens", async () => {
