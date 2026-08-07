@@ -416,16 +416,21 @@
     if (source === "file") {
       try {
         const credFile = getClaudeCredentialsPath(ctx)
-        if (
-          expectedDigest &&
-          ctx.host.fs &&
-          typeof ctx.host.fs.writeTextIfUnchanged === "function"
-        ) {
-          const persisted = ctx.host.fs.writeTextIfUnchanged(credFile, text, expectedDigest)
-          if (!persisted) throw ERR_TOKEN_CONFLICT
-        } else {
-          ctx.host.fs.writeText(credFile, text)
+        if (expectedDigest && ctx.host.fs && typeof ctx.host.fs.readText === "function") {
+          let currentText = null
+          try {
+            currentText = ctx.host.fs.exists(credFile) ? ctx.host.fs.readText(credFile) : null
+          } catch (e) {
+            currentText = null
+          }
+          if (
+            currentText != null &&
+            rawDigest(ctx, currentText) !== expectedDigest
+          ) {
+            throw ERR_TOKEN_CONFLICT
+          }
         }
+        ctx.host.fs.writeText(credFile, text)
         creds.rawDigest = rawDigest(ctx, text)
       } catch (e) {
         if (e === ERR_TOKEN_CONFLICT) throw e
