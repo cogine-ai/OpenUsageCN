@@ -8,6 +8,10 @@
   const USAGE_URL = "https://api.factory.ai/api/organization/subscription/usage"
   const TOKEN_REFRESH_THRESHOLD_MS = 24 * 60 * 60 * 1000 // 24 hours before expiry
 
+  function rawDigest(ctx, text) {
+    return ctx.host.crypto.sha256Hex(String(text))
+  }
+
   function decodeHexUtf8(hex) {
     try {
       const bytes = []
@@ -117,6 +121,7 @@
         authPath: AUTH_V2_PATH,
         authKey: key,
         keychainService: null,
+        rawDigest: rawDigest(ctx, envelope),
       }
     } catch (e) {
       ctx.host.log.warn("auth file read failed: " + String(e))
@@ -139,7 +144,13 @@
           continue
         }
         ctx.host.log.info("auth loaded from file: " + authPath)
-        return { auth, source: "file", authPath, keychainService: null }
+        return {
+          auth,
+          source: "file",
+          authPath,
+          keychainService: null,
+          rawDigest: rawDigest(ctx, text),
+        }
       } catch (e) {
         ctx.host.log.warn("auth file read failed: " + String(e))
       }
@@ -207,13 +218,14 @@
           return false
         }
         const envelope = ctx.host.crypto.encryptAes256Gcm(JSON.stringify(auth, null, 2), authState.authKey)
-        ctx.host.fs.writeText(authState.authPath, envelope)
+        if (!writeAuthFile(ctx, authState, envelope)) return false
         ctx.host.log.info("auth file updated: " + authState.authPath)
         return true
       }
 
       if (authState.source === "file" && authState.authPath) {
-        ctx.host.fs.writeText(authState.authPath, JSON.stringify(auth, null, 2))
+        const serialized = JSON.stringify(auth, null, 2)
+        if (!writeAuthFile(ctx, authState, serialized)) return false
         ctx.host.log.info("auth file updated: " + authState.authPath)
         return true
       }
@@ -235,6 +247,52 @@
       ctx.host.log.warn("failed to save auth: " + String(e))
       return false
     }
+  }
+
+  function writeAuthFile(ctx, authState, content) {
+    if (
+      authState.rawDigest &&
+      ctx.host.fs &&
+      typeof ctx.host.fs.writeTextIfUnchanged === "function"
+    ) {
+      const persisted = ctx.host.fs.writeTextIfUnchanged(
+        authState.authPath,
+        content,
+        authState.rawDigest
+      )
+      if (!persisted) {
+        ctx.host.log.warn(
+          "auth file changed mid-refresh; refusing overwrite: " + authState.authPath
+        )
+        return false
+      }
+      authState.rawDigest = rawDigest(ctx, content)
+      return true
+    }
+
+    if (authState.rawDigest && ctx.host.fs && typeof ctx.host.fs.readText === "function") {
+      let currentText = null
+      try {
+        currentText = ctx.host.fs.exists(authState.authPath)
+          ? ctx.host.fs.readText(authState.authPath)
+          : null
+      } catch (e) {
+        currentText = null
+      }
+      if (
+        currentText != null &&
+        rawDigest(ctx, currentText) !== authState.rawDigest
+      ) {
+        ctx.host.log.warn(
+          "auth file changed mid-refresh; refusing overwrite: " + authState.authPath
+        )
+        return false
+      }
+    }
+
+    ctx.host.fs.writeText(authState.authPath, content)
+    authState.rawDigest = rawDigest(ctx, content)
+    return true
   }
 
   function getAccessTokenExpiryMs(ctx, accessToken) {
