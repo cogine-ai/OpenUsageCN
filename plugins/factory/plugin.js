@@ -9,6 +9,7 @@
   const TOKEN_REFRESH_THRESHOLD_MS = 24 * 60 * 60 * 1000 // 24 hours before expiry
 
   function rawDigest(ctx, text) {
+    if (!ctx.host.crypto || typeof ctx.host.crypto.sha256Hex !== "function") return null
     return ctx.host.crypto.sha256Hex(String(text))
   }
 
