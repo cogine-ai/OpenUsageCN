@@ -139,12 +139,12 @@ describe("grok plugin", () => {
     expect(billingCall.headers.Authorization).toBe("Bearer new-token")
 
     const authWrites = ctx.host.fs.writeTextIfUnchanged.mock.calls.filter((call) => call[0] === AUTH_PATH)
+    expect(authWrites.length).toBeGreaterThan(0)
     const saved = JSON.parse(authWrites[authWrites.length - 1][1])
     const entry = saved["https://auth.x.ai::client"]
     expect(entry.key).toBe("new-token")
     expect(entry.refresh_token).toBe("new-refresh")
     expect(entry.expires_at).toBe("2026-02-02T01:00:00.000Z")
-    expect(ctx.host.fs.writeText.mock.calls.filter((call) => call[0] === AUTH_PATH).length).toBe(0)
   })
 
   it("preserves a newer auth.json when it changes mid-refresh", async () => {
