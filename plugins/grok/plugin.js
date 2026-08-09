@@ -8,12 +8,72 @@
   const AUTH_REFRESH_BUFFER_MS = 5 * 60 * 1000
   const LOGIN_HINT = "Grok auth expired. Run `grok login` again."
 
-  function readJson(ctx, path) {
-    if (!ctx.host.fs.exists(path)) return null
+  function rawDigest(ctx, text) {
+    if (!ctx.host.crypto || typeof ctx.host.crypto.sha256Hex !== "function") return null
+    return ctx.host.crypto.sha256Hex(String(text))
+  }
+
+  function loadAuthFile(ctx) {
+    if (!ctx.host.fs.exists(AUTH_PATH)) return null
     try {
-      return ctx.util.tryParseJson(ctx.host.fs.readText(path))
+      const text = ctx.host.fs.readText(AUTH_PATH)
+      const auth = ctx.util.tryParseJson(text)
+      if (!auth || typeof auth !== "object") return null
+      return { auth, rawDigest: rawDigest(ctx, text) }
     } catch {
       return null
+    }
+  }
+
+  function saveAuthFile(ctx, authState) {
+    const content = JSON.stringify(authState.auth, null, 2)
+    try {
+      if (
+        authState.rawDigest &&
+        ctx.host.fs &&
+        typeof ctx.host.fs.writeTextIfUnchanged === "function"
+      ) {
+        const persisted = ctx.host.fs.writeTextIfUnchanged(
+          AUTH_PATH,
+          content,
+          authState.rawDigest
+        )
+        if (!persisted) {
+          ctx.host.log.warn(
+            "Grok auth file changed mid-refresh; refusing overwrite: " + AUTH_PATH
+          )
+          return false
+        }
+        authState.rawDigest = rawDigest(ctx, content)
+        return true
+      }
+
+      if (authState.rawDigest && ctx.host.fs && typeof ctx.host.fs.readText === "function") {
+        let currentText = null
+        try {
+          currentText = ctx.host.fs.exists(AUTH_PATH)
+            ? ctx.host.fs.readText(AUTH_PATH)
+            : null
+        } catch (e) {
+          currentText = null
+        }
+        if (
+          currentText != null &&
+          rawDigest(ctx, currentText) !== authState.rawDigest
+        ) {
+          ctx.host.log.warn(
+            "Grok auth file changed mid-refresh; refusing overwrite: " + AUTH_PATH
+          )
+          return false
+        }
+      }
+
+      ctx.host.fs.writeText(AUTH_PATH, content)
+      authState.rawDigest = rawDigest(ctx, content)
+      return true
+    } catch (e) {
+      ctx.host.log.warn("Grok auth refresh succeeded but failed to save auth: " + String(e))
+      return false
     }
   }
 
@@ -74,7 +134,7 @@
     return ctx.util.parseDateMs(ctx.nowIso) || Date.now()
   }
 
-  function refreshAuth(ctx, auth, entryKey, entry) {
+  function refreshAuth(ctx, authState, entryKey, entry) {
     const refreshToken = readRefreshToken(entry)
     if (!refreshToken) {
       ctx.host.log.warn("refresh skipped: no refresh token")
@@ -128,12 +188,10 @@
         : tokenExpiryMs || refreshedAtMs + 3600 * 1000
       entry.expires_at = new Date(expiresAtMs).toISOString()
 
-      try {
-        ctx.host.fs.writeText(AUTH_PATH, JSON.stringify(auth, null, 2))
-        ctx.host.log.info("Grok auth refresh succeeded, token persisted")
-      } catch (e) {
-        ctx.host.log.warn("Grok auth refresh succeeded but failed to save auth: " + String(e))
+      if (!saveAuthFile(ctx, authState)) {
+        return null
       }
+      ctx.host.log.info("Grok auth refresh succeeded, token persisted")
 
       return accessToken
     } catch (e) {
@@ -144,11 +202,12 @@
   }
 
   function loadAuth(ctx) {
-    const auth = readJson(ctx, AUTH_PATH)
-    if (!auth || typeof auth !== "object") {
+    const authState = loadAuthFile(ctx)
+    if (!authState) {
       throw "Grok not logged in. Run `grok login`."
     }
 
+    const auth = authState.auth
     const currentMs = nowMs(ctx)
     let expiredCandidate = false
     const keys = Object.keys(auth)
@@ -159,16 +218,16 @@
       const token = typeof entry.key === "string" ? entry.key.trim() : ""
       if (!token) continue
       if (needsRefresh(ctx, entry, token, currentMs)) {
-        const refreshed = refreshAuth(ctx, auth, entryKey, entry)
-        if (refreshed) return { auth, entryKey, entry, token: refreshed }
+        const refreshed = refreshAuth(ctx, authState, entryKey, entry)
+        if (refreshed) return { authState, entryKey, entry, token: refreshed }
         if (!isExpired(ctx, entry, token, currentMs)) {
           ctx.host.log.warn("Grok refresh failed, trying existing access token")
-          return { auth, entryKey, entry, token }
+          return { authState, entryKey, entry, token }
         }
         expiredCandidate = true
         continue
       }
-      return { auth, entryKey, entry, token }
+      return { authState, entryKey, entry, token }
     }
 
     if (expiredCandidate) {
@@ -251,7 +310,7 @@
     const billingResp = ctx.util.retryOnceOnAuth({
       request: (token) => fetchBillingResponse(ctx, token || auth.token),
       refresh: () => {
-        const refreshed = refreshAuth(ctx, auth.auth, auth.entryKey, auth.entry)
+        const refreshed = refreshAuth(ctx, auth.authState, auth.entryKey, auth.entry)
         if (refreshed) auth.token = refreshed
         return refreshed
       },

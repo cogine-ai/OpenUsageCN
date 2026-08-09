@@ -24,7 +24,7 @@ grok login
 
 2. Enable the Grok plugin in OpenUsageCN settings.
 
-OpenUsageCN reads the same local auth file that the Grok CLI uses. Access tokens are refreshed automatically before expiry when a `refresh_token` is present. If refresh fails, run `grok login` again.
+OpenUsageCN reads the same local auth file that the Grok CLI uses. Access tokens are refreshed automatically before expiry when a `refresh_token` is present. If the auth file changes while OpenUsageCN is refreshing, it refuses to overwrite the newer credentials. If refresh fails, run `grok login` again.
 
 ## Endpoint
 

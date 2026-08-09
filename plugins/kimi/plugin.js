@@ -5,6 +5,11 @@
   const CLIENT_ID = "17e5f671-d194-4dfb-9706-5516cb48c098"
   const REFRESH_BUFFER_SEC = 5 * 60
 
+  function rawDigest(ctx, text) {
+    if (!ctx.host.crypto || typeof ctx.host.crypto.sha256Hex !== "function") return null
+    return ctx.host.crypto.sha256Hex(String(text))
+  }
+
   function readNumber(value) {
     const n = Number(value)
     return Number.isFinite(n) ? n : null
@@ -51,18 +56,62 @@
         ctx.host.log.warn("credentials missing access_token and refresh_token")
         return null
       }
-      return parsed
+      return { creds: parsed, rawDigest: rawDigest(ctx, text) }
     } catch (e) {
       ctx.host.log.warn("credentials read failed: " + String(e))
       return null
     }
   }
 
-  function saveCredentials(ctx, creds) {
+  function saveCredentials(ctx, authState) {
+    const content = JSON.stringify(authState.creds)
     try {
-      ctx.host.fs.writeText(CRED_PATH, JSON.stringify(creds))
+      if (
+        authState.rawDigest &&
+        ctx.host.fs &&
+        typeof ctx.host.fs.writeTextIfUnchanged === "function"
+      ) {
+        const persisted = ctx.host.fs.writeTextIfUnchanged(
+          CRED_PATH,
+          content,
+          authState.rawDigest
+        )
+        if (!persisted) {
+          ctx.host.log.warn(
+            "credentials file changed mid-refresh; refusing overwrite: " + CRED_PATH
+          )
+          return false
+        }
+        authState.rawDigest = rawDigest(ctx, content)
+        return true
+      }
+
+      if (authState.rawDigest && ctx.host.fs && typeof ctx.host.fs.readText === "function") {
+        let currentText = null
+        try {
+          currentText = ctx.host.fs.exists(CRED_PATH)
+            ? ctx.host.fs.readText(CRED_PATH)
+            : null
+        } catch (e) {
+          currentText = null
+        }
+        if (
+          currentText != null &&
+          rawDigest(ctx, currentText) !== authState.rawDigest
+        ) {
+          ctx.host.log.warn(
+            "credentials file changed mid-refresh; refusing overwrite: " + CRED_PATH
+          )
+          return false
+        }
+      }
+
+      ctx.host.fs.writeText(CRED_PATH, content)
+      authState.rawDigest = rawDigest(ctx, content)
+      return true
     } catch (e) {
       ctx.host.log.warn("failed to persist credentials: " + String(e))
+      return false
     }
   }
 
@@ -73,7 +122,8 @@
     return nowSec + REFRESH_BUFFER_SEC >= expiresAt
   }
 
-  function refreshToken(ctx, creds) {
+  function refreshToken(ctx, authState) {
+    const creds = authState.creds
     if (!creds.refresh_token) {
       ctx.host.log.warn("refresh skipped: no refresh token")
       return null
@@ -125,7 +175,9 @@
     if (typeof body.scope === "string") creds.scope = body.scope
     if (typeof body.token_type === "string") creds.token_type = body.token_type
 
-    saveCredentials(ctx, creds)
+    if (!saveCredentials(ctx, authState)) {
+      return null
+    }
     return creds.access_token
   }
 
@@ -240,16 +292,17 @@
   }
 
   function probe(ctx) {
-    const creds = loadCredentials(ctx)
-    if (!creds) {
+    const authState = loadCredentials(ctx)
+    if (!authState) {
       throw "Not logged in. Run `kimi login` to authenticate."
     }
 
+    const creds = authState.creds
     const nowSec = Date.now() / 1000
     let accessToken = creds.access_token || ""
 
     if (needsRefresh(creds, nowSec)) {
-      const refreshed = refreshToken(ctx, creds)
+      const refreshed = refreshToken(ctx, authState)
       if (refreshed) {
         accessToken = refreshed
       } else if (!accessToken) {
@@ -266,7 +319,7 @@
         },
         refresh: function () {
           didRefresh = true
-          const refreshed = refreshToken(ctx, creds)
+          const refreshed = refreshToken(ctx, authState)
           if (refreshed) accessToken = refreshed
           return refreshed
         },
