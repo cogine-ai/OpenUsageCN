@@ -6,7 +6,6 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest"
 const state = vi.hoisted(() => ({
   platformCapabilities: {
     platform: "macos",
-    localHttpApi: true,
     autostart: true,
     cli: true,
     paceNotifications: true,
@@ -275,7 +274,6 @@ describe("App", () => {
   beforeEach(() => {
     state.platformCapabilities = {
       platform: "macos",
-      localHttpApi: true,
       autostart: true,
       cli: true,
       paceNotifications: true,
@@ -447,7 +445,6 @@ describe("App", () => {
   it("uses the static tray and hides unsupported settings on Windows", async () => {
     state.platformCapabilities = {
       platform: "windows",
-      localHttpApi: true,
       autostart: true,
       cli: false,
       paceNotifications: false,
