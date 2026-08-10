@@ -82,35 +82,22 @@
   function loadAuthState(ctx) {
     const sqliteAccessToken = readStateValue(ctx, "cursorAuth/accessToken")
     const sqliteRefreshToken = readStateValue(ctx, "cursorAuth/refreshToken")
-    const sqliteMembershipTypeRaw = readStateValue(ctx, "cursorAuth/stripeMembershipType")
-    const sqliteMembershipType = typeof sqliteMembershipTypeRaw === "string"
-      ? sqliteMembershipTypeRaw.trim().toLowerCase()
-      : null
 
-    const keychainAccessToken = readKeychainValue(ctx, KEYCHAIN_ACCESS_TOKEN_SERVICE)
-    const keychainRefreshToken = readKeychainValue(ctx, KEYCHAIN_REFRESH_TOKEN_SERVICE)
-
-    const sqliteSubject = getTokenSubject(ctx, sqliteAccessToken)
-    const keychainSubject = getTokenSubject(ctx, keychainAccessToken)
-    const hasDifferentSubjects = !!sqliteSubject && !!keychainSubject && sqliteSubject !== keychainSubject
-    const sqliteLooksFree = sqliteMembershipType === "free"
-
+    // Desktop SQLite is the current Cursor IDE session and must win when present.
+    // Preferring keychain when sqlite membership looked "free" and JWT subjects
+    // differed caused account-switch / logout bugs: a stale `agent login`
+    // keychain item shadowed the live IDE login (wrong-account usage) or made
+    // refresh fail with "Session expired" while sqlite still had a valid session.
     if (sqliteAccessToken || sqliteRefreshToken) {
-      if ((keychainAccessToken || keychainRefreshToken) && sqliteLooksFree && hasDifferentSubjects) {
-        ctx.host.log.info("sqlite auth looks free and differs from keychain account; preferring keychain token")
-        return {
-          accessToken: keychainAccessToken,
-          refreshToken: keychainRefreshToken,
-          source: "keychain",
-        }
-      }
-
       return {
         accessToken: sqliteAccessToken,
         refreshToken: sqliteRefreshToken,
         source: "sqlite",
       }
     }
+
+    const keychainAccessToken = readKeychainValue(ctx, KEYCHAIN_ACCESS_TOKEN_SERVICE)
+    const keychainRefreshToken = readKeychainValue(ctx, KEYCHAIN_REFRESH_TOKEN_SERVICE)
 
     if (keychainAccessToken || keychainRefreshToken) {
       return {
@@ -125,14 +112,6 @@
       refreshToken: null,
       source: null,
     }
-  }
-
-  function getTokenSubject(ctx, token) {
-    if (!token) return null
-    const payload = ctx.jwt.decodePayload(token)
-    if (!payload || typeof payload.sub !== "string") return null
-    const subject = payload.sub.trim()
-    return subject || null
   }
 
   function persistAccessToken(ctx, source, accessToken) {

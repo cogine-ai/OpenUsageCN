@@ -93,4 +93,51 @@ describe("opencode plugin", () => {
     const plugin = await loadPlugin()
     expect(() => plugin.probe(ctx)).toThrow("OpenCode session expired.")
   })
+
+  it("keeps usagePercent values at or below 1% on the 0-100 scale", async () => {
+    const ctx = makeCtx()
+    setEnv(ctx, {
+      OPENCODE_COOKIE: "__Host-auth=public-cookie",
+      OPENCODE_WORKSPACE_ID: "wrk_PUBLIC123",
+    })
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify({
+        data: {
+          rollingUsage: { usagePercent: 1, resetInSec: 600 },
+          weeklyUsage: { usagePercent: 0.5, resetInSec: 3600 },
+        },
+      }),
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    // Regression: previously `percent <= 1` then `*= 100` turned 1% into 100% exhausted.
+    expect(result.lines.find((line) => line.label === "Session").used).toBe(1)
+    expect(result.lines.find((line) => line.label === "Weekly").used).toBe(0.5)
+  })
+
+  it("does not rescale used/limit ratios that are at most 1%", async () => {
+    const ctx = makeCtx()
+    setEnv(ctx, {
+      OPENCODE_COOKIE: "__Host-auth=public-cookie",
+      OPENCODE_WORKSPACE_ID: "wrk_PUBLIC123",
+    })
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify({
+        data: {
+          rollingUsage: { used: 1, limit: 100, resetInSec: 600 },
+          weeklyUsage: { used: 1, limit: 200, resetInSec: 3600 },
+        },
+      }),
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.lines.find((line) => line.label === "Session").used).toBe(1)
+    expect(result.lines.find((line) => line.label === "Weekly").used).toBe(0.5)
+  })
 })
