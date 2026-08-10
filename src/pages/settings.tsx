@@ -346,7 +346,7 @@ export function SettingsPage({
           onGlobalShortcutChange={onGlobalShortcutChange}
         />
       ) : null}
-      {platformCapabilities?.localHttpApi ? <LocalHttpApiSection /> : null}
+      <LocalHttpApiSection />
       {platformCapabilities?.cli ? <CliSection /> : null}
       {platformCapabilities?.autostart ? (
         <section>

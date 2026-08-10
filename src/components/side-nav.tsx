@@ -188,26 +188,31 @@ export function SideNav({
           action: () => onPluginContextAction(pluginId, "remove"),
         })
         const bottomSeparator = await PredefinedMenuItem.new({ item: "Separator" })
-        const inspectItem = await MenuItem.new({
-          id: `ctx-inspect-${pluginId}`,
-          text: "检查元素",
-          action: () => {
-            invoke("open_devtools").catch(console.error)
-          },
-        })
+        const items: Awaited<ReturnType<typeof MenuItem.new>>[] = [
+          reloadItem,
+          removeItem,
+          bottomSeparator,
+        ]
+        let inspectItem: Awaited<ReturnType<typeof MenuItem.new>> | null = null
+        if (import.meta.env.DEV) {
+          inspectItem = await MenuItem.new({
+            id: `ctx-inspect-${pluginId}`,
+            text: "检查元素",
+            action: () => {
+              invoke("open_devtools").catch(console.error)
+            },
+          })
+          items.push(inspectItem)
+        }
         const menu = await Menu.new({
-          items: [reloadItem, removeItem, bottomSeparator, inspectItem],
+          items,
         })
         try {
           await menu.popup()
         } finally {
-          await Promise.allSettled([
-            menu.close(),
-            reloadItem.close(),
-            removeItem.close(),
-            bottomSeparator.close(),
-            inspectItem.close(),
-          ])
+          const closeTargets = [menu, reloadItem, removeItem, bottomSeparator]
+          if (inspectItem) closeTargets.push(inspectItem)
+          await Promise.allSettled(closeTargets.map((item) => item.close()))
         }
       })().catch(console.error)
     },
