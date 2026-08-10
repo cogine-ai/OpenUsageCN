@@ -266,7 +266,7 @@
       if (used !== null && limit !== null && limit > 0) percent = used / limit * 100
     }
     if (percent === null) return null
-    if (percent <= 1) percent *= 100
+    // Already 0-100 (usagePercent or used/limit*100); do not rescale (0,1] as a fraction.
     percent = Math.round(Math.max(0, Math.min(100, percent)) * 10) / 10
 
     let resetIn = anyNumber(window, RESET_IN_KEYS)
