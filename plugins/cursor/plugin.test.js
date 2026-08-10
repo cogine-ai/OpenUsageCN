@@ -136,11 +136,13 @@ describe("cursor plugin", () => {
     const result = plugin.probe(ctx)
 
     expect(result.lines.find((line) => line.label === "Total usage")).toBeTruthy()
-    expect(ctx.host.keychain.readGenericPassword).toHaveBeenCalledWith("cursor-access-token")
-    expect(ctx.host.keychain.readGenericPassword).toHaveBeenCalledWith("cursor-refresh-token")
+    expect(ctx.host.keychain.readGenericPassword).not.toHaveBeenCalled()
   })
 
-  it("prefers keychain when sqlite looks free and token subjects differ", async () => {
+  it("prefers sqlite over keychain when free IDE account differs from agent login", async () => {
+    // Regression: a prior free-membership heuristic preferred keychain whenever
+    // sqlite looked free and JWT subjects differed, so a stale `agent login`
+    // shadowed the live Cursor IDE session after account switch / logout.
     const ctx = makeCtx()
     const sqlitePayload = Buffer.from(
       JSON.stringify({ exp: 9999999999, sub: "google-oauth2|sqlite-user" }),
@@ -177,7 +179,7 @@ describe("cursor plugin", () => {
     })
     ctx.host.http.request.mockImplementation((opts) => {
       if (String(opts.url).includes("GetCurrentPeriodUsage")) {
-        expect(opts.headers.Authorization).toBe("Bearer " + keychainToken)
+        expect(opts.headers.Authorization).toBe("Bearer " + sqliteToken)
       }
       return {
         status: 200,
@@ -191,6 +193,7 @@ describe("cursor plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
     expect(result.lines.find((line) => line.label === "Total usage")).toBeTruthy()
+    expect(ctx.host.keychain.readGenericPassword).not.toHaveBeenCalled()
   })
 
   it("throws on sqlite errors when reading token", async () => {

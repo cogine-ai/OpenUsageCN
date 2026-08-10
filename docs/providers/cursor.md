@@ -149,6 +149,8 @@ OpenUsageCN reads Cursor auth in this order:
 1. **Cursor Desktop SQLite** (preferred)
 2. **Cursor CLI keychain** (fallback)
 
+SQLite always wins when it has an access or refresh token (including free-plan IDE sessions). Keychain is only used when SQLite has neither. A previous exception that preferred keychain for free IDE accounts with a different JWT subject is removed — it showed the wrong account or reported session expired after switching or logging out of `agent login` while the IDE session was still valid.
+
 #### 1) Cursor Desktop SQLite (preferred)
 
 Path: `~/Library/Application Support/Cursor/User/globalStorage/state.vscdb`
