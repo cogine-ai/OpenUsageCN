@@ -8,11 +8,11 @@ The plugin reads `AIAssistantQuotaManager2.xml` from JetBrains IDE config direct
 
 ### Candidate base directories
 
-- macOS: `~/Library/Application Support/JetBrains`
-- Linux: `~/.config/JetBrains`
-- Windows: `~/AppData/Roaming/JetBrains`
+- macOS: `~/Library/Application Support/JetBrains`, `~/Library/Application Support/Google`
+- Linux: `~/.config/JetBrains`, `~/.config/Google`
+- Windows: `~/AppData/Roaming/JetBrains`, `~/AppData/Roaming/Google`
 
-For each base directory, the plugin lists real IDE directories on disk (WebStorm, IntelliJ IDEA, PyCharm, etc.), then picks the valid entry with the latest quota window.
+For each base directory, the plugin lists real IDE directories on disk (WebStorm, IntelliJ IDEA, PyCharm, Android Studio, etc.), then picks the valid entry with the latest quota window. Android Studio config lives under the `Google` parent folder; other JetBrains IDEs use the `JetBrains` parent folder.
 
 ## Parsed Fields
 
