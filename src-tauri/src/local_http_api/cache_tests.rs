@@ -288,6 +288,78 @@ fn enabled_snapshots_ordered_uses_default_enabled_plugins_without_settings() {
 }
 
 #[test]
+fn enabled_plugin_ids_merge_partial_settings_order_with_known_plugins() {
+    let dir = temp_dir("partial-plugin-order");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join(SETTINGS_FILE_NAME),
+        r#"{"plugins":{"order":["cursor","codex"]}}"#,
+    )
+    .unwrap();
+
+    let state = CacheState {
+        snapshots: HashMap::new(),
+        app_data_dir: dir.clone(),
+        settings_data_dir: dir.clone(),
+        known_plugin_ids: vec![
+            "claude".to_string(),
+            "codex".to_string(),
+            "cursor".to_string(),
+            "openrouter".to_string(),
+        ],
+        limit_catalog: HashMap::new(),
+        errors: HashMap::new(),
+        app_version: "test".to_string(),
+        dirty_generation: 0,
+        flushed_generation: 0,
+        flush_scheduled: false,
+    };
+
+    assert_eq!(
+        enabled_plugin_ids_ordered(&state),
+        vec![
+            "cursor".to_string(),
+            "codex".to_string(),
+            "claude".to_string(),
+            "openrouter".to_string(),
+        ]
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn enabled_plugin_ids_honors_disabled_list_when_settings_order_is_partial() {
+    let dir = temp_dir("settings-order-partial-disabled");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join(SETTINGS_FILE_NAME),
+        r#"{"plugins":{"order":["codex"],"disabled":["codex"]}}"#,
+    )
+    .unwrap();
+
+    let state = CacheState {
+        snapshots: HashMap::new(),
+        app_data_dir: dir.clone(),
+        settings_data_dir: dir.clone(),
+        known_plugin_ids: vec!["claude".to_string(), "codex".to_string()],
+        limit_catalog: HashMap::new(),
+        errors: HashMap::new(),
+        app_version: "test".to_string(),
+        dirty_generation: 0,
+        flushed_generation: 0,
+        flush_scheduled: false,
+    };
+
+    assert_eq!(
+        enabled_plugin_ids_ordered(&state),
+        vec!["claude".to_string()]
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 #[serial]
 fn enabled_providers_read_preferences_from_a_separate_settings_directory() {
     let cache_dir = temp_dir("local-cache");
