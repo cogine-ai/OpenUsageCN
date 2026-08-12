@@ -188,11 +188,7 @@ export function SideNav({
           action: () => onPluginContextAction(pluginId, "remove"),
         })
         const bottomSeparator = await PredefinedMenuItem.new({ item: "Separator" })
-        const menuItems: Awaited<ReturnType<typeof MenuItem.new>>[] = [
-          reloadItem,
-          removeItem,
-          bottomSeparator,
-        ]
+        const menuItems = [reloadItem, removeItem, bottomSeparator]
         const closableItems: Array<{ close: () => Promise<void> }> = [
           reloadItem,
           removeItem,
