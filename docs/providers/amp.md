@@ -5,7 +5,7 @@
 - **Protocol:** JSON-RPC (`POST /api/internal`)
 - **URL:** `https://ampcode.com/api/internal`
 - **Auth:** API key from Amp CLI (`~/.local/share/amp/secrets.json`)
-- **Tier:** Free (daily replenishing quota) and/or individual credits
+- **Tier:** Free (daily replenishing quota), paid subscription (Other/Orb percent remaining), and/or individual credits
 
 ## Authentication
 
@@ -50,11 +50,18 @@ Signed in as <user>
 Individual credits: $<credits> remaining - https://ampcode.com/settings
 ```
 
+**Paid subscription (Megawatt and similar):**
+```
+Signed in as <user>
+Subscription Megawatt: 97% other usage and 100% orb usage remaining - resets upon renewal in 29 days
+```
+
 The plugin parses the display text with regex to extract:
 - **Balance:** `$remaining/$total remaining` → dollar amounts (only if Amp Free enabled)
 - **Rate:** `replenishes +$rate/hour` → replenishment speed (only if Amp Free enabled)
 - **Bonus:** `[+N% bonus for N more days]` → optional promotional bonus 
 - **Credits:** `Individual credits: $N remaining` → paid credits balance
+- **Subscription:** `Subscription <plan>: <n>% other usage and <n>% orb usage remaining` → percent used (`100 - remaining`) for Other Usage and Orb Usage, plus renewal days when present
 
 ### Usage Calculation (Free tier only)
 
@@ -66,20 +73,23 @@ The plugin parses the display text with regex to extract:
 
 | Condition | Plan |
 |-----------|------|
+| Subscription line present | Plan name from that line (for example `"Megawatt"`) |
 | Free tier present (with or without credits) | `"Free"` |
 | Credits only (no free tier) | `"Credits"` |
 
 ## Displayed Lines
 
-| Line       | Scope    | Condition                   | Description                            |
-|------------|----------|-----------------------------|----------------------------------------|
-| Free       | overview | Amp Free enabled            | Dollar amount consumed as progress bar |
-| Bonus      | detail   | Amp Free + active promotion | Bonus percentage and duration          |
-| Credits    | overview | Credits > $0, or credits-only accounts | Individual credits balance      |
+| Line         | Scope    | Condition                   | Description                            |
+|--------------|----------|-----------------------------|----------------------------------------|
+| Other Usage  | overview | Paid subscription           | Agent usage consumed as a percent bar  |
+| Orb Usage    | overview | Paid subscription           | Orb usage consumed as a percent bar    |
+| Free         | overview | Amp Free enabled            | Dollar amount consumed as progress bar |
+| Bonus        | detail   | Amp Free + active promotion | Bonus percentage and duration          |
+| Credits      | overview | Credits > $0, or credits-only accounts | Individual credits balance      |
 
 Progress line includes:
-- `resetsAt` — ISO timestamp of estimated full replenishment (null if nothing used or rate is zero)
-- `periodDurationMs` — 24 hours for pace tracking
+- `resetsAt` — for Free, estimated full replenishment (omitted if nothing used or rate is zero); for subscriptions, renewal time when Amp reports remaining days
+- `periodDurationMs` — 24 hours for Free pace tracking, 30 days for Other Usage and Orb Usage
 
 ## Errors
 
