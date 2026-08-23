@@ -46,6 +46,6 @@ You can also use an authenticated proxy URL:
 
 ## Scope
 
-This applies to provider, plugin, and provider-status HTTP requests that go through OpenUsageCN's built-in HTTP client.
+This applies to provider, plugin, provider-status, browser-account validation, Claude membership enrichment, and Cursor model-history requests that go through OpenUsageCN's built-in HTTP client.
 
 OpenUsageCN does not support PAC/WPAD or integrated enterprise proxy authentication. It also does not proxy unrelated subprocess network traffic.

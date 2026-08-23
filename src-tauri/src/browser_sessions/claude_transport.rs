@@ -75,7 +75,7 @@ impl ClaudeAccountTransport for FixedClaudeAccountTransport {
         if cancellation.is_cancelled() {
             return Err(ClaudeAccountTransportError::Cancelled);
         }
-        let client = reqwest::blocking::Client::builder()
+        let client = crate::config::blocking_client_builder()
             .redirect(reqwest::redirect::Policy::none())
             .connect_timeout(timeout)
             .timeout(timeout)

@@ -89,7 +89,7 @@ impl ProviderIdentityTransport for FixedProviderIdentityTransport {
         if cancellation.is_cancelled() {
             return Err(ProviderTransportError::Cancelled);
         }
-        let client = reqwest::blocking::Client::builder()
+        let client = crate::config::blocking_client_builder()
             .redirect(reqwest::redirect::Policy::none())
             .connect_timeout(timeout)
             .timeout(timeout)

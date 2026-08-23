@@ -75,7 +75,7 @@ pub(crate) struct FixedCursorTransport {
 
 impl FixedCursorTransport {
     pub(crate) fn new() -> Result<Self, TransportError> {
-        let client = reqwest::blocking::Client::builder()
+        let client = crate::config::blocking_client_builder()
             .redirect(reqwest::redirect::Policy::none())
             .timeout(Duration::from_secs(30))
             .build()

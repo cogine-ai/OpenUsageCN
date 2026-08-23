@@ -13,7 +13,7 @@ pub(super) struct FixedBrowserCursorProbe {
 
 impl FixedBrowserCursorProbe {
     pub(super) fn new() -> Result<Self, String> {
-        let client = reqwest::blocking::Client::builder()
+        let client = crate::config::blocking_client_builder()
             .redirect(reqwest::redirect::Policy::none())
             .timeout(Duration::from_secs(15))
             .build()

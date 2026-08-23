@@ -67,15 +67,12 @@ fn parse_statuspage_status(body: &[u8]) -> Result<ProviderStatus, String> {
 }
 
 fn fetch_statuspage_status(api_url: &str) -> Result<ProviderStatus, String> {
-    let mut client_builder = reqwest::blocking::Client::builder()
+    let client_builder = crate::config::blocking_client_builder()
         .timeout(STATUS_REQUEST_TIMEOUT)
         .connect_timeout(STATUS_REQUEST_TIMEOUT)
         .redirect(reqwest::redirect::Policy::limited(3))
         .https_only(true)
         .user_agent("OpenUsageCN/provider-status");
-    if let Some(resolved) = crate::config::get_resolved_proxy() {
-        client_builder = client_builder.proxy(resolved.proxy.clone());
-    }
     let client = client_builder
         .build()
         .map_err(|error| format!("failed to build status client: {error}"))?;

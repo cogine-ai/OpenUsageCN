@@ -40,7 +40,7 @@ impl ClaudeOAuthProfileTransport for FixedClaudeOAuthProfileTransport {
             return Err(ClaudeOAuthProfileError::Cancelled);
         }
         let timeout = timeout.min(CLAUDE_OAUTH_PROFILE_TIMEOUT);
-        let client = reqwest::blocking::Client::builder()
+        let client = crate::config::blocking_client_builder()
             .redirect(reqwest::redirect::Policy::none())
             .connect_timeout(timeout)
             .timeout(timeout)
