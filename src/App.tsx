@@ -102,6 +102,7 @@ function App() {
     autoUpdateNextAt,
     setAutoUpdateNextAt,
     handleRetryPlugin,
+    handleAccountChangeRefresh,
     handleRefreshAll,
   } = useProbe({
     pluginSettings,
@@ -291,6 +292,7 @@ function App() {
       onNavReorder={handleReorder}
       appContentProps={{
         onRetryPlugin: handleRetryPlugin,
+        onAccountChangeRefreshPlugin: handleAccountChangeRefresh,
         onReorder: handleReorder,
         onToggle: handleToggle,
         onProviderConfigSaved: handleProviderConfigSaved,

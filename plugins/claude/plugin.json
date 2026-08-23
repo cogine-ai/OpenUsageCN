@@ -6,6 +6,10 @@
   "entry": "plugin.js",
   "icon": "icon.svg",
   "brandColor": "#DE7356",
+  "accountSupport": {
+    "localDiscovery": true,
+    "browserBinding": true
+  },
   "statusPage": {
     "apiUrl": "https://status.claude.com/api/v2/status.json",
     "url": "https://status.claude.com/"

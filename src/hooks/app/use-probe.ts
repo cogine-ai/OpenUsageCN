@@ -23,6 +23,7 @@ export function useProbe({
     pluginStates,
     pluginStatesRef,
     setLoadingForPlugins,
+    setAccountTransitionForPlugins,
     setErrorForPlugins,
     handleProbeResult,
   } = useProbeState({ onProbeResult })
@@ -54,11 +55,16 @@ export function useProbe({
     startBatch,
   })
 
-  const { handleRetryPlugin, handleRefreshAll } = useProbeRefreshActions({
+  const {
+    handleRetryPlugin,
+    handleAccountChangeRefresh,
+    handleRefreshAll,
+  } = useProbeRefreshActions({
     pluginSettings,
     pluginStatesRef,
     resetAutoUpdateSchedule,
     setLoadingForPlugins,
+    setAccountTransitionForPlugins,
     setErrorForPlugins,
     startBatch,
   })
@@ -71,6 +77,7 @@ export function useProbe({
     autoUpdateNextAt,
     setAutoUpdateNextAt,
     handleRetryPlugin,
+    handleAccountChangeRefresh,
     handleRefreshAll,
   }
 }

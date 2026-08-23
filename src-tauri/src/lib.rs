@@ -1,9 +1,11 @@
 #[cfg(target_os = "macos")]
 mod app_nap;
 mod app_paths;
+mod browser_sessions;
 pub mod cli;
 mod cli_installer;
 mod config;
+mod cursor_history;
 mod local_http_api;
 mod log_path;
 mod notifications;
@@ -19,6 +21,7 @@ mod panel_standard_tests;
 mod platform_capabilities;
 mod plugin_engine;
 mod probe_batches;
+mod provider_accounts;
 mod provider_config;
 mod provider_status;
 mod safe_file;
@@ -36,7 +39,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use serde::Serialize;
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 use tauri_plugin_aptabase::EventTracker;
 use tauri_plugin_log::{Target, TargetKind};
 use uuid::Uuid;
@@ -49,6 +52,124 @@ const GLOBAL_SHORTCUT_STORE_KEY: &str = "globalShortcut";
 const DAILY_ACTIVE_TRACKED_DAY_KEY: &str = "analytics.daily_active_day";
 const DAILY_ACTIVE_EVENT_NAME: &str = "app_started";
 const MAX_CONCURRENT_PROBES: usize = 4;
+
+enum PendingProbe {
+    Unscoped {
+        output: plugin_engine::runtime::PluginOutput,
+        started_at: time::OffsetDateTime,
+    },
+    Account(provider_accounts::ActiveAccountProbe),
+}
+
+struct CursorHistoryState {
+    service: Option<cursor_history::HistoryService>,
+    store: cursor_history::HistoryStore,
+    unavailable_correlation_id: Option<String>,
+}
+
+struct BrowserDiscoveryState {
+    broker: Arc<browser_sessions::BrowserSessionBroker>,
+    cancellations: Mutex<HashMap<String, browser_sessions::CancellationToken>>,
+}
+
+impl BrowserDiscoveryState {
+    fn new(broker: Arc<browser_sessions::BrowserSessionBroker>) -> Self {
+        Self {
+            broker,
+            cancellations: Mutex::new(HashMap::new()),
+        }
+    }
+
+    fn begin(
+        &self,
+        request_id: &str,
+    ) -> Result<browser_sessions::CancellationToken, browser_sessions::BrowserSessionError> {
+        if request_id.is_empty()
+            || request_id.len() > 128
+            || request_id.chars().any(char::is_control)
+        {
+            return Err(browser_sessions::BrowserSessionError::invalid_request());
+        }
+        let mut cancellations = self
+            .cancellations
+            .lock()
+            .map_err(|_| browser_sessions::BrowserSessionError::worker_failed())?;
+        if cancellations.contains_key(request_id) {
+            return Err(browser_sessions::BrowserSessionError::invalid_request());
+        }
+        let cancellation = browser_sessions::CancellationToken::new();
+        cancellations.insert(request_id.to_string(), cancellation.clone());
+        Ok(cancellation)
+    }
+
+    fn finish(&self, request_id: &str) {
+        if let Ok(mut cancellations) = self.cancellations.lock() {
+            cancellations.remove(request_id);
+        }
+    }
+
+    fn cancel(&self, request_id: &str) -> bool {
+        self.cancellations
+            .lock()
+            .ok()
+            .and_then(|mut cancellations| cancellations.remove(request_id))
+            .is_some_and(|cancellation| {
+                cancellation.cancel();
+                true
+            })
+    }
+}
+
+impl CursorHistoryState {
+    fn new(
+        app_data_dir: &std::path::Path,
+        credentials: Arc<dyn cursor_history::CredentialLeasePort>,
+    ) -> Self {
+        let store = cursor_history::HistoryStore::new(app_data_dir);
+        match cursor_history::FixedCursorTransport::new() {
+            Ok(transport) => Self {
+                service: Some(cursor_history::HistoryService::new(
+                    credentials,
+                    Arc::new(transport),
+                    store.clone(),
+                    cursor_history::HistoryScheduler::global(),
+                )),
+                store,
+                unavailable_correlation_id: None,
+            },
+            Err(_) => {
+                let correlation_id = Uuid::new_v4().to_string();
+                log::error!(
+                    "cursor history transport unavailable: correlation_id={}",
+                    correlation_id
+                );
+                Self {
+                    service: None,
+                    store,
+                    unavailable_correlation_id: Some(correlation_id),
+                }
+            }
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CursorHistoryErrorView {
+    code: String,
+    message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    correlation_id: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CursorHistoryRefreshView {
+    snapshot: Option<cursor_history::CompleteHistory>,
+    stale: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<CursorHistoryErrorView>,
+}
 
 fn is_autostart_launch(arguments: &[String]) -> bool {
     arguments.iter().any(|argument| argument == "--autostart")
@@ -261,6 +382,56 @@ pub struct ProbeBatchComplete {
     pub batch_id: String,
 }
 
+fn publish_probe_output(
+    app_handle: &tauri::AppHandle,
+    batch_id: &str,
+    plugin_id: &str,
+    output: plugin_engine::runtime::PluginOutput,
+    started_at: time::OffsetDateTime,
+) {
+    if let Some(message) = plugin_engine::runtime::probe_error_message(&output) {
+        log::warn!("probe {} completed with error", plugin_id);
+        local_http_api::record_probe_error(
+            plugin_id,
+            plugin_engine::host_api::redact_log_message(message),
+        );
+    } else {
+        log::info!(
+            "probe {} completed ok ({} lines)",
+            plugin_id,
+            output.lines.len()
+        );
+        local_http_api::cache_successful_output(&output, started_at);
+    }
+    if let Err(error) = app_handle.emit(
+        "probe:result",
+        ProbeResult {
+            batch_id: batch_id.to_string(),
+            output,
+        },
+    ) {
+        log::error!(
+            "probe {} result event for batch {} failed: {}",
+            plugin_id,
+            batch_id,
+            error
+        );
+    }
+}
+
+fn sync_active_account_projection(
+    accounts: &provider_accounts::ProviderAccounts,
+    provider_id: &str,
+) -> Result<(), String> {
+    match accounts.active_projection(provider_id)? {
+        Some(projection) => local_http_api::cache::replace_account_projection(
+            provider_id,
+            Some((&projection.output, projection.started_at)),
+        ),
+        None => local_http_api::cache::replace_account_projection(provider_id, None),
+    }
+}
+
 #[tauri::command]
 fn init_panel(app_handle: tauri::AppHandle) -> Result<(), String> {
     panel::init(&app_handle).map_err(|error| {
@@ -409,41 +580,102 @@ async fn start_probe_batch(
                 };
 
                 let plugin_id = plugin.manifest.id.clone();
+                let probe_started_at = time::OffsetDateTime::now_utc();
+                let account_aware = plugin
+                    .manifest
+                    .account_support
+                    .as_ref()
+                    .is_some_and(|support| support.local_discovery);
                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    plugin_engine::runtime::run_probe(&plugin, &data_dir, &version)
+                    if !account_aware {
+                        return PendingProbe::Unscoped {
+                            output: plugin_engine::runtime::run_probe(&plugin, &data_dir, &version),
+                            started_at: probe_started_at,
+                        };
+                    }
+                    let accounts = handle.state::<Arc<provider_accounts::ProviderAccounts>>();
+                    let receipt = accounts.perform(
+                        &plugin_id,
+                        provider_accounts::ProviderOperation::RefreshActive,
+                    );
+                    if let Some(event) = accounts.changed_event(&plugin_id, &receipt) {
+                        if let Err(error) = handle.emit("provider-account-view-changed", event) {
+                            log::error!(
+                                "provider account revision event failed: provider={}, operation_id={}, error={}",
+                                plugin_id,
+                                receipt.operation_id,
+                                error
+                            );
+                        }
+                    }
+                    if receipt.status == provider_accounts::OperationStatus::Failed {
+                        let message = receipt
+                            .error
+                            .as_ref()
+                            .map(|error| error.message.as_str())
+                            .unwrap_or("Account refresh failed. Try again.");
+                        return PendingProbe::Unscoped {
+                            output: plugin_engine::runtime::provider_account_probe_error(
+                                &plugin, message,
+                            ),
+                            started_at: probe_started_at,
+                        };
+                    }
+                    if let Err(error) = sync_active_account_projection(&accounts, &plugin_id) {
+                        log::error!(
+                            "provider account projection sync failed: provider={}, operation_id={}, error={}",
+                            plugin_id,
+                            receipt.operation_id,
+                            plugin_engine::host_api::redact_log_message(&error)
+                        );
+                    }
+                    match accounts.prepare_active_probe(&plugin_id) {
+                        Ok(probe) => PendingProbe::Account(probe),
+                        Err(message) => PendingProbe::Unscoped {
+                            output: plugin_engine::runtime::provider_account_probe_error(
+                                &plugin, &message,
+                            ),
+                            started_at: probe_started_at,
+                        },
+                    }
                 }));
 
                 let committed =
                     latest_batches.commit_if_latest(&bid, &plugin_id, || match result {
-                        Ok(output) => {
-                            if let Some(message) =
-                                plugin_engine::runtime::probe_error_message(&output)
-                            {
-                                log::warn!("probe {} completed with error", plugin_id);
-                                local_http_api::record_probe_error(
-                                    &plugin_id,
-                                    plugin_engine::host_api::redact_log_message(message),
-                                );
-                            } else {
-                                log::info!(
-                                    "probe {} completed ok ({} lines)",
-                                    plugin_id,
-                                    output.lines.len()
-                                );
-                                local_http_api::cache_successful_output(&output);
-                            }
-                            if let Err(error) = handle.emit(
-                                "probe:result",
-                                ProbeResult {
-                                    batch_id: bid.clone(),
-                                    output,
+                        Ok(PendingProbe::Unscoped { output, started_at }) => {
+                            publish_probe_output(&handle, &bid, &plugin_id, output, started_at);
+                        }
+                        Ok(PendingProbe::Account(probe)) => {
+                            let accounts =
+                                handle.state::<Arc<provider_accounts::ProviderAccounts>>();
+                            if let Err(message) = accounts.publish_active_probe(
+                                probe,
+                                |output, started_at| {
+                                    publish_probe_output(
+                                        &handle,
+                                        &bid,
+                                        &plugin_id,
+                                        output.clone(),
+                                        started_at,
+                                    );
                                 },
                             ) {
-                                log::error!(
-                                    "probe {} result event for batch {} failed: {}",
+                                let redacted =
+                                    plugin_engine::host_api::redact_log_message(&message);
+                                log::warn!(
+                                    "provider account probe publication rejected: provider={}, reason={}",
                                     plugin_id,
-                                    bid,
-                                    error
+                                    redacted
+                                );
+                                publish_probe_output(
+                                    &handle,
+                                    &bid,
+                                    &plugin_id,
+                                    plugin_engine::runtime::provider_account_probe_error(
+                                        &plugin,
+                                        &redacted,
+                                    ),
+                                    probe_started_at,
                                 );
                             }
                         }
@@ -593,6 +825,254 @@ fn get_log_path(app_handle: tauri::AppHandle) -> Result<String, String> {
 #[tauri::command]
 fn get_local_http_api_status() -> local_http_api::LocalHttpApiServiceStatus {
     local_http_api::get_status()
+}
+
+#[tauri::command]
+fn get_provider_account_view(
+    provider_id: String,
+    accounts: tauri::State<'_, Arc<provider_accounts::ProviderAccounts>>,
+) -> Result<provider_accounts::ProviderAccountView, String> {
+    accounts.view(&provider_id)
+}
+
+#[tauri::command]
+fn perform_provider_account_operation(
+    app_handle: tauri::AppHandle,
+    provider_id: String,
+    operation: provider_accounts::ProviderOperation,
+    accounts: tauri::State<'_, Arc<provider_accounts::ProviderAccounts>>,
+) -> provider_accounts::ProviderOperationReceipt {
+    let receipt = accounts.perform(&provider_id, operation);
+    if receipt.status != provider_accounts::OperationStatus::Failed {
+        if let Err(error) = sync_active_account_projection(&accounts, &provider_id) {
+            let redacted = plugin_engine::host_api::redact_log_message(&error);
+            log::error!(
+                "provider account projection sync failed: provider={}, operation_id={}, error={}",
+                provider_id,
+                receipt.operation_id,
+                redacted
+            );
+            local_http_api::record_probe_error(&provider_id, redacted);
+        }
+    }
+    if let Some(event) = accounts.changed_event(&provider_id, &receipt) {
+        if let Err(error) = app_handle.emit("provider-account-view-changed", event) {
+            log::error!(
+                "provider account revision event failed: provider={}, operation_id={}, error={}",
+                provider_id,
+                receipt.operation_id,
+                error
+            );
+        }
+    }
+    receipt
+}
+
+#[tauri::command]
+async fn list_browser_profiles(
+    browser: browser_sessions::Browser,
+    discovery: tauri::State<'_, BrowserDiscoveryState>,
+) -> Result<browser_sessions::ListProfilesResponse, browser_sessions::BrowserSessionError> {
+    let broker = Arc::clone(&discovery.broker);
+    tokio::task::spawn_blocking(move || broker.list_profiles(browser))
+        .await
+        .map_err(|_| browser_sessions::BrowserSessionError::worker_failed())?
+}
+
+#[tauri::command]
+async fn discover_browser_accounts(
+    request_id: String,
+    provider_id: String,
+    browser: browser_sessions::Browser,
+    profile_key: Option<String>,
+    discovery: tauri::State<'_, BrowserDiscoveryState>,
+    accounts: tauri::State<'_, Arc<provider_accounts::ProviderAccounts>>,
+) -> Result<browser_sessions::AllProfilesDiscovery, browser_sessions::BrowserSessionError> {
+    let provider = match provider_id.as_str() {
+        "cursor" => browser_sessions::CookieProvider::Cursor,
+        "claude" => browser_sessions::CookieProvider::Claude,
+        _ => return Err(browser_sessions::BrowserSessionError::unsupported_provider()),
+    };
+    let cancellation = discovery.begin(&request_id)?;
+    let broker = Arc::clone(&discovery.broker);
+    let accounts = Arc::clone(accounts.inner());
+    let result = tokio::task::spawn_blocking(move || match (provider, profile_key) {
+        (browser_sessions::CookieProvider::Cursor, Some(profile_key)) => {
+            Ok(browser_sessions::AllProfilesDiscovery {
+                browser,
+                provider,
+                profiles: vec![broker.discover_specific(
+                    browser,
+                    &profile_key,
+                    provider,
+                    &cancellation,
+                )],
+                partial: false,
+            })
+        }
+        (browser_sessions::CookieProvider::Cursor, None) => {
+            broker.discover_all(browser, provider, &cancellation)
+        }
+        (browser_sessions::CookieProvider::Claude, Some(profile_key)) => accounts
+            .discover_claude_browser_profile(browser, &profile_key, &cancellation)
+            .map(|discovery| browser_sessions::AllProfilesDiscovery {
+                browser,
+                provider,
+                profiles: vec![discovery.profile],
+                partial: false,
+            })
+            .map_err(|reason| {
+                log::warn!(
+                    "Claude browser profile discovery rejected: reason={}",
+                    plugin_engine::host_api::redact_log_message(&reason)
+                );
+                browser_sessions::BrowserSessionError::provider_validation_failed()
+            }),
+        (browser_sessions::CookieProvider::Claude, None) => {
+            Err(browser_sessions::BrowserSessionError::invalid_request())
+        }
+    })
+    .await
+    .map_err(|_| browser_sessions::BrowserSessionError::worker_failed());
+    discovery.finish(&request_id);
+    match result {
+        Ok(result) => result,
+        Err(error) => {
+            log::error!("browser discovery worker failed: request_id={}", request_id);
+            Err(error)
+        }
+    }
+}
+
+#[tauri::command]
+fn cancel_browser_discovery(
+    request_id: String,
+    discovery: tauri::State<'_, BrowserDiscoveryState>,
+) -> bool {
+    discovery.cancel(&request_id)
+}
+
+#[tauri::command]
+fn get_cursor_history_snapshot(
+    provider_id: String,
+    account_id: String,
+    history: tauri::State<'_, CursorHistoryState>,
+) -> Result<Option<cursor_history::CompleteHistory>, CursorHistoryErrorView> {
+    history
+        .store
+        .load(&provider_id, &account_id)
+        .map_err(cursor_history_error)
+}
+
+#[tauri::command]
+async fn refresh_cursor_history(
+    provider_id: String,
+    account_id: String,
+    now_ms: i64,
+    time_zone: String,
+    utc_offset_seconds: i32,
+    history: tauri::State<'_, CursorHistoryState>,
+    accounts: tauri::State<'_, Arc<provider_accounts::ProviderAccounts>>,
+) -> Result<CursorHistoryRefreshView, CursorHistoryErrorView> {
+    let service = history
+        .service
+        .as_ref()
+        .ok_or_else(|| CursorHistoryErrorView {
+            code: "historyUnavailable".to_string(),
+            message: "Cursor model usage is unavailable. Restart the app and try again."
+                .to_string(),
+            correlation_id: history.unavailable_correlation_id.clone(),
+        })?;
+    let billing_cycle = accounts
+        .cursor_billing_cycle(&account_id, now_ms)
+        .map_err(|_| {
+            let correlation_id = Uuid::new_v4().to_string();
+            log::error!(
+                "cursor history billing cycle unavailable: correlation_id={}",
+                correlation_id
+            );
+            CursorHistoryErrorView {
+                code: "historyScopeUnavailable".to_string(),
+                message:
+                    "Cursor model usage could not confirm the selected account period. Try again."
+                        .to_string(),
+                correlation_id: Some(correlation_id),
+            }
+        })?;
+    let handle = service
+        .refresh(cursor_history::HistoryDemand {
+            provider_id,
+            account_id,
+            now_ms,
+            billing_cycle,
+            time_zone,
+            utc_offset_seconds,
+        })
+        .map_err(cursor_history_error)?;
+    let refresh = tokio::task::spawn_blocking(move || handle.wait())
+        .await
+        .map_err(|_| CursorHistoryErrorView {
+            code: "historyWorkerFailed".to_string(),
+            message: "Cursor model usage refresh stopped unexpectedly. Try again.".to_string(),
+            correlation_id: None,
+        })?
+        .map_err(cursor_history_error)?;
+    Ok(CursorHistoryRefreshView {
+        snapshot: refresh.snapshot,
+        stale: refresh.stale,
+        error: refresh.error.map(cursor_history_error),
+    })
+}
+
+fn cursor_history_error(error: cursor_history::HistoryError) -> CursorHistoryErrorView {
+    use cursor_history::HistoryError;
+    let (code, message) = match error {
+        HistoryError::AuthenticationUnavailable => (
+            "authenticationUnavailable",
+            "The selected Cursor account has no usable model-usage session.",
+        ),
+        HistoryError::IdentityChanged
+        | HistoryError::CredentialLeaseChanged
+        | HistoryError::CredentialLeaseMismatch
+        | HistoryError::ResultScopeChanged => (
+            "accountChanged",
+            "The selected Cursor account changed during refresh. Try again.",
+        ),
+        HistoryError::Cancelled => (
+            "refreshCancelled",
+            "Cursor model usage refresh was cancelled.",
+        ),
+        HistoryError::StorageRead
+        | HistoryError::StorageWrite
+        | HistoryError::StorageInvalid
+        | HistoryError::InvalidStorageKey
+        | HistoryError::IncompleteSnapshot
+        | HistoryError::SnapshotAccountMismatch => (
+            "historyStorageFailed",
+            "Cursor model usage could not be read or saved.",
+        ),
+        HistoryError::UnsupportedProvider => (
+            "unsupportedProvider",
+            "Model usage history is available only for Cursor.",
+        ),
+        HistoryError::SchedulerUnavailable | HistoryError::SchedulerClosed => (
+            "historySchedulerUnavailable",
+            "Cursor model usage refresh is temporarily unavailable.",
+        ),
+        HistoryError::Transport(_) => (
+            "historyRequestFailed",
+            "Cursor model usage could not be refreshed. Try again.",
+        ),
+        _ => (
+            "incompleteHistory",
+            "Cursor returned incomplete model usage, so the previous complete result was kept.",
+        ),
+    };
+    CursorHistoryErrorView {
+        code: code.to_string(),
+        message: message.to_string(),
+        correlation_id: None,
+    }
 }
 
 /// Update the global shortcut registration.
@@ -788,6 +1268,13 @@ pub fn run() {
             delete_provider_config_field,
             get_log_path,
             get_local_http_api_status,
+            get_provider_account_view,
+            perform_provider_account_operation,
+            list_browser_profiles,
+            discover_browser_accounts,
+            cancel_browser_discovery,
+            get_cursor_history_snapshot,
+            refresh_cursor_history,
             platform_capabilities::get_platform_capabilities,
             windows_autostart::repair_windows_autostart_command,
             provider_status::get_provider_status,
@@ -853,6 +1340,34 @@ pub fn run() {
                 plugins.iter().map(|p| p.manifest.id.clone()).collect();
             let limit_catalog = local_http_api::limits::catalog_from_plugins(&plugins);
             provider_config::register_existing_secrets(&plugins);
+            let provider_accounts = Arc::new(
+                provider_accounts::ProviderAccounts::open(&app_data_dir).unwrap_or_else(|error| {
+                    provider_accounts::ProviderAccounts::unavailable(&error)
+                }),
+            );
+            let browser_broker = Arc::new(browser_sessions::BrowserSessionBroker::new());
+            provider_accounts.set_browser_broker(Arc::clone(&browser_broker));
+            for plugin in plugins.iter().filter(|plugin| {
+                plugin
+                    .manifest
+                    .account_support
+                    .as_ref()
+                    .is_some_and(|support| support.local_discovery)
+            }) {
+                provider_accounts.register_adapter(
+                    &plugin.manifest.id,
+                    Box::new(provider_accounts::QuickJsAccountAdapter::new(
+                        plugin.clone(),
+                        app_data_dir.clone(),
+                        version.clone(),
+                    )),
+                );
+            }
+            let history_credentials: Arc<dyn cursor_history::CredentialLeasePort> =
+                Arc::clone(&provider_accounts) as Arc<dyn cursor_history::CredentialLeasePort>;
+            app.manage(CursorHistoryState::new(&app_data_dir, history_credentials));
+            app.manage(BrowserDiscoveryState::new(browser_broker));
+            app.manage(provider_accounts);
             app.manage(Mutex::new(AppState {
                 plugins,
                 app_data_dir: app_data_dir.clone(),

@@ -22,11 +22,17 @@ vi.mock("@/pages/settings", () => ({
 }))
 
 vi.mock("@/pages/provider-detail", () => ({
-  ProviderDetailPage: (props: { onRetry?: () => void }) => {
+  ProviderDetailPage: (props: {
+    onRetry?: () => void
+    onAccountChangeRefresh?: () => void
+  }) => {
     providerDetailPageMock(props)
     return (
       <div data-testid="provider-detail-page">
         {props.onRetry ? <button onClick={props.onRetry}>retry-provider</button> : null}
+        {props.onAccountChangeRefresh ? (
+          <button onClick={props.onAccountChangeRefresh}>refresh-account-change</button>
+        ) : null}
       </div>
     )
   },
@@ -66,6 +72,7 @@ function createProps(): AppContentProps {
       lastUpdatedAt: null,
     },
     onRetryPlugin: vi.fn(),
+    onAccountChangeRefreshPlugin: vi.fn(),
     onReorder: vi.fn(),
     onToggle: vi.fn(),
     onProviderConfigSaved: vi.fn(),
@@ -113,5 +120,16 @@ describe("AppContent", () => {
 
     expect(providerDetailPageMock).toHaveBeenCalledTimes(1)
     expect(props.onRetryPlugin).toHaveBeenCalledWith("codex")
+  })
+
+  it("passes the dedicated account-change refresh for provider detail", () => {
+    const props = createProps()
+    useAppUiStore.getState().setActiveView("codex")
+    render(<AppContent {...props} />)
+
+    fireEvent.click(screen.getByRole("button", { name: "refresh-account-change" }))
+
+    expect(props.onAccountChangeRefreshPlugin).toHaveBeenCalledWith("codex")
+    expect(props.onRetryPlugin).not.toHaveBeenCalled()
   })
 })

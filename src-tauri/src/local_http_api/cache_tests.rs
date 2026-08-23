@@ -9,6 +9,7 @@ fn make_snapshot(id: &str, name: &str) -> CachedPluginSnapshot {
         display_name: name.to_string(),
         plan: Some("Pro".to_string()),
         lines: vec![],
+        started_at: "2026-03-26T08:15:00Z".to_string(),
         fetched_at: "2026-03-26T08:15:30Z".to_string(),
     }
 }
@@ -197,11 +198,11 @@ fn cache_merge_rejects_an_invalid_incoming_timestamp() {
 #[test]
 fn cache_merge_does_not_let_a_future_stored_timestamp_block_current_data() {
     let mut current = make_snapshot("provider-a", "Future Stored");
-    current.fetched_at = (time::OffsetDateTime::now_utc() + time::Duration::hours(1))
+    current.started_at = (time::OffsetDateTime::now_utc() + time::Duration::hours(1))
         .format(&time::format_description::well_known::Rfc3339)
         .unwrap();
     let mut incoming = make_snapshot("provider-a", "Current Incoming");
-    incoming.fetched_at = time::OffsetDateTime::now_utc()
+    incoming.started_at = time::OffsetDateTime::now_utc()
         .format(&time::format_description::well_known::Rfc3339)
         .unwrap();
 
@@ -212,7 +213,7 @@ fn cache_merge_does_not_let_a_future_stored_timestamp_block_current_data() {
 fn cache_merge_rejects_an_incoming_timestamp_far_in_the_future() {
     let current = make_snapshot("provider-a", "Current");
     let mut incoming = make_snapshot("provider-a", "Future Incoming");
-    incoming.fetched_at = (time::OffsetDateTime::now_utc() + time::Duration::hours(1))
+    incoming.started_at = (time::OffsetDateTime::now_utc() + time::Duration::hours(1))
         .format(&time::format_description::well_known::Rfc3339)
         .unwrap();
 
@@ -326,8 +327,14 @@ fn cache_successful_output_debounces_disk_writes() {
         vec!["claude".to_string(), "codex".to_string()],
         "test".to_string(),
     );
-    cache_successful_output(&make_output("claude", "Claude"));
-    cache_successful_output(&make_output("codex", "Codex"));
+    cache_successful_output(
+        &make_output("claude", "Claude"),
+        time::OffsetDateTime::now_utc(),
+    );
+    cache_successful_output(
+        &make_output("codex", "Codex"),
+        time::OffsetDateTime::now_utc(),
+    );
 
     {
         let state = cache_state().lock().unwrap();
@@ -356,7 +363,10 @@ fn flush_cache_persists_pending_write_synchronously() {
     std::fs::create_dir_all(&dir).unwrap();
 
     init(&dir, vec!["claude".to_string()], "test".to_string());
-    cache_successful_output(&make_output("claude", "Claude"));
+    cache_successful_output(
+        &make_output("claude", "Claude"),
+        time::OffsetDateTime::now_utc(),
+    );
     assert!(
         !dir.join(CACHE_FILE_NAME).exists(),
         "cache write should be pending before explicit flush"
@@ -370,6 +380,49 @@ fn flush_cache_persists_pending_write_synchronously() {
 
     wait_for_cache_writer_idle();
 
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+#[serial]
+fn account_projection_force_replaces_and_removes_a_provider_snapshot() {
+    let dir = temp_dir("account-projection");
+    std::fs::create_dir_all(&dir).unwrap();
+    init(&dir, vec!["cursor".to_string()], "test".to_string());
+    let old_started_at = time::OffsetDateTime::parse(
+        "2026-03-26T08:15:00Z",
+        &time::format_description::well_known::Rfc3339,
+    )
+    .unwrap();
+    cache_successful_output(&make_output("cursor", "Old Cursor"), old_started_at);
+    record_probe_error("cursor", "old account failed");
+    flush_cache().unwrap();
+
+    let replacement_started_at = time::OffsetDateTime::parse(
+        "2026-03-25T08:15:00Z",
+        &time::format_description::well_known::Rfc3339,
+    )
+    .unwrap();
+    replace_account_projection(
+        "cursor",
+        Some((
+            &make_output("cursor", "Selected Cursor"),
+            replacement_started_at,
+        )),
+    )
+    .unwrap();
+    assert_eq!(
+        snapshot_for_provider("cursor").unwrap().display_name,
+        "Selected Cursor"
+    );
+    assert_eq!(load_cache(&dir)["cursor"].display_name, "Selected Cursor");
+
+    record_probe_error("cursor", "selected account failed");
+    replace_account_projection("cursor", None).unwrap();
+    assert!(snapshot_for_provider("cursor").is_none());
+    assert!(!load_cache(&dir).contains_key("cursor"));
+    assert!(!cache_state().lock().unwrap().errors.contains_key("cursor"));
+    wait_for_cache_writer_idle();
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -436,6 +489,7 @@ fn snapshot_with_progress_line_round_trips() {
             period_duration_ms: Some(14400000),
             color: None,
         }],
+        started_at: "2026-03-26T07:59:00Z".to_string(),
         fetched_at: "2026-03-26T08:00:00Z".to_string(),
     };
 

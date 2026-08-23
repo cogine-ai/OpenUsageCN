@@ -9,6 +9,7 @@
   const SCOPES =
     "user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload"
   const REFRESH_BUFFER_MS = 5 * 60 * 1000 // refresh 5 minutes before expiration
+  const ERR_TOKEN_CONFLICT = "Token conflict. Run `claude` to log in again."
 
   // Rate-limit state persisted across probe() calls (module scope survives re-invocations).
   const MIN_USAGE_FETCH_INTERVAL_MS = 5 * 60 * 1000  // never poll more than once per 5 min
@@ -203,6 +204,10 @@
     }
   }
 
+  function rawDigest(ctx, text) {
+    return ctx.host.crypto.sha256Hex(String(text))
+  }
+
   function buildClaudeBaseKeychainService(ctx) {
     return KEYCHAIN_SERVICE_PREFIX + getOauthConfig(ctx).oauthFileSuffix + "-credentials"
   }
@@ -276,7 +281,12 @@
           const oauth = parsed.claudeAiOauth
           if (oauth && oauth.accessToken) {
             ctx.host.log.info("credentials loaded from file")
-            return { oauth, source: "file", fullData: parsed }
+            return {
+              oauth,
+              source: "file",
+              fullData: parsed,
+              rawDigest: rawDigest(ctx, text),
+            }
           }
         }
         ctx.host.log.warn("credentials file exists but no valid oauth data")
@@ -298,7 +308,13 @@
           const oauth = parsed.claudeAiOauth
           if (oauth && oauth.accessToken) {
             ctx.host.log.info("credentials loaded from keychain (service=" + service + ")")
-            return { oauth, source: keychainResult.source, serviceName: service, fullData: parsed }
+            return {
+              oauth,
+              source: keychainResult.source,
+              serviceName: service,
+              fullData: parsed,
+              rawDigest: rawDigest(ctx, keychainResult.value),
+            }
           }
         }
         ctx.host.log.warn("keychain has data for " + service + " but no valid oauth")
@@ -307,6 +323,39 @@
     }
 
     return null
+  }
+
+  function readKeychainRawValue(ctx, source, serviceName) {
+    const keychain = ctx.host.keychain
+    if (!keychain || !serviceName) return null
+
+    try {
+      if (source === "keychain-current-user") {
+        if (typeof keychain.readGenericPasswordForCurrentUser === "function") {
+          const value = keychain.readGenericPasswordForCurrentUser(serviceName)
+          return value ? String(value) : null
+        }
+        if (typeof keychain.readGenericPassword === "function") {
+          const value = keychain.readGenericPassword(serviceName)
+          return value ? String(value) : null
+        }
+        return null
+      }
+
+      if (typeof keychain.readGenericPassword !== "function") return null
+      const value = keychain.readGenericPassword(serviceName)
+      return value ? String(value) : null
+    } catch {
+      return null
+    }
+  }
+
+  function assertKeychainUnchanged(ctx, source, serviceName, expectedDigest) {
+    if (!expectedDigest) return
+    const currentValue = readKeychainRawValue(ctx, source, serviceName)
+    if (currentValue != null && rawDigest(ctx, currentValue) !== expectedDigest) {
+      throw ERR_TOKEN_CONFLICT
+    }
   }
 
   function loadStoredCredentials(ctx, suppressMissingWarn) {
@@ -338,6 +387,7 @@
       source: stored ? stored.source : null,
       serviceName: stored ? stored.serviceName : null,
       fullData: stored ? stored.fullData : null,
+      rawDigest: stored ? stored.rawDigest : null,
       inferenceOnly: true,
     }
   }
@@ -353,14 +403,106 @@
     return true
   }
 
-  function saveCredentials(ctx, source, serviceName, fullData) {
+  function loadOAuthConnection(ctx, connectionTarget) {
+    if (
+      connectionTarget &&
+      connectionTarget.connectionKey !== "claude-oauth"
+    ) {
+      throw "Selected Claude account connection is unavailable."
+    }
+    const creds = loadCredentials(ctx)
+    if (
+      !creds ||
+      !creds.oauth ||
+      typeof creds.oauth.accessToken !== "string" ||
+      !creds.oauth.accessToken.trim() ||
+      !hasProfileScope(creds)
+    ) {
+      throw "Selected Claude OAuth connection is unavailable."
+    }
+    return creds
+  }
+
+  function credentialGenerationForOAuth(ctx, creds) {
+    const accessToken = String(creds.oauth.accessToken || "")
+    const refreshToken = String(creds.oauth.refreshToken || "")
+    const framed = "claude-oauth-credential-v1\n" +
+      String(accessToken.length) + ":" + accessToken +
+      String(refreshToken.length) + ":" + refreshToken
+    return ctx.host.crypto.sha256Hex(framed)
+  }
+
+  function discoverConnections(ctx) {
+    const creds = loadCredentials(ctx)
+    const usable = !!(
+      creds &&
+      creds.oauth &&
+      typeof creds.oauth.accessToken === "string" &&
+      creds.oauth.accessToken.trim() &&
+      hasProfileScope(creds)
+    )
+    return {
+      observations: usable ? [{
+        identityNamespace: "claude-oauth-profile-v1",
+        identitySource: "claudeOAuthProfile",
+        connectionKey: "claude-oauth",
+        connectionKind: "cli",
+      }] : [],
+      sourceOutcomes: [{
+        sourceKey: "claude-oauth",
+        status: usable ? "available" : (creds ? "unavailable" : "absent"),
+      }],
+      defaultConnectionKey: usable ? "claude-oauth" : null,
+    }
+  }
+
+  function credentialGeneration(ctx, connectionTarget) {
+    return credentialGenerationForOAuth(
+      ctx,
+      loadOAuthConnection(ctx, connectionTarget)
+    )
+  }
+
+  function oauthCredential(ctx, connectionTarget) {
+    const creds = loadOAuthConnection(ctx, connectionTarget)
+    const expectedGeneration = connectionTarget && connectionTarget.credentialGeneration
+    if (
+      typeof expectedGeneration !== "string" ||
+      !/^[a-f0-9]{64}$/.test(expectedGeneration)
+    ) {
+      throw "Selected Claude OAuth credential lease is invalid."
+    }
+    if (credentialGenerationForOAuth(ctx, creds) !== expectedGeneration) {
+      throw "Account credentials changed during refresh. Try again."
+    }
+    return { accessToken: creds.oauth.accessToken.trim() }
+  }
+
+  function saveCredentials(ctx, creds, fullData) {
     // MUST use minified JSON - macOS `security -w` hex-encodes values with newlines,
     // which Claude Code can't read back, causing it to invalidate the session.
+    const source = creds && creds.source
+    const serviceName = creds && creds.serviceName
+    const expectedDigest = creds && creds.rawDigest
     const text = JSON.stringify(fullData)
     if (source === "file") {
       try {
-        ctx.host.fs.writeText(getClaudeCredentialsPath(ctx), text)
+        const credFile = getClaudeCredentialsPath(ctx)
+        if (expectedDigest && ctx.host.fs && typeof ctx.host.fs.readText === "function") {
+          let currentText = null
+          try {
+            currentText = ctx.host.fs.exists(credFile) ? ctx.host.fs.readText(credFile) : null
+          } catch {
+            currentText = null
+          }
+          if (currentText != null && rawDigest(ctx, currentText) !== expectedDigest) {
+            throw ERR_TOKEN_CONFLICT
+          }
+        }
+        ctx.host.fs.writeText(credFile, text)
+        creds.rawDigest = rawDigest(ctx, text)
       } catch (e) {
+        if (e === ERR_TOKEN_CONFLICT) throw e
         ctx.host.log.error("Failed to write Claude credentials file: " + String(e))
       }
       return
@@ -369,6 +511,7 @@
       ctx.host.log.error("Refusing keychain write: missing service name (source=" + source + ")")
       return
     }
+    assertKeychainUnchanged(ctx, source, serviceName, expectedDigest)
     if (source === "keychain-current-user") {
       try {
         if (typeof ctx.host.keychain.writeGenericPasswordForCurrentUser === "function") {
@@ -376,13 +519,17 @@
         } else {
           ctx.host.keychain.writeGenericPassword(serviceName, text)
         }
+        creds.rawDigest = rawDigest(ctx, text)
       } catch (e) {
+        if (e === ERR_TOKEN_CONFLICT) throw e
         ctx.host.log.error("Failed to write Claude credentials keychain: " + String(e))
       }
     } else if (source === "keychain-legacy" || source === "keychain") {
       try {
         ctx.host.keychain.writeGenericPassword(serviceName, text)
+        creds.rawDigest = rawDigest(ctx, text)
       } catch (e) {
+        if (e === ERR_TOKEN_CONFLICT) throw e
         ctx.host.log.error("Failed to write Claude credentials keychain: " + String(e))
       }
     }
@@ -397,7 +544,7 @@
   }
 
   function refreshToken(ctx, creds) {
-    const { oauth, source, fullData } = creds
+    const { oauth, fullData } = creds
     if (!oauth.refreshToken) {
       ctx.host.log.warn("refresh skipped: no refresh token")
       return null
@@ -454,7 +601,7 @@
 
       // Persist updated credentials back to the same source we read from.
       fullData.claudeAiOauth = oauth
-      saveCredentials(ctx, source, creds.serviceName, fullData)
+      saveCredentials(ctx, creds, fullData)
 
       ctx.host.log.info("refresh succeeded, new token expires in " + (body.expires_in || "unknown") + "s")
       return newAccessToken
@@ -756,11 +903,25 @@
     return null
   }
 
-  function probe(ctx) {
-    const creds = loadCredentials(ctx)
+  function probe(ctx, connectionTarget) {
+    const creds = connectionTarget
+      ? loadOAuthConnection(ctx, connectionTarget)
+      : loadCredentials(ctx)
     if (!creds || !creds.oauth || !creds.oauth.accessToken || !creds.oauth.accessToken.trim()) {
       ctx.host.log.error("probe failed: not logged in")
       throw "Not logged in. Run `claude` to authenticate."
+    }
+    if (connectionTarget) {
+      const expectedGeneration = connectionTarget.credentialGeneration
+      if (
+        typeof expectedGeneration !== "string" ||
+        !/^[a-f0-9]{64}$/.test(expectedGeneration)
+      ) {
+        throw "Selected Claude OAuth credential lease is invalid."
+      }
+      if (credentialGenerationForOAuth(ctx, creds) !== expectedGeneration) {
+        throw "Account credentials changed during refresh. Try again."
+      }
     }
 
     const nowMs = Date.now()
@@ -1023,6 +1184,9 @@
   globalThis.__openusage_plugin = {
     id: "claude",
     probe,
+    discoverConnections,
+    credentialGeneration,
+    oauthCredential,
     _resetState,
     _resolveTeamSeatLabel: resolveTeamSeatLabel,
   }

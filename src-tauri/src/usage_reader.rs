@@ -2,6 +2,9 @@ use crate::local_http_api;
 use crate::plugin_engine;
 use crate::plugin_engine::manifest::LoadedPlugin;
 use crate::plugin_engine::runtime::{PluginOutput, probe_error_message};
+use crate::provider_accounts::{
+    ActiveAccountProbe, OperationStatus, ProviderAccounts, ProviderOperation, QuickJsAccountAdapter,
+};
 use crate::provider_config;
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
@@ -20,6 +23,14 @@ pub(crate) enum LimitsReadError {
     UnknownProvider(String),
     NoDataDirectory,
     NoProviderPlugins,
+}
+
+enum PendingUsageProbe {
+    Unscoped {
+        output: PluginOutput,
+        started_at: time::OffsetDateTime,
+    },
+    Account(ActiveAccountProbe),
 }
 
 pub(crate) fn read_limits_once(
@@ -56,6 +67,51 @@ pub(crate) fn read_limits_once(
         None => local_http_api::cache::enabled_provider_ids(),
     };
 
+    let by_id: HashMap<String, LoadedPlugin> = plugins
+        .into_iter()
+        .map(|plugin| (plugin.manifest.id.clone(), plugin))
+        .collect();
+    let provider_accounts = ProviderAccounts::open(&app_data_dir)
+        .unwrap_or_else(|error| ProviderAccounts::unavailable(&error));
+    provider_accounts.set_browser_broker(Arc::new(
+        crate::browser_sessions::BrowserSessionBroker::new(),
+    ));
+    for plugin in by_id.values().filter(|plugin| {
+        plugin
+            .manifest
+            .account_support
+            .as_ref()
+            .is_some_and(|support| support.local_discovery)
+    }) {
+        provider_accounts.register_adapter(
+            &plugin.manifest.id,
+            Box::new(QuickJsAccountAdapter::new(
+                plugin.clone(),
+                app_data_dir.clone(),
+                env!("CARGO_PKG_VERSION").to_string(),
+            )),
+        );
+    }
+    let provider_accounts = Arc::new(provider_accounts);
+    for account_provider_id in selected_ids.iter().filter(|provider_id| {
+        by_id.get(*provider_id).is_some_and(|plugin| {
+            plugin
+                .manifest
+                .account_support
+                .as_ref()
+                .is_some_and(|support| support.local_discovery)
+        })
+    }) {
+        if let Err(error) =
+            crate::sync_active_account_projection(&provider_accounts, account_provider_id)
+        {
+            let redacted = plugin_engine::host_api::redact_log_message(&error);
+            eprintln!(
+                "openusage: account projection sync failed for {account_provider_id}: {redacted}"
+            );
+            local_http_api::record_probe_error(account_provider_id, redacted);
+        }
+    }
     let now = time::OffsetDateTime::now_utc();
     let refresh_ids: Vec<String> = selected_ids
         .iter()
@@ -67,10 +123,6 @@ pub(crate) fn read_limits_once(
         })
         .cloned()
         .collect();
-    let by_id: HashMap<String, LoadedPlugin> = plugins
-        .into_iter()
-        .map(|plugin| (plugin.manifest.id.clone(), plugin))
-        .collect();
     let selected_plugins: Vec<LoadedPlugin> = refresh_ids
         .iter()
         .filter_map(|provider_id| by_id.get(provider_id).cloned())
@@ -79,17 +131,35 @@ pub(crate) fn read_limits_once(
         selected_plugins,
         app_data_dir.clone(),
         env!("CARGO_PKG_VERSION").to_string(),
+        Arc::clone(&provider_accounts),
     );
 
     let mut refresh_failed = worker_failed;
-    for (provider_id, output) in results {
+    for (provider_id, pending) in results {
+        let published = match pending {
+            PendingUsageProbe::Unscoped { output, started_at } => {
+                publish_cli_probe(&provider_id, &output, started_at);
+                Ok(output)
+            }
+            PendingUsageProbe::Account(probe) => provider_accounts
+                .publish_active_probe(probe, |output, started_at| {
+                    publish_cli_probe(&provider_id, output, started_at)
+                }),
+        };
+        let output = match published {
+            Ok(output) => output,
+            Err(error) => {
+                refresh_failed = true;
+                let redacted = plugin_engine::host_api::redact_log_message(&error);
+                eprintln!("openusage: refresh publication failed for {provider_id}: {redacted}");
+                local_http_api::record_probe_error(&provider_id, redacted);
+                continue;
+            }
+        };
         if let Some(message) = probe_error_message(&output) {
             refresh_failed = true;
             let redacted = plugin_engine::host_api::redact_log_message(message);
             eprintln!("openusage: refresh failed for {provider_id}: {redacted}");
-            local_http_api::record_probe_error(&provider_id, redacted);
-        } else {
-            local_http_api::cache_successful_output(&output);
         }
     }
     if let Err(error) = local_http_api::flush_cache() {
@@ -113,7 +183,8 @@ fn run_probes(
     plugins: Vec<LoadedPlugin>,
     app_data_dir: PathBuf,
     app_version: String,
-) -> (Vec<(String, PluginOutput)>, bool) {
+    provider_accounts: Arc<ProviderAccounts>,
+) -> (Vec<(String, PendingUsageProbe)>, bool) {
     if plugins.is_empty() {
         return (Vec::new(), false);
     }
@@ -127,6 +198,7 @@ fn run_probes(
         let results = Arc::clone(&results);
         let app_data_dir = app_data_dir.clone();
         let app_version = app_version.clone();
+        let provider_accounts = Arc::clone(&provider_accounts);
         workers.push(std::thread::spawn(move || {
             loop {
                 let plugin = queue
@@ -135,10 +207,61 @@ fn run_probes(
                     .pop_front();
                 let Some(plugin) = plugin else { break };
                 let provider_id = plugin.manifest.id.clone();
+                let probe_started_at = time::OffsetDateTime::now_utc();
                 let output = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    plugin_engine::runtime::run_probe(&plugin, &app_data_dir, &app_version)
+                    let account_aware = plugin
+                        .manifest
+                        .account_support
+                        .as_ref()
+                        .is_some_and(|support| support.local_discovery);
+                    if !account_aware {
+                        return PendingUsageProbe::Unscoped {
+                            output: plugin_engine::runtime::run_probe(
+                                &plugin,
+                                &app_data_dir,
+                                &app_version,
+                            ),
+                            started_at: probe_started_at,
+                        };
+                    }
+                    let receipt = provider_accounts
+                        .perform(&provider_id, ProviderOperation::RefreshActive);
+                    if receipt.status == OperationStatus::Failed {
+                        let message = receipt
+                            .error
+                            .as_ref()
+                            .map(|error| error.message.as_str())
+                            .unwrap_or("Account refresh failed. Try again.");
+                        return PendingUsageProbe::Unscoped {
+                            output: plugin_engine::runtime::provider_account_probe_error(
+                                &plugin, message,
+                            ),
+                            started_at: probe_started_at,
+                        };
+                    }
+                    if let Err(error) =
+                        crate::sync_active_account_projection(&provider_accounts, &provider_id)
+                    {
+                        let redacted = plugin_engine::host_api::redact_log_message(&error);
+                        eprintln!(
+                            "openusage: account projection sync failed for {provider_id}: {redacted}"
+                        );
+                        local_http_api::record_probe_error(&provider_id, redacted);
+                    }
+                    match provider_accounts.prepare_active_probe(&provider_id) {
+                        Ok(probe) => PendingUsageProbe::Account(probe),
+                        Err(message) => PendingUsageProbe::Unscoped {
+                            output: plugin_engine::runtime::provider_account_probe_error(
+                                &plugin, &message,
+                            ),
+                            started_at: probe_started_at,
+                        },
+                    }
                 }))
-                .unwrap_or_else(|_| plugin_engine::runtime::panic_probe_output(&plugin));
+                .unwrap_or_else(|_| PendingUsageProbe::Unscoped {
+                    output: plugin_engine::runtime::panic_probe_output(&plugin),
+                    started_at: probe_started_at,
+                });
                 results
                     .lock()
                     .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -154,12 +277,25 @@ fn run_probes(
         }
     }
     (
-        Arc::try_unwrap(results)
-            .expect("probe results still shared")
-            .into_inner()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()),
+        match Arc::try_unwrap(results) {
+            Ok(results) => results
+                .into_inner()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()),
+            Err(_) => panic!("probe results still shared"),
+        },
         worker_failed,
     )
+}
+
+fn publish_cli_probe(provider_id: &str, output: &PluginOutput, started_at: time::OffsetDateTime) {
+    if let Some(message) = probe_error_message(output) {
+        local_http_api::record_probe_error(
+            provider_id,
+            plugin_engine::host_api::redact_log_message(message),
+        );
+    } else {
+        local_http_api::cache_successful_output(output, started_at);
+    }
 }
 
 fn load_cli_plugins(app_data_dir: &Path) -> Vec<LoadedPlugin> {

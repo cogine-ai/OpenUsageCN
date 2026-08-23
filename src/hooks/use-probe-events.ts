@@ -31,6 +31,7 @@ export type ProbeResultContext = {
 
 export type StartBatchOptions = {
   manual?: boolean
+  invalidatePreviousOnFailure?: boolean
 }
 
 export type StartBatch = (
@@ -196,7 +197,16 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
       const failedPluginIds: string[] = []
       for (const [pluginId, batchMeta] of batchMetaByProvider) {
         batchMeta.failed = true
+        if (options.invalidatePreviousOnFailure) {
+          batchMeta.previous = undefined
+        }
         if (latestBatchByProvider.current.get(pluginId) !== batchMeta) continue
+
+        if (options.invalidatePreviousOnFailure) {
+          latestBatchByProvider.current.delete(pluginId)
+          failedPluginIds.push(pluginId)
+          continue
+        }
 
         let previousBatch = batchMeta.previous
         while (previousBatch?.failed) {

@@ -2,10 +2,18 @@ use super::limits::ProviderLimitCatalog;
 use crate::plugin_engine::runtime::{MetricLine, PluginOutput};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
+
+mod account_projection;
+pub(crate) use account_projection::replace_account_projection;
+#[cfg(test)]
+use account_projection::save_cache;
+mod flush;
+use flush::{CacheFlushResult, flush_pending_cache_once, schedule_cache_flush_locked};
+#[cfg(test)]
+use flush::{cache_write_retry_delay, should_log_cache_write_failure};
 
 const CACHE_FILE_NAME: &str = "usage-api-cache.json";
 const CACHE_LOCK_FILE_NAME: &str = ".usage-api-cache.lock";
@@ -31,6 +39,9 @@ pub struct CachedPluginSnapshot {
     pub display_name: String,
     pub plan: Option<String>,
     pub lines: Vec<MetricLine>,
+    /// When the probe that produced this snapshot started. Empty for legacy rows.
+    #[serde(default)]
+    pub started_at: String,
     pub fetched_at: String,
 }
 
@@ -49,16 +60,10 @@ pub(super) struct CacheState {
     pub limit_catalog: HashMap<String, ProviderLimitCatalog>,
     pub errors: HashMap<String, String>,
     pub app_version: String,
+    forced_projections: HashMap<String, Option<CachedPluginSnapshot>>,
     dirty_generation: u64,
     flushed_generation: u64,
     flush_scheduled: bool,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-enum CacheFlushResult {
-    Idle,
-    Flushed,
-    Failed(String),
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -99,6 +104,7 @@ pub(super) fn cache_state() -> &'static Mutex<CacheState> {
             limit_catalog: HashMap::new(),
             errors: HashMap::new(),
             app_version: String::new(),
+            forced_projections: HashMap::new(),
             dirty_generation: 0,
             flushed_generation: 0,
             flush_scheduled: false,
@@ -135,49 +141,6 @@ pub fn load_cache(app_data_dir: &Path) -> HashMap<String, CachedPluginSnapshot> 
             HashMap::new()
         }
     }
-}
-
-fn save_cache(
-    app_data_dir: &Path,
-    snapshots: &HashMap<String, CachedPluginSnapshot>,
-) -> Result<(), String> {
-    std::fs::create_dir_all(app_data_dir)
-        .map_err(|e| format!("failed to create app data directory: {}", e))?;
-    let lock_path = app_data_dir.join(CACHE_LOCK_FILE_NAME);
-    let lock_file = OpenOptions::new()
-        .create(true)
-        .read(true)
-        .write(true)
-        .open(&lock_path)
-        .map_err(|e| format!("failed to open usage cache lock: {}", e))?;
-    lock_cache_file(&lock_file)?;
-
-    // The menu-bar app and one-shot CLI are separate processes. Re-read and
-    // merge while holding the file lock so they cannot discard each other's
-    // provider snapshots.
-    let mut merged_snapshots = load_cache(app_data_dir);
-    for (provider_id, incoming) in snapshots {
-        let should_replace = merged_snapshots
-            .get(provider_id)
-            .map(|current| snapshot_is_at_least_as_new(incoming, current))
-            .unwrap_or(true);
-        if should_replace {
-            merged_snapshots.insert(provider_id.clone(), incoming.clone());
-        }
-    }
-    let file = UsageApiCacheFile {
-        version: 1,
-        snapshots: merged_snapshots,
-    };
-    let path = app_data_dir.join(CACHE_FILE_NAME);
-    let json = serde_json::to_string(&file)
-        .map_err(|e| format!("failed to serialize usage cache: {}", e))?;
-    let write_result = crate::safe_file::write_text(&path, &json)
-        .map_err(|e| format!("failed to save usage cache: {e}"));
-    let unlock_result = unlock_cache_file(&lock_file);
-    write_result?;
-    unlock_result?;
-    Ok(())
 }
 
 #[cfg(unix)]
@@ -218,16 +181,30 @@ fn unlock_cache_file(_file: &std::fs::File) -> Result<(), String> {
     Ok(())
 }
 
+fn parse_rfc3339(value: &str) -> Result<time::OffsetDateTime, time::error::Parse> {
+    time::OffsetDateTime::parse(value, &time::format_description::well_known::Rfc3339)
+}
+
+fn snapshot_ordering_timestamp(
+    snapshot: &CachedPluginSnapshot,
+) -> Result<time::OffsetDateTime, time::error::Parse> {
+    let started_at = snapshot.started_at.trim();
+    if !started_at.is_empty() {
+        return parse_rfc3339(started_at);
+    }
+    parse_rfc3339(snapshot.fetched_at.trim())
+}
+
 fn snapshot_is_at_least_as_new(
     incoming: &CachedPluginSnapshot,
     current: &CachedPluginSnapshot,
 ) -> bool {
-    let parse = |value: &str| {
-        time::OffsetDateTime::parse(value, &time::format_description::well_known::Rfc3339)
-    };
     let now = time::OffsetDateTime::now_utc();
     let latest_credible_timestamp = now + time::Duration::minutes(5);
-    match (parse(&incoming.fetched_at), parse(&current.fetched_at)) {
+    match (
+        snapshot_ordering_timestamp(incoming),
+        snapshot_ordering_timestamp(current),
+    ) {
         (Ok(incoming_at), _) if incoming_at > latest_credible_timestamp => {
             log::warn!(
                 "incoming usage cache timestamp is unexpectedly in the future (provider={})",
@@ -242,7 +219,22 @@ fn snapshot_is_at_least_as_new(
             );
             true
         }
-        (Ok(incoming_at), Ok(current_at)) => incoming_at >= current_at,
+        (Ok(incoming_at), Ok(current_at)) if incoming_at != current_at => incoming_at >= current_at,
+        (Ok(_), Ok(_)) => match (
+            parse_rfc3339(incoming.fetched_at.trim()),
+            parse_rfc3339(current.fetched_at.trim()),
+        ) {
+            (Ok(incoming_at), Ok(current_at)) => incoming_at >= current_at,
+            (Ok(_), Err(_)) => true,
+            (Err(error), _) => {
+                log::warn!(
+                    "incoming usage cache fetched_at is invalid (provider={}): {}",
+                    incoming.provider_id,
+                    error
+                );
+                false
+            }
+        },
         (Err(error), _) => {
             log::warn!(
                 "incoming usage cache timestamp is invalid (provider={}): {}",
@@ -262,95 +254,22 @@ fn snapshot_is_at_least_as_new(
     }
 }
 
-fn schedule_cache_flush_locked(state: &mut CacheState) {
-    if state.flush_scheduled {
+fn adopt_disk_snapshot_if_newer(state: &mut CacheState, provider_id: &str) {
+    if state.app_data_dir.as_os_str().is_empty() {
         return;
     }
-
-    state.flush_scheduled = true;
-    std::thread::spawn(debounced_cache_flush_worker);
-}
-
-fn debounced_cache_flush_worker() {
-    let mut consecutive_failures = 0_u32;
-    let mut retry_delay = CACHE_WRITE_DEBOUNCE;
-
-    loop {
-        std::thread::sleep(retry_delay);
-
-        match flush_pending_cache_once() {
-            CacheFlushResult::Idle => return,
-            CacheFlushResult::Flushed => {
-                if consecutive_failures > 0 {
-                    log::info!(
-                        "usage-api-cache.json write recovered after {} failed attempts",
-                        consecutive_failures
-                    );
-                }
-                consecutive_failures = 0;
-                retry_delay = CACHE_WRITE_DEBOUNCE;
-            }
-            CacheFlushResult::Failed(e) => {
-                consecutive_failures = consecutive_failures.saturating_add(1);
-                retry_delay = cache_write_retry_delay(consecutive_failures);
-                if should_log_cache_write_failure(consecutive_failures) {
-                    log::warn!(
-                        "{}; retrying in {:?} (consecutive failures: {})",
-                        e,
-                        retry_delay,
-                        consecutive_failures
-                    );
-                }
-            }
-        }
-    }
-}
-
-fn cache_write_retry_delay(consecutive_failures: u32) -> Duration {
-    let factor = 1_u32 << consecutive_failures.min(16);
-    std::cmp::min(
-        CACHE_WRITE_DEBOUNCE.saturating_mul(factor),
-        CACHE_WRITE_RETRY_MAX_DELAY,
-    )
-}
-
-fn should_log_cache_write_failure(consecutive_failures: u32) -> bool {
-    consecutive_failures == 1 || consecutive_failures.is_power_of_two()
-}
-
-fn pending_cache_write() -> Option<(u64, PathBuf, HashMap<String, CachedPluginSnapshot>)> {
-    let mut state = cache_state().lock().expect("cache state poisoned");
-    if state.dirty_generation == state.flushed_generation {
-        state.flush_scheduled = false;
-        return None;
-    }
-
-    Some((
-        state.dirty_generation,
-        state.app_data_dir.clone(),
-        state.snapshots.clone(),
-    ))
-}
-
-fn mark_cache_flushed(generation: u64) {
-    let mut state = cache_state().lock().expect("cache state poisoned");
-    state.flushed_generation = generation;
-}
-
-fn flush_pending_cache_once() -> CacheFlushResult {
-    let _write_guard = cache_write_lock()
-        .lock()
-        .expect("cache write lock poisoned");
-    let Some((generation, app_data_dir, snapshots)) = pending_cache_write() else {
-        return CacheFlushResult::Idle;
+    let Some(disk_snapshot) = load_cache(&state.app_data_dir).remove(provider_id) else {
+        return;
     };
-
-    match save_cache(&app_data_dir, &snapshots) {
-        Ok(()) => {
-            mark_cache_flushed(generation);
-            CacheFlushResult::Flushed
-        }
-        Err(e) => CacheFlushResult::Failed(e),
+    let should_adopt = state
+        .snapshots
+        .get(provider_id)
+        .map(|current| snapshot_is_at_least_as_new(&disk_snapshot, current))
+        .unwrap_or(true);
+    if should_adopt {
+        state
+            .snapshots
+            .insert(provider_id.to_string(), disk_snapshot);
     }
 }
 
@@ -388,25 +307,50 @@ pub fn init_with_catalog(
         .collect();
     state.errors.clear();
     state.app_version = app_version;
+    state.forced_projections.clear();
     state.dirty_generation = 0;
     state.flushed_generation = 0;
     state.flush_scheduled = false;
 }
 
-pub fn cache_successful_output(output: &PluginOutput) {
-    let fetched_at = time::OffsetDateTime::now_utc()
-        .format(&time::format_description::well_known::Rfc3339)
-        .unwrap_or_default();
-
-    let snapshot = CachedPluginSnapshot {
+fn snapshot_from_output(
+    output: &PluginOutput,
+    started_at: time::OffsetDateTime,
+) -> CachedPluginSnapshot {
+    let format_timestamp = |value: time::OffsetDateTime| {
+        value
+            .format(&time::format_description::well_known::Rfc3339)
+            .unwrap_or_default()
+    };
+    CachedPluginSnapshot {
         provider_id: output.provider_id.clone(),
         display_name: output.display_name.clone(),
         plan: output.plan.clone(),
         lines: output.lines.clone(),
-        fetched_at,
-    };
+        started_at: format_timestamp(started_at),
+        fetched_at: format_timestamp(time::OffsetDateTime::now_utc()),
+    }
+}
 
+pub fn cache_successful_output(output: &PluginOutput, started_at: time::OffsetDateTime) {
+    let snapshot = snapshot_from_output(output, started_at);
+
+    let _write_guard = cache_write_lock()
+        .lock()
+        .expect("cache write lock poisoned");
     let mut state = cache_state().lock().expect("cache state poisoned");
+    adopt_disk_snapshot_if_newer(&mut state, &output.provider_id);
+    if state
+        .snapshots
+        .get(&output.provider_id)
+        .is_some_and(|current| !snapshot_is_at_least_as_new(&snapshot, current))
+    {
+        log::debug!(
+            "usage cache ignored older probe result for {}",
+            output.provider_id
+        );
+        return;
+    }
     state.snapshots.insert(output.provider_id.clone(), snapshot);
     state.errors.remove(&output.provider_id);
     state.dirty_generation = state.dirty_generation.wrapping_add(1);

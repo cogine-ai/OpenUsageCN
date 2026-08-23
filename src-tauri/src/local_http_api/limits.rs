@@ -294,6 +294,7 @@ mod tests {
                 period_duration_ms: Some(18_000_000),
                 color: Some("#fff".to_string()),
             }],
+            started_at: "2026-07-14T01:59:00Z".to_string(),
             fetched_at: "2026-07-14T02:00:00Z".to_string(),
         }
     }

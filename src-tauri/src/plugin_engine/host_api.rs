@@ -408,6 +408,26 @@ fn redact_url(url: &str) -> String {
         "accountid",
         "profilearn",
         "profile_arn",
+        "profilekey",
+        "profile_key",
+        "candidateid",
+        "candidate_id",
+        "sessionref",
+        "session_ref",
+        "storeid",
+        "store_id",
+        "subject",
+        "sub",
+        "normalizedidentity",
+        "normalized_identity",
+        "organizationuuid",
+        "organization_uuid",
+        "owninguser",
+        "owning_user",
+        "owningteam",
+        "owning_team",
+        "credentialgeneration",
+        "credential_generation",
         "email",
         "login",
     ];
@@ -485,6 +505,33 @@ fn redact_body(body: &str) -> String {
         "credential",
         "session_token",
         "sessionToken",
+        "cookie",
+        "cookieHeader",
+        "cookie_header",
+        "setCookie",
+        "set_cookie",
+        "candidateId",
+        "candidate_id",
+        "sessionRef",
+        "session_ref",
+        "storeId",
+        "store_id",
+        "subject",
+        "sub",
+        "normalizedIdentity",
+        "normalized_identity",
+        "profileKey",
+        "profile_key",
+        "organizationUuid",
+        "organization_uuid",
+        "emailAddress",
+        "email_address",
+        "owningUser",
+        "owning_user",
+        "owningTeam",
+        "owning_team",
+        "credentialGeneration",
+        "credential_generation",
         "auth_token",
         "authToken",
         "id_token",
@@ -3950,6 +3997,25 @@ mod tests {
     }
 
     #[test]
+    fn redact_url_redacts_provider_account_and_browser_session_identifiers() {
+        let url = "https://example.com/api?candidateId=candidate-1234567890&sessionRef=session-1234567890&normalizedIdentity=auth0-user-1234567890&profileKey=Profile-Work-1234567890&limit=10";
+        let redacted = redact_url(url);
+
+        for sensitive in [
+            "candidate-1234567890",
+            "session-1234567890",
+            "auth0-user-1234567890",
+            "Profile-Work-1234567890",
+        ] {
+            assert!(
+                !redacted.contains(sensitive),
+                "provider account identifier should be redacted, got: {redacted}"
+            );
+        }
+        assert!(redacted.contains("limit=10"));
+    }
+
+    #[test]
     fn redact_body_redacts_jwt() {
         let body = r#"{"token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"}"#;
         let redacted = redact_body(body);
@@ -4046,6 +4112,31 @@ mod tests {
             "accountId should show first4...last4, got: {}",
             redacted
         );
+    }
+
+    #[test]
+    fn redact_body_redacts_provider_account_browser_and_history_fields() {
+        let body = r#"{"cookieHeader":"WorkosCursorSessionToken=secret-cookie-value-1234567890","candidateId":"candidate-1234567890","sessionRef":"session-1234567890","storeId":"store-1234567890","subject":"auth0-user-1234567890","normalizedIdentity":"auth0-user-1234567890","profileKey":"Profile-Work-1234567890","organizationUuid":"org-1234567890","emailAddress":"member-private@example.com","owningUser":"owner-1234567890","owningTeam":"team-1234567890","credentialGeneration":"generation-1234567890"}"#;
+        let redacted = redact_body(body);
+
+        for sensitive in [
+            "secret-cookie-value-1234567890",
+            "candidate-1234567890",
+            "session-1234567890",
+            "store-1234567890",
+            "auth0-user-1234567890",
+            "Profile-Work-1234567890",
+            "org-1234567890",
+            "member-private@example.com",
+            "owner-1234567890",
+            "team-1234567890",
+            "generation-1234567890",
+        ] {
+            assert!(
+                !redacted.contains(sensitive),
+                "provider account field should be redacted, got: {redacted}"
+            );
+        }
     }
 
     #[test]

@@ -12,6 +12,7 @@ type UseProbeRefreshActionsArgs = {
   pluginStatesRef: MutableRefObject<Record<string, PluginState>>
   resetAutoUpdateSchedule: () => void
   setLoadingForPlugins: (ids: string[]) => void
+  setAccountTransitionForPlugins: (ids: string[]) => void
   setErrorForPlugins: (ids: string[], error: string) => void
   startBatch: StartBatch
 }
@@ -21,6 +22,7 @@ export function useProbeRefreshActions({
   pluginStatesRef,
   resetAutoUpdateSchedule,
   setLoadingForPlugins,
+  setAccountTransitionForPlugins,
   setErrorForPlugins,
   startBatch,
 }: UseProbeRefreshActionsArgs) {
@@ -51,6 +53,21 @@ export function useProbeRefreshActions({
     [pluginStatesRef, resetAutoUpdateSchedule, startManualRefresh]
   )
 
+  const handleAccountChangeRefresh = useCallback(
+    (id: string) => {
+      resetAutoUpdateSchedule()
+      setAccountTransitionForPlugins([id])
+      startBatch([id], { invalidatePreviousOnFailure: true }).catch((error) => {
+        console.error("Failed to refresh plugin after account change:", error)
+        const failedPluginIds = getProbeBatchStartFailedPluginIds(error, [id])
+        if (failedPluginIds.length > 0) {
+          setErrorForPlugins(failedPluginIds, "无法开始刷新")
+        }
+      })
+    },
+    [resetAutoUpdateSchedule, setAccountTransitionForPlugins, setErrorForPlugins, startBatch]
+  )
+
   const handleRefreshAll = useCallback(() => {
     if (!pluginSettings) return
     const enabledIds = getEnabledPluginIds(pluginSettings)
@@ -72,6 +89,7 @@ export function useProbeRefreshActions({
 
   return {
     handleRetryPlugin,
+    handleAccountChangeRefresh,
     handleRefreshAll,
   }
 }
