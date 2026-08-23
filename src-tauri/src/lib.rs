@@ -182,6 +182,8 @@ pub struct PluginMeta {
     pub links: Vec<PluginLinkDto>,
     pub status_page: Option<PluginStatusPageDto>,
     pub config: Option<PluginConfigDto>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub account_support: Option<plugin_engine::manifest::PluginAccountSupport>,
     /// Ordered list of primary metric candidates (sorted by primaryOrder).
     /// Frontend picks the first one that exists in runtime data.
     pub primary_candidates: Vec<String>,
@@ -718,6 +720,7 @@ fn list_plugins(state: tauri::State<'_, Mutex<AppState>>) -> Vec<PluginMeta> {
                     }
                 }),
                 config: plugin.manifest.config.as_ref().map(plugin_config_dto),
+                account_support: plugin.manifest.account_support,
                 primary_candidates,
                 weekly_candidate,
             }
@@ -925,12 +928,13 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::{
-        DAILY_ACTIVE_TRACKED_DAY_KEY, MAX_CONCURRENT_PROBES, is_autostart_launch,
+        DAILY_ACTIVE_TRACKED_DAY_KEY, MAX_CONCURRENT_PROBES, PluginMeta, is_autostart_launch,
         plugin_config_dto, probe_worker_count, seconds_until_next_utc_day,
         should_track_daily_active,
     };
     use crate::plugin_engine::manifest::{
-        PluginConfig, PluginConfigField, PluginConfigFieldType, PluginConfigOption,
+        PluginAccountSupport, PluginConfig, PluginConfigField, PluginConfigFieldType,
+        PluginConfigOption,
     };
     use serde_json::json;
     use time::{Date, Month, PrimitiveDateTime, Time};
@@ -1021,5 +1025,56 @@ mod tests {
         assert_eq!(dto.fields[0].options[0].value, "cn");
         assert_eq!(dto.fields[0].default, Some(json!("cn")));
         assert!(dto.fields[0].default_source);
+    }
+
+    #[test]
+    fn plugin_meta_serializes_account_support_in_camel_case() {
+        let meta = PluginMeta {
+            id: "cursor".to_string(),
+            name: "Cursor".to_string(),
+            icon_url: "data:image/svg+xml;base64,...".to_string(),
+            brand_color: None,
+            lines: Vec::new(),
+            links: Vec::new(),
+            status_page: None,
+            config: None,
+            account_support: Some(PluginAccountSupport {
+                local_discovery: true,
+                browser_binding: false,
+                model_history: true,
+            }),
+            primary_candidates: Vec::new(),
+            weekly_candidate: None,
+        };
+
+        let value = serde_json::to_value(meta).expect("PluginMeta should serialize");
+        assert_eq!(
+            value.get("accountSupport"),
+            Some(&json!({
+                "localDiscovery": true,
+                "browserBinding": false,
+                "modelHistory": true
+            }))
+        );
+    }
+
+    #[test]
+    fn plugin_meta_omits_account_support_for_legacy_manifests() {
+        let meta = PluginMeta {
+            id: "legacy".to_string(),
+            name: "Legacy".to_string(),
+            icon_url: "data:image/svg+xml;base64,...".to_string(),
+            brand_color: None,
+            lines: Vec::new(),
+            links: Vec::new(),
+            status_page: None,
+            config: None,
+            account_support: None,
+            primary_candidates: Vec::new(),
+            weekly_candidate: None,
+        };
+
+        let value = serde_json::to_value(meta).expect("PluginMeta should serialize");
+        assert!(value.get("accountSupport").is_none());
     }
 }

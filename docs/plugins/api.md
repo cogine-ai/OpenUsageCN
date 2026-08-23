@@ -40,6 +40,10 @@ On Windows, `appDataDir` is under `%LOCALAPPDATA%\ai.cogine.openusagecn`; non-se
 
 The Windows MVP runs only `codex`, `bigmodel-cn`, `openai-api`, `openrouter`, and `zai`. Codex is enabled by default. Windows launch plugins may use filesystem, environment, provider config, HTTP, crypto, and line-building APIs, but must not depend on the macOS Keychain or `ccusage`. Use `ctx.app.platform === "windows"` when a plugin needs a platform-specific credential path or optional metric.
 
+## Account Capability Declarations
+
+Account-related features are declared through the optional `accountSupport` object in `plugin.json`, not through methods on `ctx.host`. The declaration only advertises app-owned account experiences and does not expand a plugin's access to credentials, browsers, the filesystem, or the network. See [Manifest Schema](./schema.md#account-support-optional) for the available flags and legacy behavior.
+
 ## Logging
 
 ```typescript

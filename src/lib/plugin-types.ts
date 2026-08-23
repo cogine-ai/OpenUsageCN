@@ -75,6 +75,12 @@ export type PluginOutput = {
   iconUrl: string
 }
 
+export type PluginAccountSupport = {
+  localDiscovery: boolean
+  browserBinding: boolean
+  modelHistory: boolean
+}
+
 export type PluginMeta = {
   id: string
   name: string
@@ -84,6 +90,7 @@ export type PluginMeta = {
   links?: PluginLink[]
   statusPage?: PluginStatusPage
   config?: PluginConfig
+  accountSupport?: PluginAccountSupport
   /** Ordered list of primary metric candidates. Frontend picks first available. */
   primaryCandidates: string[]
   /** Label of the line marked `"period": "weekly"`, if the provider has one. */

@@ -773,6 +773,7 @@ mod tests {
                 links: vec![],
                 status_page: None,
                 config: None,
+                account_support: None,
             },
             plugin_dir: PathBuf::from("."),
             entry_script: entry_script.to_string(),

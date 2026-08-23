@@ -90,6 +90,7 @@ Bundled plugins live under `src-tauri/resources/bundled_plugins/<id>/`.
 | `links`         | array  | No       | Optional quick links shown on detail page  |
 | `statusPage`    | object | No       | Optional provider outage status source     |
 | `config`        | object | No       | Optional Settings fields for this plugin   |
+| `accountSupport` | object | No      | Optional account-related capabilities      |
 | `lines`         | array  | Yes      | Output shape used for loading skeletons    |
 
 Validation rules:
@@ -118,6 +119,28 @@ Validation rules:
 | `url`    | string | Yes      | Public status page opened from an incident notice (`https` only) |
 
 The frontend sends only the plugin id when checking status. The backend resolves `apiUrl` from the loaded manifest, so UI code cannot supply an arbitrary request URL.
+
+### Account Support (Optional)
+
+`accountSupport` advertises account experiences implemented by the provider and the app:
+
+```json
+{
+  "accountSupport": {
+    "localDiscovery": true,
+    "browserBinding": true,
+    "modelHistory": true
+  }
+}
+```
+
+| Field            | Description |
+|------------------|-------------|
+| `localDiscovery` | The provider can expose accounts found from local app or CLI sessions. |
+| `browserBinding` | Users can explicitly attach a supported browser profile. |
+| `modelHistory`   | The provider can expose account-scoped model usage history. |
+
+Each field is an optional boolean and defaults to `false`. When `accountSupport` is omitted, the existing single-view probe behavior is unchanged and plugin metadata omits the capability object. These flags advertise app-owned features; they do not grant new filesystem, browser, credential, or network access to plugin JavaScript.
 
 ### Config Fields (Optional)
 
