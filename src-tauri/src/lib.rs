@@ -423,7 +423,22 @@ fn sync_active_account_projection(
     accounts: &provider_accounts::ProviderAccounts,
     provider_id: &str,
 ) -> Result<(), String> {
-    match accounts.active_projection(provider_id)? {
+    let projection = match accounts.active_projection(provider_id) {
+        Ok(projection) => projection,
+        Err(error) => {
+            if error.clear_existing_projection() {
+                if let Err(clear_error) =
+                    local_http_api::cache::replace_account_projection(provider_id, None)
+                {
+                    return Err(format!(
+                        "{error}; invalid selected account projection could not be cleared: {clear_error}"
+                    ));
+                }
+            }
+            return Err(error.to_string());
+        }
+    };
+    match projection {
         Some(projection) => local_http_api::cache::replace_account_projection(
             provider_id,
             Some((&projection.output, projection.started_at)),
@@ -648,7 +663,7 @@ async fn start_probe_batch(
                         Ok(PendingProbe::Account(probe)) => {
                             let accounts =
                                 handle.state::<Arc<provider_accounts::ProviderAccounts>>();
-                            if let Err(message) = accounts.publish_active_probe(
+                            match accounts.publish_active_probe(
                                 probe,
                                 |output, started_at| {
                                     publish_probe_output(
@@ -660,23 +675,37 @@ async fn start_probe_batch(
                                     );
                                 },
                             ) {
-                                let redacted =
-                                    plugin_engine::host_api::redact_log_message(&message);
-                                log::warn!(
-                                    "provider account probe publication rejected: provider={}, reason={}",
-                                    plugin_id,
-                                    redacted
-                                );
-                                publish_probe_output(
-                                    &handle,
-                                    &bid,
-                                    &plugin_id,
-                                    plugin_engine::runtime::provider_account_probe_error(
-                                        &plugin,
-                                        &redacted,
-                                    ),
-                                    probe_started_at,
-                                );
+                                Ok(_) if plugin_id == "claude" => {
+                                    if let Err(error) = handle.emit(
+                                        "provider-account-view-changed",
+                                        accounts.view_changed_event(&plugin_id),
+                                    ) {
+                                        log::error!(
+                                            "Claude Team verification event failed: {}",
+                                            error
+                                        );
+                                    }
+                                }
+                                Ok(_) => {}
+                                Err(message) => {
+                                    let redacted =
+                                        plugin_engine::host_api::redact_log_message(&message);
+                                    log::warn!(
+                                        "provider account probe publication rejected: provider={}, reason={}",
+                                        plugin_id,
+                                        redacted
+                                    );
+                                    publish_probe_output(
+                                        &handle,
+                                        &bid,
+                                        &plugin_id,
+                                        plugin_engine::runtime::provider_account_probe_error(
+                                            &plugin,
+                                            &redacted,
+                                        ),
+                                        probe_started_at,
+                                    );
+                                }
                             }
                         }
                         Err(_) => {

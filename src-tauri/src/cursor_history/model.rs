@@ -159,7 +159,7 @@ pub(crate) enum HistoryError {
         actual: u64,
     },
     InvalidWindow,
-    InvalidTimeZoneOffset,
+    InvalidTimeZone,
     MalformedTokenValue,
     TokenOverflow,
 }

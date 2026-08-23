@@ -1103,7 +1103,7 @@ describe("claude plugin", () => {
     expect(refreshBody.scope).toContain("user:file_upload")
   })
 
-  it("refreshes keychain credentials and writes back to keychain", async () => {
+  it("refuses to refresh legacy Keychain credentials before contacting the token endpoint", async () => {
     const ctx = makeCtx()
     ctx.host.fs.exists = () => false
     ctx.host.keychain.readGenericPassword.mockReturnValue(
@@ -1117,24 +1117,17 @@ describe("claude plugin", () => {
       })
     )
 
-    ctx.host.http.request.mockImplementation((opts) => {
-      if (String(opts.url).includes("/v1/oauth/token")) {
-        return {
-          status: 200,
-          bodyText: JSON.stringify({ access_token: "new-token", expires_in: 3600 }),
-        }
-      }
-      return {
-        status: 200,
-        bodyText: JSON.stringify({
-          five_hour: { utilization: 10, resets_at: "2099-01-01T00:00:00.000Z" },
-        }),
-      }
+    ctx.host.http.request.mockImplementation(() => {
+      throw new Error("refresh and usage endpoints must not be called")
     })
 
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).not.toThrow()
-    expect(ctx.host.keychain.writeGenericPassword).toHaveBeenCalled()
+    expect(() => plugin.probe(ctx)).toThrow("must be refreshed by Claude Code")
+    expect(ctx.host.http.request).not.toHaveBeenCalled()
+    expect(ctx.host.keychain.writeGenericPassword).not.toHaveBeenCalled()
+    expect(ctx.host.log.warn).toHaveBeenCalledWith(
+      "refusing to refresh Keychain credentials without a safe conditional write"
+    )
   })
 
   it("retries usage request after 401 by refreshing once", async () => {
@@ -1252,7 +1245,7 @@ describe("claude plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("Token expired")
   })
 
-  it("logs when saving keychain credentials fails", async () => {
+  it("refuses a 401-triggered Keychain refresh without writing credentials", async () => {
     const ctx = makeCtx()
     ctx.host.fs.exists = () => false
     ctx.host.keychain.readGenericPassword.mockReturnValue(
@@ -1260,30 +1253,25 @@ describe("claude plugin", () => {
         claudeAiOauth: {
           accessToken: "old-token",
           refreshToken: "refresh",
-          expiresAt: Date.now() - 1000,
+          expiresAt: Date.now() + 24 * 60 * 60 * 1000,
         },
       })
     )
-    ctx.host.keychain.writeGenericPassword.mockImplementation(() => {
-      throw new Error("write fail")
-    })
+    let usageCalls = 0
     ctx.host.http.request.mockImplementation((opts) => {
-      if (String(opts.url).includes("/v1/oauth/token")) {
-        return { status: 200, bodyText: JSON.stringify({ access_token: "new-token", expires_in: 3600 }) }
+      if (String(opts.url).includes("/api/oauth/usage")) {
+        usageCalls += 1
+        return { status: 401, bodyText: "" }
       }
-      return {
-        status: 200,
-        bodyText: JSON.stringify({
-          five_hour: { utilization: 10, resets_at: "2099-01-01T00:00:00.000Z" },
-        }),
-      }
+      throw new Error("token endpoint must not be called")
     })
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).not.toThrow()
-    expect(ctx.host.log.error).toHaveBeenCalled()
+    expect(() => plugin.probe(ctx)).toThrow("must be refreshed by Claude Code")
+    expect(usageCalls).toBe(1)
+    expect(ctx.host.keychain.writeGenericPassword).not.toHaveBeenCalled()
   })
 
-  it("writes refreshed credentials back to the current-user keychain source", async () => {
+  it("refuses to refresh current-user Keychain credentials without writing either source", async () => {
     const ctx = makeCtx()
     ctx.host.fs.exists = () => false
     ctx.host.keychain.readGenericPasswordForCurrentUser.mockReturnValue(
@@ -1295,21 +1283,14 @@ describe("claude plugin", () => {
         },
       })
     )
-    ctx.host.http.request.mockImplementation((opts) => {
-      if (String(opts.url).includes("/v1/oauth/token")) {
-        return { status: 200, bodyText: JSON.stringify({ access_token: "new-token", expires_in: 3600 }) }
-      }
-      return {
-        status: 200,
-        bodyText: JSON.stringify({
-          five_hour: { utilization: 10, resets_at: "2099-01-01T00:00:00.000Z" },
-        }),
-      }
+    ctx.host.http.request.mockImplementation(() => {
+      throw new Error("refresh and usage endpoints must not be called")
     })
 
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).not.toThrow()
-    expect(ctx.host.keychain.writeGenericPasswordForCurrentUser).toHaveBeenCalled()
+    expect(() => plugin.probe(ctx)).toThrow("must be refreshed by Claude Code")
+    expect(ctx.host.http.request).not.toHaveBeenCalled()
+    expect(ctx.host.keychain.writeGenericPasswordForCurrentUser).not.toHaveBeenCalled()
     expect(ctx.host.keychain.writeGenericPassword).not.toHaveBeenCalled()
   })
 
@@ -1320,7 +1301,7 @@ describe("claude plugin", () => {
       claudeAiOauth: {
         accessToken: "stale-access",
         refreshToken: "stale-refresh",
-        expiresAt: Date.now() - 1000,
+        expiresAt: Date.now() + 24 * 60 * 60 * 1000,
       },
     })
     const newerAuth = JSON.stringify({
@@ -1336,22 +1317,15 @@ describe("claude plugin", () => {
       keychainValue = String(value)
     })
     ctx.host.http.request.mockImplementation((opts) => {
-      if (String(opts.url).includes("/v1/oauth/token")) {
+      if (String(opts.url).includes("/api/oauth/usage")) {
         keychainValue = newerAuth
-        return {
-          status: 200,
-          bodyText: JSON.stringify({
-            access_token: "openusage-refresh",
-            refresh_token: "openusage-rotated-refresh",
-            expires_in: 3600,
-          }),
-        }
+        return { status: 401, bodyText: "" }
       }
-      throw new Error("usage should not run after a keychain credential conflict")
+      throw new Error("refresh endpoint must not run for Keychain credentials")
     })
 
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Token conflict")
+    expect(() => plugin.probe(ctx)).toThrow("must be refreshed by Claude Code")
     expect(keychainValue).toBe(newerAuth)
     expect(keychainValue).not.toContain("openusage-refresh")
     expect(ctx.host.keychain.writeGenericPasswordForCurrentUser).not.toHaveBeenCalled()
@@ -1399,10 +1373,11 @@ describe("claude plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("Token conflict")
     expect(fileValue).toBe(newerAuth)
     expect(fileValue).not.toContain("openusage-refresh")
+    expect(ctx.host.fs.writeTextIfUnchanged).toHaveBeenCalledTimes(1)
     expect(ctx.host.fs.writeText).not.toHaveBeenCalled()
   })
 
-  it("writes refreshed credentials back to the legacy keychain source after fallback", async () => {
+  it("refuses to refresh the legacy Keychain source after current-user fallback", async () => {
     const ctx = makeCtx()
     ctx.host.fs.exists = () => false
     ctx.host.keychain.readGenericPasswordForCurrentUser.mockImplementation(() => {
@@ -1417,25 +1392,18 @@ describe("claude plugin", () => {
         },
       })
     )
-    ctx.host.http.request.mockImplementation((opts) => {
-      if (String(opts.url).includes("/v1/oauth/token")) {
-        return { status: 200, bodyText: JSON.stringify({ access_token: "new-token", expires_in: 3600 }) }
-      }
-      return {
-        status: 200,
-        bodyText: JSON.stringify({
-          five_hour: { utilization: 10, resets_at: "2099-01-01T00:00:00.000Z" },
-        }),
-      }
+    ctx.host.http.request.mockImplementation(() => {
+      throw new Error("refresh and usage endpoints must not be called")
     })
 
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).not.toThrow()
-    expect(ctx.host.keychain.writeGenericPassword).toHaveBeenCalled()
+    expect(() => plugin.probe(ctx)).toThrow("must be refreshed by Claude Code")
+    expect(ctx.host.http.request).not.toHaveBeenCalled()
+    expect(ctx.host.keychain.writeGenericPassword).not.toHaveBeenCalled()
     expect(ctx.host.keychain.writeGenericPasswordForCurrentUser).not.toHaveBeenCalled()
   })
 
-  it("logs when saving credentials file fails", async () => {
+  it("reports a friendly error when saving the credentials file fails", async () => {
     const ctx = makeCtx()
     const credentials = JSON.stringify({
       claudeAiOauth: {
@@ -1461,7 +1429,7 @@ describe("claude plugin", () => {
       }
     })
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).not.toThrow()
+    expect(() => plugin.probe(ctx)).toThrow("credentials could not be saved")
     expect(ctx.host.log.error).toHaveBeenCalled()
   })
 

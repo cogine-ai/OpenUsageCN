@@ -40,13 +40,12 @@ pub(crate) fn aggregate_scripted_history(
         to_ms,
         fetched_at_ms,
         time_zone,
-        utc_offset_seconds,
+        utc_offset_seconds: _,
         requested_page_size,
         pages,
     } = script;
     let events = pagination::collect_complete_events(pages, requested_page_size)?;
-    let (buckets, totals) =
-        aggregate::aggregate_events(events, from_ms, to_ms, utc_offset_seconds)?;
+    let (buckets, totals) = aggregate::aggregate_events(events, from_ms, to_ms, &time_zone)?;
 
     Ok(CompleteHistory {
         account_id,

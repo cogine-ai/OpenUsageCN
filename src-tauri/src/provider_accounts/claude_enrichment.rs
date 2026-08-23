@@ -1,3 +1,4 @@
+use super::model::ProviderEnrichmentWarning;
 use super::probe::ProviderAccountAdapter;
 use super::state::ConnectionRecord;
 use super::{ConnectionKind, ProviderAccounts};
@@ -13,6 +14,12 @@ pub(super) struct ClaudeEnrichmentLease {
     connection_key: String,
     session_ref: String,
     credential_generation: u64,
+}
+
+#[derive(Default)]
+pub(super) struct ClaudeEnrichmentResult {
+    pub(super) lease: Option<ClaudeEnrichmentLease>,
+    pub(super) warning: Option<ProviderEnrichmentWarning>,
 }
 
 struct ClaudeBrowserBinding {
@@ -32,12 +39,12 @@ impl ProviderAccounts {
         oauth_generation: &str,
         adapter: &dyn ProviderAccountAdapter,
         output: &mut PluginOutput,
-    ) -> Option<ClaudeEnrichmentLease> {
+    ) -> ClaudeEnrichmentResult {
         if output.provider_id != "claude"
             || output.plan.as_deref() != Some("Team")
             || crate::plugin_engine::runtime::probe_error_message(output).is_some()
         {
-            return None;
+            return ClaudeEnrichmentResult::default();
         }
         let cancellation = CancellationToken::new();
         let oauth_identity = match adapter.claude_oauth_identity(
@@ -47,8 +54,7 @@ impl ProviderAccounts {
         ) {
             Ok(identity) => identity,
             Err(_) => {
-                log_enrichment_warning("oauthIdentityUnavailable");
-                return None;
+                return enrichment_warning("oauthIdentityUnavailable");
             }
         };
         if adapter
@@ -57,8 +63,7 @@ impl ProviderAccounts {
             .as_deref()
             != Some(oauth_generation)
         {
-            log_enrichment_warning("oauthCredentialsChanged");
-            return None;
+            return enrichment_warning("oauthCredentialsChanged");
         }
         let binding = match self.claude_browser_binding(
             account_id,
@@ -66,7 +71,7 @@ impl ProviderAccounts {
             oauth_connection_key,
         ) {
             Some(binding) => binding,
-            None => return None,
+            None => return enrichment_warning("browserProfileUnavailable"),
         };
         let broker = match self
             .browser_broker
@@ -76,8 +81,7 @@ impl ProviderAccounts {
         {
             Some(broker) => broker,
             None => {
-                log_enrichment_warning("browserBrokerUnavailable");
-                return None;
+                return enrichment_warning("browserBrokerUnavailable");
             }
         };
 
@@ -92,21 +96,60 @@ impl ProviderAccounts {
             &cancellation,
         );
         let Some((enrichment, session_ref, generation)) = result else {
-            return None;
+            return enrichment_warning("providerUnavailable");
         };
         if !enrichment.exact {
-            if let Some(warning) = enrichment.warning {
-                log_enrichment_warning(warning_code(warning));
-            }
-            return None;
+            return enrichment_warning(
+                enrichment
+                    .warning
+                    .map(warning_code)
+                    .unwrap_or("providerUnavailable"),
+            );
         }
         output.plan = Some(enrichment.plan.label().to_string());
-        Some(ClaudeEnrichmentLease {
-            connection_id: binding.connection_id,
-            connection_key: binding.connection_key,
-            session_ref,
-            credential_generation: generation,
-        })
+        ClaudeEnrichmentResult {
+            lease: Some(ClaudeEnrichmentLease {
+                connection_id: binding.connection_id,
+                connection_key: binding.connection_key,
+                session_ref,
+                credential_generation: generation,
+            }),
+            warning: None,
+        }
+    }
+
+    pub(super) fn commit_claude_enrichment_warning(
+        &self,
+        account_id: &str,
+        warning: Option<ProviderEnrichmentWarning>,
+    ) {
+        let key = ("claude".to_string(), account_id.to_string());
+        let mut warnings = match self.enrichment_warnings.lock() {
+            Ok(warnings) => warnings,
+            Err(_) => {
+                log::error!("Claude Team verification status is unavailable");
+                return;
+            }
+        };
+        match warning {
+            Some(warning) => {
+                if warnings
+                    .get(&key)
+                    .is_some_and(|current| current.code == warning.code)
+                {
+                    return;
+                }
+                log::warn!(
+                    "Claude Team enrichment unavailable: code={}, correlation_id={}",
+                    warning.code,
+                    warning.correlation_id
+                );
+                warnings.insert(key, warning);
+            }
+            None => {
+                warnings.remove(&key);
+            }
+        }
     }
 
     pub(super) fn claude_enrichment_is_current(
@@ -368,10 +411,43 @@ fn warning_code(warning: ClaudeTeamWarningCode) -> &'static str {
     }
 }
 
-fn log_enrichment_warning(code: &str) {
-    log::warn!(
-        "Claude Team enrichment unavailable: code={}, correlation_id={}",
-        code,
-        uuid::Uuid::new_v4()
-    );
+fn enrichment_warning(code: &str) -> ClaudeEnrichmentResult {
+    ClaudeEnrichmentResult {
+        lease: None,
+        warning: Some(ProviderEnrichmentWarning {
+            code: code.to_string(),
+            message: warning_message(code).to_string(),
+            correlation_id: uuid::Uuid::new_v4().to_string(),
+        }),
+    }
+}
+
+fn warning_message(code: &str) -> &'static str {
+    match code {
+        "identityMismatch" => {
+            "The connected Claude browser profile does not match the selected OAuth account. Quota remains available with the generic Team label."
+        }
+        "missingIdentity" => {
+            "The connected Claude browser profile did not provide enough identity information to verify the exact Team seat."
+        }
+        "unknownSeat" => {
+            "The connected Claude Team seat is not recognized yet. Quota remains available with the generic Team label."
+        }
+        "browserProfileUnavailable" => {
+            "Connect a matching Claude browser profile to verify the exact Team seat."
+        }
+        "oauthCredentialsChanged" | "browserCredentialsChanged" => {
+            "Claude credentials changed during Team seat verification. Refresh again."
+        }
+        "oauthIdentityUnavailable" => {
+            "Claude OAuth identity is unavailable, so the exact Team seat could not be verified."
+        }
+        "browserBrokerUnavailable" | "providerUnavailable" | "sessionUnavailable" => {
+            "Claude Team seat verification is temporarily unavailable. Quota remains available with the generic Team label."
+        }
+        "cancelled" => "Claude Team seat verification was cancelled. Refresh again.",
+        _ => {
+            "Claude Team seat verification is unavailable. Quota remains available with the generic Team label."
+        }
+    }
 }

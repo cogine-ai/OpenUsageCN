@@ -54,10 +54,11 @@ chosen profile locator, and local labels. A saved browser connection is reacquir
 profile after restart and can be detached at any time.
 
 Local account-scoped probes verify `GET https://cursor.com/api/auth/me` against the complete JWT
-subject before requesting quota. Before a refreshed probe token is written back, OpenUsageCN reads
-the original SQLite or Keychain source again and requires its credential generation, source, and
-complete subject to be unchanged. A concurrent login switch therefore rejects the write instead of
-overwriting the new session. A token refreshed only for model-history access stays in memory.
+subject before requesting quota. A refreshed Desktop token is written with one SQLite transaction
+that requires the original access token and refresh token to remain unchanged. A scoped CLI
+Keychain refresh stays in memory because macOS Keychain does not provide a compare-by-value update.
+A concurrent login switch therefore cannot be overwritten. Model-history refreshes also stay in
+memory.
 
 ## Model Usage
 
@@ -68,8 +69,10 @@ not available, it uses a bounded 30-day window. Every fetch first proves the ses
 `/api/auth/me` and uses the same accepted session for all pages.
 
 The view groups complete results by local date and raw model name and shows input, output, cache
-write, and cache read tokens plus request counts. A blank model name is displayed as `Unknown` but
-is not rewritten in storage.
+write, and cache read tokens plus request counts. Local dates use the selected IANA time zone's
+rules at each event, including daylight-saving changes inside the window. Missing optional counters
+are zero; invalid or inexact totals fail the refresh without replacing the last complete result. A
+blank model name is displayed as `Unknown` but is not rewritten in storage.
 
 `List-Price Equivalent` sums event-level model prices when present. `Metered Usage` is a separate
 whole-window value and is shown only when every in-window event has a valid charged amount. These
@@ -234,8 +237,8 @@ agent login
 
 Access tokens are short-lived JWTs. The legacy single-account probe refreshes before a request and
 persists the new access token back to its original SQLite or Keychain source. Account-scoped probes
-verify the complete identity before use and persist with the same source and credential-generation
-check described above. Model-history reads refresh in memory and never overwrite the local source.
+verify the complete identity before use. Desktop writes use the guarded SQLite transaction described
+above; CLI Keychain and model-history refreshes stay in memory and never overwrite the local source.
 
 ```
 POST https://api2.cursor.sh/oauth/token

@@ -169,6 +169,38 @@ fn changing_authoritative_total_fails_the_complete_fetch() {
 }
 
 #[test]
+fn an_optional_authoritative_total_can_appear_on_only_one_page() {
+    for totals in [[None, Some(1_001)], [Some(1_001), None]] {
+        let result = aggregate_scripted_history(ScriptedHistory {
+            account_id: "account-a".to_string(),
+            from_ms: 1,
+            to_ms: 2,
+            fetched_at_ms: 3,
+            time_zone: "UTC".to_string(),
+            utc_offset_seconds: 0,
+            requested_page_size: 1_000,
+            pages: vec![
+                ScriptedPage {
+                    page: 1,
+                    events: vec![pagination_event(); 1_000],
+                    total_usage_events_count: totals[0],
+                },
+                ScriptedPage {
+                    page: 2,
+                    events: vec![pagination_event()],
+                    total_usage_events_count: totals[1],
+                },
+            ],
+        });
+
+        assert!(
+            result.is_ok(),
+            "a present total must be stable, not repeated on every page"
+        );
+    }
+}
+
+#[test]
 fn a_full_last_page_is_incomplete_even_when_the_total_is_reached() {
     let error = aggregate_scripted_history(ScriptedHistory {
         account_id: "account-a".to_string(),

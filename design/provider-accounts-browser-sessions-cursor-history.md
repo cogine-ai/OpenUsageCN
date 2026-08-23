@@ -237,9 +237,10 @@ Identity and usage must come from the same lease. Before publishing output, writ
 credentials, or committing history, the coordinator verifies that the lease still belongs to
 the selected account and current generation.
 
-Cursor token refresh writes must become compare-and-swap operations. SQLite or Keychain is
-updated only if the original credential generation and identity still match. A concurrent login
-change fails visibly instead of overwriting another account's token.
+Cursor Desktop token refresh writes must use one SQLite transaction that verifies the original
+access token and refresh token before replacement. Cursor CLI Keychain refreshes stay in memory
+because macOS Keychain has no compare-by-value update. A concurrent login change therefore fails
+visibly or leaves the external credential untouched instead of overwriting another account's token.
 
 ## Plugin Runtime Seam
 

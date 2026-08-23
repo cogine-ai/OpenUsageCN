@@ -1,6 +1,6 @@
 use super::model::{
     AccountId, AccountSelection, AccountSummary, ConnectionKind, ProviderAccountView,
-    ProviderPersistenceWarning, SourceOutcome,
+    ProviderEnrichmentWarning, ProviderPersistenceWarning, SourceOutcome,
 };
 use serde::{Deserialize, Serialize};
 
@@ -58,6 +58,7 @@ pub(super) fn view_from_state(
     provider_id: &str,
     provider: &ProviderState,
     persistence_warning: Option<ProviderPersistenceWarning>,
+    enrichment_warning: Option<ProviderEnrichmentWarning>,
 ) -> ProviderAccountView {
     let mut accounts = provider
         .accounts
@@ -106,6 +107,7 @@ pub(super) fn view_from_state(
         active_account_id: provider.active_account_id.clone(),
         accounts,
         persistence_warning,
+        enrichment_warning,
     }
 }
 
@@ -134,5 +136,6 @@ pub(super) fn empty_view(
         active_account_id: None,
         accounts: Vec::new(),
         persistence_warning,
+        enrichment_warning: None,
     }
 }

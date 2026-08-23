@@ -259,6 +259,7 @@ impl BrowserSessionBroker {
                             super::BrowserSessionError::overall_timed_out(),
                         );
                     }
+                    let (store_id, host, cookie_header) = candidate.into_parts();
                     let summary = self
                         .roster
                         .lock()
@@ -269,9 +270,9 @@ impl BrowserSessionBroker {
                                 provider,
                                 browser,
                                 profile_key: profile_key.to_string(),
-                                host: candidate.host,
-                                store_id: candidate.store_id,
-                                cookie_header: candidate.cookie_header,
+                                host,
+                                store_id,
+                                cookie_header,
                                 identity,
                             },
                         );

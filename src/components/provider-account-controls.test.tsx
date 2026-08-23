@@ -175,6 +175,41 @@ describe("ProviderAccountControls", () => {
     expect(screen.getByText("Reference: correlation-7")).toBeInTheDocument()
   })
 
+  it("shows a Claude Team verification warning without hiding the account", async () => {
+    tauri.invoke.mockResolvedValue({
+      providerId: "claude",
+      selection: { mode: "auto" },
+      activeAccountId: "account-claude",
+      accounts: [
+        {
+          accountId: "account-claude",
+          label: "Work",
+          connectionKinds: ["cli", "chrome"],
+          connections: [],
+          selected: true,
+          stale: false,
+        },
+      ],
+      enrichmentWarning: {
+        code: "identityMismatch",
+        message:
+          "The connected Claude browser profile does not match the selected OAuth account. Quota remains available with the generic Team label.",
+        correlationId: "correlation-seat-9",
+      },
+    })
+
+    render(<ProviderAccountControls providerId="claude" browserBinding />)
+
+    expect(
+      await screen.findByRole("heading", { name: "Claude Team Verification" })
+    ).toBeInTheDocument()
+    expect(screen.getByRole("radio", { name: /Work/i })).toBeInTheDocument()
+    expect(
+      screen.getByText(/does not match the selected OAuth account/i)
+    ).toBeInTheDocument()
+    expect(screen.getByText("Reference: correlation-seat-9")).toBeInTheDocument()
+  })
+
   it("renames an account from its inline editor", async () => {
     const initialView = {
       providerId: "cursor",

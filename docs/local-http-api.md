@@ -176,7 +176,7 @@ Resource keys such as `session` and `weekly` are stable identifiers declared by 
 
 The resource key is stable, but its `unit` can follow the live plan or metric. Consumers should read `unit` from every response instead of assuming one permanent unit for a key.
 
-If a refresh fails, the last successful provider snapshot remains available and a redacted entry may appear in `errors`. Consumers should use numeric fields instead of parsing text from `/v1/usage`.
+If a refresh fails for the same selected account, the last successful provider snapshot remains available and a redacted entry may appear in `errors`. If the selected account changes or its stored snapshot is unreadable, the previous account's projection is removed so it cannot be shown as the new account. If the account registry itself is unavailable, the last projection remains available with an error. Consumers should use numeric fields instead of parsing text from `/v1/usage`.
 
 ### Current Resource Keys
 
@@ -215,7 +215,7 @@ On Windows, only the five Windows MVP providers are present; the rest of this ta
 
 - The collection endpoint (`/v1/usage`) returns **enabled providers only**, in the order defined by your plugin settings.
 - Only **successful** probe results are cached. A failed probe never overwrites a previous successful snapshot.
-- For an account-aware provider, the cache contains only the account selected in OpenUsageCN. Changing the selection changes the provider projection after that account refreshes; data from different accounts is never combined.
+- For an account-aware provider, the cache contains only the account selected in OpenUsageCN. Changing the selection removes an unreadable or missing target projection until that account refreshes; data from different accounts is never combined.
 - The API has no account selector and does not expose account lists, connection metadata, or Cursor Model Usage history in version 1.
 - The single-provider endpoint (`/v1/usage/:providerId`) works for any known provider, including disabled ones.
 - The limits collection follows the same enabled-provider selection. `providers` is an object, so consumers must not rely on key order. Its single-provider route also works for disabled providers.

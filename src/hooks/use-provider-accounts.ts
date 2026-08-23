@@ -27,6 +27,7 @@ export function useProviderAccounts(providerId: string) {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [subscriptionWarning, setSubscriptionWarning] = useState<string | null>(null)
   const [receipt, setReceipt] = useState<ProviderAccountOperationReceipt | null>(null)
   const [accountRevision, setAccountRevision] = useState(0)
 
@@ -40,6 +41,7 @@ export function useProviderAccounts(providerId: string) {
     setView(null)
     setBusy(false)
     setError(null)
+    setSubscriptionWarning(null)
     setReceipt(null)
     setAccountRevision(0)
 
@@ -80,7 +82,6 @@ export function useProviderAccounts(providerId: string) {
         })
     }
 
-    readView(true)
     void listen<ProviderAccountViewChanged>("provider-account-view-changed", (event) => {
       if (
         cancelled ||
@@ -102,10 +103,15 @@ export function useProviderAccounts(providerId: string) {
           nextUnlisten()
         } else {
           unlisten = nextUnlisten
+          readView(true)
         }
       })
       .catch((cause) => {
-        if (!cancelled) console.error("Failed to listen for provider account changes:", cause)
+        if (!cancelled) {
+          console.error("Failed to listen for provider account changes:", cause)
+          setSubscriptionWarning("账号实时更新不可用，请重新打开此页面")
+          readView(true)
+        }
       })
 
     return () => {
@@ -134,8 +140,8 @@ export function useProviderAccounts(providerId: string) {
         setView(nextReceipt.view)
         setReceipt(nextReceipt)
         return nextReceipt
-      } catch {
-        console.error("Failed to perform provider account operation")
+      } catch (cause) {
+        console.error("Failed to perform provider account operation", cause)
         if (
           currentProviderId.current === targetProviderId &&
           operationRevision.current === revision
@@ -191,7 +197,7 @@ export function useProviderAccounts(providerId: string) {
     view,
     loading,
     busy,
-    error,
+    error: error ?? subscriptionWarning,
     receipt,
     accountRevision,
     selectAccount,

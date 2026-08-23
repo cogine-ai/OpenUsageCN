@@ -85,6 +85,12 @@ pub(super) struct HelperWarning {
     pub _message: String,
 }
 
+impl Drop for HelperWarning {
+    fn drop(&mut self) {
+        zero_string(&mut self._message);
+    }
+}
+
 #[derive(Deserialize)]
 pub(super) enum HelperWarningCode {
     CookieReadWarning,
@@ -114,6 +120,12 @@ pub(super) struct HelperErrorWire {
     pub _message: String,
 }
 
+impl Drop for HelperErrorWire {
+    fn drop(&mut self) {
+        zero_string(&mut self._message);
+    }
+}
+
 #[derive(Clone, Copy, Deserialize)]
 pub(super) enum HelperErrorCode {
     UnsupportedVersion,
@@ -135,6 +147,37 @@ pub(super) struct CookieCandidate {
     pub cookie_header: String,
 }
 
+impl CookieCandidate {
+    pub(super) fn into_parts(mut self) -> (String, String, String) {
+        (
+            std::mem::take(&mut self.store_id),
+            std::mem::take(&mut self.host),
+            std::mem::take(&mut self.cookie_header),
+        )
+    }
+
+    fn clear_secrets(&mut self) {
+        zero_string(&mut self.store_id);
+        zero_string(&mut self.cookie_header);
+    }
+
+    #[cfg(test)]
+    fn clear_secrets_for_test(&mut self) {
+        self.clear_secrets();
+    }
+}
+
+impl Drop for CookieCandidate {
+    fn drop(&mut self) {
+        self.clear_secrets();
+    }
+}
+
+fn zero_string(value: &mut String) {
+    unsafe { value.as_bytes_mut().fill(0) };
+    value.clear();
+}
+
 pub(super) struct ReadCookiesResponse {
     pub candidates: Vec<CookieCandidate>,
     pub warnings: Vec<BrowserSessionWarning>,
@@ -148,4 +191,24 @@ pub(super) enum BrowserSessionWarningCode {
 pub(super) struct BrowserSessionWarning {
     pub code: BrowserSessionWarningCode,
     pub message: &'static str,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CookieCandidate;
+
+    #[test]
+    fn cookie_candidate_secret_fields_can_be_zeroized_before_discard() {
+        let mut candidate = CookieCandidate {
+            store_id: "/Users/alice/Private/Profile 2".to_string(),
+            host: "cursor.com".to_string(),
+            cookie_header: "WorkosCursorSessionToken=secret".to_string(),
+        };
+
+        candidate.clear_secrets_for_test();
+
+        assert!(candidate.store_id.is_empty());
+        assert!(candidate.cookie_header.is_empty());
+        assert_eq!(candidate.host, "cursor.com");
+    }
 }

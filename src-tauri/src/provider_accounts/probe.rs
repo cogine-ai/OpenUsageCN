@@ -13,7 +13,7 @@ pub(crate) struct ActiveAccountProbe {
     credential_generation: String,
     started_at: time::OffsetDateTime,
     output: PluginOutput,
-    claude_enrichment_lease: Option<super::claude_enrichment::ClaudeEnrichmentLease>,
+    claude_enrichment: Option<super::claude_enrichment::ClaudeEnrichmentResult>,
 }
 
 pub(crate) trait ProviderAccountAdapter: Send + Sync {
@@ -135,19 +135,19 @@ impl ProviderAccounts {
             return Err("Account identity changed during refresh. Try again.".to_string());
         }
 
-        let claude_enrichment_lease =
-            if provider_id == "claude" && connection.kind == ConnectionKind::Cli {
-                self.enrich_claude_team(
-                    &account_id,
-                    &connection.connection_id,
-                    &connection.connection_key,
-                    &credential_generation,
-                    adapter.as_ref(),
-                    &mut output,
-                )
-            } else {
-                None
-            };
+        let claude_enrichment = if provider_id == "claude" && connection.kind == ConnectionKind::Cli
+        {
+            Some(self.enrich_claude_team(
+                &account_id,
+                &connection.connection_id,
+                &connection.connection_key,
+                &credential_generation,
+                adapter.as_ref(),
+                &mut output,
+            ))
+        } else {
+            None
+        };
 
         if !self.probe_binding_is_current(
             provider_id,
@@ -170,14 +170,14 @@ impl ProviderAccounts {
             credential_generation,
             started_at,
             output,
-            claude_enrichment_lease,
+            claude_enrichment,
         })
     }
 
     #[cfg(test)]
     pub(crate) fn run_active_probe(&self, provider_id: &str) -> Result<PluginOutput, String> {
-        self.prepare_active_probe(provider_id)
-            .map(|probe| probe.output)
+        let probe = self.prepare_active_probe(provider_id)?;
+        self.publish_active_probe(probe, |_, _| {})
     }
 
     pub(crate) fn publish_active_probe(
@@ -230,8 +230,9 @@ impl ProviderAccounts {
             return Err("Account identity changed during refresh. Try again.".to_string());
         }
         if probe
-            .claude_enrichment_lease
+            .claude_enrichment
             .as_ref()
+            .and_then(|enrichment| enrichment.lease.as_ref())
             .is_some_and(|lease| !self.claude_enrichment_is_current(&probe.account_id, lease))
         {
             return Err(
@@ -288,6 +289,9 @@ impl ProviderAccounts {
                     return Err("A newer account snapshot is already available.".to_string());
                 }
             }
+        }
+        if let Some(enrichment) = &probe.claude_enrichment {
+            self.commit_claude_enrichment_warning(&probe.account_id, enrichment.warning.clone());
         }
         publish(&probe.output, probe.started_at);
         drop(locked_provider);

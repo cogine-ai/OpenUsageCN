@@ -8,7 +8,7 @@
 
 [**下载最新版**](https://github.com/cogine-ai/OpenUsageCN/releases/latest)
 
-- macOS：支持 Apple Silicon 和 Intel。
+- macOS：支持 macOS 13 及以上版本，提供 Apple Silicon 和 Intel 构建。
 - Windows：支持 Windows 10 22H2 和 Windows 11 x64，使用 NSIS 为当前用户安装，无需管理员权限。
 
 如果当前 Release 中还没有 `x64-setup.exe`，表示该版本尚未发布 Windows 构建。

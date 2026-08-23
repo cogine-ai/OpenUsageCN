@@ -6,6 +6,15 @@ use crate::plugin_engine::runtime::PluginOutput;
 
 struct TwoAccountProjectionAdapter;
 
+fn active_projection(
+    accounts: &ProviderAccounts,
+) -> Option<super::projection::ActiveAccountProjection> {
+    match accounts.active_projection("cursor") {
+        Ok(projection) => projection,
+        Err(error) => panic!("active projection failed: {error}"),
+    }
+}
+
 impl ProviderAccountAdapter for TwoAccountProjectionAdapter {
     fn discover_default(&self) -> Result<DiscoveryReport, String> {
         Ok(DiscoveryReport {
@@ -70,19 +79,13 @@ fn active_projection_follows_only_the_selected_accounts_snapshot() {
         .account_id
         .clone();
 
-    assert!(accounts.active_projection("cursor").unwrap().is_none());
+    assert!(active_projection(&accounts).is_none());
     let desktop_probe = accounts.prepare_active_probe("cursor").unwrap();
     accounts
         .publish_active_probe(desktop_probe, |_, _| {})
         .unwrap();
     assert_eq!(
-        accounts
-            .active_projection("cursor")
-            .unwrap()
-            .unwrap()
-            .output
-            .plan
-            .as_deref(),
+        active_projection(&accounts).unwrap().output.plan.as_deref(),
         Some("cursor-desktop")
     );
 
@@ -92,17 +95,11 @@ fn active_projection_follows_only_the_selected_accounts_snapshot() {
             account_id: cli_id.clone(),
         },
     );
-    assert!(accounts.active_projection("cursor").unwrap().is_none());
+    assert!(active_projection(&accounts).is_none());
     let cli_probe = accounts.prepare_active_probe("cursor").unwrap();
     accounts.publish_active_probe(cli_probe, |_, _| {}).unwrap();
     assert_eq!(
-        accounts
-            .active_projection("cursor")
-            .unwrap()
-            .unwrap()
-            .output
-            .plan
-            .as_deref(),
+        active_projection(&accounts).unwrap().output.plan.as_deref(),
         Some("cursor-cli")
     );
 
@@ -113,13 +110,7 @@ fn active_projection_follows_only_the_selected_accounts_snapshot() {
         },
     );
     assert_eq!(
-        accounts
-            .active_projection("cursor")
-            .unwrap()
-            .unwrap()
-            .output
-            .plan
-            .as_deref(),
+        active_projection(&accounts).unwrap().output.plan.as_deref(),
         Some("cursor-desktop")
     );
     let _ = std::fs::remove_dir_all(directory);

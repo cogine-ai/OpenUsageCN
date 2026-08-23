@@ -84,7 +84,10 @@ Outcome:
 - Auto and Pinned selection work.
 - Successful snapshots are account-scoped.
 - Existing provider-level consumers still receive the active projection.
-- Credential refresh uses generation-checked compare-and-swap.
+- Cursor Desktop refresh uses a generation-checked SQLite transaction. Cursor CLI and Claude
+  Keychain refreshes never write back without a value-conditional Keychain primitive; Claude asks
+  Claude Code to refresh, while Cursor keeps the probe token in memory. Claude file refresh uses a
+  conditional replacement.
 - Account switches never relabel or publish another account's cached output.
 - A new explicitly attached browser account becomes Pinned; a connection that matches an existing
   account does not change selection.

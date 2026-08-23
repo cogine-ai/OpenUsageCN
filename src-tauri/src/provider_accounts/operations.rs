@@ -19,10 +19,15 @@ impl ProviderAccounts {
         let Some(provider) = providers.get(provider_id) else {
             return Ok(empty_view(provider_id, self.current_persistence_warning()));
         };
+        let enrichment_warning = provider
+            .active_account_id
+            .as_deref()
+            .and_then(|account_id| self.current_enrichment_warning(provider_id, account_id));
         Ok(view_from_state(
             provider_id,
             provider,
             self.current_persistence_warning(),
+            enrichment_warning,
         ))
     }
 

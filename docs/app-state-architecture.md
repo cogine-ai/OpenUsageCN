@@ -33,7 +33,7 @@
 - Account selection, labels, identity fingerprints, and account-owned snapshots use separate versioned stores. Raw identities, credentials, and browser cookies are not stored there.
 - Account changes are serialized per provider and persisted before the in-memory view changes. Browser attachments carry a revision so an older process cannot restore a connection that was explicitly detached.
 - Account revision events contain only a provider id and monotonic revision. The frontend fresh-reads the account view instead of receiving account data in the event.
-- Switching to an account without a snapshot removes the previous account's provider projection while the new probe is loading. A failed probe does not overwrite a previously successful snapshot.
+- Switching to an account without a readable snapshot removes the previous account's provider projection while the new probe is loading. A failed probe does not overwrite a previously successful snapshot for the same selected account. If the account registry itself is unavailable, the last projection stays readable with an error instead of being silently deleted.
 - `/v1/limits` projects that cache into stable numeric resources. The CLI can also refresh stale data without starting the Tauri UI or local HTTP server.
 
 ## Account-Scoped Detail Data

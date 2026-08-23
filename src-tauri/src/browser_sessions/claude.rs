@@ -259,6 +259,7 @@ impl BrowserSessionBroker {
                 candidate.cookie_header = rotated.expose().to_string();
             }
             let now = self.clock.now();
+            let (store_id, host, cookie_header) = candidate.into_parts();
             let summary = self
                 .roster
                 .lock()
@@ -269,9 +270,9 @@ impl BrowserSessionBroker {
                         provider: CookieProvider::Claude,
                         browser,
                         profile_key: profile_key.to_string(),
-                        host: candidate.host,
-                        store_id: candidate.store_id,
-                        cookie_header: candidate.cookie_header,
+                        host,
+                        store_id,
+                        cookie_header,
                         identity: oauth_identity.binding_identity(),
                     },
                 );

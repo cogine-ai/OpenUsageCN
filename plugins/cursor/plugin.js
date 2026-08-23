@@ -51,6 +51,46 @@
     }
   }
 
+  function sqlLiteral(value) {
+    return "'" + String(value).replace(/'/g, "''") + "'"
+  }
+
+  function stateValueMatches(key, expectedValue) {
+    const keyLiteral = sqlLiteral(key)
+    if (typeof expectedValue !== "string" || !expectedValue) {
+      return "NOT EXISTS (SELECT 1 FROM ItemTable WHERE key = " + keyLiteral +
+        " AND value IS NOT NULL AND value <> '')"
+    }
+    return "EXISTS (SELECT 1 FROM ItemTable WHERE key = " + keyLiteral +
+      " AND value = " + sqlLiteral(expectedValue) + ")"
+  }
+
+  function writeStateValueIfAuthUnchanged(ctx, key, value, expectedAuthState) {
+    try {
+      const accessMatches = stateValueMatches(
+        "cursorAuth/accessToken",
+        expectedAuthState.accessToken
+      )
+      const refreshMatches = stateValueMatches(
+        "cursorAuth/refreshToken",
+        expectedAuthState.refreshToken
+      )
+      const sql =
+        "BEGIN IMMEDIATE;" +
+        "CREATE TEMP TABLE openusage_cas_guard(ok INTEGER CHECK(ok = 1));" +
+        "INSERT INTO openusage_cas_guard(ok) SELECT CASE WHEN (" +
+        accessMatches + ") AND (" + refreshMatches + ") THEN 1 ELSE 0 END;" +
+        "INSERT OR REPLACE INTO ItemTable (key, value) VALUES (" +
+        sqlLiteral(key) + ", " + sqlLiteral(value) + ");" +
+        "COMMIT;"
+      ctx.host.sqlite.exec(STATE_DB, sql)
+      return true
+    } catch (e) {
+      ctx.host.log.warn("sqlite conditional write failed for " + key + ": " + String(e))
+      return false
+    }
+  }
+
   function readKeychainValue(ctx, service) {
     if (!ctx.host.keychain || typeof ctx.host.keychain.readGenericPassword !== "function") {
       return null
@@ -261,8 +301,18 @@
     if (currentSubject !== selectedSubject || current.source !== source) {
       throw "Account identity changed during refresh. Try again."
     }
-    if (!persistAccessToken(ctx, source, accessToken)) {
-      throw "Refreshed Cursor credentials could not be saved. Try again."
+    if (source === "keychain") {
+      // macOS Keychain has no compare-by-value update primitive. Keep scoped refreshes in memory
+      // so an old probe can never overwrite a concurrent CLI login or logout.
+      return expectedGeneration
+    }
+    if (!writeStateValueIfAuthUnchanged(
+      ctx,
+      "cursorAuth/accessToken",
+      accessToken,
+      current
+    )) {
+      throw "Account credentials changed during refresh. Try again."
     }
     return credentialGenerationForAuthState(ctx, {
       accessToken,

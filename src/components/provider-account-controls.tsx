@@ -295,6 +295,19 @@ export function ProviderAccountControls({
           </Alert>
         ) : null}
 
+        {view?.enrichmentWarning ? (
+          <Alert>
+            <AlertTriangle className="size-4" />
+            <AlertTitle>Claude Team Verification</AlertTitle>
+            <AlertDescription className="space-y-1">
+              <p>{view.enrichmentWarning.message}</p>
+              <p className="text-xs text-muted-foreground">
+                Reference: {view.enrichmentWarning.correlationId}
+              </p>
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
         {receipt?.status === "partial" ? (
           <Alert>
             <AlertTriangle className="size-4" />

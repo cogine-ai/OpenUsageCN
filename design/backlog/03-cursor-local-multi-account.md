@@ -60,8 +60,9 @@ In:
 - Preserve the current Desktop/CLI preference as Cursor's Auto rule without discarding the
   non-active account.
 - Route each probe through an immutable account/connection credential lease.
-- Make Cursor token refresh writes compare-and-swap against the original source generation and
-  identity.
+- Make Cursor Desktop token refresh writes compare-and-swap against the original SQLite values and
+  identity. Keep scoped CLI Keychain refreshes in memory because Keychain cannot condition writes
+  on the old value.
 - Add account view/operation hooks and state, an active-account selector in the Cursor detail
   header, and a Manage Accounts flow for local accounts, rename, availability, and selection.
 - Publish only the active snapshot to every existing provider-level consumer.
@@ -132,7 +133,8 @@ Preserve / do not touch:
   falling back.
 - [ ] A source login change leaves the old pinned account stale/unavailable and reconciles the new
   identity separately.
-- [ ] Refreshed tokens write only when the source generation and identity remain unchanged.
+- [ ] Refreshed Desktop tokens write only when the source generation and identity remain unchanged;
+  scoped CLI refreshes never overwrite Keychain.
 - [ ] Detail, overview, tray, notifications, scheduled/manual refresh, CLI, and Local HTTP all
   project the same active account under races and restarts.
 - [ ] Rename validation and visible loading/stale/unavailable/partial/error states are covered by UI
@@ -206,7 +208,8 @@ let users choose one active account consistently across every existing provider 
 - Add Pinned selection, account rename/manage UI, account-owned snapshots, and visible failure
   states.
 - Route all probe/cache/CLI/Local HTTP/tray/notification publication through the active account.
-- Add compare-and-swap protection to Cursor credential refresh writes.
+- Add a guarded SQLite transaction to Desktop credential refresh writes and keep scoped CLI
+  Keychain refreshes memory-only.
 - Do not add browser collection or cross-account totals in this issue.
 
 ## Acceptance Criteria

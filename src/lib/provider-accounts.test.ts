@@ -15,17 +15,22 @@ describe("provider accounts client", () => {
 
   it("loads a provider account view with a camelCase provider id", async () => {
     const view = {
-      providerId: "cursor",
+      providerId: "claude",
       selection: { mode: "auto" as const },
-      activeAccountId: null,
+      activeAccountId: "account-claude",
       accounts: [],
+      enrichmentWarning: {
+        code: "unknownSeat",
+        message: "The connected Claude Team seat is not recognized yet.",
+        correlationId: "correlation-seat-type",
+      },
     }
     tauri.invoke.mockResolvedValue(view)
     const { getProviderAccountView } = await import("./provider-accounts")
 
-    await expect(getProviderAccountView("cursor")).resolves.toEqual(view)
+    await expect(getProviderAccountView("claude")).resolves.toEqual(view)
     expect(tauri.invoke).toHaveBeenCalledWith("get_provider_account_view", {
-      providerId: "cursor",
+      providerId: "claude",
     })
   })
 

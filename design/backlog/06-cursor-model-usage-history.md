@@ -59,8 +59,8 @@ In:
 - Fetch the current billing cycle capped to the latest 30 days, or 30 days when no reliable cycle
   exists.
 - Prove pagination complete before aggregating and committing.
-- Aggregate by local date plus raw model into four token classes, checked total tokens, request
-  count, list-price equivalent, and coverage.
+- Aggregate by local date plus raw model using each event's historical IANA time-zone offset into
+  four token classes, checked total tokens, request count, list-price equivalent, and coverage.
 - Publish a separate whole-window metered total only when every valid timestamped event has valid
   `chargedCents`.
 - Persist only complete account-scoped aggregates under `provider-history/provider/account.json`.
@@ -91,8 +91,8 @@ Implementation notes:
 - Request `pageSize: 1000`; encode `startDate` and `endDate` Unix milliseconds as strings; cap at
   200 pages.
 - Require an empty/short final page. A full page at the cap is incomplete.
-- If `totalUsageEventsCount` exists, require it to remain stable and require collected count to
-  reach it.
+- If `totalUsageEventsCount` exists on any page, require every present value to remain stable and
+  require collected count to reach it; do not require the optional field on every page.
 - Remove only exact proven overlap at adjacent page boundaries when raw count exceeds the stable
   total. Never globally deduplicate equal events because there is no stable event ID.
 - Fail closed on missing page, count drift, unexplained duplicate/overcount, malformed numbers,
@@ -100,6 +100,8 @@ Implementation notes:
   change. Preserve the previous complete snapshot.
 - Include a row in a model bucket only when timestamp is positive/in-window, `tokenUsage` exists,
   and checked `inputTokens + outputTokens + cacheWriteTokens + cacheReadTokens` is greater than zero.
+- Treat a missing or blank optional token counter as zero. Reject negative, fractional,
+  non-numeric, overflowing, or JavaScript-unsafe totals so frontend numbers remain exact.
 - Preserve raw model spelling; blank becomes `Unknown` only at presentation.
 - `requestCount` counts included token events.
 - `tokenUsage.totalCents / 100` is list-price equivalent. Missing values retain known cost with
@@ -135,8 +137,8 @@ Preserve / do not touch:
 - [ ] Missing page, full final page at cap, count drift, unexplained overcount, malformed numeric
   data, overflow, cancellation, account switch, and generation switch commit nothing.
 - [ ] Four token classes sum with checked integer arithmetic and remain available in detail.
-- [ ] Aggregation is account-scoped by local date and raw model; Chrome/Arc/local accounts using
-  the same model never flatten together.
+- [ ] Aggregation is account-scoped by local date and raw model, applies IANA daylight-saving rules
+  per event, and never flattens Chrome/Arc/local accounts using the same model together.
 - [ ] Missing `totalCents` marks list cost Partial while preserving known values; invalid cost
   latches Invalid for that bucket.
 - [ ] Metered total publishes only when all valid timestamped events have valid `chargedCents` and
@@ -162,8 +164,8 @@ Automated:
 
 - Scripted pagination fixtures for short/empty final pages, exact totals, count drift, adjacent
   overlap, legitimate equal events, page cap, missing page, malformed values, and overflow.
-- Mapping/cost fixtures for four token classes, unknown model, time zones, Partial/Invalid list
-  cost, complete/incomplete metered total, and non-token charged rows.
+- Mapping/cost fixtures for four token classes, unknown model, IANA daylight-saving transitions,
+  Partial/Invalid list cost, complete/incomplete metered total, and non-token charged rows.
 - Scheduler/store tests for coalescing, global concurrency, cancellation, account/generation/window
   switch, safe replacement, and previous-snapshot retention.
 - Browser/local auth candidate and no-secret/redaction tests.

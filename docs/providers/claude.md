@@ -78,6 +78,11 @@ Email matching ignores surrounding ASCII whitespace and letter case; the organiz
 match exactly. Missing, mismatched, or unknown evidence keeps the label at `Team`. A Claude browser
 session cannot create a separate browser-only account.
 
+When exact-seat verification cannot complete, the account panel shows a nonsecret Claude Team
+verification warning and reference ID. The successful quota result remains available with the
+generic `Team` label, so a browser mismatch or temporary browser failure does not turn quota into an
+error.
+
 The browser profile must be selected explicitly. Cookies, OAuth identity fields, and raw account
 responses remain in memory. Persisted account data contains only opaque identifiers, fingerprints,
 the selected profile locator, and local labels.
@@ -115,7 +120,11 @@ Keychain values use the same JSON structure as the legacy credentials file:
 
 **Fallback:** `~/.claude/.credentials.json`. This file can be left behind by older Claude Code versions, so it is treated as a fallback when Keychain does not contain usable credentials.
 
-If the Keychain item or credentials file changes during token refresh, OpenUsageCN refuses to overwrite the newer login and reports a credential conflict.
+OpenUsageCN does not refresh Keychain credentials because macOS Keychain has no compare-by-value
+update that can protect a concurrent Claude Code login. When that access token needs refresh, run
+`claude` and try again. Credentials-file refreshes use a conditional safe replacement so a newer
+file is not overwritten. If that replacement cannot be saved, the refresh fails visibly and asks
+you to refresh the session with Claude Code.
 
 ### Token Refresh
 

@@ -109,12 +109,19 @@ export type ProviderPersistenceWarning = {
   correlationId: string
 }
 
+export type ProviderEnrichmentWarning = {
+  code: string
+  message: string
+  correlationId: string
+}
+
 export type ProviderAccountView = {
   providerId: string
   selection: ProviderAccountSelection
   activeAccountId: string | null
   accounts: ProviderAccountSummary[]
   persistenceWarning?: ProviderPersistenceWarning
+  enrichmentWarning?: ProviderEnrichmentWarning
 }
 
 export type ProviderAccountOperation =

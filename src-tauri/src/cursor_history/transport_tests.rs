@@ -88,6 +88,33 @@ fn actual_cursor_page_schema_maps_numeric_strings_and_four_token_classes() {
 }
 
 #[test]
+fn blank_optional_token_fields_decode_as_missing_zero_values() {
+    let page = transport::decode_page_body(
+        1,
+        br#"{
+          "usageEventsDisplay": [{
+            "timestamp": "1700000000000",
+            "model": "model",
+            "tokenUsage": {
+              "inputTokens": "",
+              "outputTokens": 2.0,
+              "cacheReadTokens": 3
+            },
+            "chargedCents": 0
+          }],
+          "totalUsageEventsCount": 1
+        }"#,
+    )
+    .expect("blank optional token counters should decode");
+
+    let usage = page.events[0].token_usage.as_ref().expect("token usage");
+    assert!(matches!(usage.input_tokens, RawNumber::Missing));
+    assert!(matches!(usage.output_tokens, RawNumber::Decimal(value) if value == 2.0));
+    assert!(matches!(usage.cache_write_tokens, RawNumber::Missing));
+    assert!(matches!(usage.cache_read_tokens, RawNumber::Integer(3)));
+}
+
+#[test]
 fn ownership_field_shape_does_not_control_whether_a_page_decodes() {
     let page = transport::decode_page_body(
         1,

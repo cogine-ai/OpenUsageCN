@@ -34,10 +34,10 @@ jobs:
       max-parallel: 1
       matrix:
         include:
-          - platform: macos-latest
+          - platform: macos-15
             target: aarch64-apple-darwin
             args: "--target aarch64-apple-darwin"
-          - platform: macos-latest
+          - platform: macos-15-intel
             target: x86_64-apple-darwin
             args: "--target x86_64-apple-darwin"
     runs-on: ${{ matrix.platform }}
@@ -61,6 +61,8 @@ jobs:
       - run: bun install
       - name: Build Cookie Helper
         run: bun run build:cookie-helper -- ${{ matrix.target }}
+      - name: Verify Cookie Helper Build
+        run: bun run verify:cookie-helper-build -- ${{ matrix.target }}
       - name: Bundle plugins
         run: bun run bundle:plugins
       - name: Verify bundled plugins
@@ -170,6 +172,9 @@ jobs:
           prerelease: false
           includeUpdaterJson: true
           args: ${{ matrix.args }}
+
+      - name: Verify Signed And Notarized Cookie Helper
+        run: bun run verify:cookie-helper-package -- ${{ matrix.target }}
 
       - name: Verify updater signatures
         run: bun run verify:updater-signature

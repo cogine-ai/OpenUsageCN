@@ -121,11 +121,21 @@ pub(crate) struct ProviderAccountView {
     pub accounts: Vec<AccountSummary>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub persistence_warning: Option<ProviderPersistenceWarning>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enrichment_warning: Option<ProviderEnrichmentWarning>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ProviderPersistenceWarning {
+    pub code: String,
+    pub message: String,
+    pub correlation_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ProviderEnrichmentWarning {
     pub code: String,
     pub message: String,
     pub correlation_id: String,

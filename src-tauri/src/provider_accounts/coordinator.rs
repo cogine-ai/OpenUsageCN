@@ -1,7 +1,7 @@
 use super::keychain::{InstallationKeyStore, SystemInstallationKeyStore};
 use super::model::{
-    OperationStatus, ProviderAccountViewChanged, ProviderOperationReceipt,
-    ProviderPersistenceWarning,
+    AccountId, OperationStatus, ProviderAccountViewChanged, ProviderEnrichmentWarning,
+    ProviderOperationReceipt, ProviderPersistenceWarning,
 };
 use super::probe::ProviderAccountAdapter;
 use super::registry_store::RegistryStore;
@@ -22,6 +22,7 @@ pub(crate) struct ProviderAccounts {
     pub(super) registry_store: Option<RegistryStore>,
     pub(super) snapshot_store: Option<SnapshotStore>,
     pub(super) persistence_warning: Mutex<Option<ProviderPersistenceWarning>>,
+    pub(super) enrichment_warnings: Mutex<HashMap<(String, AccountId), ProviderEnrichmentWarning>>,
     revision: AtomicU64,
 }
 
@@ -38,6 +39,7 @@ impl ProviderAccounts {
             registry_store: None,
             snapshot_store: None,
             persistence_warning: Mutex::new(None),
+            enrichment_warnings: Mutex::new(HashMap::new()),
             revision: AtomicU64::new(0),
         }
     }
@@ -59,6 +61,7 @@ impl ProviderAccounts {
             registry_store: Some(registry_store),
             snapshot_store: Some(SnapshotStore::new(app_data_dir)),
             persistence_warning: Mutex::new(None),
+            enrichment_warnings: Mutex::new(HashMap::new()),
             revision: AtomicU64::new(0),
         })
     }
@@ -94,6 +97,7 @@ impl ProviderAccounts {
             registry_store: Some(registry_store),
             snapshot_store: Some(SnapshotStore::new(app_data_dir)),
             persistence_warning: Mutex::new(None),
+            enrichment_warnings: Mutex::new(HashMap::new()),
             revision: AtomicU64::new(0),
         })
     }
@@ -120,6 +124,7 @@ impl ProviderAccounts {
                     .to_string(),
                 correlation_id,
             })),
+            enrichment_warnings: Mutex::new(HashMap::new()),
             revision: AtomicU64::new(0),
         }
     }
@@ -153,10 +158,14 @@ impl ProviderAccounts {
         if receipt.status == OperationStatus::Failed {
             return None;
         }
-        Some(ProviderAccountViewChanged {
+        Some(self.view_changed_event(provider_id))
+    }
+
+    pub(crate) fn view_changed_event(&self, provider_id: &str) -> ProviderAccountViewChanged {
+        ProviderAccountViewChanged {
             provider_id: provider_id.to_string(),
             revision: self.revision.fetch_add(1, Ordering::Relaxed) + 1,
-        })
+        }
     }
 
     pub(super) fn current_persistence_warning(&self) -> Option<ProviderPersistenceWarning> {
@@ -172,6 +181,22 @@ impl ProviderAccounts {
                     correlation_id: "provider-account-warning-unavailable".to_string(),
                 })
             })
+    }
+
+    pub(super) fn current_enrichment_warning(
+        &self,
+        provider_id: &str,
+        account_id: &str,
+    ) -> Option<ProviderEnrichmentWarning> {
+        match self.enrichment_warnings.lock() {
+            Ok(warnings) => warnings
+                .get(&(provider_id.to_string(), account_id.to_string()))
+                .cloned(),
+            Err(_) => {
+                log::error!("provider enrichment warning state is unavailable");
+                None
+            }
+        }
     }
 
     pub(super) fn record_persistence_failure(&self, reason: &str) {

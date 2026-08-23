@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use time::{OffsetDateTime, UtcOffset};
+use jiff::{Timestamp, tz::TimeZone};
 
 use super::{
     HistoryError, HistoryTotals, ListCostCoverage, MeteredCoverage, ModelUsageBucket, RawNumber,
@@ -8,6 +8,7 @@ use super::{
 };
 
 const MAX_SAFE_CENTS: f64 = 9_007_199_254_740_991.0;
+const MAX_SAFE_TOKEN_COUNT: u64 = 9_007_199_254_740_991;
 
 #[derive(Default)]
 struct BucketAccumulator {
@@ -25,13 +26,12 @@ pub(super) fn aggregate_events(
     events: Vec<ScriptedEvent>,
     from_ms: i64,
     to_ms: i64,
-    utc_offset_seconds: i32,
+    time_zone: &str,
 ) -> Result<(Vec<ModelUsageBucket>, HistoryTotals), HistoryError> {
     if from_ms <= 0 || to_ms <= from_ms {
         return Err(HistoryError::InvalidWindow);
     }
-    let offset = UtcOffset::from_whole_seconds(utc_offset_seconds)
-        .map_err(|_| HistoryError::InvalidTimeZoneOffset)?;
+    let time_zone = TimeZone::get(time_zone).map_err(|_| HistoryError::InvalidTimeZone)?;
     let mut buckets = BTreeMap::<(String, String), BucketAccumulator>::new();
     let mut metered_cents = 0.0;
     let mut metered_complete = true;
@@ -63,12 +63,11 @@ pub(super) fn aggregate_events(
         let counts = token_counts(&token_usage)?;
         let total_tokens = counts
             .iter()
-            .try_fold(0_u64, |sum, value| sum.checked_add(*value))
-            .ok_or(HistoryError::TokenOverflow)?;
+            .try_fold(0_u64, |sum, value| checked_add(sum, *value))?;
         if total_tokens == 0 {
             continue;
         }
-        let local_date = local_date(timestamp_ms, offset).ok_or(HistoryError::InvalidWindow)?;
+        let local_date = local_date(timestamp_ms, &time_zone).ok_or(HistoryError::InvalidWindow)?;
         let bucket = buckets.entry((local_date, event.model_name)).or_default();
         bucket.input_tokens = checked_add(bucket.input_tokens, counts[0])?;
         bucket.output_tokens = checked_add(bucket.output_tokens, counts[1])?;
@@ -135,31 +134,36 @@ fn token_counts(token_usage: &ScriptedTokenUsage) -> Result<[u64; 4], HistoryErr
 
 fn token_count(value: &RawNumber) -> Result<u64, HistoryError> {
     match value {
-        RawNumber::Integer(value) => {
-            u64::try_from(*value).map_err(|_| HistoryError::MalformedTokenValue)
+        RawNumber::Missing => Ok(0),
+        RawNumber::Integer(value) => match u64::try_from(*value) {
+            Ok(value) if value <= MAX_SAFE_TOKEN_COUNT => Ok(value),
+            Ok(_) => Err(HistoryError::TokenOverflow),
+            Err(_) => Err(HistoryError::MalformedTokenValue),
+        },
+        RawNumber::Decimal(value)
+            if value.is_finite()
+                && *value >= 0.0
+                && value.fract() == 0.0
+                && *value <= MAX_SAFE_TOKEN_COUNT as f64 =>
+        {
+            Ok(*value as u64)
         }
-        RawNumber::Missing | RawNumber::Decimal(_) | RawNumber::Invalid => {
-            Err(HistoryError::MalformedTokenValue)
-        }
+        RawNumber::Decimal(_) | RawNumber::Invalid => Err(HistoryError::MalformedTokenValue),
     }
 }
 
 fn checked_add(left: u64, right: u64) -> Result<u64, HistoryError> {
-    left.checked_add(right).ok_or(HistoryError::TokenOverflow)
+    left.checked_add(right)
+        .filter(|sum| *sum <= MAX_SAFE_TOKEN_COUNT)
+        .ok_or(HistoryError::TokenOverflow)
 }
 
-fn local_date(timestamp_ms: i64, offset: UtcOffset) -> Option<String> {
-    let nanos = i128::from(timestamp_ms).checked_mul(1_000_000)?;
-    let date = OffsetDateTime::from_unix_timestamp_nanos(nanos)
+fn local_date(timestamp_ms: i64, time_zone: &TimeZone) -> Option<String> {
+    let date = Timestamp::from_millisecond(timestamp_ms)
         .ok()?
-        .to_offset(offset)
+        .to_zoned(time_zone.clone())
         .date();
-    Some(format!(
-        "{:04}-{:02}-{:02}",
-        date.year(),
-        date.month() as u8,
-        date.day()
-    ))
+    Some(date.to_string())
 }
 
 fn valid_cents(value: &RawNumber) -> Option<f64> {

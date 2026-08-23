@@ -36,16 +36,17 @@ pub(super) fn collect_complete_events(
         }
     }
 
-    if let Some(first_page) = pages.first() {
-        let expected = first_page.total_usage_events_count;
-        for page in pages.iter().skip(1) {
-            if page.total_usage_events_count != expected {
+    let mut authoritative_total = None;
+    for page in &pages {
+        if let Some(actual) = page.total_usage_events_count {
+            if authoritative_total.is_some_and(|expected| expected != actual) {
                 return Err(HistoryError::TotalCountDrift {
-                    expected,
-                    actual: page.total_usage_events_count,
+                    expected: authoritative_total,
+                    actual: Some(actual),
                     page: page.page,
                 });
             }
+            authoritative_total = Some(actual);
         }
     }
 
@@ -63,7 +64,6 @@ pub(super) fn collect_complete_events(
         });
     }
 
-    let authoritative_total = pages.first().and_then(|page| page.total_usage_events_count);
     let actual = pages.iter().fold(0_u64, |count, page| {
         count + u64::try_from(page.events.len()).unwrap_or(u64::MAX)
     });

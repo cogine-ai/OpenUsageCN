@@ -12,9 +12,11 @@
     "ccusage:bump": "bun ./scripts/bump-ccusage-version.mjs",
     "bundle:plugins": "bun copy-bundled.cjs",
     "verify:updater-signature": "bun scripts/verify-updater-signature.mjs",
+    "verify:cookie-helper-build": "bun scripts/verify-macos-cookie-helper.mjs build",
+    "verify:cookie-helper-package": "bun scripts/verify-macos-cookie-helper.mjs package",
     "preview": "vite preview",
     "test": "vitest",
-    "test:cookie-helper": "bun test tools/cookie-helper/*.test.mjs scripts/build-cookie-helper.test.mjs",
+    "test:cookie-helper": "bun test tools/cookie-helper/*.test.mjs scripts/*cookie-helper*.test.mjs",
     "test:watch": "vitest --watch",
     "test:coverage": "vitest run --coverage.enabled",
     "tauri": "tauri"

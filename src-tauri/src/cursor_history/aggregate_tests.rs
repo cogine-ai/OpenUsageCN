@@ -44,6 +44,37 @@ fn aggregate(events: Vec<ScriptedEvent>) -> CompleteHistory {
     aggregate_scripted_history(script(events)).expect("fixture is a complete history")
 }
 
+fn assert_los_angeles_local_date(
+    timestamp_ms: i64,
+    current_utc_offset_seconds: i32,
+    expected_date: &str,
+) {
+    let event = token_event(
+        i128::from(timestamp_ms),
+        "model-dst",
+        [1, 0, 0, 0],
+        RawNumber::Integer(0),
+        RawNumber::Integer(0),
+    );
+    let history = aggregate_scripted_history(ScriptedHistory {
+        account_id: "account-dst".to_string(),
+        from_ms: timestamp_ms - 60_000,
+        to_ms: timestamp_ms + 60_000,
+        fetched_at_ms: timestamp_ms + 120_000,
+        time_zone: "America/Los_Angeles".to_string(),
+        utc_offset_seconds: current_utc_offset_seconds,
+        requested_page_size: 1_000,
+        pages: vec![ScriptedPage {
+            page: 1,
+            events: vec![event],
+            total_usage_events_count: Some(1),
+        }],
+    })
+    .expect("IANA rules map the event into an account-local date");
+
+    assert_eq!(history.buckets[0].local_date, expected_date);
+}
+
 fn script(events: Vec<ScriptedEvent>) -> ScriptedHistory {
     let total = u64::try_from(events.len()).expect("fixture count fits u64");
     ScriptedHistory {
@@ -131,6 +162,17 @@ fn aggregates_four_token_classes_by_local_date_and_raw_model() {
             metered_coverage: MeteredCoverage::Complete,
         }
     );
+}
+
+#[test]
+fn local_dates_use_historical_iana_offsets_across_dst_changes() {
+    // 2024-03-10 07:30Z was still 2024-03-09 in Los Angeles (UTC-8), even
+    // when the current browser offset supplied with the request is UTC-7.
+    assert_los_angeles_local_date(1_710_055_800_000, -7 * 60 * 60, "2024-03-09");
+
+    // 2024-11-03 07:30Z was already 2024-11-03 in Los Angeles (UTC-7), even
+    // when the current browser offset supplied with the request is UTC-8.
+    assert_los_angeles_local_date(1_730_619_000_000, -8 * 60 * 60, "2024-11-03");
 }
 
 #[test]
@@ -340,6 +382,55 @@ fn malformed_token_values_fail_the_account_aggregate() {
         .expect_err("fractional token counts cannot produce a complete aggregate");
 
     assert_eq!(error, super::HistoryError::MalformedTokenValue);
+}
+
+#[test]
+fn missing_and_integer_decimal_token_fields_map_to_exact_zero_or_counts() {
+    let mut event = token_event(
+        1_704_069_000_000,
+        "model-a",
+        [0, 0, 0, 0],
+        RawNumber::Integer(0),
+        RawNumber::Integer(0),
+    );
+    let usage = event.token_usage.as_mut().expect("fixture has token usage");
+    usage.input_tokens = RawNumber::Missing;
+    usage.output_tokens = RawNumber::Decimal(2.0);
+    usage.cache_write_tokens = RawNumber::Missing;
+    usage.cache_read_tokens = RawNumber::Integer(3);
+
+    let history = aggregate_scripted_history(script(vec![event]))
+        .expect("optional zero fields and integer decimals are valid token counters");
+
+    assert_eq!(history.buckets[0].input_tokens, 0);
+    assert_eq!(history.buckets[0].output_tokens, 2);
+    assert_eq!(history.buckets[0].cache_write_tokens, 0);
+    assert_eq!(history.buckets[0].cache_read_tokens, 3);
+}
+
+#[test]
+fn aggregate_token_totals_cannot_exceed_javascript_safe_integer_range() {
+    let events = vec![
+        token_event(
+            1_704_069_000_000,
+            "model-a",
+            [9_007_199_254_740_991, 0, 0, 0],
+            RawNumber::Integer(0),
+            RawNumber::Integer(0),
+        ),
+        token_event(
+            1_704_069_100_000,
+            "model-a",
+            [1, 0, 0, 0],
+            RawNumber::Integer(0),
+            RawNumber::Integer(0),
+        ),
+    ];
+
+    let error = aggregate_scripted_history(script(events))
+        .expect_err("frontend token totals must remain exact JavaScript integers");
+
+    assert_eq!(error, super::HistoryError::TokenOverflow);
 }
 
 #[test]

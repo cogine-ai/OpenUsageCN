@@ -21,10 +21,10 @@ pub(crate) fn current_period_window(
 ) -> Result<HistoryWindow, HistoryError> {
     const THIRTY_DAYS_MS: i64 = 30 * 86_400_000;
 
-    if time_zone.trim().is_empty()
+    if jiff::tz::TimeZone::get(&time_zone).is_err()
         || time::UtcOffset::from_whole_seconds(utc_offset_seconds).is_err()
     {
-        return Err(HistoryError::InvalidTimeZoneOffset);
+        return Err(HistoryError::InvalidTimeZone);
     }
     let fallback_start = now_ms
         .checked_sub(THIRTY_DAYS_MS)

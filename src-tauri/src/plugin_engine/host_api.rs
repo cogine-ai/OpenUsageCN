@@ -590,6 +590,9 @@ fn redact_body(body: &str) -> String {
 
 fn redact_http_response_body(url: &str, body: &str) -> String {
     let path = url.split('?').next().unwrap_or(url);
+    if path.ends_with("/api/auth/me") {
+        return "[REDACTED CURSOR IDENTITY RESPONSE]".to_string();
+    }
     let body = if path.ends_with("/wham/rate-limit-reset-credits") {
         redact_codex_reset_credit_inventory_sensitive_fields(body)
     } else {
@@ -4282,6 +4285,23 @@ mod tests {
         assert_eq!(
             redact_http_response_body("https://example.com/usage", body),
             body
+        );
+    }
+
+    #[test]
+    fn redact_http_response_body_hides_entire_cursor_identity_response() {
+        let body = r#"{"email":"person@example.com","picture":"https://images.example.com/private/avatar.png","subscriptionStatus":"active"}"#;
+
+        assert_eq!(
+            redact_http_response_body(
+                "https://api2.cursor.sh/api/auth/me?include_profile=true",
+                body,
+            ),
+            "[REDACTED CURSOR IDENTITY RESPONSE]"
+        );
+        assert_eq!(
+            redact_http_response_body("https://example.com/api/auth/metadata", body),
+            redact_body(body)
         );
     }
 

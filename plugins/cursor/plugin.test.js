@@ -399,7 +399,7 @@ describe("cursor plugin", () => {
     expect(result.lines.find((line) => line.label === "Total usage")).toBeTruthy()
   })
 
-  it("writes a scoped refresh only through a generation-checked account source", async () => {
+  it("keeps a scoped CLI refresh in memory without overwriting Keychain", async () => {
     const ctx = makeCtx()
     const expiredAccessToken = makeJwt({ sub: "auth0|cli-user", exp: 1 })
     const refreshedAccessToken = makeJwt({ sub: "auth0|cli-user", exp: 9999999999 })
@@ -408,9 +408,6 @@ describe("cursor plugin", () => {
       if (service === "cursor-access-token") return currentAccessToken
       if (service === "cursor-refresh-token") return "refresh-current"
       return null
-    })
-    ctx.host.keychain.writeGenericPassword.mockImplementation((service, value) => {
-      if (service === "cursor-access-token") currentAccessToken = value
     })
     ctx.host.http.request.mockImplementation((opts) => {
       if (String(opts.url).includes("/oauth/token")) {
@@ -447,12 +444,119 @@ describe("cursor plugin", () => {
     })
 
     expect(result.lines.find((line) => line.label === "Total usage")).toBeTruthy()
-    expect(ctx.host.keychain.writeGenericPassword).toHaveBeenCalledWith(
-      "cursor-access-token",
-      refreshedAccessToken
-    )
-    expect(currentAccessToken).toBe(refreshedAccessToken)
+    expect(ctx.host.keychain.writeGenericPassword).not.toHaveBeenCalled()
+    expect(currentAccessToken).toBe(expiredAccessToken)
     expect(ctx.host.sqlite.exec).not.toHaveBeenCalled()
+  })
+
+  it("persists a scoped Desktop refresh in one guarded SQLite transaction", async () => {
+    const ctx = makeCtx()
+    const expiredAccessToken = makeJwt({ sub: "auth0|desktop-user", exp: 1 })
+    const refreshedAccessToken = makeJwt({ sub: "auth0|desktop-user", exp: 9999999999 })
+    const refreshToken = "refresh-current"
+    let currentAccessToken = expiredAccessToken
+    ctx.host.sqlite.query.mockImplementation((_db, sql) => {
+      const text = String(sql)
+      if (text.includes("cursorAuth/accessToken")) {
+        return JSON.stringify([{ value: currentAccessToken }])
+      }
+      if (text.includes("cursorAuth/refreshToken")) {
+        return JSON.stringify([{ value: refreshToken }])
+      }
+      return JSON.stringify([])
+    })
+    ctx.host.sqlite.exec.mockImplementation((_db, sql) => {
+      expect(String(sql)).toContain("BEGIN IMMEDIATE;")
+      expect(String(sql)).toContain("CHECK(ok = 1)")
+      expect(String(sql)).toContain(expiredAccessToken)
+      expect(String(sql)).toContain(refreshToken)
+      expect(String(sql)).toContain(refreshedAccessToken)
+      expect(String(sql)).toContain("COMMIT;")
+      currentAccessToken = refreshedAccessToken
+    })
+    ctx.host.http.request.mockImplementation((opts) => {
+      const url = String(opts.url)
+      if (url.includes("/oauth/token")) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({ access_token: refreshedAccessToken }),
+        }
+      }
+      if (url === "https://cursor.com/api/auth/me") {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({ sub: "auth0|desktop-user" }),
+        }
+      }
+      return {
+        status: 200,
+        bodyText: JSON.stringify({
+          enabled: true,
+          planUsage: { totalSpend: 1200, limit: 2400 },
+        }),
+      }
+    })
+    const plugin = await loadPlugin()
+    const credentialGeneration = plugin.credentialGeneration(ctx, {
+      connectionKey: "cursor-desktop",
+    })
+
+    const result = plugin.probe(ctx, {
+      connectionKey: "cursor-desktop",
+      credentialGeneration,
+    })
+
+    expect(result.lines.find((line) => line.label === "Total usage")).toBeTruthy()
+    expect(ctx.host.sqlite.exec).toHaveBeenCalledTimes(1)
+    expect(currentAccessToken).toBe(refreshedAccessToken)
+    expect(ctx.host.keychain.writeGenericPassword).not.toHaveBeenCalled()
+  })
+
+  it("rejects a scoped Desktop refresh when the SQLite transaction guard fails", async () => {
+    const ctx = makeCtx()
+    const expiredAccessToken = makeJwt({ sub: "auth0|desktop-user", exp: 1 })
+    const refreshedAccessToken = makeJwt({ sub: "auth0|desktop-user", exp: 9999999999 })
+    ctx.host.sqlite.query.mockImplementation((_db, sql) => {
+      if (String(sql).includes("cursorAuth/accessToken")) {
+        return JSON.stringify([{ value: expiredAccessToken }])
+      }
+      if (String(sql).includes("cursorAuth/refreshToken")) {
+        return JSON.stringify([{ value: "refresh-current" }])
+      }
+      return JSON.stringify([])
+    })
+    ctx.host.sqlite.exec.mockImplementation(() => {
+      throw new Error("CHECK constraint failed: openusage_cas_guard")
+    })
+    ctx.host.http.request.mockImplementation((opts) => {
+      const url = String(opts.url)
+      if (url.includes("/oauth/token")) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({ access_token: refreshedAccessToken }),
+        }
+      }
+      if (url === "https://cursor.com/api/auth/me") {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({ sub: "auth0|desktop-user" }),
+        }
+      }
+      throw new Error("usage must not be requested after a failed credential guard")
+    })
+    const plugin = await loadPlugin()
+    const credentialGeneration = plugin.credentialGeneration(ctx, {
+      connectionKey: "cursor-desktop",
+    })
+
+    expect(() =>
+      plugin.probe(ctx, {
+        connectionKey: "cursor-desktop",
+        credentialGeneration,
+      })
+    ).toThrow("Account credentials changed")
+    expect(ctx.host.sqlite.exec).toHaveBeenCalledTimes(1)
+    expect(ctx.host.keychain.writeGenericPassword).not.toHaveBeenCalled()
   })
 
   it("rejects a scoped refresh write when the local login changes before CAS", async () => {

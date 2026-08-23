@@ -81,6 +81,36 @@ describe("useProviderAccounts view-change events", () => {
     expect(tauri.invoke).toHaveBeenCalledTimes(2)
   })
 
+  it("establishes the subscription before the initial fresh read", async () => {
+    const listenerReady = deferred<() => void>()
+    let serverView = view("cursor", "account-1")
+    tauri.listen.mockReturnValueOnce(listenerReady.promise)
+    tauri.invoke.mockImplementation(() => Promise.resolve(serverView))
+
+    const { result } = renderHook(() => useProviderAccounts("cursor"))
+
+    serverView = view("cursor", "account-2")
+    act(() => listenerReady.resolve(tauri.unlisten))
+
+    await waitFor(() => expect(result.current.view?.activeAccountId).toBe("account-2"))
+    expect(tauri.invoke).toHaveBeenCalledTimes(1)
+  })
+
+  it("loads the view but keeps a visible warning when account events cannot subscribe", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    tauri.listen.mockRejectedValueOnce(new Error("event bridge unavailable"))
+    tauri.invoke.mockResolvedValue(view("cursor", "account-1"))
+
+    const { result } = renderHook(() => useProviderAccounts("cursor"))
+
+    await waitFor(() => expect(result.current.view?.activeAccountId).toBe("account-1"))
+    expect(result.current.error).toBe("账号实时更新不可用，请重新打开此页面")
+    expect(errorSpy).toHaveBeenCalledWith(
+      "Failed to listen for provider account changes:",
+      expect.any(Error)
+    )
+  })
+
   it("keeps the newest fresh read when event responses resolve out of order", async () => {
     const olderRead = deferred<ReturnType<typeof view>>()
     const newerRead = deferred<ReturnType<typeof view>>()

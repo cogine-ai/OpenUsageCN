@@ -223,6 +223,9 @@ fn wire_number(value: Option<Value>) -> RawNumber {
         }
         Value::String(value) => {
             let value = value.trim();
+            if value.is_empty() {
+                return RawNumber::Missing;
+            }
             if let Ok(value) = value.parse::<i128>() {
                 RawNumber::Integer(value)
             } else {

@@ -184,7 +184,8 @@ Manual:
   fail-closed or accounts will duplicate.
 - App/CLI cross-process ordering may change when PR #182 lands. Integrate its final `startedAt`
   semantics instead of maintaining a parallel last-write rule.
-- Claude credential persistence must retain PR #184's final compare-and-swap behavior if it lands.
+- Claude credentials-file persistence must use conditional replacement. Keychain refresh must stay
+  fail-closed unless macOS exposes a value-conditional update primitive.
 
 Required sequence:
 

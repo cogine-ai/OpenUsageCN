@@ -93,8 +93,9 @@ Implementation notes:
 - A `Set-Cookie` rotation may update only the current in-memory SessionRef.
 - Browser mismatch is visible and nonfatal: preserve the successful quota snapshot and generic
   Team label.
-- If PR #184 lands, keep its credential-generation/CAS behavior when moving Claude routing behind
-  ProviderAccounts.
+- Keep credentials-file refresh behind a conditional replacement when moving Claude routing behind
+  ProviderAccounts. Do not refresh Keychain credentials without a value-conditional write; ask the
+  user to refresh them with Claude Code.
 
 Reuse existing code:
 
@@ -123,8 +124,8 @@ Preserve / do not touch:
 - [ ] OAuth profile and browser account bodies never use the generic response-prefix logger.
 - [ ] Storage/log/event/error canaries prove no bearer token, session key, email, organization UUID,
   membership ID, or response body escapes.
-- [ ] Existing Claude refresh behavior, including final PR #184 compare-and-swap protection,
-  remains covered.
+- [ ] Claude credentials-file conditional replacement and fail-closed Keychain refresh behavior
+  remain covered.
 - [ ] New request/response fields are audited against `host_api.rs` redaction with explicit tests.
 - [ ] `docs/providers/claude.md`, README support text, and applicable plugin API docs describe exact
   labels and the generic fallback.

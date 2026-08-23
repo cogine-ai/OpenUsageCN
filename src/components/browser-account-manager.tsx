@@ -63,6 +63,7 @@ export function BrowserAccountManager({
 }: BrowserAccountManagerProps) {
   const mounted = useRef(true)
   const activeRequestId = useRef<string | null>(null)
+  const profileListRevision = useRef(0)
   const [open, setOpen] = useState(false)
   const [browser, setBrowser] = useState<BrowserName | null>(null)
   const [profiles, setProfiles] = useState<BrowserProfile[]>([])
@@ -80,6 +81,7 @@ export function BrowserAccountManager({
   }
 
   function closeManager() {
+    profileListRevision.current += 1
     const requestId = activeRequestId.current
     activeRequestId.current = null
     if (requestId) cancelRequest(requestId)
@@ -98,6 +100,7 @@ export function BrowserAccountManager({
     mounted.current = true
     return () => {
       mounted.current = false
+      profileListRevision.current += 1
       const requestId = activeRequestId.current
       activeRequestId.current = null
       if (requestId) cancelRequest(requestId)
@@ -105,6 +108,7 @@ export function BrowserAccountManager({
   }, [])
 
   async function chooseBrowser(nextBrowser: BrowserName) {
+    const listRevision = ++profileListRevision.current
     const requestId = activeRequestId.current
     activeRequestId.current = null
     if (requestId) cancelRequest(requestId)
@@ -118,20 +122,23 @@ export function BrowserAccountManager({
     setLoadingProfiles(true)
     try {
       const response = await listBrowserProfiles(nextBrowser)
-      if (mounted.current) {
+      if (mounted.current && profileListRevision.current === listRevision) {
         setProfiles(response.profiles)
         setProfilesListed(true)
       }
     } catch (cause) {
+      if (!mounted.current || profileListRevision.current !== listRevision) return
       const nextError = typedError(
         cause,
         "Browser Profiles Unavailable",
         "Browser profiles could not be listed. Try another browser."
       )
       console.error("Failed to list browser profiles", nextError.code)
-      if (mounted.current) setError(nextError)
+      setError(nextError)
     } finally {
-      if (mounted.current) setLoadingProfiles(false)
+      if (mounted.current && profileListRevision.current === listRevision) {
+        setLoadingProfiles(false)
+      }
     }
   }
 
@@ -211,13 +218,14 @@ export function BrowserAccountManager({
         </Button>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex gap-2" role="group" aria-label="Browser">
         {(["Chrome", "Arc"] as const).map((option) => (
           <Button
             key={option}
             type="button"
             size="sm"
             variant={browser === option ? "default" : "outline"}
+            aria-pressed={browser === option}
             disabled={loadingProfiles}
             onClick={() => void chooseBrowser(option)}
           >
@@ -227,7 +235,11 @@ export function BrowserAccountManager({
       </div>
 
       {loadingProfiles ? (
-        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+        <p
+          className="flex items-center gap-2 text-sm text-muted-foreground"
+          role="status"
+          aria-live="polite"
+        >
           <LoaderCircle className="size-4 animate-spin" />
           Loading Browser Profiles…
         </p>
@@ -248,7 +260,7 @@ export function BrowserAccountManager({
             aria-label="Browser Profile"
             value={profileKey}
             onChange={(event) => setProfileKey(event.target.value)}
-            className="h-9 w-full rounded-md border border-input bg-background px-2"
+            className="h-9 w-full rounded-md border border-input bg-background px-2 outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             <option value="" disabled>
               Choose A Profile

@@ -205,6 +205,13 @@ fn successful_quota_probe_applies_only_exact_seat_and_preserves_lines() {
     let output = accounts.run_active_probe("claude").expect("probe succeeds");
 
     assert_eq!(output.plan.as_deref(), Some("Claude Team Premium"));
+    assert!(
+        accounts
+            .view("claude")
+            .unwrap()
+            .enrichment_warning
+            .is_none()
+    );
     assert_eq!(output.lines.len(), 1);
     match &output.lines[0] {
         MetricLine::Text { label, value, .. } => {
@@ -213,6 +220,43 @@ fn successful_quota_probe_applies_only_exact_seat_and_preserves_lines() {
         }
         _ => panic!("quota line changed"),
     }
+}
+
+#[test]
+fn exact_seat_success_clears_a_previous_identity_mismatch_warning() {
+    let (accounts, _) = setup(vec![
+        evidence(EMAIL, "team_standard", None),
+        evidence("other@example.com", "team_tier_1", None),
+        evidence(EMAIL, "team_tier_1", None),
+    ]);
+
+    let mismatched = accounts
+        .run_active_probe("claude")
+        .expect("generic quota remains available");
+    assert_eq!(mismatched.plan.as_deref(), Some("Team"));
+    assert_eq!(mismatched.lines.len(), 1);
+    assert_eq!(
+        accounts
+            .view("claude")
+            .unwrap()
+            .enrichment_warning
+            .as_ref()
+            .map(|warning| warning.code.as_str()),
+        Some("identityMismatch")
+    );
+
+    let exact = accounts
+        .run_active_probe("claude")
+        .expect("exact seat probe succeeds");
+    assert_eq!(exact.plan.as_deref(), Some("Claude Team Premium"));
+    assert_eq!(exact.lines.len(), 1);
+    assert!(
+        accounts
+            .view("claude")
+            .unwrap()
+            .enrichment_warning
+            .is_none()
+    );
 }
 
 #[test]
@@ -228,6 +272,80 @@ fn mismatched_browser_identity_is_nonfatal_and_keeps_generic_team() {
 
     assert_eq!(output.plan.as_deref(), Some("Team"));
     assert_eq!(output.lines.len(), 1);
+    let warning = accounts
+        .view("claude")
+        .unwrap()
+        .enrichment_warning
+        .expect("identity mismatch is visible");
+    assert_eq!(warning.code, "identityMismatch");
+    assert!(warning.message.contains("does not match"));
+    assert!(!warning.correlation_id.is_empty());
+}
+
+#[test]
+fn unknown_seat_is_visible_and_keeps_the_successful_generic_team_quota() {
+    let (accounts, _) = setup(vec![
+        evidence(EMAIL, "team_standard", None),
+        evidence(EMAIL, "team_future", None),
+    ]);
+
+    let output = accounts
+        .run_active_probe("claude")
+        .expect("quota probe succeeds");
+
+    assert_eq!(output.plan.as_deref(), Some("Team"));
+    assert_eq!(output.lines.len(), 1);
+    let warning = accounts
+        .view("claude")
+        .unwrap()
+        .enrichment_warning
+        .expect("unknown seat is visible");
+    assert_eq!(warning.code, "unknownSeat");
+    assert!(warning.message.contains("not recognized"));
+}
+
+#[test]
+fn missing_browser_profile_is_visible_and_keeps_the_successful_generic_team_quota() {
+    let (accounts, _) = setup(vec![evidence(EMAIL, "team_standard", None)]);
+    let view = accounts.view("claude").unwrap();
+    let account_id = view.active_account_id.unwrap();
+    let browser_connection_id = view.accounts[0]
+        .connections
+        .iter()
+        .find(|connection| connection.kind == ConnectionKind::Chrome)
+        .unwrap()
+        .connection_id
+        .clone();
+    assert_eq!(
+        accounts
+            .perform(
+                "claude",
+                ProviderOperation::DetachConnection {
+                    account_id,
+                    connection_id: browser_connection_id,
+                },
+            )
+            .status,
+        OperationStatus::Succeeded
+    );
+
+    let output = accounts
+        .run_active_probe("claude")
+        .expect("quota probe succeeds");
+
+    assert_eq!(output.plan.as_deref(), Some("Team"));
+    assert_eq!(output.lines.len(), 1);
+    let warning = accounts
+        .view("claude")
+        .unwrap()
+        .enrichment_warning
+        .expect("missing browser proof is visible");
+    assert_eq!(warning.code, "browserProfileUnavailable");
+    assert!(
+        warning
+            .message
+            .contains("Connect a matching Claude browser profile")
+    );
 }
 
 #[test]
@@ -271,6 +389,29 @@ fn oauth_generation_change_rejects_exact_seat_at_publication() {
     assert_eq!(
         error,
         "Account credentials changed during refresh. Try again."
+    );
+}
+
+#[test]
+fn rejected_probe_does_not_publish_its_pending_enrichment_warning() {
+    let (accounts, generation) = setup(vec![
+        evidence(EMAIL, "team_standard", None),
+        evidence("other@example.com", "team_tier_1", None),
+    ]);
+    let probe = accounts.prepare_active_probe("claude").expect("probe");
+    *generation.lock().unwrap() =
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string();
+
+    accounts
+        .publish_active_probe(probe, |_, _| {})
+        .expect_err("stale OAuth credentials reject publication");
+
+    assert!(
+        accounts
+            .view("claude")
+            .unwrap()
+            .enrichment_warning
+            .is_none()
     );
 }
 

@@ -32,8 +32,8 @@ Adjacent pull requests, not duplicates:
   active-account projection is integrated.
 - [PR #204](https://github.com/cogine-ai/OpenUsageCN/pull/204) adds stale probe cache regression
   coverage in the same cache area; preserve that coverage.
-- [PR #184](https://github.com/cogine-ai/OpenUsageCN/pull/184) adds Claude credential
-  compare-and-swap protection; the account-aware Claude path must retain the landed behavior.
+- Claude credentials-file refresh uses conditional replacement; the account-aware path must retain
+  it and must not refresh Keychain credentials without a value-conditional update.
 - [PR #176](https://github.com/cogine-ai/OpenUsageCN/pull/176) extends HTTP redaction; use the final
   redaction baseline when auditing new provider fields.
 

@@ -9,6 +9,9 @@ use std::time::Duration;
 mod account_projection;
 pub(crate) use account_projection::replace_account_projection;
 #[cfg(test)]
+#[path = "cache_account_projection_tests.rs"]
+mod account_projection_tests;
+#[cfg(test)]
 use account_projection::save_cache;
 mod flush;
 use flush::{CacheFlushResult, flush_pending_cache_once, schedule_cache_flush_locked};

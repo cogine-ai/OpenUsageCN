@@ -64,7 +64,8 @@ Completeness rules:
 
 - Request 1,000 rows per page, with a hard cap of 200 pages.
 - Require an empty or short final page; a full page at the cap is incomplete.
-- If totalUsageEventsCount is present, require it to stay constant.
+- If totalUsageEventsCount is present on any page, require every present value to stay constant;
+  the optional field need not repeat on every page.
 - Require the collected row count to reach the authoritative count.
 - If raw rows exceed that count, remove only the exact proven overlap at adjacent page
   boundaries.
@@ -82,6 +83,9 @@ Include an event in a model bucket only when:
 - Its timestamp is a positive valid value inside the requested window.
 - tokenUsage exists.
 - The checked four-field token sum is greater than zero.
+
+Missing or blank optional counters are zero. Negative, fractional, non-numeric, overflowing, or
+JavaScript-unsafe totals make the fetch incomplete instead of publishing an inexact number.
 
 Group by local calendar date and the API's raw model string. Record the time-zone identifier in
 coverage so a time-zone change triggers re-fetch or re-aggregation.
@@ -158,6 +162,10 @@ Write through safe replacement only after:
 2. Aggregation passes checked arithmetic.
 3. The active CredentialLease still has the same AccountId and generation.
 4. The requested window and time zone still match the job key.
+
+Local-date aggregation resolves the IANA time zone for every event timestamp. It does not reuse the
+browser's current UTC offset for older events because a 30-day window can cross a daylight-saving
+transition.
 
 A failed refresh leaves the previous complete document untouched. It updates only in-memory
 error metadata and the visible stale state.

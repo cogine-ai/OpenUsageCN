@@ -37,6 +37,14 @@ describe("BrowserAccountManager", () => {
 
     await user.click(screen.getByRole("button", { name: "Chrome" }))
 
+    expect(screen.getByRole("button", { name: "Chrome" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    )
+    expect(screen.getByRole("button", { name: "Arc" })).toHaveAttribute(
+      "aria-pressed",
+      "false"
+    )
     expect(await screen.findByRole("option", { name: "Work (Profile 2)" })).toBeInTheDocument()
     expect(tauri.invoke).toHaveBeenCalledWith("list_browser_profiles", {
       browser: "Chrome",
@@ -448,62 +456,4 @@ describe("BrowserAccountManager", () => {
     expect(screen.queryByText("Verified")).not.toBeInTheDocument()
   })
 
-  it("shows a friendly profile-list error and logs the typed failure", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-    tauri.invoke.mockRejectedValue({
-      code: "profileDiscoveryFailed",
-      message: "Browser profiles could not be listed.",
-    })
-    const user = userEvent.setup()
-    render(<BrowserAccountManager busy={false} onAttach={vi.fn()} />)
-
-    await user.click(screen.getByRole("button", { name: "Add Browser Account" }))
-    await user.click(screen.getByRole("button", { name: "Chrome" }))
-
-    expect(
-      await screen.findByRole("heading", { name: "Browser Profiles Unavailable" })
-    ).toBeInTheDocument()
-    expect(screen.getByText("Browser profiles could not be listed.")).toBeInTheDocument()
-    expect(errorSpy).toHaveBeenCalledWith(
-      "Failed to list browser profiles",
-      "profileDiscoveryFailed"
-    )
-  })
-
-  it("shows and logs a friendly account-discovery error", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-    tauri.invoke.mockImplementation((command: string) => {
-      if (command === "list_browser_profiles") {
-        return Promise.resolve({
-          profiles: [{ profileKey: "Default", displayName: "Main" }],
-        })
-      }
-      if (command === "discover_browser_accounts") {
-        return Promise.reject({
-          code: "overallTimedOut",
-          message: "Browser profile discovery timed out.",
-        })
-      }
-      throw new Error(`Unexpected command: ${command}`)
-    })
-    const user = userEvent.setup()
-    render(<BrowserAccountManager busy={false} onAttach={vi.fn()} />)
-
-    await user.click(screen.getByRole("button", { name: "Add Browser Account" }))
-    await user.click(screen.getByRole("button", { name: "Chrome" }))
-    await user.selectOptions(
-      await screen.findByRole("combobox", { name: "Browser Profile" }),
-      "Default"
-    )
-    await user.click(screen.getByRole("button", { name: "Scan Profile" }))
-
-    expect(
-      await screen.findByRole("heading", { name: "Browser Discovery Error" })
-    ).toBeInTheDocument()
-    expect(screen.getByText("Browser profile discovery timed out.")).toBeInTheDocument()
-    expect(errorSpy).toHaveBeenCalledWith(
-      "Failed to discover browser accounts",
-      "overallTimedOut"
-    )
-  })
 })
