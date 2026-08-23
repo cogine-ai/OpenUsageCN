@@ -59,6 +59,12 @@ Returns rate limit windows and optional extra credits.
 
 All windows are enforced simultaneously — hitting any limit throttles the user.
 
+## Plan Labels
+
+The exact seat identifiers `team_standard` and `team_tier_1` resolve to `Claude Team Standard`
+and `Claude Team Premium`. Current OAuth credentials do not supply a verified seat identifier, so
+a generic Team subscription continues to display as `Team` instead of guessing an exact seat.
+
 ## Authentication
 
 ### Token Location

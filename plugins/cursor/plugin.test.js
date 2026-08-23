@@ -444,6 +444,30 @@ describe("cursor plugin", () => {
     expect(result.lines.find((line) => line.label === "Total usage")).toBeTruthy()
   })
 
+  it("maps a mixed-case pro_plus plan with surrounding whitespace to Pro+", async () => {
+    const ctx = makeCtx()
+    ctx.host.sqlite.query.mockReturnValue(JSON.stringify([{ value: "token" }]))
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("GetCurrentPeriodUsage")) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            enabled: true,
+            planUsage: { totalSpend: 1200, limit: 2400 },
+          }),
+        }
+      }
+      return {
+        status: 200,
+        bodyText: JSON.stringify({ planInfo: { planName: "  PrO_PlUs  " } }),
+      }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    expect(result.plan).toBe("Pro+")
+  })
+
   it("omits plan badge for blank plan names", async () => {
     const ctx = makeCtx()
     ctx.host.sqlite.query.mockReturnValue(JSON.stringify([{ value: "token" }]))

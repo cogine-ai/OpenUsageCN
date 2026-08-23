@@ -445,6 +445,33 @@ describe("claude plugin", () => {
     expect(result.lines.find((line) => line.label === "Weekly")).toBeTruthy()
   })
 
+  it("keeps a generic Team subscription generic without verified seat input", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.readText = () =>
+      JSON.stringify({ claudeAiOauth: { accessToken: "token", subscriptionType: "team" } })
+    ctx.host.fs.exists = () => true
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify({
+        five_hour: { utilization: 10, resets_at: "2099-01-01T00:00:00.000Z" },
+      }),
+    })
+
+    const plugin = await loadPlugin()
+    expect(plugin.probe(ctx).plan).toBe("Team")
+  })
+
+  it.each([
+    ["  TEAM_STANDARD  ", "Claude Team Standard"],
+    ["  Team_Tier_1  ", "Claude Team Premium"],
+    ["team_unknown", null],
+    ["   ", null],
+    [null, null],
+  ])("resolves the verified Claude Team seat code %s", async (seatCode, expected) => {
+    const plugin = await loadPlugin()
+    expect(plugin._resolveTeamSeatLabel(seatCode)).toBe(expected)
+  })
+
   it("appends max rate limit tier to the plan label when present", async () => {
     const runCase = async (rateLimitTier, expectedPlan) => {
       const ctx = makeCtx()

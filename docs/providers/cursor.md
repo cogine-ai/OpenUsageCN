@@ -27,6 +27,9 @@
 
 **Team detection**: an account is treated as "team" when `planName` is `"Team"`, or `spendLimitUsage.limitType` is `"team"`, or `spendLimitUsage.pooledLimit` is greater than `0`. Team accounts display Total usage in dollars; individual accounts display it as a percentage.
 
+The Cursor plan identifier `pro_plus` is displayed as `Pro+`. Matching ignores surrounding
+whitespace and letter case; other plan names keep the existing display formatting.
+
 ## Endpoints
 
 ### POST /aiserver.v1.DashboardService/GetCurrentPeriodUsage

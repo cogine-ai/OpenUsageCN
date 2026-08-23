@@ -1879,7 +1879,7 @@ fn ls_parse_listening_ports(output: &str) -> Vec<i32> {
     ports.into_iter().collect()
 }
 
-const CCUSAGE_VERSION: &str = "20.0.2";
+const CCUSAGE_VERSION: &str = "20.0.20";
 const CCUSAGE_PACKAGE_NAME: &str = "ccusage";
 const CCUSAGE_BIN_NAME: &str = "ccusage";
 const CCUSAGE_LEGACY_VERSION: &str = "18.0.11";
@@ -4415,7 +4415,7 @@ mod tests {
             claude_path: None,
         };
         let expected_ccusage_package = ccusage_package_spec();
-        assert_eq!(expected_ccusage_package, "ccusage@20.0.2");
+        assert_eq!(expected_ccusage_package, "ccusage@20.0.20");
         let expected_npm_exec_package = format!("--package={expected_ccusage_package}");
 
         let bunx = ccusage_runner_args(
@@ -5080,7 +5080,7 @@ esac
         );
 
         let calls = std::fs::read_to_string(&args_path).expect("read args log");
-        assert!(calls.contains("ccusage@20.0.2 codex daily"));
+        assert!(calls.contains("ccusage@20.0.20 codex daily"));
         assert!(calls.contains("@ccusage/codex@18.0.11 daily"));
 
         let _ = std::fs::remove_dir_all(&dir);

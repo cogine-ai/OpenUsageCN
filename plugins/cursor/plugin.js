@@ -306,6 +306,13 @@
     }
   }
 
+  function formatCursorPlan(ctx, planName) {
+    const rawPlan = typeof planName === "string" ? planName.trim() : ""
+    if (!rawPlan) return null
+    if (rawPlan.toLowerCase() === "pro_plus") return "Pro+"
+    return ctx.fmt.planLabel(rawPlan) || null
+  }
+
   function buildRequestBasedResult(ctx, accessToken, planName, unavailableMessage) {
     var requestUsage = fetchRequestBasedUsage(ctx, accessToken)
     var lines = []
@@ -338,11 +345,7 @@
       throw unavailableMessage
     }
 
-    var plan = null
-    if (planName) {
-      var planLabel = ctx.fmt.planLabel(planName)
-      if (planLabel) plan = planLabel
-    }
+    var plan = formatCursorPlan(ctx, planName)
 
     return { plan: plan, lines: lines }
   }
@@ -537,13 +540,7 @@
 
     const stripeBalanceCents = fetchStripeBalance(ctx, accessToken) || 0
 
-    let plan = null
-    if (planName) {
-      const planLabel = ctx.fmt.planLabel(planName)
-      if (planLabel) {
-        plan = planLabel
-      }
-    }
+    let plan = formatCursorPlan(ctx, planName)
 
     const lines = []
     const pu = usage.planUsage

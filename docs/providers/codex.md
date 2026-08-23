@@ -71,6 +71,9 @@ OpenUsageCN floors the remaining credit balance to a whole number and displays i
 equivalent at `$0.04` per credit. For example, `820.6969075` renders as
 `$32.80 · 820 点数`. The credit balance is unbounded; the API does not provide a maximum.
 
+The plan identifiers `prolite`, `pro_lite`, and `pro-lite` are displayed as `Pro 5x`. Matching
+ignores surrounding whitespace and letter case.
+
 The Codex card uses short Chinese labels: `5小时`, `每周`, `代码审查`, `手动重置`, `点数`,
 `今日`, `昨日`, `近30天`, and `用量趋势`. `5小时` is shown only when an 18000-second window is
 present. Model names and the `tokens` unit stay unchanged.

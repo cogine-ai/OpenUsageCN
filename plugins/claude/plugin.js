@@ -749,6 +749,13 @@
     }))
   }
 
+  function resolveTeamSeatLabel(seatCode) {
+    const normalizedSeat = typeof seatCode === "string" ? seatCode.trim().toLowerCase() : ""
+    if (normalizedSeat === "team_standard") return "Claude Team Standard"
+    if (normalizedSeat === "team_tier_1") return "Claude Team Premium"
+    return null
+  }
+
   function probe(ctx) {
     const creds = loadCredentials(ctx)
     if (!creds || !creds.oauth || !creds.oauth.accessToken || !creds.oauth.accessToken.trim()) {
@@ -1013,5 +1020,10 @@
     cachedUsageData = null
   }
 
-  globalThis.__openusage_plugin = { id: "claude", probe, _resetState }
+  globalThis.__openusage_plugin = {
+    id: "claude",
+    probe,
+    _resetState,
+    _resolveTeamSeatLabel: resolveTeamSeatLabel,
+  }
 })()
