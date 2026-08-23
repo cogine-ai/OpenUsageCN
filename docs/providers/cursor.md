@@ -30,6 +30,53 @@
 The Cursor plan identifier `pro_plus` is displayed as `Pro+`. Matching ignores surrounding
 whitespace and letter case; other plan names keep the existing display formatting.
 
+## Accounts
+
+On macOS, OpenUsageCN discovers Cursor Desktop and Cursor CLI sessions independently. Sessions
+with the same complete JWT subject become two connections to one account; different subjects stay
+as separate accounts. Accounts are never merged by email or by the suffix after `|`.
+
+The account selector supports two modes:
+
+- **Auto** keeps the previous Cursor preference: Desktop normally wins, except a different CLI
+  account wins when the Desktop account appears to be Free.
+- Selecting an account pins it until **Auto** is chosen again.
+
+Only the selected account is published to the overview, tray, notifications, CLI, and Local HTTP
+API. Switching to an account without a snapshot shows loading instead of relabeling another
+account's data.
+
+Chrome and Arc accounts can be added by choosing an exact browser profile. Browser access is
+explicit and macOS-only. OpenUsageCN uses the packaged `@steipete/sweet-cookie` helper to read a
+SQLite snapshot and let macOS Keychain decrypt matching Cursor cookies. Cookies and raw account
+subjects stay in memory; persisted account data contains random IDs, an identity fingerprint, the
+chosen profile locator, and local labels. A saved browser connection is reacquired from that exact
+profile after restart and can be detached at any time.
+
+Local account-scoped probes verify `GET https://cursor.com/api/auth/me` against the complete JWT
+subject before requesting quota. Before a refreshed probe token is written back, OpenUsageCN reads
+the original SQLite or Keychain source again and requires its credential generation, source, and
+complete subject to be unchanged. A concurrent login switch therefore rejects the write instead of
+overwriting the new session. A token refreshed only for model-history access stays in memory.
+
+## Model Usage
+
+The selected account's detail page loads Model Usage on demand. It requests the current billing
+cycle, capped to the latest 30 days, from
+`POST https://cursor.com/api/dashboard/get-filtered-usage-events`. When reliable cycle metadata is
+not available, it uses a bounded 30-day window. Every fetch first proves the session with
+`/api/auth/me` and uses the same accepted session for all pages.
+
+The view groups complete results by local date and raw model name and shows input, output, cache
+write, and cache read tokens plus request counts. A blank model name is displayed as `Unknown` but
+is not rewritten in storage.
+
+`List-Price Equivalent` sums event-level model prices when present. `Metered Usage` is a separate
+whole-window value and is shown only when every in-window event has a valid charged amount. These
+figures describe dashboard data, not an invoice. If pagination, identity, numeric validation, or
+account ownership cannot be proven, the previous complete aggregate remains visible as stale and
+the incomplete result is not saved. Raw events and ownership fields are not persisted.
+
 ## Endpoints
 
 ### POST /aiserver.v1.DashboardService/GetCurrentPeriodUsage
@@ -147,10 +194,11 @@ Returns subscription and Stripe customer balance metadata from `cursor.com`.
 
 ### Token Sources
 
-OpenUsageCN reads Cursor auth in this order:
+The account-aware path reads Cursor Desktop SQLite and Cursor CLI Keychain independently so both
+accounts remain available. The legacy single-account path keeps the original preference order:
 
-1. **Cursor Desktop SQLite** (preferred)
-2. **Cursor CLI keychain** (fallback)
+1. **Cursor Desktop SQLite** (normally preferred)
+2. **Cursor CLI Keychain** (fallback, or preferred for a different account when Desktop is Free)
 
 #### 1) Cursor Desktop SQLite (preferred)
 
@@ -184,7 +232,10 @@ agent login
 
 ### Token Refresh
 
-Access tokens are short-lived JWTs. The app refreshes before each request if expired, then persists the new access token back to the same source it was loaded from (SQLite or keychain).
+Access tokens are short-lived JWTs. The legacy single-account probe refreshes before a request and
+persists the new access token back to its original SQLite or Keychain source. Account-scoped probes
+verify the complete identity before use and persist with the same source and credential-generation
+check described above. Model-history reads refresh in memory and never overwrite the local source.
 
 ```
 POST https://api2.cursor.sh/oauth/token

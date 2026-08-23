@@ -49,15 +49,20 @@ APPLE_TEAM_ID
 
 1. 确认 `package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 的版本一致。
 2. 运行 `bun run bundle:plugins`，确认 bundled plugins 包含当前支持的服务商。
-3. 运行 `bun run test --run`。
-4. 运行 `bun run build`。
-5. 运行 `CARGO_NET_GIT_FETCH_WITH_CLI=true cargo test --manifest-path src-tauri/Cargo.toml`。
+3. 运行 `bun run test:cookie-helper`，确认浏览器 Cookie helper 的协议和构建输入检查通过。
+4. 运行 `bun run test --run`。
+5. 运行 `bun run build`。
+6. 运行 `CARGO_NET_GIT_FETCH_WITH_CLI=true cargo test --manifest-path src-tauri/Cargo.toml`。
 
 macOS 发布还需要：
 
-1. 运行 `bun run build:release` 或 `bun run build:release -- --skip-stapling`。
-2. 运行 `bun run verify:updater-signature`，确认 updater 包能被 `src-tauri/tauri.conf.json` 里的公钥验签。
-3. 打包运行应用后，替换 `README.md` 使用的 `screenshot.png`。
+1. 分别运行 `bun run build:cookie-helper -- aarch64-apple-darwin` 和 `bun run build:cookie-helper -- x86_64-apple-darwin`，确认两个固定名称的 helper 都可执行。
+2. 确认安装包包含 `THIRD_PARTY_NOTICES.md`，并在签名、公证后的应用中验证 Chrome 和 Arc 精确 profile 的读取。
+3. 用两个不同的 Cursor 身份验证 Desktop SQLite、CLI Keychain、账号切换和当前账期 Model Usage；切换时不能短暂显示另一个账号的数据。
+4. 用 Claude OAuth 账号和匹配的浏览器 profile 验证 Team 席位；不匹配或无法验证时必须保持通用 `Team`。
+5. 运行 `bun run build:release` 或 `bun run build:release -- --skip-stapling`。
+6. 运行 `bun run verify:updater-signature`，确认 updater 包能被 `src-tauri/tauri.conf.json` 里的公钥验签。
+7. 打包运行应用后，替换 `README.md` 使用的 `screenshot.png`。
 
 Windows 发布还需要：
 

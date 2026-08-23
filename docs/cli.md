@@ -27,7 +27,7 @@ openusage codex --force
 
 Standard output contains compact JSON only. Refresh diagnostics go to standard error, so scripts can parse stdout directly.
 
-Without `--force`, snapshots newer than five minutes are reused. Missing or stale providers are refreshed with the same plugin engine, credentials, provider settings, and proxy configuration as the app. Successful results are written to the shared disk cache for later CLI runs and the app's next launch; an already-running app updates after its own refresh. A failed refresh does not replace the last successful snapshot.
+Without `--force`, snapshots newer than five minutes are reused. Missing or stale providers are refreshed with the same plugin engine, credentials, provider settings, proxy configuration, and active account selection as the app. Account-aware providers publish only the selected account; the CLI does not aggregate accounts or return account metadata. Successful results are written to the shared disk cache for later CLI runs and the app's next launch; an already-running app updates after its own refresh. A failed refresh does not replace the last successful snapshot. Cursor Model Usage history remains detail-only and is not loaded by the CLI.
 
 ## Exit Codes
 

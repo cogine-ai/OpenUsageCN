@@ -136,11 +136,11 @@ The frontend sends only the plugin id when checking status. The backend resolves
 
 | Field            | Description |
 |------------------|-------------|
-| `localDiscovery` | The provider can expose accounts found from local app or CLI sessions. |
-| `browserBinding` | Users can explicitly attach a supported browser profile. |
-| `modelHistory`   | The provider can expose account-scoped model usage history. |
+| `localDiscovery` | The provider implements the account-aware discovery, credential-generation, and scoped-probe contract. |
+| `browserBinding` | The app has an explicit, allowlisted browser-profile integration for this provider. |
+| `modelHistory`   | The app has an account-scoped model-history integration for this provider. |
 
-Each field is an optional boolean and defaults to `false`. When `accountSupport` is omitted, the existing single-view probe behavior is unchanged and plugin metadata omits the capability object. These flags advertise app-owned features; they do not grant new filesystem, browser, credential, or network access to plugin JavaScript.
+Each field is an optional boolean and defaults to `false`. When `accountSupport` is omitted, the existing single-view probe behavior is unchanged and plugin metadata omits the capability object. These flags advertise implemented contracts; they do not grant new filesystem, browser, credential, or network access to plugin JavaScript. Do not set a flag until the matching plugin callbacks and app-owned integration exist. See [Host API Reference](./api.md#account-capability-declarations) for the local discovery contract.
 
 ### Config Fields (Optional)
 

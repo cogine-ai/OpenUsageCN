@@ -44,6 +44,37 @@ The Windows MVP runs only `codex`, `bigmodel-cn`, `openai-api`, `openrouter`, an
 
 Account-related features are declared through the optional `accountSupport` object in `plugin.json`, not through methods on `ctx.host`. The declaration only advertises app-owned account experiences and does not expand a plugin's access to credentials, browsers, the filesystem, or the network. See [Manifest Schema](./schema.md#account-support-optional) for the available flags and legacy behavior.
 
+When `localDiscovery` is enabled, the entry script also provides these account-aware callbacks:
+
+```javascript
+globalThis.__openusage_plugin = {
+  id: "my-provider",
+  discoverConnections(ctx) {
+    return {
+      observations: [{
+        identityNamespace: "provider-sub-v1",
+        normalizedIdentity: "stable-provider-subject",
+        connectionKey: "provider-desktop",
+        connectionKind: "desktop",
+      }],
+      sourceOutcomes: [{ sourceKey: "provider-desktop", status: "available" }],
+      defaultConnectionKey: "provider-desktop",
+    }
+  },
+  credentialGeneration(ctx, { connectionKey }) {
+    return ctx.host.crypto.sha256Hex("credential state for " + connectionKey)
+  },
+  probe(ctx, { connectionKey, credentialGeneration }) {
+    // Read only this connection and reject a generation mismatch before use.
+    return { lines: [] }
+  },
+}
+```
+
+`connectionKind` is `desktop`, `cli`, `chrome`, or `arc`; source status is `available`, `absent`, or `unavailable`. `connectionKey` must be a nonsecret locator that is safe to persist. `normalizedIdentity` is process-only and is converted to an installation-scoped fingerprint before account storage; plugins must not log, display, or persist it themselves. `credentialGeneration` must return a lowercase 64-character SHA-256 value over the exact selected credential state, never the credential itself.
+
+The coordinator passes only the selected connection key and its checked generation to the scoped `probe` call. Browser binding and model-history transports remain app-owned integrations for supported bundled providers; declaring their flags alone does not expose cookies or add a general-purpose browser API to plugin JavaScript.
+
 ## Logging
 
 ```typescript
