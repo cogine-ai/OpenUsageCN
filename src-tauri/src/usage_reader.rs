@@ -351,6 +351,36 @@ fn is_packaged_resource_dir(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugin_engine::manifest::{LoadedPlugin, PluginManifest};
+
+    fn test_plugin(id: &str, entry_script: &str) -> LoadedPlugin {
+        LoadedPlugin {
+            manifest: PluginManifest {
+                schema_version: 1,
+                id: id.to_string(),
+                name: id.to_string(),
+                version: "0.0.0".to_string(),
+                entry: "plugin.js".to_string(),
+                icon: "icon.svg".to_string(),
+                brand_color: None,
+                lines: vec![],
+                links: vec![],
+                status_page: None,
+                config: None,
+            },
+            plugin_dir: PathBuf::from("."),
+            entry_script: entry_script.to_string(),
+            icon_data_url: "data:image/svg+xml;base64,".to_string(),
+        }
+    }
+
+    fn temp_app_dir(label: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "openusage-usage-reader-{}-{}",
+            label,
+            uuid::Uuid::new_v4()
+        ))
+    }
 
     #[test]
     fn app_data_path_uses_tauri_identifier() {
@@ -413,5 +443,70 @@ mod tests {
         assert_eq!(cli_resource_dir_for_executable(&copied_executable), None);
 
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn run_probes_collects_success_and_error_outputs_from_worker_pool() {
+        let app_data_dir = temp_app_dir("run-probes");
+        let plugins = vec![
+            test_plugin(
+                "ok-a",
+                r#"
+                globalThis.__openusage_plugin = {
+                    probe(ctx) {
+                        return {
+                            lines: [ctx.line.text({ label: "Status", value: "ok" })]
+                        };
+                    }
+                };
+                "#,
+            ),
+            test_plugin(
+                "ok-b",
+                r#"
+                globalThis.__openusage_plugin = {
+                    probe(ctx) {
+                        return {
+                            lines: [ctx.line.text({ label: "Status", value: "ok" })]
+                        };
+                    }
+                };
+                "#,
+            ),
+            test_plugin(
+                "bad",
+                r#"
+                globalThis.__openusage_plugin = {
+                    probe() {
+                        throw "boom";
+                    }
+                };
+                "#,
+            ),
+        ];
+
+        let (results, worker_failed) =
+            run_probes(plugins, app_data_dir, "0.0.0".to_string());
+        assert!(!worker_failed);
+
+        let mut by_id: HashMap<String, PluginOutput> = results
+            .into_iter()
+            .map(|(provider_id, output)| (provider_id, output))
+            .collect();
+        assert_eq!(by_id.len(), 3);
+        assert_eq!(probe_error_message(&by_id.remove("ok-a").unwrap()), None);
+        assert_eq!(probe_error_message(&by_id.remove("ok-b").unwrap()), None);
+        assert_eq!(
+            probe_error_message(&by_id.remove("bad").unwrap()),
+            Some("boom")
+        );
+    }
+
+    #[test]
+    fn run_probes_returns_empty_without_spawning_workers() {
+        let app_data_dir = temp_app_dir("run-probes-empty");
+        let (results, worker_failed) = run_probes(Vec::new(), app_data_dir, "0.0.0".to_string());
+        assert!(results.is_empty());
+        assert!(!worker_failed);
     }
 }
