@@ -29,6 +29,7 @@ On Windows, environment fallbacks must be present before the app starts. Set the
 | Tokens        | Last 7 days of input plus output tokens      |
 | Cached Tokens | Cached input tokens, when returned           |
 | Credits       | Legacy credit-grants fallback, when present  |
+| Balance       | Spendable credits from `total_available` (legacy fallback) |
 
 ## Endpoint
 

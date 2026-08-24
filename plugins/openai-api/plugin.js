@@ -182,7 +182,10 @@
     })
     const total = readNumber(data.total_granted) || 0
     const used = readNumber(data.total_used) || 0
-    const remaining = readNumber(data.total_available) || Math.max(0, total - used)
+    // total_available is the spendable balance and can be 0 when grants expired
+    // even if total_granted - total_used is still positive. Do not treat 0 as missing.
+    const available = readNumber(data.total_available)
+    const remaining = available !== null ? available : Math.max(0, total - used)
     const lines = []
     if (total > 0) {
       lines.push(ctx.line.progress({
