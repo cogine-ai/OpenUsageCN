@@ -431,5 +431,21 @@ pub(super) fn health_cache_state() -> HealthCacheState {
 }
 
 #[cfg(test)]
+pub(super) fn empty_cache_state_for_tests() -> CacheState {
+    CacheState {
+        snapshots: HashMap::new(),
+        app_data_dir: PathBuf::from("."),
+        settings_data_dir: PathBuf::from("."),
+        known_plugin_ids: Vec::new(),
+        limit_catalog: HashMap::new(),
+        errors: HashMap::new(),
+        app_version: "0.0.0".to_string(),
+        dirty_generation: 0,
+        flushed_generation: 0,
+        flush_scheduled: false,
+    }
+}
+
+#[cfg(test)]
 #[path = "cache_tests.rs"]
 mod tests;
