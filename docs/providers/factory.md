@@ -89,7 +89,8 @@ Premium tokens (`premium.totalAllowance > 0`) are only available on Max/Enterpri
 ```jsonc
 {
   "access_token": "<WorkOS JWT>",       // ~1329 chars, 7-day lifetime
-  "refresh_token": "<token>"            // 25-char WorkOS session token
+  "refresh_token": "<token>",           // 25-char WorkOS session token
+  "active_organization_id": "org_xxx"   // selected org; sent as X-Factory-Org-Id
 }
 ```
 
@@ -106,7 +107,7 @@ Premium tokens (`premium.totalAllowance > 0`) are only available on Max/Enterpri
 
 ### Token Refresh
 
-Access tokens have a 7-day lifetime. Refreshed when within 24 hours of expiry or on 401/403.
+Access tokens have a 7-day lifetime. Refreshed when within 24 hours of expiry or on 401/403. After a successful refresh, OpenUsageCN writes the new tokens back to the same auth store and keeps `active_organization_id` (falling back to WorkOS `organization_id` when the local field was missing).
 
 ```
 POST https://api.workos.com/user_management/authenticate

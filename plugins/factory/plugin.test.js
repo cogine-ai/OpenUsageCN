@@ -288,6 +288,101 @@ describe("factory plugin", () => {
     expect(persisted.access_token).toBe(makeJwt(futureExp))
   })
 
+  it("preserves active_organization_id when persisting a refreshed v2 auth", async () => {
+    const ctx = makeCtx()
+    const nearExp = Math.floor(Date.now() / 1000) + 12 * 60 * 60
+    const futureExp = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60
+    const authV2 = makeEncryptedAuthV2({
+      access_token: makeJwt(nearExp),
+      refresh_token: "refresh",
+      active_organization_id: "org_selected",
+    })
+    ctx.host.fs.writeText("~/.factory/auth.v2.file", authV2.envelope)
+    ctx.host.fs.writeText("~/.factory/auth.v2.key", authV2.keyB64)
+    ctx.host.fs.writeText.mockClear()
+
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("workos.com")) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            access_token: makeJwt(futureExp),
+            refresh_token: "new-refresh",
+            organization_id: "org_from_workos",
+          }),
+        }
+      }
+      return {
+        status: 200,
+        headers: {},
+        bodyText: JSON.stringify({
+          usage: {
+            startDate: 1770623326000,
+            endDate: 1772956800000,
+            standard: { orgTotalTokensUsed: 111, totalAllowance: 20000000 },
+            premium: { orgTotalTokensUsed: 0, totalAllowance: 0 },
+          },
+        }),
+      }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    expect(result.lines.find((line) => line.label === "Standard")).toBeTruthy()
+
+    const persistedEnvelope = ctx.host.fs.readText("~/.factory/auth.v2.file")
+    const persistedRaw = ctx.host.crypto.decryptAes256Gcm(persistedEnvelope, authV2.keyB64)
+    const persisted = JSON.parse(persistedRaw)
+    expect(persisted.refresh_token).toBe("new-refresh")
+    expect(persisted.access_token).toBe(makeJwt(futureExp))
+    expect(persisted.active_organization_id).toBe("org_selected")
+  })
+
+  it("restores active_organization_id from WorkOS when droid auth lacked it", async () => {
+    const ctx = makeCtx()
+    const nearExp = Math.floor(Date.now() / 1000) + 12 * 60 * 60
+    const futureExp = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60
+    const authV2 = makeEncryptedAuthV2({
+      access_token: makeJwt(nearExp),
+      refresh_token: "refresh",
+    })
+    ctx.host.fs.writeText("~/.factory/auth.v2.file", authV2.envelope)
+    ctx.host.fs.writeText("~/.factory/auth.v2.key", authV2.keyB64)
+
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("workos.com")) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            access_token: makeJwt(futureExp),
+            refresh_token: "new-refresh",
+            organization_id: "org_from_workos",
+          }),
+        }
+      }
+      return {
+        status: 200,
+        headers: {},
+        bodyText: JSON.stringify({
+          usage: {
+            startDate: 1770623326000,
+            endDate: 1772956800000,
+            standard: { orgTotalTokensUsed: 111, totalAllowance: 20000000 },
+            premium: { orgTotalTokensUsed: 0, totalAllowance: 0 },
+          },
+        }),
+      }
+    })
+
+    const plugin = await loadPlugin()
+    plugin.probe(ctx)
+
+    const persistedEnvelope = ctx.host.fs.readText("~/.factory/auth.v2.file")
+    const persistedRaw = ctx.host.crypto.decryptAes256Gcm(persistedEnvelope, authV2.keyB64)
+    const persisted = JSON.parse(persistedRaw)
+    expect(persisted.active_organization_id).toBe("org_from_workos")
+  })
+
   it("prefers auth.encrypted over stale auth.json when both exist", async () => {
     const ctx = makeCtx()
     const pastExp = Math.floor(Date.now() / 1000) - 1000
