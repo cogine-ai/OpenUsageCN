@@ -364,6 +364,31 @@ describe("codex plugin", () => {
     expect(credits.value).toBe("$4.00 · 100 点数")
   })
 
+  it.each(["  Pro_LiTe  ", "  PRO-lite  "])(
+    "maps the %s plan alias to Pro 5x",
+    async (planType) => {
+      const ctx = makeCtx()
+      ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
+        tokens: { access_token: "token" },
+        last_refresh: new Date().toISOString(),
+      }))
+      ctx.host.http.request.mockReturnValue({
+        status: 200,
+        headers: {},
+        bodyText: JSON.stringify({
+          plan_type: planType,
+          rate_limit: {
+            primary_window: { reset_after_seconds: 60, used_percent: 10 },
+            secondary_window: { reset_after_seconds: 120, used_percent: 20 },
+          },
+        }),
+      })
+
+      const plugin = await loadPlugin()
+      expect(plugin.probe(ctx).plan).toBe("Pro 5x")
+    }
+  )
+
   it("uses zero credits from the response body when the account has no 点数", async () => {
     const ctx = makeCtx()
     ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({

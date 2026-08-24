@@ -55,6 +55,24 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
     })
   }, [updatePluginStates])
 
+  const setAccountTransitionForPlugins = useCallback((ids: string[]) => {
+    updatePluginStates((prev) => {
+      const next = { ...prev }
+      for (const id of ids) {
+        const existing = prev[id]
+        next[id] = {
+          data: null,
+          loading: true,
+          error: null,
+          lastErrorAt: null,
+          lastManualRefreshAt: existing?.lastManualRefreshAt ?? null,
+          lastUpdatedAt: null,
+        }
+      }
+      return next
+    })
+  }, [updatePluginStates])
+
   const setErrorForPlugins = useCallback((ids: string[], error: string) => {
     const now = Date.now()
     updatePluginStates((prev) => {
@@ -105,6 +123,7 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
     pluginStates,
     pluginStatesRef,
     setLoadingForPlugins,
+    setAccountTransitionForPlugins,
     setErrorForPlugins,
     handleProbeResult,
   }

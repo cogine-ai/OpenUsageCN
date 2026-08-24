@@ -1,4 +1,5 @@
 import crypto from "node:crypto"
+import { readFileSync } from "node:fs"
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import { makeCtx } from "../test-helpers.js"
 
@@ -23,6 +24,78 @@ beforeEach(() => {
 const loadPlugin = async () => plugin
 
 describe("claude plugin", () => {
+  it("declares native OAuth identity discovery and browser enrichment capabilities", () => {
+    const manifest = JSON.parse(
+      readFileSync("plugins/claude/plugin.json", "utf8")
+    )
+
+    expect(manifest.accountSupport).toEqual({
+      localDiscovery: true,
+      browserBinding: true,
+    })
+  })
+
+  it("discovers one OAuth source whose identity must be resolved natively", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.exists = () => true
+    ctx.host.fs.readText = () => JSON.stringify({
+      claudeAiOauth: {
+        accessToken: "oauth-access-secret",
+        refreshToken: "oauth-refresh-secret",
+      },
+    })
+    const plugin = await loadPlugin()
+
+    expect(plugin.discoverConnections(ctx)).toEqual({
+      observations: [{
+        identityNamespace: "claude-oauth-profile-v1",
+        identitySource: "claudeOAuthProfile",
+        connectionKey: "claude-oauth",
+        connectionKind: "cli",
+      }],
+      sourceOutcomes: [{ sourceKey: "claude-oauth", status: "available" }],
+      defaultConnectionKey: "claude-oauth",
+    })
+  })
+
+  it("derives and enforces an exact OAuth credential generation lease", async () => {
+    const ctx = makeCtx()
+    let refreshToken = "oauth-refresh-a"
+    ctx.host.fs.exists = () => true
+    ctx.host.fs.readText = () => JSON.stringify({
+      claudeAiOauth: {
+        accessToken: "oauth-access-secret",
+        refreshToken,
+      },
+    })
+    const plugin = await loadPlugin()
+    const target = { connectionKey: "claude-oauth" }
+    const first = plugin.credentialGeneration(ctx, target)
+    expect(first).toMatch(/^[a-f0-9]{64}$/)
+    expect(plugin.oauthCredential(ctx, {
+      ...target,
+      credentialGeneration: first,
+    })).toEqual({ accessToken: "oauth-access-secret" })
+
+    refreshToken = "oauth-refresh-b"
+    expect(plugin.credentialGeneration(ctx, target)).not.toBe(first)
+    expect(() => plugin.oauthCredential(ctx, {
+      ...target,
+      credentialGeneration: first,
+    })).toThrow("credentials changed")
+  })
+
+  it("keeps account discovery empty when no usable OAuth access token exists", async () => {
+    const ctx = makeCtx()
+    const plugin = await loadPlugin()
+
+    expect(plugin.discoverConnections(ctx)).toEqual({
+      observations: [],
+      sourceOutcomes: [{ sourceKey: "claude-oauth", status: "absent" }],
+      defaultConnectionKey: null,
+    })
+  })
+
   it("throws when no credentials", async () => {
     const ctx = makeCtx()
     const plugin = await loadPlugin()
@@ -443,6 +516,33 @@ describe("claude plugin", () => {
     expect(result.plan).toBe("Pro")
     expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
     expect(result.lines.find((line) => line.label === "Weekly")).toBeTruthy()
+  })
+
+  it("keeps a generic Team subscription generic without verified seat input", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.readText = () =>
+      JSON.stringify({ claudeAiOauth: { accessToken: "token", subscriptionType: "team" } })
+    ctx.host.fs.exists = () => true
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify({
+        five_hour: { utilization: 10, resets_at: "2099-01-01T00:00:00.000Z" },
+      }),
+    })
+
+    const plugin = await loadPlugin()
+    expect(plugin.probe(ctx).plan).toBe("Team")
+  })
+
+  it.each([
+    ["  TEAM_STANDARD  ", "Claude Team Standard"],
+    ["  Team_Tier_1  ", "Claude Team Premium"],
+    ["team_unknown", null],
+    ["   ", null],
+    [null, null],
+  ])("resolves the verified Claude Team seat code %s", async (seatCode, expected) => {
+    const plugin = await loadPlugin()
+    expect(plugin._resolveTeamSeatLabel(seatCode)).toBe(expected)
   })
 
   it("appends max rate limit tier to the plan label when present", async () => {
@@ -935,16 +1035,16 @@ describe("claude plugin", () => {
 
   it("refreshes token when expired and persists updated credentials", async () => {
     const ctx = makeCtx()
+    const credentials = JSON.stringify({
+      claudeAiOauth: {
+        accessToken: "old-token",
+        refreshToken: "refresh",
+        expiresAt: Date.now() - 1000,
+        subscriptionType: "pro",
+      },
+    })
     ctx.host.fs.exists = () => true
-    ctx.host.fs.readText = () =>
-      JSON.stringify({
-        claudeAiOauth: {
-          accessToken: "old-token",
-          refreshToken: "refresh",
-          expiresAt: Date.now() - 1000,
-          subscriptionType: "pro",
-        },
-      })
+    ctx.host.fs.readText = () => credentials
 
     ctx.host.http.request.mockImplementation((opts) => {
       if (String(opts.url).includes("/v1/oauth/token")) {
@@ -969,16 +1069,16 @@ describe("claude plugin", () => {
 
   it("includes user:file_upload in the OAuth refresh scope", async () => {
     const ctx = makeCtx()
+    const credentials = JSON.stringify({
+      claudeAiOauth: {
+        accessToken: "old-token",
+        refreshToken: "refresh",
+        expiresAt: Date.now() - 1000,
+        subscriptionType: "pro",
+      },
+    })
     ctx.host.fs.exists = () => true
-    ctx.host.fs.readText = () =>
-      JSON.stringify({
-        claudeAiOauth: {
-          accessToken: "old-token",
-          refreshToken: "refresh",
-          expiresAt: Date.now() - 1000,
-          subscriptionType: "pro",
-        },
-      })
+    ctx.host.fs.readText = () => credentials
 
     let refreshBody = null
     ctx.host.http.request.mockImplementation((opts) => {
@@ -1003,7 +1103,7 @@ describe("claude plugin", () => {
     expect(refreshBody.scope).toContain("user:file_upload")
   })
 
-  it("refreshes keychain credentials and writes back to keychain", async () => {
+  it("refuses to refresh legacy Keychain credentials before contacting the token endpoint", async () => {
     const ctx = makeCtx()
     ctx.host.fs.exists = () => false
     ctx.host.keychain.readGenericPassword.mockReturnValue(
@@ -1017,38 +1117,31 @@ describe("claude plugin", () => {
       })
     )
 
-    ctx.host.http.request.mockImplementation((opts) => {
-      if (String(opts.url).includes("/v1/oauth/token")) {
-        return {
-          status: 200,
-          bodyText: JSON.stringify({ access_token: "new-token", expires_in: 3600 }),
-        }
-      }
-      return {
-        status: 200,
-        bodyText: JSON.stringify({
-          five_hour: { utilization: 10, resets_at: "2099-01-01T00:00:00.000Z" },
-        }),
-      }
+    ctx.host.http.request.mockImplementation(() => {
+      throw new Error("refresh and usage endpoints must not be called")
     })
 
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).not.toThrow()
-    expect(ctx.host.keychain.writeGenericPassword).toHaveBeenCalled()
+    expect(() => plugin.probe(ctx)).toThrow("must be refreshed by Claude Code")
+    expect(ctx.host.http.request).not.toHaveBeenCalled()
+    expect(ctx.host.keychain.writeGenericPassword).not.toHaveBeenCalled()
+    expect(ctx.host.log.warn).toHaveBeenCalledWith(
+      "refusing to refresh Keychain credentials without a safe conditional write"
+    )
   })
 
   it("retries usage request after 401 by refreshing once", async () => {
     const ctx = makeCtx()
+    const credentials = JSON.stringify({
+      claudeAiOauth: {
+        accessToken: "token",
+        refreshToken: "refresh",
+        expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+        subscriptionType: "pro",
+      },
+    })
     ctx.host.fs.exists = () => true
-    ctx.host.fs.readText = () =>
-      JSON.stringify({
-        claudeAiOauth: {
-          accessToken: "token",
-          refreshToken: "refresh",
-          expiresAt: Date.now() + 60_000,
-          subscriptionType: "pro",
-        },
-      })
+    ctx.host.fs.readText = () => credentials
 
     let usageCalls = 0
     let firstUsageHeaders = null
@@ -1082,15 +1175,15 @@ describe("claude plugin", () => {
 
   it("throws session expired when refresh returns invalid_grant", async () => {
     const ctx = makeCtx()
+    const credentials = JSON.stringify({
+      claudeAiOauth: {
+        accessToken: "token",
+        refreshToken: "refresh",
+        expiresAt: Date.now() - 1,
+      },
+    })
     ctx.host.fs.exists = () => true
-    ctx.host.fs.readText = () =>
-      JSON.stringify({
-        claudeAiOauth: {
-          accessToken: "token",
-          refreshToken: "refresh",
-          expiresAt: Date.now() - 1,
-        },
-      })
+    ctx.host.fs.readText = () => credentials
 
     ctx.host.http.request.mockImplementation((opts) => {
       if (String(opts.url).includes("/v1/oauth/token")) {
@@ -1105,15 +1198,15 @@ describe("claude plugin", () => {
 
   it("throws token expired when usage remains unauthorized after refresh", async () => {
     const ctx = makeCtx()
+    const credentials = JSON.stringify({
+      claudeAiOauth: {
+        accessToken: "token",
+        refreshToken: "refresh",
+        expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+      },
+    })
     ctx.host.fs.exists = () => true
-    ctx.host.fs.readText = () =>
-      JSON.stringify({
-        claudeAiOauth: {
-          accessToken: "token",
-          refreshToken: "refresh",
-          expiresAt: Date.now() + 60_000,
-        },
-      })
+    ctx.host.fs.readText = () => credentials
 
     let usageCalls = 0
     ctx.host.http.request.mockImplementation((opts) => {
@@ -1131,15 +1224,15 @@ describe("claude plugin", () => {
 
   it("throws token expired when refresh is unauthorized", async () => {
     const ctx = makeCtx()
+    const credentials = JSON.stringify({
+      claudeAiOauth: {
+        accessToken: "token",
+        refreshToken: "refresh",
+        expiresAt: Date.now() - 1,
+      },
+    })
     ctx.host.fs.exists = () => true
-    ctx.host.fs.readText = () =>
-      JSON.stringify({
-        claudeAiOauth: {
-          accessToken: "token",
-          refreshToken: "refresh",
-          expiresAt: Date.now() - 1,
-        },
-      })
+    ctx.host.fs.readText = () => credentials
 
     ctx.host.http.request.mockImplementation((opts) => {
       if (String(opts.url).includes("/v1/oauth/token")) {
@@ -1152,7 +1245,7 @@ describe("claude plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("Token expired")
   })
 
-  it("logs when saving keychain credentials fails", async () => {
+  it("refuses a 401-triggered Keychain refresh without writing credentials", async () => {
     const ctx = makeCtx()
     ctx.host.fs.exists = () => false
     ctx.host.keychain.readGenericPassword.mockReturnValue(
@@ -1160,30 +1253,25 @@ describe("claude plugin", () => {
         claudeAiOauth: {
           accessToken: "old-token",
           refreshToken: "refresh",
-          expiresAt: Date.now() - 1000,
+          expiresAt: Date.now() + 24 * 60 * 60 * 1000,
         },
       })
     )
-    ctx.host.keychain.writeGenericPassword.mockImplementation(() => {
-      throw new Error("write fail")
-    })
+    let usageCalls = 0
     ctx.host.http.request.mockImplementation((opts) => {
-      if (String(opts.url).includes("/v1/oauth/token")) {
-        return { status: 200, bodyText: JSON.stringify({ access_token: "new-token", expires_in: 3600 }) }
+      if (String(opts.url).includes("/api/oauth/usage")) {
+        usageCalls += 1
+        return { status: 401, bodyText: "" }
       }
-      return {
-        status: 200,
-        bodyText: JSON.stringify({
-          five_hour: { utilization: 10, resets_at: "2099-01-01T00:00:00.000Z" },
-        }),
-      }
+      throw new Error("token endpoint must not be called")
     })
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).not.toThrow()
-    expect(ctx.host.log.error).toHaveBeenCalled()
+    expect(() => plugin.probe(ctx)).toThrow("must be refreshed by Claude Code")
+    expect(usageCalls).toBe(1)
+    expect(ctx.host.keychain.writeGenericPassword).not.toHaveBeenCalled()
   })
 
-  it("writes refreshed credentials back to the current-user keychain source", async () => {
+  it("refuses to refresh current-user Keychain credentials without writing either source", async () => {
     const ctx = makeCtx()
     ctx.host.fs.exists = () => false
     ctx.host.keychain.readGenericPasswordForCurrentUser.mockReturnValue(
@@ -1195,25 +1283,101 @@ describe("claude plugin", () => {
         },
       })
     )
-    ctx.host.http.request.mockImplementation((opts) => {
-      if (String(opts.url).includes("/v1/oauth/token")) {
-        return { status: 200, bodyText: JSON.stringify({ access_token: "new-token", expires_in: 3600 }) }
-      }
-      return {
-        status: 200,
-        bodyText: JSON.stringify({
-          five_hour: { utilization: 10, resets_at: "2099-01-01T00:00:00.000Z" },
-        }),
-      }
+    ctx.host.http.request.mockImplementation(() => {
+      throw new Error("refresh and usage endpoints must not be called")
     })
 
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).not.toThrow()
-    expect(ctx.host.keychain.writeGenericPasswordForCurrentUser).toHaveBeenCalled()
+    expect(() => plugin.probe(ctx)).toThrow("must be refreshed by Claude Code")
+    expect(ctx.host.http.request).not.toHaveBeenCalled()
+    expect(ctx.host.keychain.writeGenericPasswordForCurrentUser).not.toHaveBeenCalled()
     expect(ctx.host.keychain.writeGenericPassword).not.toHaveBeenCalled()
   })
 
-  it("writes refreshed credentials back to the legacy keychain source after fallback", async () => {
+  it("preserves a newer keychain auth when it changes immediately before refresh persistence", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.exists = () => false
+    const staleAuth = JSON.stringify({
+      claudeAiOauth: {
+        accessToken: "stale-access",
+        refreshToken: "stale-refresh",
+        expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+      },
+    })
+    const newerAuth = JSON.stringify({
+      claudeAiOauth: {
+        accessToken: "newer-access",
+        refreshToken: "newer-refresh",
+        expiresAt: Date.now() + 60_000,
+      },
+    })
+    let keychainValue = staleAuth
+    ctx.host.keychain.readGenericPasswordForCurrentUser.mockImplementation(() => keychainValue)
+    ctx.host.keychain.writeGenericPasswordForCurrentUser.mockImplementation((_service, value) => {
+      keychainValue = String(value)
+    })
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("/api/oauth/usage")) {
+        keychainValue = newerAuth
+        return { status: 401, bodyText: "" }
+      }
+      throw new Error("refresh endpoint must not run for Keychain credentials")
+    })
+
+    const plugin = await loadPlugin()
+    expect(() => plugin.probe(ctx)).toThrow("must be refreshed by Claude Code")
+    expect(keychainValue).toBe(newerAuth)
+    expect(keychainValue).not.toContain("openusage-refresh")
+    expect(ctx.host.keychain.writeGenericPasswordForCurrentUser).not.toHaveBeenCalled()
+  })
+
+  it("preserves a newer credentials file when it changes immediately before refresh persistence", async () => {
+    const ctx = makeCtx()
+    const credPath = "~/.claude/.credentials.json"
+    const staleAuth = JSON.stringify({
+      claudeAiOauth: {
+        accessToken: "stale-access",
+        refreshToken: "stale-refresh",
+        expiresAt: Date.now() - 1000,
+      },
+    })
+    const newerAuth = JSON.stringify({
+      claudeAiOauth: {
+        accessToken: "newer-access",
+        refreshToken: "newer-refresh",
+        expiresAt: Date.now() + 60_000,
+      },
+    })
+    let fileValue = staleAuth
+    ctx.host.fs.exists = (path) => path === credPath
+    ctx.host.fs.readText = () => fileValue
+    ctx.host.fs.writeText.mockImplementation((_path, text) => {
+      fileValue = String(text)
+    })
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("/v1/oauth/token")) {
+        fileValue = newerAuth
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            access_token: "openusage-refresh",
+            refresh_token: "openusage-rotated-refresh",
+            expires_in: 3600,
+          }),
+        }
+      }
+      throw new Error("usage should not run after a credentials file conflict")
+    })
+
+    const plugin = await loadPlugin()
+    expect(() => plugin.probe(ctx)).toThrow("Token conflict")
+    expect(fileValue).toBe(newerAuth)
+    expect(fileValue).not.toContain("openusage-refresh")
+    expect(ctx.host.fs.writeTextIfUnchanged).toHaveBeenCalledTimes(1)
+    expect(ctx.host.fs.writeText).not.toHaveBeenCalled()
+  })
+
+  it("refuses to refresh the legacy Keychain source after current-user fallback", async () => {
     const ctx = makeCtx()
     ctx.host.fs.exists = () => false
     ctx.host.keychain.readGenericPasswordForCurrentUser.mockImplementation(() => {
@@ -1228,35 +1392,28 @@ describe("claude plugin", () => {
         },
       })
     )
-    ctx.host.http.request.mockImplementation((opts) => {
-      if (String(opts.url).includes("/v1/oauth/token")) {
-        return { status: 200, bodyText: JSON.stringify({ access_token: "new-token", expires_in: 3600 }) }
-      }
-      return {
-        status: 200,
-        bodyText: JSON.stringify({
-          five_hour: { utilization: 10, resets_at: "2099-01-01T00:00:00.000Z" },
-        }),
-      }
+    ctx.host.http.request.mockImplementation(() => {
+      throw new Error("refresh and usage endpoints must not be called")
     })
 
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).not.toThrow()
-    expect(ctx.host.keychain.writeGenericPassword).toHaveBeenCalled()
+    expect(() => plugin.probe(ctx)).toThrow("must be refreshed by Claude Code")
+    expect(ctx.host.http.request).not.toHaveBeenCalled()
+    expect(ctx.host.keychain.writeGenericPassword).not.toHaveBeenCalled()
     expect(ctx.host.keychain.writeGenericPasswordForCurrentUser).not.toHaveBeenCalled()
   })
 
-  it("logs when saving credentials file fails", async () => {
+  it("reports a friendly error when saving the credentials file fails", async () => {
     const ctx = makeCtx()
+    const credentials = JSON.stringify({
+      claudeAiOauth: {
+        accessToken: "old-token",
+        refreshToken: "refresh",
+        expiresAt: Date.now() - 1000,
+      },
+    })
     ctx.host.fs.exists = () => true
-    ctx.host.fs.readText = () =>
-      JSON.stringify({
-        claudeAiOauth: {
-          accessToken: "old-token",
-          refreshToken: "refresh",
-          expiresAt: Date.now() - 1000,
-        },
-      })
+    ctx.host.fs.readText = () => credentials
     ctx.host.fs.writeText.mockImplementation(() => {
       throw new Error("disk full")
     })
@@ -1272,7 +1429,7 @@ describe("claude plugin", () => {
       }
     })
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).not.toThrow()
+    expect(() => plugin.probe(ctx)).toThrow("credentials could not be saved")
     expect(ctx.host.log.error).toHaveBeenCalled()
   })
 
@@ -1415,15 +1572,15 @@ describe("claude plugin", () => {
 
   it("throws usage request failed after refresh when retry errors", async () => {
     const ctx = makeCtx()
+    const credentials = JSON.stringify({
+      claudeAiOauth: {
+        accessToken: "token",
+        refreshToken: "refresh",
+        expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+      },
+    })
     ctx.host.fs.exists = () => true
-    ctx.host.fs.readText = () =>
-      JSON.stringify({
-        claudeAiOauth: {
-          accessToken: "token",
-          refreshToken: "refresh",
-          expiresAt: Date.now() + 60_000,
-        },
-      })
+    ctx.host.fs.readText = () => credentials
 
     let usageCalls = 0
     ctx.host.http.request.mockImplementation((opts) => {

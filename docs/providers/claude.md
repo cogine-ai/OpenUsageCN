@@ -59,6 +59,34 @@ Returns rate limit windows and optional extra credits.
 
 All windows are enforced simultaneously — hitting any limit throttles the user.
 
+## Plan Labels
+
+The exact seat identifiers `team_standard` and `team_tier_1` resolve to `Claude Team Standard`
+and `Claude Team Premium`. A generic Team subscription continues to display as `Team` unless the
+seat can be verified from the same account.
+
+### Verifying A Team Seat
+
+On macOS, a Claude browser profile can enrich the local Claude OAuth account with an exact Team
+seat. OpenUsageCN first verifies the OAuth email and organization with
+`GET https://api.anthropic.com/api/oauth/profile`. It then reads the selected Chrome or Arc profile
+with the packaged `@steipete/sweet-cookie` helper and checks
+`GET https://claude.ai/api/account`.
+
+The exact seat is used only when the browser email and organization both match the OAuth profile.
+Email matching ignores surrounding ASCII whitespace and letter case; the organization UUID must
+match exactly. Missing, mismatched, or unknown evidence keeps the label at `Team`. A Claude browser
+session cannot create a separate browser-only account.
+
+When exact-seat verification cannot complete, the account panel shows a nonsecret Claude Team
+verification warning and reference ID. The successful quota result remains available with the
+generic `Team` label, so a browser mismatch or temporary browser failure does not turn quota into an
+error.
+
+The browser profile must be selected explicitly. Cookies, OAuth identity fields, and raw account
+responses remain in memory. Persisted account data contains only opaque identifiers, fingerprints,
+the selected profile locator, and local labels.
+
 ## Authentication
 
 ### Token Location
@@ -91,6 +119,12 @@ Keychain values use the same JSON structure as the legacy credentials file:
 ```
 
 **Fallback:** `~/.claude/.credentials.json`. This file can be left behind by older Claude Code versions, so it is treated as a fallback when Keychain does not contain usable credentials.
+
+OpenUsageCN does not refresh Keychain credentials because macOS Keychain has no compare-by-value
+update that can protect a concurrent Claude Code login. When that access token needs refresh, run
+`claude` and try again. Credentials-file refreshes use a conditional safe replacement so a newer
+file is not overwritten. If that replacement cannot be saved, the refresh fails visibly and asks
+you to refresh the session with Claude Code.
 
 ### Token Refresh
 

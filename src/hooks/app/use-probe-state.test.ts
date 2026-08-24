@@ -21,6 +21,38 @@ describe("useProbeState", () => {
     expect(result.current.pluginStates.codex?.loading).toBe(true)
   })
 
+  it("clears the previous account projection synchronously for a transition", () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(123_000)
+    const { result } = renderHook(() => useProbeState({}))
+
+    act(() => {
+      result.current.handleProbeResult(
+        {
+          providerId: "codex",
+          displayName: "Codex",
+          iconUrl: "",
+          lines: [{ type: "text", label: "Usage", value: "Old Account" }],
+        },
+        { manual: true }
+      )
+    })
+
+    let transitionState = result.current.pluginStatesRef.current.codex
+    act(() => {
+      result.current.setAccountTransitionForPlugins(["codex"])
+      transitionState = result.current.pluginStatesRef.current.codex
+    })
+
+    expect(transitionState).toMatchObject({
+      data: null,
+      loading: true,
+      error: null,
+      lastUpdatedAt: null,
+      lastManualRefreshAt: 123_000,
+    })
+  })
+
   it("uses Chinese fallback text for empty plugin error output", () => {
     const { result } = renderHook(() => useProbeState({}))
 

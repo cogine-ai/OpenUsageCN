@@ -26,6 +26,637 @@ describe("cursor plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("Not logged in")
   })
 
+  it("discovers matching Desktop and CLI sessions as independent connections", async () => {
+    const ctx = makeCtx()
+    const sharedToken = makeJwt({ sub: "auth0|shared-user", exp: 9999999999 })
+    ctx.host.sqlite.query.mockImplementation((_db, sql) => {
+      if (String(sql).includes("cursorAuth/accessToken")) {
+        return JSON.stringify([{ value: sharedToken }])
+      }
+      return JSON.stringify([])
+    })
+    ctx.host.keychain.readGenericPassword.mockImplementation((service) => {
+      if (service === "cursor-access-token") return sharedToken
+      return null
+    })
+    const plugin = await loadPlugin()
+
+    const report = plugin.discoverConnections(ctx)
+
+    expect(report).toEqual({
+      observations: [
+        {
+          identityNamespace: "cursor-sub-v1",
+          normalizedIdentity: "auth0|shared-user",
+          connectionKey: "cursor-desktop",
+          connectionKind: "desktop",
+        },
+        {
+          identityNamespace: "cursor-sub-v1",
+          normalizedIdentity: "auth0|shared-user",
+          connectionKey: "cursor-cli",
+          connectionKind: "cli",
+        },
+      ],
+      sourceOutcomes: [
+        { sourceKey: "cursor-desktop", status: "available" },
+        { sourceKey: "cursor-cli", status: "available" },
+      ],
+      defaultConnectionKey: "cursor-desktop",
+    })
+  })
+
+  it("keeps different Desktop and CLI identities and preserves the existing Auto preference", async () => {
+    const ctx = makeCtx()
+    const desktopToken = makeJwt({ sub: "auth0|desktop-user", exp: 9999999999 })
+    const cliToken = makeJwt({ sub: "auth0|cli-user", exp: 9999999999 })
+    ctx.host.sqlite.query.mockImplementation((_db, sql) => {
+      if (String(sql).includes("cursorAuth/accessToken")) {
+        return JSON.stringify([{ value: desktopToken }])
+      }
+      if (String(sql).includes("cursorAuth/stripeMembershipType")) {
+        return JSON.stringify([{ value: " Free " }])
+      }
+      return JSON.stringify([])
+    })
+    ctx.host.keychain.readGenericPassword.mockImplementation((service) => {
+      if (service === "cursor-access-token") return cliToken
+      return null
+    })
+    const plugin = await loadPlugin()
+
+    const report = plugin.discoverConnections(ctx)
+
+    expect(report.observations.map((item) => item.normalizedIdentity)).toEqual([
+      "auth0|desktop-user",
+      "auth0|cli-user",
+    ])
+    expect(report.defaultConnectionKey).toBe("cursor-cli")
+  })
+
+  it("marks a credential without a full JWT subject unavailable without inventing identity", async () => {
+    const ctx = makeCtx()
+    ctx.host.sqlite.query.mockImplementation((_db, sql) => {
+      if (String(sql).includes("cursorAuth/accessToken")) {
+        return JSON.stringify([{ value: "opaque-token" }])
+      }
+      return JSON.stringify([])
+    })
+    const plugin = await loadPlugin()
+
+    const report = plugin.discoverConnections(ctx)
+
+    expect(report.observations).toEqual([])
+    expect(report.sourceOutcomes).toEqual([
+      { sourceKey: "cursor-desktop", status: "unavailable" },
+      { sourceKey: "cursor-cli", status: "absent" },
+    ])
+    expect(report.defaultConnectionKey).toBeNull()
+  })
+
+  it("derives a credential generation from the exact selected source state", async () => {
+    const ctx = makeCtx()
+    const accessToken = makeJwt({ sub: "auth0|cli-user", exp: 9999999999 })
+    let refreshToken = "refresh-a"
+    ctx.host.keychain.readGenericPassword.mockImplementation((service) => {
+      if (service === "cursor-access-token") return accessToken
+      if (service === "cursor-refresh-token") return refreshToken
+      return null
+    })
+    const plugin = await loadPlugin()
+
+    const first = plugin.credentialGeneration(ctx, { connectionKey: "cursor-cli" })
+    refreshToken = "refresh-b"
+    const second = plugin.credentialGeneration(ctx, { connectionKey: "cursor-cli" })
+
+    expect(first).toMatch(/^[a-f0-9]{64}$/)
+    expect(second).toMatch(/^[a-f0-9]{64}$/)
+    expect(second).not.toBe(first)
+  })
+
+  it("derives a history cookie only from the generation-bound local connection", async () => {
+    const ctx = makeCtx()
+    const accessToken = makeJwt({ sub: "auth0|local-user", exp: 9999999999 })
+    ctx.host.keychain.readGenericPassword.mockImplementation((service) => {
+      if (service === "cursor-access-token") return accessToken
+      if (service === "cursor-refresh-token") return "refresh-current"
+      return null
+    })
+    const plugin = await loadPlugin()
+    const credentialGeneration = plugin.credentialGeneration(ctx, {
+      connectionKey: "cursor-cli",
+    })
+
+    expect(
+      plugin.historyCredential(ctx, {
+        connectionKey: "cursor-cli",
+        credentialGeneration,
+      })
+    ).toEqual({
+      cookieHeader: `WorkosCursorSessionToken=local-user%3A%3A${accessToken}`,
+    })
+  })
+
+  it("refreshes an expired history session in memory without mutating the selected source", async () => {
+    const ctx = makeCtx()
+    const expiredAccessToken = makeJwt({ sub: "auth0|local-user", exp: 1 })
+    const refreshedAccessToken = makeJwt({ sub: "auth0|local-user", exp: 9999999999 })
+    ctx.host.keychain.readGenericPassword.mockImplementation((service) => {
+      if (service === "cursor-access-token") return expiredAccessToken
+      if (service === "cursor-refresh-token") return "refresh-current"
+      return null
+    })
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify({ access_token: refreshedAccessToken }),
+    })
+    const plugin = await loadPlugin()
+    const credentialGeneration = plugin.credentialGeneration(ctx, {
+      connectionKey: "cursor-cli",
+    })
+
+    expect(
+      plugin.historyCredential(ctx, {
+        connectionKey: "cursor-cli",
+        credentialGeneration,
+      })
+    ).toEqual({
+      cookieHeader: `WorkosCursorSessionToken=local-user%3A%3A${refreshedAccessToken}`,
+    })
+    expect(ctx.host.keychain.writeGenericPassword).not.toHaveBeenCalled()
+  })
+
+  it("rejects history credential extraction after the local generation changes", async () => {
+    const ctx = makeCtx()
+    const accessToken = makeJwt({ sub: "auth0|local-user", exp: 9999999999 })
+    let refreshToken = "refresh-a"
+    ctx.host.keychain.readGenericPassword.mockImplementation((service) => {
+      if (service === "cursor-access-token") return accessToken
+      if (service === "cursor-refresh-token") return refreshToken
+      return null
+    })
+    const plugin = await loadPlugin()
+    const credentialGeneration = plugin.credentialGeneration(ctx, {
+      connectionKey: "cursor-cli",
+    })
+    refreshToken = "refresh-b"
+
+    expect(() =>
+      plugin.historyCredential(ctx, {
+        connectionKey: "cursor-cli",
+        credentialGeneration,
+      })
+    ).toThrow("Account credentials changed")
+  })
+
+  it("rejects a scoped probe when its credential generation is no longer current", async () => {
+    const ctx = makeCtx()
+    const accessToken = makeJwt({ sub: "auth0|cli-user", exp: 9999999999 })
+    ctx.host.keychain.readGenericPassword.mockImplementation((service) => {
+      if (service === "cursor-access-token") return accessToken
+      if (service === "cursor-refresh-token") return "refresh-current"
+      return null
+    })
+    const plugin = await loadPlugin()
+
+    expect(() =>
+      plugin.probe(ctx, {
+        connectionKey: "cursor-cli",
+        credentialGeneration: "0".repeat(64),
+      })
+    ).toThrow("Account credentials changed")
+    expect(ctx.host.http.request).not.toHaveBeenCalled()
+  })
+
+  it("rejects a scoped local session whose auth identity only shares the JWT subject suffix", async () => {
+    const ctx = makeCtx()
+    const accessToken = makeJwt({ sub: "auth0|shared-tail", exp: 9999999999 })
+    ctx.host.keychain.readGenericPassword.mockImplementation((service) => {
+      if (service === "cursor-access-token") return accessToken
+      if (service === "cursor-refresh-token") return "refresh-current"
+      return null
+    })
+    let authRequest = null
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url) === "https://cursor.com/api/auth/me") {
+        authRequest = opts
+        return {
+          status: 200,
+          bodyText: JSON.stringify({ sub: "google-oauth2|shared-tail" }),
+        }
+      }
+      return {
+        status: 200,
+        bodyText: JSON.stringify({
+          enabled: true,
+          planUsage: { totalSpend: 1200, limit: 2400 },
+        }),
+      }
+    })
+    const plugin = await loadPlugin()
+    const credentialGeneration = plugin.credentialGeneration(ctx, {
+      connectionKey: "cursor-cli",
+    })
+
+    expect(() =>
+      plugin.probe(ctx, {
+        connectionKey: "cursor-cli",
+        credentialGeneration,
+      })
+    ).toThrow("Selected Cursor account identity could not be verified")
+    expect(authRequest).toMatchObject({
+      method: "GET",
+      url: "https://cursor.com/api/auth/me",
+      headers: {
+        Accept: "application/json",
+        Cookie: `WorkosCursorSessionToken=shared-tail%3A%3A${accessToken}`,
+      },
+      timeoutMs: 10000,
+    })
+    expect(
+      ctx.host.http.request.mock.calls.filter(([opts]) =>
+        String(opts.url).includes("GetCurrentPeriodUsage")
+      )
+    ).toHaveLength(0)
+  })
+
+  it.each([
+    ["401", { status: 401, bodyText: "identity-response-secret" }],
+    ["403", { status: 403, bodyText: "identity-response-secret" }],
+    ["redirect", { status: 302, bodyText: "identity-response-secret" }],
+    ["malformed body", { status: 200, bodyText: "identity-response-secret" }],
+    ["missing subject", { status: 200, bodyText: "{}" }],
+    ["mismatched subject", { status: 200, bodyText: JSON.stringify({ sub: "auth0|other" }) }],
+  ])("fails a scoped local probe on auth identity %s before usage", async (_caseName, authResponse) => {
+    const ctx = makeCtx()
+    const accessToken = makeJwt({ sub: "auth0|selected", exp: 9999999999 })
+    ctx.host.keychain.readGenericPassword.mockImplementation((service) => {
+      if (service === "cursor-access-token") return accessToken
+      if (service === "cursor-refresh-token") return "refresh-current"
+      return null
+    })
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url) === "https://cursor.com/api/auth/me") return authResponse
+      throw new Error("usage must not be requested")
+    })
+    const plugin = await loadPlugin()
+    const credentialGeneration = plugin.credentialGeneration(ctx, {
+      connectionKey: "cursor-cli",
+    })
+
+    expect(() =>
+      plugin.probe(ctx, {
+        connectionKey: "cursor-cli",
+        credentialGeneration,
+      })
+    ).toThrow("Selected Cursor account identity could not be verified")
+    expect(ctx.host.http.request).toHaveBeenCalledTimes(1)
+    const logged = [
+      ...ctx.host.log.trace.mock.calls,
+      ...ctx.host.log.debug.mock.calls,
+      ...ctx.host.log.info.mock.calls,
+      ...ctx.host.log.warn.mock.calls,
+      ...ctx.host.log.error.mock.calls,
+    ].flat().join(" ")
+    expect(logged).not.toContain("auth0|selected")
+    expect(logged).not.toContain("auth0|other")
+    expect(logged).not.toContain("identity-response-secret")
+  })
+
+  it("keeps the non-account-scoped legacy probe free of auth identity requests", async () => {
+    const ctx = makeCtx()
+    const accessToken = makeJwt({ sub: "auth0|legacy", exp: 9999999999 })
+    ctx.host.sqlite.query.mockImplementation((_db, sql) => {
+      if (String(sql).includes("cursorAuth/accessToken")) {
+        return JSON.stringify([{ value: accessToken }])
+      }
+      return JSON.stringify([])
+    })
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url) === "https://cursor.com/api/auth/me") {
+        throw new Error("legacy probe must not verify account identity")
+      }
+      return {
+        status: 200,
+        bodyText: JSON.stringify({
+          enabled: true,
+          planUsage: { totalSpend: 1200, limit: 2400 },
+        }),
+      }
+    })
+    const plugin = await loadPlugin()
+
+    expect(plugin.probe(ctx).lines.find((line) => line.label === "Total usage")).toBeTruthy()
+    expect(
+      ctx.host.http.request.mock.calls.some(([opts]) =>
+        String(opts.url) === "https://cursor.com/api/auth/me"
+      )
+    ).toBe(false)
+  })
+
+  it("verifies the explicitly selected Desktop session before its usage request", async () => {
+    const ctx = makeCtx()
+    const accessToken = makeJwt({ sub: "auth0|desktop-user", exp: 9999999999 })
+    ctx.host.sqlite.query.mockImplementation((_db, sql) => {
+      if (String(sql).includes("cursorAuth/accessToken")) {
+        return JSON.stringify([{ value: accessToken }])
+      }
+      return JSON.stringify([])
+    })
+    ctx.host.http.request.mockImplementation((opts) => {
+      const url = String(opts.url)
+      if (url === "https://cursor.com/api/auth/me") {
+        expect(opts.headers.Cookie).toBe(
+          `WorkosCursorSessionToken=desktop-user%3A%3A${accessToken}`
+        )
+        return {
+          status: 200,
+          bodyText: JSON.stringify({ sub: "auth0|desktop-user" }),
+        }
+      }
+      if (url.includes("GetCurrentPeriodUsage")) {
+        expect(opts.headers.Authorization).toBe("Bearer " + accessToken)
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            enabled: true,
+            planUsage: { totalSpend: 1200, limit: 2400 },
+          }),
+        }
+      }
+      return { status: 200, bodyText: "{}" }
+    })
+    const plugin = await loadPlugin()
+    const credentialGeneration = plugin.credentialGeneration(ctx, {
+      connectionKey: "cursor-desktop",
+    })
+
+    const result = plugin.probe(ctx, {
+      connectionKey: "cursor-desktop",
+      credentialGeneration,
+    })
+
+    expect(result.lines.find((line) => line.label === "Total usage")).toBeTruthy()
+  })
+
+  it("keeps a scoped CLI refresh in memory without overwriting Keychain", async () => {
+    const ctx = makeCtx()
+    const expiredAccessToken = makeJwt({ sub: "auth0|cli-user", exp: 1 })
+    const refreshedAccessToken = makeJwt({ sub: "auth0|cli-user", exp: 9999999999 })
+    let currentAccessToken = expiredAccessToken
+    ctx.host.keychain.readGenericPassword.mockImplementation((service) => {
+      if (service === "cursor-access-token") return currentAccessToken
+      if (service === "cursor-refresh-token") return "refresh-current"
+      return null
+    })
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("/oauth/token")) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({ access_token: refreshedAccessToken }),
+        }
+      }
+      if (String(opts.url) === "https://cursor.com/api/auth/me") {
+        expect(opts.headers.Cookie).toBe(
+          `WorkosCursorSessionToken=cli-user%3A%3A${refreshedAccessToken}`
+        )
+        return {
+          status: 200,
+          bodyText: JSON.stringify({ sub: "auth0|cli-user" }),
+        }
+      }
+      return {
+        status: 200,
+        bodyText: JSON.stringify({
+          enabled: true,
+          planUsage: { totalSpend: 1200, limit: 2400 },
+        }),
+      }
+    })
+    const plugin = await loadPlugin()
+    const credentialGeneration = plugin.credentialGeneration(ctx, {
+      connectionKey: "cursor-cli",
+    })
+
+    const result = plugin.probe(ctx, {
+      connectionKey: "cursor-cli",
+      credentialGeneration,
+    })
+
+    expect(result.lines.find((line) => line.label === "Total usage")).toBeTruthy()
+    expect(ctx.host.keychain.writeGenericPassword).not.toHaveBeenCalled()
+    expect(currentAccessToken).toBe(expiredAccessToken)
+    expect(ctx.host.sqlite.exec).not.toHaveBeenCalled()
+  })
+
+  it("persists a scoped Desktop refresh in one guarded SQLite transaction", async () => {
+    const ctx = makeCtx()
+    const expiredAccessToken = makeJwt({ sub: "auth0|desktop-user", exp: 1 })
+    const refreshedAccessToken = makeJwt({ sub: "auth0|desktop-user", exp: 9999999999 })
+    const refreshToken = "refresh-current"
+    let currentAccessToken = expiredAccessToken
+    ctx.host.sqlite.query.mockImplementation((_db, sql) => {
+      const text = String(sql)
+      if (text.includes("cursorAuth/accessToken")) {
+        return JSON.stringify([{ value: currentAccessToken }])
+      }
+      if (text.includes("cursorAuth/refreshToken")) {
+        return JSON.stringify([{ value: refreshToken }])
+      }
+      return JSON.stringify([])
+    })
+    ctx.host.sqlite.exec.mockImplementation((_db, sql) => {
+      expect(String(sql)).toContain("BEGIN IMMEDIATE;")
+      expect(String(sql)).toContain("CHECK(ok = 1)")
+      expect(String(sql)).toContain(expiredAccessToken)
+      expect(String(sql)).toContain(refreshToken)
+      expect(String(sql)).toContain(refreshedAccessToken)
+      expect(String(sql)).toContain("COMMIT;")
+      currentAccessToken = refreshedAccessToken
+    })
+    ctx.host.http.request.mockImplementation((opts) => {
+      const url = String(opts.url)
+      if (url.includes("/oauth/token")) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({ access_token: refreshedAccessToken }),
+        }
+      }
+      if (url === "https://cursor.com/api/auth/me") {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({ sub: "auth0|desktop-user" }),
+        }
+      }
+      return {
+        status: 200,
+        bodyText: JSON.stringify({
+          enabled: true,
+          planUsage: { totalSpend: 1200, limit: 2400 },
+        }),
+      }
+    })
+    const plugin = await loadPlugin()
+    const credentialGeneration = plugin.credentialGeneration(ctx, {
+      connectionKey: "cursor-desktop",
+    })
+
+    const result = plugin.probe(ctx, {
+      connectionKey: "cursor-desktop",
+      credentialGeneration,
+    })
+
+    expect(result.lines.find((line) => line.label === "Total usage")).toBeTruthy()
+    expect(ctx.host.sqlite.exec).toHaveBeenCalledTimes(1)
+    expect(currentAccessToken).toBe(refreshedAccessToken)
+    expect(ctx.host.keychain.writeGenericPassword).not.toHaveBeenCalled()
+  })
+
+  it("rejects a scoped Desktop refresh when the SQLite transaction guard fails", async () => {
+    const ctx = makeCtx()
+    const expiredAccessToken = makeJwt({ sub: "auth0|desktop-user", exp: 1 })
+    const refreshedAccessToken = makeJwt({ sub: "auth0|desktop-user", exp: 9999999999 })
+    ctx.host.sqlite.query.mockImplementation((_db, sql) => {
+      if (String(sql).includes("cursorAuth/accessToken")) {
+        return JSON.stringify([{ value: expiredAccessToken }])
+      }
+      if (String(sql).includes("cursorAuth/refreshToken")) {
+        return JSON.stringify([{ value: "refresh-current" }])
+      }
+      return JSON.stringify([])
+    })
+    ctx.host.sqlite.exec.mockImplementation(() => {
+      throw new Error("CHECK constraint failed: openusage_cas_guard")
+    })
+    ctx.host.http.request.mockImplementation((opts) => {
+      const url = String(opts.url)
+      if (url.includes("/oauth/token")) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({ access_token: refreshedAccessToken }),
+        }
+      }
+      if (url === "https://cursor.com/api/auth/me") {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({ sub: "auth0|desktop-user" }),
+        }
+      }
+      throw new Error("usage must not be requested after a failed credential guard")
+    })
+    const plugin = await loadPlugin()
+    const credentialGeneration = plugin.credentialGeneration(ctx, {
+      connectionKey: "cursor-desktop",
+    })
+
+    expect(() =>
+      plugin.probe(ctx, {
+        connectionKey: "cursor-desktop",
+        credentialGeneration,
+      })
+    ).toThrow("Account credentials changed")
+    expect(ctx.host.sqlite.exec).toHaveBeenCalledTimes(1)
+    expect(ctx.host.keychain.writeGenericPassword).not.toHaveBeenCalled()
+  })
+
+  it("rejects a scoped refresh write when the local login changes before CAS", async () => {
+    const ctx = makeCtx()
+    const expiredAccessToken = makeJwt({ sub: "auth0|selected", exp: 1 })
+    const refreshedAccessToken = makeJwt({ sub: "auth0|selected", exp: 9999999999 })
+    const switchedAccessToken = makeJwt({ sub: "auth0|other", exp: 9999999999 })
+    let currentAccessToken = expiredAccessToken
+    ctx.host.keychain.readGenericPassword.mockImplementation((service) => {
+      if (service === "cursor-access-token") return currentAccessToken
+      if (service === "cursor-refresh-token") return "refresh-current"
+      return null
+    })
+    ctx.host.http.request.mockImplementation((opts) => {
+      const url = String(opts.url)
+      if (url.includes("/oauth/token")) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({ access_token: refreshedAccessToken }),
+        }
+      }
+      if (url === "https://cursor.com/api/auth/me") {
+        currentAccessToken = switchedAccessToken
+        return {
+          status: 200,
+          bodyText: JSON.stringify({ sub: "auth0|selected" }),
+        }
+      }
+      throw new Error("usage must not be requested")
+    })
+    const plugin = await loadPlugin()
+    const credentialGeneration = plugin.credentialGeneration(ctx, {
+      connectionKey: "cursor-cli",
+    })
+
+    expect(() =>
+      plugin.probe(ctx, {
+        connectionKey: "cursor-cli",
+        credentialGeneration,
+      })
+    ).toThrow("Account credentials changed")
+    expect(ctx.host.keychain.writeGenericPassword).not.toHaveBeenCalled()
+  })
+
+  it("revalidates a scoped identity before retrying usage with a refreshed token", async () => {
+    const ctx = makeCtx()
+    const accessToken = makeJwt({ sub: "auth0|selected", exp: 9999999999 })
+    const refreshedToken = makeJwt({ sub: "auth0|different", exp: 9999999999 })
+    ctx.host.keychain.readGenericPassword.mockImplementation((service) => {
+      if (service === "cursor-access-token") return accessToken
+      if (service === "cursor-refresh-token") return "refresh-current"
+      return null
+    })
+    let authCalls = 0
+    let usageCalls = 0
+    ctx.host.http.request.mockImplementation((opts) => {
+      const url = String(opts.url)
+      if (url === "https://cursor.com/api/auth/me") {
+        authCalls += 1
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            sub: authCalls === 1 ? "auth0|selected" : "auth0|different",
+          }),
+        }
+      }
+      if (url.includes("GetCurrentPeriodUsage")) {
+        usageCalls += 1
+        if (usageCalls === 1) return { status: 401, bodyText: "" }
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            enabled: true,
+            planUsage: { totalSpend: 1200, limit: 2400 },
+          }),
+        }
+      }
+      if (url.includes("/oauth/token")) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({ access_token: refreshedToken }),
+        }
+      }
+      return { status: 200, bodyText: "{}" }
+    })
+    const plugin = await loadPlugin()
+    const credentialGeneration = plugin.credentialGeneration(ctx, {
+      connectionKey: "cursor-cli",
+    })
+
+    expect(() =>
+      plugin.probe(ctx, {
+        connectionKey: "cursor-cli",
+        credentialGeneration,
+      })
+    ).toThrow("Selected Cursor account identity could not be verified")
+    expect(authCalls).toBe(2)
+    expect(usageCalls).toBe(1)
+  })
+
   it("loads tokens from keychain when sqlite has none", async () => {
     const ctx = makeCtx()
     ctx.host.sqlite.query.mockReturnValue(JSON.stringify([]))
@@ -48,6 +679,53 @@ describe("cursor plugin", () => {
     expect(result.lines.find((line) => line.label === "Total usage")).toBeTruthy()
     expect(ctx.host.keychain.readGenericPassword).toHaveBeenCalledWith("cursor-access-token")
     expect(ctx.host.keychain.readGenericPassword).toHaveBeenCalledWith("cursor-refresh-token")
+  })
+
+  it("probes the explicitly selected CLI connection even when Desktop would be Auto", async () => {
+    const ctx = makeCtx()
+    const desktopToken = makeJwt({ sub: "auth0|desktop", exp: 9999999999 })
+    const cliToken = makeJwt({ sub: "auth0|cli", exp: 9999999999 })
+    ctx.host.sqlite.query.mockImplementation((_db, sql) => {
+      if (String(sql).includes("cursorAuth/accessToken")) {
+        return JSON.stringify([{ value: desktopToken }])
+      }
+      return JSON.stringify([])
+    })
+    ctx.host.keychain.readGenericPassword.mockImplementation((service) => {
+      if (service === "cursor-access-token") return cliToken
+      return null
+    })
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url) === "https://cursor.com/api/auth/me") {
+        expect(opts.headers.Cookie).toBe(
+          `WorkosCursorSessionToken=cli%3A%3A${cliToken}`
+        )
+        return {
+          status: 200,
+          bodyText: JSON.stringify({ sub: "auth0|cli" }),
+        }
+      }
+      if (String(opts.url).includes("GetCurrentPeriodUsage")) {
+        expect(opts.headers.Authorization).toBe("Bearer " + cliToken)
+      }
+      return {
+        status: 200,
+        bodyText: JSON.stringify({
+          enabled: true,
+          planUsage: { totalSpend: 1200, limit: 2400 },
+        }),
+      }
+    })
+    const plugin = await loadPlugin()
+
+    const result = plugin.probe(ctx, {
+      connectionKey: "cursor-cli",
+      credentialGeneration: plugin.credentialGeneration(ctx, {
+        connectionKey: "cursor-cli",
+      }),
+    })
+
+    expect(result.lines.find((line) => line.label === "Total usage")).toBeTruthy()
   })
 
   it("refreshes keychain access token and persists to keychain source", async () => {
@@ -442,6 +1120,30 @@ describe("cursor plugin", () => {
     const result = plugin.probe(ctx)
     expect(result.plan).toBeTruthy()
     expect(result.lines.find((line) => line.label === "Total usage")).toBeTruthy()
+  })
+
+  it("maps a mixed-case pro_plus plan with surrounding whitespace to Pro+", async () => {
+    const ctx = makeCtx()
+    ctx.host.sqlite.query.mockReturnValue(JSON.stringify([{ value: "token" }]))
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("GetCurrentPeriodUsage")) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            enabled: true,
+            planUsage: { totalSpend: 1200, limit: 2400 },
+          }),
+        }
+      }
+      return {
+        status: 200,
+        bodyText: JSON.stringify({ planInfo: { planName: "  PrO_PlUs  " } }),
+      }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    expect(result.plan).toBe("Pro+")
   })
 
   it("omits plan badge for blank plan names", async () => {

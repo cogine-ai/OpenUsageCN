@@ -75,6 +75,81 @@ export type PluginOutput = {
   iconUrl: string
 }
 
+export type PluginAccountSupport = {
+  localDiscovery: boolean
+  browserBinding: boolean
+  modelHistory: boolean
+}
+
+export type ProviderAccountSelection =
+  | { mode: "auto" }
+  | { mode: "pinned"; accountId: string }
+
+export type ProviderAccountConnectionKind = "desktop" | "cli" | "chrome" | "arc"
+
+export type ProviderAccountConnection = {
+  connectionId: string
+  kind: ProviderAccountConnectionKind
+  available: boolean
+  profileKey?: string
+}
+
+export type ProviderAccountSummary = {
+  accountId: string
+  label: string
+  connectionKinds: ProviderAccountConnectionKind[]
+  connections: ProviderAccountConnection[]
+  selected: boolean
+  stale: boolean
+}
+
+export type ProviderPersistenceWarning = {
+  code: string
+  message: string
+  correlationId: string
+}
+
+export type ProviderEnrichmentWarning = {
+  code: string
+  message: string
+  correlationId: string
+}
+
+export type ProviderAccountView = {
+  providerId: string
+  selection: ProviderAccountSelection
+  activeAccountId: string | null
+  accounts: ProviderAccountSummary[]
+  persistenceWarning?: ProviderPersistenceWarning
+  enrichmentWarning?: ProviderEnrichmentWarning
+}
+
+export type ProviderAccountOperation =
+  | { kind: "refreshActive" }
+  | { kind: "selectActive"; accountId: string }
+  | { kind: "followDefaultConnection" }
+  | { kind: "renameAccount"; accountId: string; label: string }
+  | { kind: "attachBrowserCandidate"; candidateId: string }
+  | { kind: "detachConnection"; accountId: string; connectionId: string }
+
+export type ProviderAccountSourceOutcome = {
+  sourceKey: string
+  status: "available" | "absent" | "unavailable"
+}
+
+export type ProviderAccountOperationError = {
+  code: string
+  message: string
+}
+
+export type ProviderAccountOperationReceipt = {
+  operationId: string
+  status: "succeeded" | "partial" | "failed"
+  sourceOutcomes: ProviderAccountSourceOutcome[]
+  view: ProviderAccountView
+  error?: ProviderAccountOperationError
+}
+
 export type PluginMeta = {
   id: string
   name: string
@@ -84,6 +159,7 @@ export type PluginMeta = {
   links?: PluginLink[]
   statusPage?: PluginStatusPage
   config?: PluginConfig
+  accountSupport?: PluginAccountSupport
   /** Ordered list of primary metric candidates. Frontend picks first available. */
   primaryCandidates: string[]
   /** Label of the line marked `"period": "weekly"`, if the provider has one. */

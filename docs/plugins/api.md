@@ -40,6 +40,41 @@ On Windows, `appDataDir` is under `%LOCALAPPDATA%\ai.cogine.openusagecn`; non-se
 
 The Windows MVP runs only `codex`, `bigmodel-cn`, `openai-api`, `openrouter`, and `zai`. Codex is enabled by default. Windows launch plugins may use filesystem, environment, provider config, HTTP, crypto, and line-building APIs, but must not depend on the macOS Keychain or `ccusage`. Use `ctx.app.platform === "windows"` when a plugin needs a platform-specific credential path or optional metric.
 
+## Account Capability Declarations
+
+Account-related features are declared through the optional `accountSupport` object in `plugin.json`, not through methods on `ctx.host`. The declaration only advertises app-owned account experiences and does not expand a plugin's access to credentials, browsers, the filesystem, or the network. See [Manifest Schema](./schema.md#account-support-optional) for the available flags and legacy behavior.
+
+When `localDiscovery` is enabled, the entry script also provides these account-aware callbacks:
+
+```javascript
+globalThis.__openusage_plugin = {
+  id: "my-provider",
+  discoverConnections(ctx) {
+    return {
+      observations: [{
+        identityNamespace: "provider-sub-v1",
+        normalizedIdentity: "stable-provider-subject",
+        connectionKey: "provider-desktop",
+        connectionKind: "desktop",
+      }],
+      sourceOutcomes: [{ sourceKey: "provider-desktop", status: "available" }],
+      defaultConnectionKey: "provider-desktop",
+    }
+  },
+  credentialGeneration(ctx, { connectionKey }) {
+    return ctx.host.crypto.sha256Hex("credential state for " + connectionKey)
+  },
+  probe(ctx, { connectionKey, credentialGeneration }) {
+    // Read only this connection and reject a generation mismatch before use.
+    return { lines: [] }
+  },
+}
+```
+
+`connectionKind` is `desktop`, `cli`, `chrome`, or `arc`; source status is `available`, `absent`, or `unavailable`. `connectionKey` must be a nonsecret locator that is safe to persist. `normalizedIdentity` is process-only and is converted to an installation-scoped fingerprint before account storage; plugins must not log, display, or persist it themselves. `credentialGeneration` must return a lowercase 64-character SHA-256 value over the exact selected credential state, never the credential itself.
+
+The coordinator passes only the selected connection key and its checked generation to the scoped `probe` call. Browser binding and model-history transports remain app-owned integrations for supported bundled providers; declaring their flags alone does not expose cookies or add a general-purpose browser API to plugin JavaScript.
+
 ## Logging
 
 ```typescript
@@ -602,10 +637,10 @@ Returns a status envelope:
 
 ### Behavior
 
-- **Runtime runners**: Executes pinned `ccusage@20.0.2` via fallback chain `bunx -> pnpm dlx -> yarn dlx -> npm exec -> npx`
+- **Runtime runners**: Executes pinned `ccusage@20.0.20` via fallback chain `bunx -> pnpm dlx -> yarn dlx -> npm exec -> npx`
 - **Provider-aware**: Resolves provider from `opts.provider` or plugin id (`claude`/`codex`)
 - **Focused commands**: Uses `ccusage claude daily` or `ccusage codex daily`; it intentionally does not use `ccusage daily` because that aggregates all detected agents
-- **Legacy fallback**: If `ccusage@20.0.2` cannot run through the package manager release-age policy, retries with release-age-safe `ccusage@18.0.11` for Claude or `@ccusage/codex@18.0.11` for Codex
+- **Legacy fallback**: If `ccusage@20.0.20` cannot run through the package manager release-age policy, retries with release-age-safe `ccusage@18.0.11` for Claude or `@ccusage/codex@18.0.11` for Codex
 - **No provider API calls**: Usage is computed from local JSONL session files; the host does not call Claude/Codex (or other provider) APIs, but package runners may contact a package registry to download the `ccusage` CLI if it is not already available locally
 - **Graceful degradation**: returns `no_runner` when no runner exists, `runner_failed` when execution fails
 - **Pricing**: Uses ccusage's built-in LiteLLM pricing data

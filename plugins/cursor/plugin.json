@@ -6,6 +6,11 @@
   "entry": "plugin.js",
   "icon": "icon.svg",
   "brandColor": "#000000",
+  "accountSupport": {
+    "localDiscovery": true,
+    "browserBinding": true,
+    "modelHistory": true
+  },
   "statusPage": {
     "apiUrl": "https://status.cursor.com/api/v2/status.json",
     "url": "https://status.cursor.com/"

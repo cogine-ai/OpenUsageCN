@@ -76,19 +76,51 @@ pub struct PluginOutput {
 }
 
 pub fn run_probe(plugin: &LoadedPlugin, app_data_dir: &PathBuf, app_version: &str) -> PluginOutput {
-    run_probe_with_timeout(
+    run_probe_with_timeout_and_connection(
         plugin,
         app_data_dir,
         app_version,
         Duration::from_secs(PROBE_TIMEOUT_SECS),
+        None,
     )
 }
 
+pub(crate) fn run_probe_for_connection(
+    plugin: &LoadedPlugin,
+    app_data_dir: &PathBuf,
+    app_version: &str,
+    connection_key: &str,
+    credential_generation: &str,
+) -> PluginOutput {
+    run_probe_with_timeout_and_connection(
+        plugin,
+        app_data_dir,
+        app_version,
+        Duration::from_secs(PROBE_TIMEOUT_SECS),
+        Some((connection_key, credential_generation)),
+    )
+}
+
+pub(crate) fn provider_account_probe_error(plugin: &LoadedPlugin, message: &str) -> PluginOutput {
+    error_output(plugin, message.to_string())
+}
+
+#[cfg(test)]
 fn run_probe_with_timeout(
     plugin: &LoadedPlugin,
     app_data_dir: &PathBuf,
     app_version: &str,
     timeout: Duration,
+) -> PluginOutput {
+    run_probe_with_timeout_and_connection(plugin, app_data_dir, app_version, timeout, None)
+}
+
+fn run_probe_with_timeout_and_connection(
+    plugin: &LoadedPlugin,
+    app_data_dir: &PathBuf,
+    app_version: &str,
+    timeout: Duration,
+    connection_target: Option<(&str, &str)>,
 ) -> PluginOutput {
     let fallback = error_output(plugin, "runtime error".to_string());
     let timeout_message = probe_timeout_message(timeout);
@@ -183,7 +215,17 @@ fn run_probe_with_timeout(
             .get("__openusage_ctx")
             .unwrap_or_else(|_| Value::new_undefined(ctx.clone()));
 
-        let result_value: Value = match probe_fn.call((probe_ctx,)) {
+        let call_result = match connection_target {
+            Some((connection_key, credential_generation)) => {
+                Object::new(ctx.clone()).and_then(|target| {
+                    target.set("connectionKey", connection_key)?;
+                    target.set("credentialGeneration", credential_generation)?;
+                    probe_fn.call((probe_ctx, target))
+                })
+            }
+            None => probe_fn.call((probe_ctx,)),
+        };
+        let result_value: Value = match call_result {
             Ok(r) => r,
             Err(_) => {
                 if deadline.has_elapsed() {
@@ -773,6 +815,7 @@ mod tests {
                 links: vec![],
                 status_page: None,
                 config: None,
+                account_support: None,
             },
             plugin_dir: PathBuf::from("."),
             entry_script: entry_script.to_string(),
@@ -823,6 +866,39 @@ mod tests {
         );
         let output = run_probe(&plugin, &temp_app_dir("async"), "0.0.0");
         assert_eq!(error_text(output), "boom");
+    }
+
+    #[test]
+    fn account_aware_probe_receives_only_the_scoped_connection_lease() {
+        let plugin = test_plugin(
+            r#"
+            globalThis.__openusage_plugin = {
+                probe(ctx, target) {
+                    if (!target || target.connectionKey !== "cursor-cli"
+                        || target.credentialGeneration !== "generation-a"
+                        || Object.keys(target).length !== 2) {
+                        throw "wrong target";
+                    }
+                    return {
+                        lines: [ctx.line.text({ label: "Connection", value: target.connectionKey })]
+                    };
+                }
+            };
+            "#,
+        );
+
+        let output = run_probe_for_connection(
+            &plugin,
+            &temp_app_dir("account-target"),
+            "0.0.0",
+            "cursor-cli",
+            "generation-a",
+        );
+
+        match &output.lines[0] {
+            MetricLine::Text { value, .. } => assert_eq!(value, "cursor-cli"),
+            other => panic!("expected connection text, got {other:?}"),
+        }
     }
 
     #[test]

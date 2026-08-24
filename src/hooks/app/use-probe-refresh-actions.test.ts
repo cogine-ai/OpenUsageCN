@@ -11,6 +11,7 @@ vi.mock("@/lib/settings", () => ({
 }))
 
 import { useProbeRefreshActions } from "@/hooks/app/use-probe-refresh-actions"
+import { useProbeState } from "@/hooks/app/use-probe-state"
 import { ProbeBatchStartError } from "@/hooks/use-probe-events"
 
 describe("useProbeRefreshActions", () => {
@@ -31,6 +32,7 @@ describe("useProbeRefreshActions", () => {
         pluginStatesRef: { current: {} },
         resetAutoUpdateSchedule: vi.fn(),
         setLoadingForPlugins,
+        setAccountTransitionForPlugins: vi.fn(),
         setErrorForPlugins: vi.fn(),
         startBatch,
       })
@@ -42,6 +44,107 @@ describe("useProbeRefreshActions", () => {
 
     expect(setLoadingForPlugins).toHaveBeenCalledWith(["codex"])
     expect(startBatch).toHaveBeenCalledWith(["codex"], { manual: true })
+  })
+
+  it.each([
+    {
+      name: "loading",
+      state: {
+        data: null,
+        loading: true,
+        error: null,
+        lastManualRefreshAt: null,
+        lastUpdatedAt: null,
+      },
+    },
+    {
+      name: "manual cooldown",
+      state: {
+        data: null,
+        loading: false,
+        error: null,
+        lastManualRefreshAt: 999_999,
+        lastUpdatedAt: null,
+      },
+    },
+  ])("starts an account-change batch during $name while Retry stays guarded", ({ state }) => {
+    vi.spyOn(Date, "now").mockReturnValue(1_000_000)
+    const startBatch = vi.fn().mockResolvedValue([])
+    const setLoadingForPlugins = vi.fn()
+    const setAccountTransitionForPlugins = vi.fn()
+    const resetAutoUpdateSchedule = vi.fn()
+    const { result } = renderHook(() =>
+      useProbeRefreshActions({
+        pluginSettings: { order: ["codex"], disabled: [] },
+        pluginStatesRef: { current: { codex: state } },
+        resetAutoUpdateSchedule,
+        setLoadingForPlugins,
+        setAccountTransitionForPlugins,
+        setErrorForPlugins: vi.fn(),
+        startBatch,
+      })
+    )
+
+    act(() => {
+      result.current.handleRetryPlugin("codex")
+    })
+    expect(startBatch).not.toHaveBeenCalled()
+
+    act(() => {
+      result.current.handleAccountChangeRefresh("codex")
+    })
+
+    expect(resetAutoUpdateSchedule).toHaveBeenCalledTimes(1)
+    expect(setLoadingForPlugins).not.toHaveBeenCalled()
+    expect(setAccountTransitionForPlugins).toHaveBeenCalledWith(["codex"])
+    expect(startBatch).toHaveBeenCalledWith(["codex"], {
+      invalidatePreviousOnFailure: true,
+    })
+  })
+
+  it("clears old account data and ends loading when the transition batch fails", async () => {
+    const failure = new Error("batch failed")
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    const { result } = renderHook(() => {
+      const probeState = useProbeState({})
+      const actions = useProbeRefreshActions({
+        pluginSettings: { order: ["codex"], disabled: [] },
+        pluginStatesRef: probeState.pluginStatesRef,
+        resetAutoUpdateSchedule: vi.fn(),
+        setLoadingForPlugins: probeState.setLoadingForPlugins,
+        setAccountTransitionForPlugins: probeState.setAccountTransitionForPlugins,
+        setErrorForPlugins: probeState.setErrorForPlugins,
+        startBatch: vi.fn().mockRejectedValue(failure),
+      })
+      return { ...probeState, ...actions }
+    })
+
+    act(() => {
+      result.current.handleProbeResult(
+        {
+          providerId: "codex",
+          displayName: "Codex",
+          iconUrl: "",
+          lines: [{ type: "text", label: "Usage", value: "Old Account" }],
+        },
+        { manual: false }
+      )
+    })
+
+    let transitionState = result.current.pluginStatesRef.current.codex
+    act(() => {
+      result.current.handleAccountChangeRefresh("codex")
+      transitionState = result.current.pluginStatesRef.current.codex
+    })
+
+    expect(transitionState?.data).toBeNull()
+    expect(transitionState?.loading).toBe(true)
+    await waitFor(() => expect(result.current.pluginStates.codex?.loading).toBe(false))
+    expect(result.current.pluginStates.codex?.error).toBe("无法开始刷新")
+    expect(errorSpy).toHaveBeenCalledWith(
+      "Failed to refresh plugin after account change:",
+      failure
+    )
   })
 
   it("filters out ineligible plugins for refresh-all", () => {
@@ -61,6 +164,7 @@ describe("useProbeRefreshActions", () => {
         },
         resetAutoUpdateSchedule: vi.fn(),
         setLoadingForPlugins,
+        setAccountTransitionForPlugins: vi.fn(),
         setErrorForPlugins: vi.fn(),
         startBatch,
       })
@@ -90,6 +194,7 @@ describe("useProbeRefreshActions", () => {
           },
           resetAutoUpdateSchedule,
           setLoadingForPlugins: vi.fn(),
+          setAccountTransitionForPlugins: vi.fn(),
           setErrorForPlugins: vi.fn(),
           startBatch,
         }),
@@ -121,6 +226,7 @@ describe("useProbeRefreshActions", () => {
         pluginStatesRef: { current: {} },
         resetAutoUpdateSchedule: vi.fn(),
         setLoadingForPlugins: vi.fn(),
+        setAccountTransitionForPlugins: vi.fn(),
         setErrorForPlugins,
         startBatch: vi.fn().mockRejectedValueOnce(failure),
       })
@@ -150,6 +256,7 @@ describe("useProbeRefreshActions", () => {
         pluginStatesRef: { current: {} },
         resetAutoUpdateSchedule: vi.fn(),
         setLoadingForPlugins: vi.fn(),
+        setAccountTransitionForPlugins: vi.fn(),
         setErrorForPlugins,
         startBatch: vi.fn().mockRejectedValueOnce(failure),
       })

@@ -10,6 +10,7 @@ fn make_snapshot(id: &str, name: &str) -> CachedPluginSnapshot {
         display_name: name.to_string(),
         plan: Some("Pro".to_string()),
         lines: vec![],
+        started_at: "2026-03-26T08:15:00Z".to_string(),
         fetched_at: "2026-03-26T08:15:30Z".to_string(),
     }
 }

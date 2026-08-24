@@ -31,6 +31,9 @@
     "active": true,
     "targets": "all",
     "macOS": {
+      "minimumSystemVersion": "13.0",
+      "hardenedRuntime": true,
+      "entitlements": "./Entitlements.plist",
       "dmg": {
         "appPosition": {
           "x": 180,
@@ -56,7 +59,8 @@
     "resources": [
       "resources/bundled_plugins/**/*",
       "icons/tray-icon.png",
-      "icons/tray-icon-windows.png"
+      "icons/tray-icon-windows.png",
+      "../THIRD_PARTY_NOTICES.md"
     ],
     "createUpdaterArtifacts": true
   },

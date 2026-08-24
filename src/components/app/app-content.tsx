@@ -29,6 +29,7 @@ type AppContentDerivedProps = {
 
 export type AppContentActionProps = {
   onRetryPlugin: (id: string) => void
+  onAccountChangeRefreshPlugin: (id: string) => void
   onReorder: (orderedIds: string[]) => void
   onToggle: (id: string) => void
   onProviderConfigSaved: (id: string) => void
@@ -54,6 +55,7 @@ export function AppContent({
   settingsPlugins,
   selectedPlugin,
   onRetryPlugin,
+  onAccountChangeRefreshPlugin,
   onReorder,
   onToggle,
   onProviderConfigSaved,
@@ -151,11 +153,15 @@ export function AppContent({
   const handleRetry = selectedPlugin
     ? () => onRetryPlugin(selectedPlugin.meta.id)
     : /* v8 ignore next */ undefined
+  const handleAccountChangeRefresh = selectedPlugin
+    ? () => onAccountChangeRefreshPlugin(selectedPlugin.meta.id)
+    : /* v8 ignore next */ undefined
 
   return (
     <ProviderDetailPage
       plugin={selectedPlugin}
       onRetry={handleRetry}
+      onAccountChangeRefresh={handleAccountChangeRefresh}
       displayMode={displayMode}
       resetTimerDisplayMode={resetTimerDisplayMode}
       timeFormatMode={timeFormatMode}

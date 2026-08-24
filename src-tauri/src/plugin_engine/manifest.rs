@@ -93,6 +93,17 @@ pub struct PluginConfigOption {
     pub label: String,
 }
 
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginAccountSupport {
+    #[serde(default)]
+    pub local_discovery: bool,
+    #[serde(default)]
+    pub browser_binding: bool,
+    #[serde(default)]
+    pub model_history: bool,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginManifest {
@@ -110,6 +121,8 @@ pub struct PluginManifest {
     pub status_page: Option<PluginStatusPage>,
     #[serde(default)]
     pub config: Option<PluginConfig>,
+    #[serde(default)]
+    pub account_support: Option<PluginAccountSupport>,
 }
 
 #[derive(Debug, Clone)]
@@ -396,6 +409,10 @@ fn sanitize_plugin_links(plugin_id: &str, links: Vec<PluginLink>) -> Vec<PluginL
 #[cfg(test)]
 #[path = "manifest_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "manifest_account_support_tests.rs"]
+mod account_support_tests;
 
 #[cfg(test)]
 #[path = "manifest_limits_tests.rs"]

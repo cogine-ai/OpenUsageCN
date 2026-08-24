@@ -42,6 +42,22 @@ pub fn get_resolved_proxy() -> Option<&'static ResolvedProxy> {
         .as_ref()
 }
 
+/// Starts an HTTP client builder with the app's resolved manual proxy.
+/// When no manual proxy is configured, reqwest keeps its automatic proxy behavior.
+pub fn blocking_client_builder() -> reqwest::blocking::ClientBuilder {
+    blocking_client_builder_with_proxy(get_resolved_proxy())
+}
+
+fn blocking_client_builder_with_proxy(
+    resolved: Option<&ResolvedProxy>,
+) -> reqwest::blocking::ClientBuilder {
+    let builder = reqwest::blocking::Client::builder();
+    match resolved {
+        Some(resolved) => builder.proxy(resolved.proxy.clone()),
+        None => builder,
+    }
+}
+
 /// Config file path (initialized from the Tauri app path on Windows).
 fn config_path() -> Option<PathBuf> {
     if let Some(path) = CONFIG_PATH.get() {
@@ -124,6 +140,10 @@ pub fn redact_proxy_url(url: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::{ErrorKind, Read, Write};
+    use std::net::TcpListener;
+    use std::thread;
+    use std::time::{Duration, Instant};
 
     #[test]
     fn redact_proxy_url_with_credentials() {
@@ -161,5 +181,56 @@ mod tests {
             }),
         };
         assert!(config.proxy.as_ref().filter(|p| p.enabled).is_some());
+    }
+
+    #[test]
+    fn manual_proxy_is_applied_to_blocking_clients() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind proxy listener");
+        listener
+            .set_nonblocking(true)
+            .expect("set proxy listener nonblocking");
+        let proxy_url = format!("http://{}", listener.local_addr().expect("proxy address"));
+        let resolved = ResolvedProxy {
+            proxy: Proxy::all(&proxy_url).expect("manual proxy"),
+        };
+        let server = thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(5);
+            let (mut stream, _) = loop {
+                match listener.accept() {
+                    Ok(connection) => break connection,
+                    Err(error)
+                        if error.kind() == ErrorKind::WouldBlock && Instant::now() < deadline =>
+                    {
+                        thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(error) => panic!("accept proxy request: {error}"),
+                }
+            };
+            stream
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .expect("set proxy read timeout");
+            let mut request = [0_u8; 4096];
+            let bytes_read = stream.read(&mut request).expect("read proxy request");
+            stream
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
+                .expect("write proxy response");
+            String::from_utf8_lossy(&request[..bytes_read]).into_owned()
+        });
+
+        let client = blocking_client_builder_with_proxy(Some(&resolved))
+            .timeout(Duration::from_secs(2))
+            .build()
+            .expect("proxied client");
+        let response = client
+            .get("http://manual-proxy.invalid/proxy-regression")
+            .send()
+            .expect("proxied request");
+        assert_eq!(response.status(), reqwest::StatusCode::OK);
+
+        let proxy_request = server.join().expect("proxy server");
+        assert!(
+            proxy_request.starts_with("GET http://manual-proxy.invalid/proxy-regression HTTP/1.1"),
+            "unexpected proxy request: {proxy_request}"
+        );
     }
 }

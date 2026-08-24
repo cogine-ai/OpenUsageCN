@@ -10,6 +10,7 @@
   const CREDITS_URL = BASE_URL + "/aiserver.v1.DashboardService/GetCreditGrantsBalance"
   const REST_USAGE_URL = "https://cursor.com/api/usage"
   const STRIPE_URL = "https://cursor.com/api/auth/stripe"
+  const AUTH_ME_URL = "https://cursor.com/api/auth/me"
   const CLIENT_ID = "KbZUR41cY7W6zRSdpSUJ7I7mLYBKOCmB"
   const REFRESH_BUFFER_MS = 5 * 60 * 1000 // refresh 5 minutes before expiration
   const LOGIN_HINT = "Sign in via Cursor app or run `agent login`."
@@ -46,6 +47,46 @@
       return true
     } catch (e) {
       ctx.host.log.warn("sqlite write failed for " + key + ": " + String(e))
+      return false
+    }
+  }
+
+  function sqlLiteral(value) {
+    return "'" + String(value).replace(/'/g, "''") + "'"
+  }
+
+  function stateValueMatches(key, expectedValue) {
+    const keyLiteral = sqlLiteral(key)
+    if (typeof expectedValue !== "string" || !expectedValue) {
+      return "NOT EXISTS (SELECT 1 FROM ItemTable WHERE key = " + keyLiteral +
+        " AND value IS NOT NULL AND value <> '')"
+    }
+    return "EXISTS (SELECT 1 FROM ItemTable WHERE key = " + keyLiteral +
+      " AND value = " + sqlLiteral(expectedValue) + ")"
+  }
+
+  function writeStateValueIfAuthUnchanged(ctx, key, value, expectedAuthState) {
+    try {
+      const accessMatches = stateValueMatches(
+        "cursorAuth/accessToken",
+        expectedAuthState.accessToken
+      )
+      const refreshMatches = stateValueMatches(
+        "cursorAuth/refreshToken",
+        expectedAuthState.refreshToken
+      )
+      const sql =
+        "BEGIN IMMEDIATE;" +
+        "CREATE TEMP TABLE openusage_cas_guard(ok INTEGER CHECK(ok = 1));" +
+        "INSERT INTO openusage_cas_guard(ok) SELECT CASE WHEN (" +
+        accessMatches + ") AND (" + refreshMatches + ") THEN 1 ELSE 0 END;" +
+        "INSERT OR REPLACE INTO ItemTable (key, value) VALUES (" +
+        sqlLiteral(key) + ", " + sqlLiteral(value) + ");" +
+        "COMMIT;"
+      ctx.host.sqlite.exec(STATE_DB, sql)
+      return true
+    } catch (e) {
+      ctx.host.log.warn("sqlite conditional write failed for " + key + ": " + String(e))
       return false
     }
   }
@@ -127,6 +168,107 @@
     }
   }
 
+  function discoverConnections(ctx) {
+    const sqliteAccessToken = readStateValue(ctx, "cursorAuth/accessToken")
+    const sqliteRefreshToken = readStateValue(ctx, "cursorAuth/refreshToken")
+    const sqliteMembershipTypeRaw = readStateValue(ctx, "cursorAuth/stripeMembershipType")
+    const sqliteMembershipType = typeof sqliteMembershipTypeRaw === "string"
+      ? sqliteMembershipTypeRaw.trim().toLowerCase()
+      : null
+    const keychainAccessToken = readKeychainValue(ctx, KEYCHAIN_ACCESS_TOKEN_SERVICE)
+    const keychainRefreshToken = readKeychainValue(ctx, KEYCHAIN_REFRESH_TOKEN_SERVICE)
+
+    const sqliteSubject = getTokenSubject(ctx, sqliteAccessToken) ||
+      getTokenSubject(ctx, sqliteRefreshToken)
+    const keychainSubject = getTokenSubject(ctx, keychainAccessToken) ||
+      getTokenSubject(ctx, keychainRefreshToken)
+    const observations = []
+    const sourceOutcomes = []
+
+    function addLocalSource(connectionKey, connectionKind, subject, hasCredential) {
+      if (subject) {
+        observations.push({
+          identityNamespace: "cursor-sub-v1",
+          normalizedIdentity: subject,
+          connectionKey,
+          connectionKind,
+        })
+        sourceOutcomes.push({ sourceKey: connectionKey, status: "available" })
+      } else {
+        sourceOutcomes.push({
+          sourceKey: connectionKey,
+          status: hasCredential ? "unavailable" : "absent",
+        })
+      }
+    }
+
+    addLocalSource(
+      "cursor-desktop",
+      "desktop",
+      sqliteSubject,
+      !!sqliteAccessToken || !!sqliteRefreshToken
+    )
+    addLocalSource(
+      "cursor-cli",
+      "cli",
+      keychainSubject,
+      !!keychainAccessToken || !!keychainRefreshToken
+    )
+
+    let defaultConnectionKey = null
+    if (sqliteSubject) {
+      const shouldPreferCli = !!keychainSubject &&
+        sqliteMembershipType === "free" &&
+        sqliteSubject !== keychainSubject
+      defaultConnectionKey = shouldPreferCli ? "cursor-cli" : "cursor-desktop"
+    } else if (keychainSubject) {
+      defaultConnectionKey = "cursor-cli"
+    }
+
+    return { observations, sourceOutcomes, defaultConnectionKey }
+  }
+
+  function loadAuthStateForConnection(ctx, connectionTarget) {
+    if (connectionTarget === undefined || connectionTarget === null) {
+      return loadAuthState(ctx)
+    }
+    const connectionKey = connectionTarget && connectionTarget.connectionKey
+    if (connectionKey === "cursor-desktop") {
+      return {
+        accessToken: readStateValue(ctx, "cursorAuth/accessToken"),
+        refreshToken: readStateValue(ctx, "cursorAuth/refreshToken"),
+        source: "sqlite",
+      }
+    }
+    if (connectionKey === "cursor-cli") {
+      return {
+        accessToken: readKeychainValue(ctx, KEYCHAIN_ACCESS_TOKEN_SERVICE),
+        refreshToken: readKeychainValue(ctx, KEYCHAIN_REFRESH_TOKEN_SERVICE),
+        source: "keychain",
+      }
+    }
+    throw "Selected Cursor account connection is unavailable."
+  }
+
+  function credentialGenerationForAuthState(ctx, authState) {
+    const accessToken = typeof authState.accessToken === "string" ? authState.accessToken : ""
+    const refreshTokenValue = typeof authState.refreshToken === "string" ? authState.refreshToken : ""
+    if (!accessToken && !refreshTokenValue) {
+      throw "Selected Cursor account connection is unavailable."
+    }
+    const framed = "cursor-credential-v1\n" +
+      String(accessToken.length) + ":" + accessToken +
+      String(refreshTokenValue.length) + ":" + refreshTokenValue
+    return ctx.host.crypto.sha256Hex(framed)
+  }
+
+  function credentialGeneration(ctx, connectionTarget) {
+    return credentialGenerationForAuthState(
+      ctx,
+      loadAuthStateForConnection(ctx, connectionTarget)
+    )
+  }
+
   function getTokenSubject(ctx, token) {
     if (!token) return null
     const payload = ctx.jwt.decodePayload(token)
@@ -140,6 +282,43 @@
       return writeKeychainValue(ctx, KEYCHAIN_ACCESS_TOKEN_SERVICE, accessToken)
     }
     return writeStateValue(ctx, "cursorAuth/accessToken", accessToken)
+  }
+
+  function persistScopedAccessTokenCas(
+    ctx,
+    connectionTarget,
+    source,
+    selectedSubject,
+    accessToken,
+    expectedGeneration
+  ) {
+    const current = loadAuthStateForConnection(ctx, connectionTarget)
+    if (credentialGenerationForAuthState(ctx, current) !== expectedGeneration) {
+      throw "Account credentials changed during refresh. Try again."
+    }
+    const currentSubject = getTokenSubject(ctx, current.accessToken) ||
+      getTokenSubject(ctx, current.refreshToken)
+    if (currentSubject !== selectedSubject || current.source !== source) {
+      throw "Account identity changed during refresh. Try again."
+    }
+    if (source === "keychain") {
+      // macOS Keychain has no compare-by-value update primitive. Keep scoped refreshes in memory
+      // so an old probe can never overwrite a concurrent CLI login or logout.
+      return expectedGeneration
+    }
+    if (!writeStateValueIfAuthUnchanged(
+      ctx,
+      "cursorAuth/accessToken",
+      accessToken,
+      current
+    )) {
+      throw "Account credentials changed during refresh. Try again."
+    }
+    return credentialGenerationForAuthState(ctx, {
+      accessToken,
+      refreshToken: current.refreshToken,
+      source,
+    })
   }
 
   function getTokenExpiration(ctx, token) {
@@ -158,7 +337,7 @@
     })
   }
 
-  function refreshToken(ctx, refreshTokenValue, source) {
+  function refreshToken(ctx, refreshTokenValue, source, persistRefreshedCredential) {
     if (!refreshTokenValue) {
       ctx.host.log.warn("refresh skipped: no refresh token")
       return null
@@ -212,9 +391,12 @@
         return null
       }
 
-      // Persist updated access token to source where auth was loaded from.
-      persistAccessToken(ctx, source, newAccessToken)
-      ctx.host.log.info("refresh succeeded, token persisted")
+      if (persistRefreshedCredential) {
+        persistAccessToken(ctx, source, newAccessToken)
+        ctx.host.log.info("refresh succeeded, token persisted")
+      } else {
+        ctx.host.log.info("refresh succeeded for scoped probe")
+      }
 
       // Note: Cursor refresh returns access_token which is used as both
       // access and refresh token in some flows
@@ -247,6 +429,71 @@
     var userId = parts.length > 1 ? parts[1] : parts[0]
     if (!userId) return null
     return { userId: userId, sessionToken: userId + "%3A%3A" + accessToken }
+  }
+
+  function verifyScopedLocalIdentity(ctx, accessToken, expectedSubject) {
+    const session = buildSessionToken(ctx, accessToken)
+    if (!session || !expectedSubject) {
+      throw "Selected Cursor account identity could not be verified."
+    }
+
+    let response
+    try {
+      response = ctx.util.request({
+        method: "GET",
+        url: AUTH_ME_URL,
+        headers: {
+          Accept: "application/json",
+          Cookie: "WorkosCursorSessionToken=" + session.sessionToken,
+        },
+        timeoutMs: 10000,
+      })
+    } catch (_error) {
+      ctx.host.log.error("scoped identity verification request failed")
+      throw "Selected Cursor account identity could not be verified."
+    }
+
+    const status = response && Number(response.status)
+    if (!Number.isInteger(status) || status < 200 || status >= 300) {
+      ctx.host.log.error(
+        "scoped identity verification failed: status=" +
+        (Number.isInteger(status) ? String(status) : "invalid")
+      )
+      throw "Selected Cursor account identity could not be verified."
+    }
+    const identity = ctx.util.tryParseJson(response.bodyText)
+    if (!identity || typeof identity.sub !== "string" || identity.sub !== expectedSubject) {
+      ctx.host.log.error("scoped identity verification failed")
+      throw "Selected Cursor account identity could not be verified."
+    }
+  }
+
+  function historyCredential(ctx, connectionTarget) {
+    const authState = loadAuthStateForConnection(ctx, connectionTarget)
+    const expectedGeneration = connectionTarget && connectionTarget.credentialGeneration
+    if (typeof expectedGeneration !== "string" || !/^[a-f0-9]{64}$/.test(expectedGeneration)) {
+      throw "Selected Cursor account credential lease is invalid."
+    }
+    if (credentialGenerationForAuthState(ctx, authState) !== expectedGeneration) {
+      throw "Account credentials changed during refresh. Try again."
+    }
+    let accessToken = authState.accessToken
+    if (needsRefresh(ctx, accessToken, Date.now())) {
+      let refreshed = null
+      try {
+        refreshed = refreshToken(ctx, authState.refreshToken, authState.source, false)
+      } catch (error) {
+        if (!accessToken) throw error
+      }
+      if (refreshed) accessToken = refreshed
+    }
+    const session = buildSessionToken(ctx, accessToken)
+    if (!session) {
+      throw "Cursor model usage is unavailable for this local session."
+    }
+    return {
+      cookieHeader: "WorkosCursorSessionToken=" + session.sessionToken,
+    }
   }
 
   function fetchRequestBasedUsage(ctx, accessToken) {
@@ -306,6 +553,13 @@
     }
   }
 
+  function formatCursorPlan(ctx, planName) {
+    const rawPlan = typeof planName === "string" ? planName.trim() : ""
+    if (!rawPlan) return null
+    if (rawPlan.toLowerCase() === "pro_plus") return "Pro+"
+    return ctx.fmt.planLabel(rawPlan) || null
+  }
+
   function buildRequestBasedResult(ctx, accessToken, planName, unavailableMessage) {
     var requestUsage = fetchRequestBasedUsage(ctx, accessToken)
     var lines = []
@@ -338,11 +592,7 @@
       throw unavailableMessage
     }
 
-    var plan = null
-    if (planName) {
-      var planLabel = ctx.fmt.planLabel(planName)
-      if (planLabel) plan = planLabel
-    }
+    var plan = formatCursorPlan(ctx, planName)
 
     return { plan: plan, lines: lines }
   }
@@ -374,8 +624,25 @@
     )
   }
 
-  function probe(ctx) {
-    const authState = loadAuthState(ctx)
+  function probe(ctx, connectionTarget) {
+    const authState = loadAuthStateForConnection(ctx, connectionTarget)
+    const isScopedProbe = connectionTarget !== undefined && connectionTarget !== null
+    let leaseGeneration = isScopedProbe ? connectionTarget.credentialGeneration : null
+    const selectedSubject = isScopedProbe
+      ? getTokenSubject(ctx, authState.accessToken) || getTokenSubject(ctx, authState.refreshToken)
+      : null
+    if (isScopedProbe) {
+      const expectedGeneration = connectionTarget.credentialGeneration
+      if (typeof expectedGeneration !== "string" || !/^[a-f0-9]{64}$/.test(expectedGeneration)) {
+        throw "Selected Cursor account credential lease is invalid."
+      }
+      if (credentialGenerationForAuthState(ctx, authState) !== expectedGeneration) {
+        throw "Account credentials changed during refresh. Try again."
+      }
+      if (!selectedSubject) {
+        throw "Selected Cursor account identity could not be verified."
+      }
+    }
     let accessToken = authState.accessToken
     const refreshTokenValue = authState.refreshToken
     const authSource = authState.source
@@ -388,13 +655,14 @@
     ctx.host.log.info("tokens loaded from " + authSource + ": accessToken=" + (accessToken ? "yes" : "no") + " refreshToken=" + (refreshTokenValue ? "yes" : "no"))
 
     const nowMs = Date.now()
+    let pendingScopedAccessToken = null
 
     // Proactively refresh if token is expired or about to expire
     if (needsRefresh(ctx, accessToken, nowMs)) {
       ctx.host.log.info("token needs refresh (expired or expiring soon)")
       let refreshed = null
       try {
-        refreshed = refreshToken(ctx, refreshTokenValue, authSource)
+        refreshed = refreshToken(ctx, refreshTokenValue, authSource, !connectionTarget)
       } catch (e) {
         // If refresh fails but we have an access token, try it anyway
         ctx.host.log.warn("refresh failed but have access token, will try: " + String(e))
@@ -402,9 +670,24 @@
       }
       if (refreshed) {
         accessToken = refreshed
+        if (isScopedProbe) pendingScopedAccessToken = refreshed
       } else if (!accessToken) {
         ctx.host.log.error("refresh failed and no access token available")
         throw "Not logged in. " + LOGIN_HINT
+      }
+    }
+
+    if (isScopedProbe) {
+      verifyScopedLocalIdentity(ctx, accessToken, selectedSubject)
+      if (pendingScopedAccessToken) {
+        leaseGeneration = persistScopedAccessTokenCas(
+          ctx,
+          connectionTarget,
+          authSource,
+          selectedSubject,
+          pendingScopedAccessToken,
+          leaseGeneration
+        )
       }
     }
 
@@ -426,8 +709,21 @@
         refresh: () => {
           ctx.host.log.info("usage returned 401, attempting refresh")
           didRefresh = true
-          const refreshed = refreshToken(ctx, refreshTokenValue, authSource)
-          if (refreshed) accessToken = refreshed
+          const refreshed = refreshToken(ctx, refreshTokenValue, authSource, !connectionTarget)
+          if (refreshed) {
+            accessToken = refreshed
+            if (isScopedProbe) {
+              verifyScopedLocalIdentity(ctx, refreshed, selectedSubject)
+              leaseGeneration = persistScopedAccessTokenCas(
+                ctx,
+                connectionTarget,
+                authSource,
+                selectedSubject,
+                refreshed,
+                leaseGeneration
+              )
+            }
+          }
           return refreshed
         },
       })
@@ -537,13 +833,7 @@
 
     const stripeBalanceCents = fetchStripeBalance(ctx, accessToken) || 0
 
-    let plan = null
-    if (planName) {
-      const planLabel = ctx.fmt.planLabel(planName)
-      if (planLabel) {
-        plan = planLabel
-      }
-    }
+    let plan = formatCursorPlan(ctx, planName)
 
     const lines = []
     const pu = usage.planUsage
@@ -666,5 +956,11 @@
     return { plan: plan, lines: lines }
   }
 
-  globalThis.__openusage_plugin = { id: "cursor", probe }
+  globalThis.__openusage_plugin = {
+    id: "cursor",
+    probe,
+    discoverConnections,
+    credentialGeneration,
+    historyCredential,
+  }
 })()

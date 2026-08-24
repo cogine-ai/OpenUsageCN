@@ -1,17 +1,22 @@
 {
   "name": "openusagecn",
   "private": true,
+  "packageManager": "bun@1.3.6",
   "version": "0.6.38",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "build:release": "./scripts/build-release.sh",
+    "build:cookie-helper": "bun scripts/build-cookie-helper.mjs",
     "ccusage:bump": "bun ./scripts/bump-ccusage-version.mjs",
     "bundle:plugins": "bun copy-bundled.cjs",
     "verify:updater-signature": "bun scripts/verify-updater-signature.mjs",
+    "verify:cookie-helper-build": "bun scripts/verify-macos-cookie-helper.mjs build",
+    "verify:cookie-helper-package": "bun scripts/verify-macos-cookie-helper.mjs package",
     "preview": "vite preview",
     "test": "vitest",
+    "test:cookie-helper": "bun test tools/cookie-helper/*.test.mjs scripts/*cookie-helper*.test.mjs",
     "test:watch": "vitest --watch",
     "test:coverage": "vitest run --coverage.enabled",
     "tauri": "tauri"
@@ -41,6 +46,7 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
+    "@steipete/sweet-cookie": "0.4.1",
     "@tauri-apps/cli": "^2.10.0",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.8.0",

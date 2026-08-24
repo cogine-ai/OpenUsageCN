@@ -408,6 +408,26 @@ fn redact_url(url: &str) -> String {
         "accountid",
         "profilearn",
         "profile_arn",
+        "profilekey",
+        "profile_key",
+        "candidateid",
+        "candidate_id",
+        "sessionref",
+        "session_ref",
+        "storeid",
+        "store_id",
+        "subject",
+        "sub",
+        "normalizedidentity",
+        "normalized_identity",
+        "organizationuuid",
+        "organization_uuid",
+        "owninguser",
+        "owning_user",
+        "owningteam",
+        "owning_team",
+        "credentialgeneration",
+        "credential_generation",
         "email",
         "login",
     ];
@@ -485,6 +505,33 @@ fn redact_body(body: &str) -> String {
         "credential",
         "session_token",
         "sessionToken",
+        "cookie",
+        "cookieHeader",
+        "cookie_header",
+        "setCookie",
+        "set_cookie",
+        "candidateId",
+        "candidate_id",
+        "sessionRef",
+        "session_ref",
+        "storeId",
+        "store_id",
+        "subject",
+        "sub",
+        "normalizedIdentity",
+        "normalized_identity",
+        "profileKey",
+        "profile_key",
+        "organizationUuid",
+        "organization_uuid",
+        "emailAddress",
+        "email_address",
+        "owningUser",
+        "owning_user",
+        "owningTeam",
+        "owning_team",
+        "credentialGeneration",
+        "credential_generation",
         "auth_token",
         "authToken",
         "id_token",
@@ -543,6 +590,9 @@ fn redact_body(body: &str) -> String {
 
 fn redact_http_response_body(url: &str, body: &str) -> String {
     let path = url.split('?').next().unwrap_or(url);
+    if path.ends_with("/api/auth/me") {
+        return "[REDACTED CURSOR IDENTITY RESPONSE]".to_string();
+    }
     let body = if path.ends_with("/wham/rate-limit-reset-credits") {
         redact_codex_reset_credit_inventory_sensitive_fields(body)
     } else {
@@ -1110,14 +1160,12 @@ fn inject_http<'js>(
                 else {
                     return Err(probe_timeout_error(&ctx_inner));
                 };
-                let mut builder = reqwest::blocking::Client::builder()
+                let mut builder = crate::config::blocking_client_builder()
                     .timeout(timeout)
                     .connect_timeout(timeout)
                     .redirect(reqwest::redirect::Policy::none());
 
-                // Apply pre-resolved proxy (localhost bypass already configured)
-                if let Some(resolved) = crate::config::get_resolved_proxy() {
-                    builder = builder.proxy(resolved.proxy.clone());
+                if crate::config::get_resolved_proxy().is_some() {
                     log::debug!("[http] proxy active");
                 } else {
                     log::debug!(
@@ -1879,7 +1927,7 @@ fn ls_parse_listening_ports(output: &str) -> Vec<i32> {
     ports.into_iter().collect()
 }
 
-const CCUSAGE_VERSION: &str = "20.0.2";
+const CCUSAGE_VERSION: &str = "20.0.20";
 const CCUSAGE_PACKAGE_NAME: &str = "ccusage";
 const CCUSAGE_BIN_NAME: &str = "ccusage";
 const CCUSAGE_LEGACY_VERSION: &str = "18.0.11";
@@ -3950,6 +3998,25 @@ mod tests {
     }
 
     #[test]
+    fn redact_url_redacts_provider_account_and_browser_session_identifiers() {
+        let url = "https://example.com/api?candidateId=candidate-1234567890&sessionRef=session-1234567890&normalizedIdentity=auth0-user-1234567890&profileKey=Profile-Work-1234567890&limit=10";
+        let redacted = redact_url(url);
+
+        for sensitive in [
+            "candidate-1234567890",
+            "session-1234567890",
+            "auth0-user-1234567890",
+            "Profile-Work-1234567890",
+        ] {
+            assert!(
+                !redacted.contains(sensitive),
+                "provider account identifier should be redacted, got: {redacted}"
+            );
+        }
+        assert!(redacted.contains("limit=10"));
+    }
+
+    #[test]
     fn redact_body_redacts_jwt() {
         let body = r#"{"token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"}"#;
         let redacted = redact_body(body);
@@ -4046,6 +4113,31 @@ mod tests {
             "accountId should show first4...last4, got: {}",
             redacted
         );
+    }
+
+    #[test]
+    fn redact_body_redacts_provider_account_browser_and_history_fields() {
+        let body = r#"{"cookieHeader":"WorkosCursorSessionToken=secret-cookie-value-1234567890","candidateId":"candidate-1234567890","sessionRef":"session-1234567890","storeId":"store-1234567890","subject":"auth0-user-1234567890","normalizedIdentity":"auth0-user-1234567890","profileKey":"Profile-Work-1234567890","organizationUuid":"org-1234567890","emailAddress":"member-private@example.com","owningUser":"owner-1234567890","owningTeam":"team-1234567890","credentialGeneration":"generation-1234567890"}"#;
+        let redacted = redact_body(body);
+
+        for sensitive in [
+            "secret-cookie-value-1234567890",
+            "candidate-1234567890",
+            "session-1234567890",
+            "store-1234567890",
+            "auth0-user-1234567890",
+            "Profile-Work-1234567890",
+            "org-1234567890",
+            "member-private@example.com",
+            "owner-1234567890",
+            "team-1234567890",
+            "generation-1234567890",
+        ] {
+            assert!(
+                !redacted.contains(sensitive),
+                "provider account field should be redacted, got: {redacted}"
+            );
+        }
     }
 
     #[test]
@@ -4191,6 +4283,23 @@ mod tests {
         assert_eq!(
             redact_http_response_body("https://example.com/usage", body),
             body
+        );
+    }
+
+    #[test]
+    fn redact_http_response_body_hides_entire_cursor_identity_response() {
+        let body = r#"{"email":"person@example.com","picture":"https://images.example.com/private/avatar.png","subscriptionStatus":"active"}"#;
+
+        assert_eq!(
+            redact_http_response_body(
+                "https://api2.cursor.sh/api/auth/me?include_profile=true",
+                body,
+            ),
+            "[REDACTED CURSOR IDENTITY RESPONSE]"
+        );
+        assert_eq!(
+            redact_http_response_body("https://example.com/api/auth/metadata", body),
+            redact_body(body)
         );
     }
 
@@ -4415,7 +4524,7 @@ mod tests {
             claude_path: None,
         };
         let expected_ccusage_package = ccusage_package_spec();
-        assert_eq!(expected_ccusage_package, "ccusage@20.0.2");
+        assert_eq!(expected_ccusage_package, "ccusage@20.0.20");
         let expected_npm_exec_package = format!("--package={expected_ccusage_package}");
 
         let bunx = ccusage_runner_args(
@@ -5080,7 +5189,7 @@ esac
         );
 
         let calls = std::fs::read_to_string(&args_path).expect("read args log");
-        assert!(calls.contains("ccusage@20.0.2 codex daily"));
+        assert!(calls.contains("ccusage@20.0.20 codex daily"));
         assert!(calls.contains("@ccusage/codex@18.0.11 daily"));
 
         let _ = std::fs::remove_dir_all(&dir);
