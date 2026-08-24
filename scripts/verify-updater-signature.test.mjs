@@ -13,3 +13,7 @@ test("does not treat unrelated executables or signatures as updater archives", (
   assert.equal(isUpdaterArchive("OpenUsageCN.app.tar.gz.sig"), false)
   assert.equal(isUpdaterArchive("OpenUsageCN_0.6.36_x64-setup.exe.sig"), false)
 })
+
+test("rejects legacy Windows nsis.zip updater archives", () => {
+  assert.equal(isUpdaterArchive("OpenUsageCN_0.6.35_x64.nsis.zip"), false)
+})

@@ -351,6 +351,88 @@ fn is_packaged_resource_dir(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugin_engine::manifest::{LoadedPlugin, PluginManifest};
+    use std::path::PathBuf;
+
+    fn cli_test_plugin(id: &str, entry_script: &str) -> LoadedPlugin {
+        LoadedPlugin {
+            manifest: PluginManifest {
+                schema_version: 1,
+                id: id.to_string(),
+                name: id.to_string(),
+                version: "0.0.0".to_string(),
+                entry: "plugin.js".to_string(),
+                icon: "icon.svg".to_string(),
+                brand_color: None,
+                lines: vec![],
+                links: vec![],
+                status_page: None,
+                config: None,
+            },
+            plugin_dir: PathBuf::from("."),
+            entry_script: entry_script.to_string(),
+            icon_data_url: "data:image/svg+xml;base64,".to_string(),
+        }
+    }
+
+    #[test]
+    fn run_probes_returns_immediately_for_empty_plugin_list() {
+        let (results, worker_failed) = run_probes(Vec::new(), PathBuf::from("."), "0.0.0".into());
+        assert!(results.is_empty());
+        assert!(!worker_failed);
+    }
+
+    #[test]
+    fn run_probes_collects_outputs_from_multiple_plugins() {
+        let app_dir = std::env::temp_dir().join(format!(
+            "openusage-run-probes-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let plugins = vec![
+            cli_test_plugin(
+                "alpha",
+                r#"
+                globalThis.__openusage_plugin = {
+                    probe(ctx) {
+                        return {
+                            lines: [
+                                ctx.line.text({ label: "Status", value: "ok" })
+                            ]
+                        };
+                    }
+                };
+                "#,
+            ),
+            cli_test_plugin(
+                "beta",
+                r#"
+                globalThis.__openusage_plugin = {
+                    probe() {
+                        throw "auth failed";
+                    }
+                };
+                "#,
+            ),
+        ];
+
+        let (results, worker_failed) = run_probes(plugins, app_dir.clone(), "0.0.0".into());
+        let _ = std::fs::remove_dir_all(app_dir);
+
+        assert!(!worker_failed);
+        assert_eq!(results.len(), 2);
+        let mut by_id: HashMap<String, PluginOutput> = results.into_iter().collect();
+        let alpha = by_id.remove("alpha").expect("alpha output");
+        assert!(
+            probe_error_message(&alpha).is_none(),
+            "successful probes must not report an error badge"
+        );
+        let beta = by_id.remove("beta").expect("beta output");
+        assert_eq!(
+            probe_error_message(&beta),
+            Some("auth failed"),
+            "probe errors must surface through the worker pool"
+        );
+    }
 
     #[test]
     fn app_data_path_uses_tauri_identifier() {

@@ -260,6 +260,18 @@ mod tests {
     use super::*;
 
     #[test]
+    fn sha256_hex_matches_known_vectors() {
+        assert_eq!(
+            sha256_hex(b""),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+        assert_eq!(
+            sha256_hex(b"hello"),
+            "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+        );
+    }
+
+    #[test]
     fn repeated_writes_replace_existing_content() {
         let dir =
             std::env::temp_dir().join(format!("openusage-safe-file-{}", uuid::Uuid::new_v4()));
@@ -294,6 +306,27 @@ mod tests {
         write_text(path, "relative").expect("write relative file");
         assert_eq!(std::fs::read_to_string(path).unwrap(), "relative");
         let _ = std::fs::remove_file(path);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_symlink_loops_when_resolving_destination() {
+        use std::os::unix::fs::symlink;
+
+        let dir =
+            std::env::temp_dir().join(format!("openusage-safe-loop-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let a = dir.join("a.json");
+        let b = dir.join("b.json");
+        symlink("b.json", &a).unwrap();
+        symlink("a.json", &b).unwrap();
+
+        let error = write_text(&a, "loop").expect_err("symlink loop must fail");
+        assert!(
+            error.contains("too many symbolic links"),
+            "unexpected error: {error}"
+        );
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[cfg(unix)]

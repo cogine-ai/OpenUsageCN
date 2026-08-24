@@ -277,7 +277,9 @@ fn format_timestamp(value: OffsetDateTime) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::local_http_api::cache::cache_state;
     use crate::plugin_engine::runtime::MetricLine;
+    use serial_test::serial;
 
     fn snapshot() -> CachedPluginSnapshot {
         CachedPluginSnapshot {
@@ -297,6 +299,29 @@ mod tests {
             started_at: "2026-07-14T01:59:00Z".to_string(),
             fetched_at: "2026-07-14T02:00:00Z".to_string(),
         }
+    }
+
+    #[test]
+    #[serial]
+    fn envelope_redacts_probe_errors_before_serialization() {
+        let secret = "sk-abcdefghijklmnopqrstuvwxyz123456";
+        {
+            let mut state = cache_state().lock().expect("cache state poisoned");
+            state.errors.clear();
+            state
+                .errors
+                .insert("codex".to_string(), format!("request failed with {secret}"));
+        }
+
+        let envelope = current_envelope(&["codex".to_string()]);
+        let json = serde_json::to_string(&envelope).expect("serialize limits envelope");
+
+        assert!(
+            !json.contains(secret),
+            "probe error secrets must not leak into the limits API payload"
+        );
+        assert_eq!(envelope.errors.len(), 1);
+        assert!(!envelope.errors[0].message.contains(secret));
     }
 
     #[test]
