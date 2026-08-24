@@ -277,7 +277,9 @@ fn format_timestamp(value: OffsetDateTime) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::local_http_api::cache::cache_state;
     use crate::plugin_engine::runtime::MetricLine;
+    use serial_test::serial;
 
     fn snapshot() -> CachedPluginSnapshot {
         CachedPluginSnapshot {
@@ -426,6 +428,28 @@ mod tests {
 
         assert!(provider.resources.contains_key("session"));
         assert!(errors.is_empty());
+    }
+
+    #[test]
+    #[serial]
+    fn envelope_redacts_probe_only_errors() {
+        let sensitive = "refresh failed: bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
+        {
+            let mut state = cache_state().lock().unwrap();
+            state.known_plugin_ids = vec!["codex".to_string()];
+            state.snapshots.clear();
+            state.errors.clear();
+            state
+                .errors
+                .insert("codex".to_string(), sensitive.to_string());
+        }
+
+        let envelope = current_envelope(&["codex".to_string()]);
+
+        assert_eq!(envelope.errors.len(), 1);
+        assert_eq!(envelope.errors[0].provider_id, "codex");
+        assert!(!envelope.errors[0].message.contains("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"));
+        assert!(envelope.errors[0].message.contains("refresh failed"));
     }
 
     #[test]
