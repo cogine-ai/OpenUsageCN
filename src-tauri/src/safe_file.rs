@@ -65,10 +65,43 @@ fn write_bytes_inner(
             .map_err(|error| format!("failed to replace destination file: {error}"))
     })();
 
-    if !matches!(result, Ok(true)) {
-        let _ = std::fs::remove_file(&temp);
+    match result {
+        Ok(true) => Ok(true),
+        Ok(false) => {
+            // Digest mismatch: destination is intact; discard the unused replacement.
+            let _ = std::fs::remove_file(&temp);
+            Ok(false)
+        }
+        Err(error) => match cleanup_temp_after_failed_write(&temp, &destination) {
+            // ReplaceFileW can delete the destination before failing (errors 1176/1177
+            // without a backup name). Promote the synced temp so credentials survive.
+            TempCleanupOutcome::Recovered => Ok(true),
+            TempCleanupOutcome::Removed | TempCleanupOutcome::LeftInPlace => Err(error),
+        },
     }
-    result
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TempCleanupOutcome {
+    Removed,
+    Recovered,
+    LeftInPlace,
+}
+
+/// Clean up a temp replacement after a failed write without discarding the only
+/// remaining credential bytes when the destination was already removed.
+fn cleanup_temp_after_failed_write(temp: &Path, destination: &Path) -> TempCleanupOutcome {
+    if destination.exists() {
+        let _ = std::fs::remove_file(temp);
+        return TempCleanupOutcome::Removed;
+    }
+    if !temp.exists() {
+        return TempCleanupOutcome::LeftInPlace;
+    }
+    match std::fs::rename(temp, destination) {
+        Ok(()) => TempCleanupOutcome::Recovered,
+        Err(_) => TempCleanupOutcome::LeftInPlace,
+    }
 }
 
 pub(crate) fn sha256_hex(content: &[u8]) -> String {
@@ -209,24 +242,52 @@ fn replace_windows_preserving_destination(source: &Path, destination: &Path) -> 
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Storage::FileSystem::ReplaceFileW;
 
+    // Pass a backup name so ERROR_UNABLE_TO_MOVE_REPLACEMENT (1176) keeps both
+    // the replaced and replacement files under their original names. Without a
+    // backup, Windows deletes the destination on that failure and leaves only
+    // the temp file — which callers must not then discard.
+    let backup = temporary_path(destination);
     let mut source_wide: Vec<u16> = source.as_os_str().encode_wide().collect();
     source_wide.push(0);
     let mut destination_wide: Vec<u16> = destination.as_os_str().encode_wide().collect();
     destination_wide.push(0);
+    let mut backup_wide: Vec<u16> = backup.as_os_str().encode_wide().collect();
+    backup_wide.push(0);
     let replaced = unsafe {
         ReplaceFileW(
             destination_wide.as_ptr(),
             source_wide.as_ptr(),
-            std::ptr::null(),
+            backup_wide.as_ptr(),
             0,
             std::ptr::null(),
             std::ptr::null(),
         )
     };
     if replaced == 0 {
-        Err(io::Error::last_os_error())
-    } else {
-        Ok(())
+        let error = io::Error::last_os_error();
+        restore_replace_backup_for_error(&backup, destination, error.raw_os_error());
+        return Err(error);
+    }
+    let _ = std::fs::remove_file(&backup);
+    Ok(())
+}
+
+/// Restore destination credentials after a failed ReplaceFileW that moved the
+/// original file to the backup path (ERROR_UNABLE_TO_MOVE_REPLACEMENT_2 / 1177).
+fn restore_replace_backup_for_error(backup: &Path, destination: &Path, raw_os_error: Option<i32>) {
+    const ERROR_UNABLE_TO_MOVE_REPLACEMENT_2: i32 = 1177;
+    match raw_os_error {
+        Some(ERROR_UNABLE_TO_MOVE_REPLACEMENT_2) => {
+            if backup.exists() && !destination.exists() {
+                let _ = std::fs::rename(backup, destination);
+            } else {
+                let _ = std::fs::remove_file(backup);
+            }
+        }
+        _ => {
+            // 1175/1176 (with backup) and other errors keep both original names.
+            let _ = std::fs::remove_file(backup);
+        }
     }
 }
 
@@ -323,6 +384,96 @@ mod tests {
                 .is_symlink()
         );
         assert_eq!(std::fs::read_to_string(&target).unwrap(), "newer");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn failed_write_cleanup_promotes_temp_when_destination_is_gone() {
+        let dir = std::env::temp_dir().join(format!(
+            "openusage-safe-recover-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let destination = dir.join("auth.json");
+        let temp = dir.join("auth.json.tmp-orphaned");
+        std::fs::write(&temp, r#"{"access_token":"rotated"}"#).unwrap();
+
+        assert_eq!(
+            cleanup_temp_after_failed_write(&temp, &destination),
+            TempCleanupOutcome::Recovered
+        );
+        assert!(!temp.exists());
+        assert_eq!(
+            std::fs::read_to_string(&destination).unwrap(),
+            r#"{"access_token":"rotated"}"#
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn failed_write_cleanup_discards_temp_when_destination_survives() {
+        let dir = std::env::temp_dir().join(format!(
+            "openusage-safe-discard-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let destination = dir.join("auth.json");
+        let temp = dir.join("auth.json.tmp-unused");
+        std::fs::write(&destination, r#"{"access_token":"current"}"#).unwrap();
+        std::fs::write(&temp, r#"{"access_token":"stale"}"#).unwrap();
+
+        assert_eq!(
+            cleanup_temp_after_failed_write(&temp, &destination),
+            TempCleanupOutcome::Removed
+        );
+        assert!(!temp.exists());
+        assert_eq!(
+            std::fs::read_to_string(&destination).unwrap(),
+            r#"{"access_token":"current"}"#
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn replace_backup_restore_returns_original_on_unable_to_move_replacement_2() {
+        let dir = std::env::temp_dir().join(format!(
+            "openusage-safe-backup-1177-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let destination = dir.join("auth.json");
+        let backup = dir.join("auth.json.bak");
+        std::fs::write(&backup, r#"{"access_token":"original"}"#).unwrap();
+
+        restore_replace_backup_for_error(&backup, &destination, Some(1177));
+
+        assert!(!backup.exists());
+        assert_eq!(
+            std::fs::read_to_string(&destination).unwrap(),
+            r#"{"access_token":"original"}"#
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn replace_backup_cleanup_keeps_destination_on_unable_to_move_replacement() {
+        let dir = std::env::temp_dir().join(format!(
+            "openusage-safe-backup-1176-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let destination = dir.join("auth.json");
+        let backup = dir.join("auth.json.bak");
+        std::fs::write(&destination, r#"{"access_token":"original"}"#).unwrap();
+        std::fs::write(&backup, "unused").unwrap();
+
+        restore_replace_backup_for_error(&backup, &destination, Some(1176));
+
+        assert!(!backup.exists());
+        assert_eq!(
+            std::fs::read_to_string(&destination).unwrap(),
+            r#"{"access_token":"original"}"#
+        );
         let _ = std::fs::remove_dir_all(dir);
     }
 }
