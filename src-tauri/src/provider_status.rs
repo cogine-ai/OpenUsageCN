@@ -188,4 +188,15 @@ mod tests {
             .expect_err("malformed response must fail loudly");
         assert!(error.contains("invalid Statuspage response"));
     }
+
+    #[test]
+    fn rejects_empty_description() {
+        let body = br#"{
+            "page": { "updated_at": "2026-07-14T00:00:00Z" },
+            "status": { "indicator": "none", "description": "   " }
+        }"#;
+        let error = parse_statuspage_status(body)
+            .expect_err("empty descriptions must not be treated as healthy");
+        assert!(error.contains("empty description"));
+    }
 }
