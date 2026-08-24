@@ -135,9 +135,26 @@
         return null
       }
       ctx.host.log.info("auth loaded from keychain: " + KEYCHAIN_SERVICE)
-      return { auth, authPath: null, source: "keychain" }
+      return {
+        auth,
+        authPath: null,
+        source: "keychain",
+        rawDigest: rawDigest(ctx, value),
+      }
     } catch (e) {
       ctx.host.log.info("keychain read failed (may not exist): " + String(e))
+      return null
+    }
+  }
+
+  function readKeychainRawValue(ctx) {
+    if (!ctx.host.keychain || typeof ctx.host.keychain.readGenericPassword !== "function") {
+      return null
+    }
+    try {
+      const value = ctx.host.keychain.readGenericPassword(KEYCHAIN_SERVICE)
+      return value ? String(value) : null
+    } catch (e) {
       return null
     }
   }
@@ -165,8 +182,20 @@
         ctx.host.log.warn("keychain write unsupported in this host")
         return false
       }
+      // Match file-auth CAS: refuse to overwrite credentials Codex changed mid-refresh.
+      if (authState.rawDigest) {
+        const currentValue = readKeychainRawValue(ctx)
+        if (
+          currentValue != null &&
+          rawDigest(ctx, currentValue) !== authState.rawDigest
+        ) {
+          throw ERR_TOKEN_CONFLICT
+        }
+      }
       // Use compact JSON to avoid newline-induced keychain encoding issues.
-      ctx.host.keychain.writeGenericPassword(KEYCHAIN_SERVICE, JSON.stringify(auth))
+      const serialized = JSON.stringify(auth)
+      ctx.host.keychain.writeGenericPassword(KEYCHAIN_SERVICE, serialized)
+      authState.rawDigest = rawDigest(ctx, serialized)
       return true
     }
 
@@ -248,8 +277,10 @@
       return { status: "error", error: ERR_TOKEN_CONFLICT }
     }
 
-    const fileChanged = authState.source === "file" && reloaded.rawDigest !== authState.rawDigest
-    if (fileChanged || JSON.stringify(reloaded.auth) !== JSON.stringify(authState.auth)) {
+    const sourceChanged =
+      (authState.source === "file" || authState.source === "keychain") &&
+      reloaded.rawDigest !== authState.rawDigest
+    if (sourceChanged || JSON.stringify(reloaded.auth) !== JSON.stringify(authState.auth)) {
       ctx.host.log.info("auth changed during guarded reload, using updated credentials")
       return { status: "changed", authState: reloaded }
     }
