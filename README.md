@@ -39,7 +39,7 @@ Windows MVP 仅启用和展示 **Codex、BigModel CN、OpenAI API、OpenRouter �
 
 - [**Alibaba Coding Plan**](docs/providers/alibaba-coding-plan.md)：5 小时、weekly、monthly coding plan quota
 - [**Alibaba Token Plan**](docs/providers/alibaba-token-plan.md)：token plan quota、remaining、expires
-- [**Amp**](docs/providers/amp.md)：免费额度、奖励额度、credits
+- [**Amp**](docs/providers/amp.md)：免费额度、订阅 Other/Orb 用量、奖励额度、credits
 - [**Antigravity**](docs/providers/antigravity.md)：全部模型用量
 - [**BigModel CN**](docs/providers/bigmodel-cn.md)：session、weekly、web searches、设置页 API Key
 - [**Claude**](docs/providers/claude.md)：session、weekly、extra usage、本地 token 用量（ccusage）、可验证的 Team 席位

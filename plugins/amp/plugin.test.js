@@ -335,16 +335,82 @@ describe("amp plugin", () => {
     expect(creditsLine.value).toBe("$10.00")
   })
 
-  it("falls back to credits-only when no balance or credits parsed", async () => {
+  it("throws when display text has no parseable usage", async () => {
     var ctx = makeCtx()
     writeSecrets(ctx)
     ctx.host.http.request.mockReturnValue(balanceResponse("Signed in as user@test.com (testuser)"))
     var plugin = await loadPlugin()
+    expect(() => plugin.probe(ctx)).toThrow("Could not parse usage data")
+  })
+
+  it("parses Megawatt subscription remaining percents instead of showing $0 credits", async () => {
+    var ctx = makeCtx()
+    writeSecrets(ctx)
+    var text = "Signed in as you@example.com (username)\n"
+      + "Subscription Megawatt: 97% other usage and 100% orb usage remaining - resets upon renewal in 29 days"
+    ctx.host.http.request.mockReturnValue(balanceResponse(text))
+    var plugin = await loadPlugin()
     var result = plugin.probe(ctx)
-    expect(result.plan).toBe("Credits")
-    expect(result.lines.length).toBe(1)
-    expect(result.lines[0].label).toBe("Credits")
-    expect(result.lines[0].value).toBe("$0.00")
+    expect(result.plan).toBe("Megawatt")
+    var other = result.lines.find(function (l) { return l.label === "Other Usage" })
+    var orb = result.lines.find(function (l) { return l.label === "Orb Usage" })
+    expect(other).toMatchObject({
+      type: "progress",
+      used: 3,
+      limit: 100,
+      format: { kind: "percent" },
+      periodDurationMs: 30 * 24 * 3600 * 1000,
+      resetsAt: "2026-03-03T00:00:00.000Z",
+    })
+    expect(orb).toMatchObject({
+      type: "progress",
+      used: 0,
+      limit: 100,
+      format: { kind: "percent" },
+      periodDurationMs: 30 * 24 * 3600 * 1000,
+      resetsAt: "2026-03-03T00:00:00.000Z",
+    })
+    expect(result.lines.find(function (l) { return l.label === "Credits" })).toBeUndefined()
+  })
+
+  it("omits zero credits on a paid subscription", async () => {
+    var ctx = makeCtx()
+    writeSecrets(ctx)
+    var text = "Signed in as you@example.com (username)\n"
+      + "Subscription Megawatt: 97% other usage and 100% orb usage remaining - resets upon renewal in 29 days\n"
+      + "Individual credits: $0 remaining - https://ampcode.com/settings"
+    ctx.host.http.request.mockReturnValue(balanceResponse(text))
+    var plugin = await loadPlugin()
+    var result = plugin.probe(ctx)
+    expect(result.plan).toBe("Megawatt")
+    expect(result.lines.find(function (l) { return l.label === "Credits" })).toBeUndefined()
+  })
+
+  it("shows leftover credits on a paid subscription", async () => {
+    var ctx = makeCtx()
+    writeSecrets(ctx)
+    var text = "Signed in as you@example.com (username)\n"
+      + "Subscription Megawatt: 97% other usage and 100% orb usage remaining - resets upon renewal in 29 days\n"
+      + "Individual credits: $5 remaining - https://ampcode.com/settings"
+    ctx.host.http.request.mockReturnValue(balanceResponse(text))
+    var plugin = await loadPlugin()
+    var result = plugin.probe(ctx)
+    expect(result.plan).toBe("Megawatt")
+    expect(result.lines.find(function (l) { return l.label === "Credits" }).value).toBe("$5.00")
+  })
+
+  it("parses subscription renewal in a single day", async () => {
+    var ctx = makeCtx()
+    writeSecrets(ctx)
+    var text = "Signed in as you@example.com (username)\n"
+      + "Subscription Gigawatt: 12.5% other usage and 40% orb usage remaining - resets upon renewal in 1 day"
+    ctx.host.http.request.mockReturnValue(balanceResponse(text))
+    var plugin = await loadPlugin()
+    var result = plugin.probe(ctx)
+    expect(result.plan).toBe("Gigawatt")
+    expect(result.lines.find(function (l) { return l.label === "Other Usage" }).used).toBe(87.5)
+    expect(result.lines.find(function (l) { return l.label === "Orb Usage" }).used).toBe(60)
+    expect(result.lines.find(function (l) { return l.label === "Other Usage" }).resetsAt).toBe("2026-02-03T00:00:00.000Z")
   })
 
   // --- Credits-only $0 ---
