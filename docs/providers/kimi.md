@@ -96,5 +96,6 @@ refresh_token=<refresh_token>
 ## Notes
 
 - The plugin refreshes tokens when near expiry (5-minute buffer).
+- If the credentials file changes while OpenUsageCN is refreshing, it refuses to overwrite the newer credentials.
 - If refresh is rejected (401/403), user must run `kimi login` again.
 - `limits[0].window.duration=300` and `TIME_UNIT_MINUTE` maps to the 5-hour session window.

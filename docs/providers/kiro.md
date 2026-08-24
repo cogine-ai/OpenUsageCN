@@ -137,6 +137,8 @@ Observed refresh response fields:
 - `expiresIn`
 - `profileArn`
 
+If the Kiro auth token file changes while OpenUsageCN is refreshing, it refuses to overwrite the newer credentials.
+
 ### Fetch usage
 
 ```http
