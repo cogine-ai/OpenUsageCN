@@ -4,6 +4,8 @@
   const REFRESH_URL = "https://auth.kimi.com/api/oauth/token"
   const CLIENT_ID = "17e5f671-d194-4dfb-9706-5516cb48c098"
   const REFRESH_BUFFER_SEC = 5 * 60
+  const ERR_AUTH_SAVE =
+    "Could not save refreshed credentials. Try again; if the problem continues, run `kimi login` to authenticate."
 
   function readNumber(value) {
     const n = Number(value)
@@ -59,11 +61,7 @@
   }
 
   function saveCredentials(ctx, creds) {
-    try {
-      ctx.host.fs.writeText(CRED_PATH, JSON.stringify(creds))
-    } catch (e) {
-      ctx.host.log.warn("failed to persist credentials: " + String(e))
-    }
+    ctx.host.fs.writeText(CRED_PATH, JSON.stringify(creds))
   }
 
   function needsRefresh(creds, nowSec) {
@@ -71,6 +69,18 @@
     const expiresAt = readNumber(creds.expires_at)
     if (expiresAt === null) return true
     return nowSec + REFRESH_BUFFER_SEC >= expiresAt
+  }
+
+  function mergeRefreshResponse(creds, body) {
+    const nextCreds = Object.assign({}, creds)
+    nextCreds.access_token = body.access_token
+    if (body.refresh_token) nextCreds.refresh_token = body.refresh_token
+    if (typeof body.expires_in === "number") {
+      nextCreds.expires_at = Date.now() / 1000 + body.expires_in
+    }
+    if (typeof body.scope === "string") nextCreds.scope = body.scope
+    if (typeof body.token_type === "string") nextCreds.token_type = body.token_type
+    return nextCreds
   }
 
   function refreshToken(ctx, creds) {
@@ -117,15 +127,15 @@
       return null
     }
 
-    creds.access_token = body.access_token
-    if (body.refresh_token) creds.refresh_token = body.refresh_token
-    if (typeof body.expires_in === "number") {
-      creds.expires_at = Date.now() / 1000 + body.expires_in
+    const nextCreds = mergeRefreshResponse(creds, body)
+    try {
+      saveCredentials(ctx, nextCreds)
+    } catch (e) {
+      ctx.host.log.error("refresh succeeded but failed to save credentials: " + String(e))
+      throw ERR_AUTH_SAVE
     }
-    if (typeof body.scope === "string") creds.scope = body.scope
-    if (typeof body.token_type === "string") creds.token_type = body.token_type
 
-    saveCredentials(ctx, creds)
+    Object.assign(creds, nextCreds)
     return creds.access_token
   }
 
