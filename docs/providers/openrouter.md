@@ -24,7 +24,7 @@ On Windows, environment fallbacks must be present before the app starts. Set the
 |---------------|-----------------------------------------|
 | Credits       | Total used credits against total credits |
 | Balance       | Remaining credits                       |
-| Key Limit     | Current API key usage against its limit |
+| Key Limit     | Current API key spend against its per-key credit cap (from `limit_remaining`) |
 | Daily Spend   | Daily key usage, when returned          |
 | Weekly Spend  | Weekly key usage, when returned         |
 | Monthly Spend | Monthly key usage, when returned        |
