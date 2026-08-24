@@ -351,6 +351,7 @@ fn is_packaged_resource_dir(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugin_engine::manifest::{LoadedPlugin, PluginManifest};
 
     #[test]
     fn app_data_path_uses_tauri_identifier() {
@@ -386,6 +387,109 @@ mod tests {
             bundled_resource_dir_for_executable(Path::new("/tmp/MacOS/openusagecn")),
             None
         );
+    }
+
+    fn test_plugin(id: &str, entry_script: &str) -> LoadedPlugin {
+        LoadedPlugin {
+            manifest: PluginManifest {
+                schema_version: 1,
+                id: id.to_string(),
+                name: id.to_string(),
+                version: "0.0.0".to_string(),
+                entry: "plugin.js".to_string(),
+                icon: "icon.svg".to_string(),
+                brand_color: None,
+                lines: vec![],
+                links: vec![],
+                status_page: None,
+                config: None,
+            },
+            plugin_dir: PathBuf::from("."),
+            entry_script: entry_script.to_string(),
+            icon_data_url: "data:image/svg+xml;base64,".to_string(),
+        }
+    }
+
+    fn temp_app_dir(label: &str) -> PathBuf {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        std::env::temp_dir().join(format!("openusagecn-usage-reader-{label}-{nanos}"))
+    }
+
+    #[test]
+    fn run_probes_returns_empty_results_for_no_plugins() {
+        let (results, worker_failed) = run_probes(Vec::new(), temp_app_dir("empty"), "0.0.0".to_string());
+        assert!(results.is_empty());
+        assert!(!worker_failed);
+    }
+
+    #[test]
+    fn run_probes_collects_success_and_error_outputs_from_multiple_plugins() {
+        let plugins = vec![
+            test_plugin(
+                "ok",
+                r#"
+                globalThis.__openusage_plugin = {
+                    probe(ctx) {
+                        return {
+                            lines: [ctx.line.text({ label: "Status", value: "ok" })]
+                        };
+                    }
+                };
+                "#,
+            ),
+            test_plugin(
+                "bad",
+                r#"
+                globalThis.__openusage_plugin = {
+                    probe() {
+                        throw "refresh failed";
+                    }
+                };
+                "#,
+            ),
+        ];
+
+        let (results, worker_failed) =
+            run_probes(plugins, temp_app_dir("mixed"), "0.0.0".to_string());
+        assert!(!worker_failed);
+        assert_eq!(results.len(), 2);
+
+        let mut by_id: HashMap<String, PluginOutput> = results.into_iter().collect();
+        assert!(probe_error_message(&by_id.remove("ok").expect("ok result")).is_none());
+        assert_eq!(
+            probe_error_message(&by_id.remove("bad").expect("bad result")),
+            Some("refresh failed")
+        );
+    }
+
+    #[test]
+    fn run_probes_processes_more_than_four_plugins_concurrently() {
+        let plugins = (0..6)
+            .map(|index| {
+                test_plugin(
+                    &format!("plugin-{index}"),
+                    r#"
+                    globalThis.__openusage_plugin = {
+                        probe() {
+                            return { lines: [] };
+                        }
+                    };
+                    "#,
+                )
+            })
+            .collect();
+
+        let (results, worker_failed) =
+            run_probes(plugins, temp_app_dir("concurrency"), "0.0.0".to_string());
+        assert!(!worker_failed);
+        assert_eq!(results.len(), 6);
+        let ids: HashMap<String, ()> = results.into_iter().map(|(id, _)| (id, ())).collect();
+        for index in 0..6 {
+            assert!(ids.contains_key(&format!("plugin-{index}")));
+        }
     }
 
     #[cfg(unix)]
