@@ -4,6 +4,40 @@
 
 暂无。
 
+## v0.6.39
+
+### New Features
+
+- Add provider-first account management with stable selection and account-scoped cache projection for Cursor Desktop, Cursor CLI, and explicitly selected Chrome and Arc profiles ([#205](https://github.com/cogine-ai/OpenUsageCN/pull/205)) by @lc708
+- Add current billing-cycle Cursor model-token history grouped by local day and model, including input, output, cache-read, cache-write, and request totals ([#205](https://github.com/cogine-ai/OpenUsageCN/pull/205)) by @lc708
+- Add verified Claude Team seat enrichment and account-capability declarations for supported provider plugins ([#205](https://github.com/cogine-ai/OpenUsageCN/pull/205)) by @lc708
+
+### Bug Fixes
+
+- Harden provider-account refresh ordering, snapshot recovery, credential races, browser-session isolation, identity redaction, Keychain installation-key handling, and timezone-aware history windows ([#205](https://github.com/cogine-ai/OpenUsageCN/pull/205)) by @lc708
+- Apply the configured app proxy consistently to browser-account validation, Claude enrichment, Cursor history, and provider HTTP requests ([#205](https://github.com/cogine-ai/OpenUsageCN/pull/205)) by @lc708
+
+### Chores
+
+- Upgrade ccusage to `20.0.20` and recognize Cursor Pro+, Codex Pro 5x, and Claude Team plan labels ([#205](https://github.com/cogine-ai/OpenUsageCN/pull/205)) by @lc708
+- Add dual-architecture macOS Cookie Helper packaging checks, signed/notarized package verification, updater validation, and release documentation ([#205](https://github.com/cogine-ai/OpenUsageCN/pull/205)) by @lc708
+
+---
+
+### Changelog
+
+**Full Changelog**: [v0.6.38...v0.6.39](https://github.com/cogine-ai/OpenUsageCN/compare/v0.6.38...v0.6.39)
+
+- [ff83dfb](https://github.com/cogine-ai/OpenUsageCN/commit/ff83dfb7c0b5fb2e08ce75f3ea882d265f8eee5e) docs: design provider accounts and cursor history by @lc708
+- [6265b08](https://github.com/cogine-ai/OpenUsageCN/commit/6265b08f40a5303ba48a84e934cfcff88aba8eb3) chore: update provider plans and ccusage by @lc708
+- [2c36c4f](https://github.com/cogine-ai/OpenUsageCN/commit/2c36c4fda9c1f0c4df33bd4419c1361c9a8d9da3) feat: declare plugin account capabilities by @lc708
+- [8619f08](https://github.com/cogine-ai/OpenUsageCN/commit/8619f0850e671a805e883719686e92fef379e135) feat: add provider accounts and cursor history by @lc708
+- [0a82067](https://github.com/cogine-ai/OpenUsageCN/commit/0a820672eef76918eb0505a5f4e52a6d5582e4a9) docs: document account-aware provider usage by @lc708
+- [16ea28a](https://github.com/cogine-ai/OpenUsageCN/commit/16ea28a72b25a07e1aec0fc53eb359699069ed0f) fix: harden provider account refresh and release checks by @lc708
+- [fd0ca30](https://github.com/cogine-ai/OpenUsageCN/commit/fd0ca3019a22638c17d285c978e688f4d8f4e067) fix: honor app proxy for account requests by @lc708
+- [d096925](https://github.com/cogine-ai/OpenUsageCN/commit/d096925b9f9662386cbd11be448f43d4d68c9fd5) fix: harden provider account boundaries by @lc708
+- [d0bfb13](https://github.com/cogine-ai/OpenUsageCN/commit/d0bfb1348fb25f6bb5e850216aebdc99ca7a7fbc) Merge pull request #205 from cogine-ai/cliq/provider-accounts-cursor-history by @lc708
+
 ## v0.6.38
 
 ### Bug Fixes
