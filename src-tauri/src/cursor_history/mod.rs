@@ -40,7 +40,6 @@ pub(crate) fn aggregate_scripted_history(
         to_ms,
         fetched_at_ms,
         time_zone,
-        utc_offset_seconds: _,
         requested_page_size,
         pages,
     } = script;

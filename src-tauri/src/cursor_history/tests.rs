@@ -22,7 +22,6 @@ fn short_final_page_returns_complete_account_aggregate() {
         to_ms: 1_700_086_400_000,
         fetched_at_ms: 1_700_090_000_000,
         time_zone: "America/Los_Angeles".to_string(),
-        utc_offset_seconds: -7 * 60 * 60,
         requested_page_size: 1_000,
         pages: vec![ScriptedPage {
             page: 1,
@@ -61,7 +60,6 @@ fn rejects_a_page_size_other_than_one_thousand() {
         to_ms: 2,
         fetched_at_ms: 3,
         time_zone: "UTC".to_string(),
-        utc_offset_seconds: 0,
         requested_page_size: 999,
         pages: vec![ScriptedPage {
             page: 1,
@@ -82,7 +80,6 @@ fn missing_page_fails_the_complete_fetch() {
         to_ms: 2,
         fetched_at_ms: 3,
         time_zone: "UTC".to_string(),
-        utc_offset_seconds: 0,
         requested_page_size: 1_000,
         pages: vec![
             ScriptedPage {
@@ -124,7 +121,6 @@ fn more_than_two_hundred_pages_is_incomplete() {
         to_ms: 2,
         fetched_at_ms: 3,
         time_zone: "UTC".to_string(),
-        utc_offset_seconds: 0,
         requested_page_size: 1_000,
         pages,
     })
@@ -141,7 +137,6 @@ fn changing_authoritative_total_fails_the_complete_fetch() {
         to_ms: 2,
         fetched_at_ms: 3,
         time_zone: "UTC".to_string(),
-        utc_offset_seconds: 0,
         requested_page_size: 1_000,
         pages: vec![
             ScriptedPage {
@@ -177,7 +172,6 @@ fn an_optional_authoritative_total_can_appear_on_only_one_page() {
             to_ms: 2,
             fetched_at_ms: 3,
             time_zone: "UTC".to_string(),
-            utc_offset_seconds: 0,
             requested_page_size: 1_000,
             pages: vec![
                 ScriptedPage {
@@ -208,7 +202,6 @@ fn a_full_last_page_is_incomplete_even_when_the_total_is_reached() {
         to_ms: 2,
         fetched_at_ms: 3,
         time_zone: "UTC".to_string(),
-        utc_offset_seconds: 0,
         requested_page_size: 1_000,
         pages: vec![ScriptedPage {
             page: 1,
@@ -229,7 +222,6 @@ fn collected_rows_must_reach_the_authoritative_total() {
         to_ms: 2,
         fetched_at_ms: 3,
         time_zone: "UTC".to_string(),
-        utc_offset_seconds: 0,
         requested_page_size: 1_000,
         pages: vec![ScriptedPage {
             page: 1,
@@ -256,7 +248,6 @@ fn exact_adjacent_boundary_overlap_can_reconcile_an_overcount() {
         to_ms: 2,
         fetched_at_ms: 3,
         time_zone: "UTC".to_string(),
-        utc_offset_seconds: 0,
         requested_page_size: 1_000,
         pages: vec![
             ScriptedPage {
@@ -283,7 +274,6 @@ fn rows_after_a_short_page_are_incomplete() {
         to_ms: 2,
         fetched_at_ms: 3,
         time_zone: "UTC".to_string(),
-        utc_offset_seconds: 0,
         requested_page_size: 1_000,
         pages: vec![
             ScriptedPage {
@@ -311,7 +301,6 @@ fn a_response_page_cannot_exceed_one_thousand_rows() {
         to_ms: 2,
         fetched_at_ms: 3,
         time_zone: "UTC".to_string(),
-        utc_offset_seconds: 0,
         requested_page_size: 1_000,
         pages: vec![ScriptedPage {
             page: 1,
@@ -338,7 +327,6 @@ fn a_missing_first_page_is_incomplete() {
         to_ms: 2,
         fetched_at_ms: 3,
         time_zone: "UTC".to_string(),
-        utc_offset_seconds: 0,
         requested_page_size: 1_000,
         pages: Vec::new(),
     })
@@ -357,7 +345,6 @@ fn an_unexplained_overcount_is_not_globally_deduplicated() {
         to_ms: 2,
         fetched_at_ms: 3,
         time_zone: "UTC".to_string(),
-        utc_offset_seconds: 0,
         requested_page_size: 1_000,
         pages: vec![
             ScriptedPage {
@@ -391,7 +378,6 @@ fn an_ambiguous_partial_boundary_overlap_fails_closed() {
         to_ms: 2,
         fetched_at_ms: 3,
         time_zone: "UTC".to_string(),
-        utc_offset_seconds: 0,
         requested_page_size: 1_000,
         pages: vec![
             ScriptedPage {

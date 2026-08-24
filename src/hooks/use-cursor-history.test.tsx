@@ -141,9 +141,7 @@ describe("useCursorHistory", () => {
     expect(result.current.snapshot).toEqual(fresh)
   })
 
-  it("requests a refresh with the current local time context", async () => {
-    vi.spyOn(Date, "now").mockReturnValue(1_787_500_000_000)
-    vi.spyOn(Date.prototype, "getTimezoneOffset").mockReturnValue(-480)
+  it("requests a refresh with only the provider, account, and current IANA time zone", async () => {
     vi.spyOn(Intl.DateTimeFormat.prototype, "resolvedOptions").mockReturnValue({
       locale: "en-US",
       calendar: "gregory",
@@ -160,9 +158,7 @@ describe("useCursorHistory", () => {
     expect(tauri.invoke).toHaveBeenLastCalledWith("refresh_cursor_history", {
       providerId: "cursor",
       accountId: "account-1",
-      nowMs: 1_787_500_000_000,
       timeZone: "Asia/Taipei",
-      utcOffsetSeconds: 28_800,
     })
   })
 

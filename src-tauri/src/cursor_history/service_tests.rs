@@ -152,7 +152,6 @@ fn failed_refresh_returns_and_preserves_the_previous_complete_snapshot() {
             now_ms: 1_800_000_000_000,
             billing_cycle: None,
             time_zone: "UTC".to_string(),
-            utc_offset_seconds: 0,
         })
         .expect("refresh should be represented as an account-local result")
         .wait()
@@ -191,7 +190,6 @@ fn complete_verified_refresh_replaces_only_its_account_snapshot() {
             now_ms: 1_800_000_000_000,
             billing_cycle: None,
             time_zone: "UTC".to_string(),
-            utc_offset_seconds: 0,
         })
         .expect("schedule refresh")
         .wait()
@@ -239,7 +237,6 @@ fn credential_generation_change_at_commit_keeps_the_previous_snapshot() {
             now_ms: 1_800_000_000_000,
             billing_cycle: None,
             time_zone: "UTC".to_string(),
-            utc_offset_seconds: 0,
         })
         .expect("schedule refresh")
         .wait()

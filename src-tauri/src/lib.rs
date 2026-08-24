@@ -997,12 +997,12 @@ fn get_cursor_history_snapshot(
 async fn refresh_cursor_history(
     provider_id: String,
     account_id: String,
-    now_ms: i64,
     time_zone: String,
-    utc_offset_seconds: i32,
     history: tauri::State<'_, CursorHistoryState>,
     accounts: tauri::State<'_, Arc<provider_accounts::ProviderAccounts>>,
 ) -> Result<CursorHistoryRefreshView, CursorHistoryErrorView> {
+    let now_ms = i64::try_from(time::OffsetDateTime::now_utc().unix_timestamp_nanos() / 1_000_000)
+        .expect("OffsetDateTime milliseconds fit in i64");
     let service = history
         .service
         .as_ref()
@@ -1035,7 +1035,6 @@ async fn refresh_cursor_history(
             now_ms,
             billing_cycle,
             time_zone,
-            utc_offset_seconds,
         })
         .map_err(cursor_history_error)?;
     let refresh = tokio::task::spawn_blocking(move || handle.wait())

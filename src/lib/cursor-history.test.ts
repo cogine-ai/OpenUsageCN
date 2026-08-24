@@ -24,16 +24,14 @@ describe("cursor history client", () => {
     })
   })
 
-  it("refreshes an account snapshot with the supplied local time context", async () => {
+  it("refreshes an account snapshot with only account scope and IANA time zone", async () => {
     const result = { snapshot: null, stale: false }
     tauri.invoke.mockResolvedValue(result)
     const { refreshCursorHistory } = await import("./cursor-history")
     const input = {
       providerId: "cursor",
       accountId: "account-1",
-      nowMs: 1_787_500_000_000,
       timeZone: "Asia/Taipei",
-      utcOffsetSeconds: 28_800,
     }
 
     await expect(refreshCursorHistory(input)).resolves.toEqual(result)

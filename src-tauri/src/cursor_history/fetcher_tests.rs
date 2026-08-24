@@ -100,7 +100,6 @@ fn candidate_rejection_falls_through_and_pages_reuse_the_verified_candidate() {
             to_ms: 1_700_086_400_000,
             fetched_at_ms: 1_700_086_400_001,
             time_zone: "Asia/Taipei".to_string(),
-            utc_offset_seconds: 8 * 60 * 60,
         },
     )
     .expect("the second candidate should produce complete history");
@@ -202,7 +201,6 @@ fn valid_but_wrong_identity_stops_without_trying_another_candidate() {
             to_ms: 1_700_086_400_000,
             fetched_at_ms: 1_700_086_400_001,
             time_zone: "UTC".to_string(),
-            utc_offset_seconds: 0,
         },
     );
 
@@ -254,7 +252,6 @@ fn network_auth_failure_does_not_fall_through_to_another_identity() {
             to_ms: 1_700_086_400_000,
             fetched_at_ms: 1_700_086_400_001,
             time_zone: "UTC".to_string(),
-            utc_offset_seconds: 0,
         },
     );
 
@@ -309,7 +306,6 @@ fn cancellation_stops_before_authentication_or_pagination() {
             to_ms: 1_700_086_400_000,
             fetched_at_ms: 1_700_086_400_001,
             time_zone: "UTC".to_string(),
-            utc_offset_seconds: 0,
         },
         &|| true,
     );

@@ -3,12 +3,15 @@ use std::fmt;
 use std::fs::File;
 use std::io;
 #[cfg(target_os = "macos")]
-use std::io::Read;
+use std::io::{Read, Write};
 #[cfg(target_os = "macos")]
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 pub(crate) const INSTALLATION_KEY_SERVICE: &str = "ai.cogine.openusagecn.provider-accounts";
 pub(crate) const INSTALLATION_KEY_ACCOUNT: &str = "installation-key-v1";
+
+#[cfg(target_os = "macos")]
+const SECURITY_TOOL_PATH: &str = "/usr/bin/security";
 
 pub(crate) struct InstallationKey([u8; 32]);
 
@@ -90,12 +93,12 @@ impl CommandResult {
 }
 
 trait CommandRunner: Send + Sync {
-    fn run(&self, args: &[String]) -> io::Result<CommandResult>;
+    fn run(&self, args: &[String], stdin: Option<&[u8]>) -> io::Result<CommandResult>;
 }
 
 impl<T: CommandRunner + ?Sized> CommandRunner for &T {
-    fn run(&self, args: &[String]) -> io::Result<CommandResult> {
-        (**self).run(args)
+    fn run(&self, args: &[String], stdin: Option<&[u8]>) -> io::Result<CommandResult> {
+        (**self).run(args, stdin)
     }
 }
 
@@ -104,8 +107,27 @@ struct SecurityCommandRunner;
 
 #[cfg(target_os = "macos")]
 impl CommandRunner for SecurityCommandRunner {
-    fn run(&self, args: &[String]) -> io::Result<CommandResult> {
-        let output = Command::new("security").args(args).output()?;
+    fn run(&self, args: &[String], stdin: Option<&[u8]>) -> io::Result<CommandResult> {
+        let mut command = Command::new(SECURITY_TOOL_PATH);
+        command.args(args);
+        let output = if let Some(input) = stdin {
+            let mut child = command
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()?;
+            let write_result = {
+                let mut child_stdin = child.stdin.take().ok_or_else(|| {
+                    io::Error::new(io::ErrorKind::BrokenPipe, "security stdin is unavailable")
+                })?;
+                child_stdin.write_all(input)
+            };
+            let output = child.wait_with_output()?;
+            write_result?;
+            output
+        } else {
+            command.output()?
+        };
         Ok(CommandResult {
             code: output.status.code(),
             stdout: output.stdout,
@@ -151,7 +173,10 @@ impl<R: CommandRunner, G: KeyGenerator> MacOsInstallationKeyStore<R, G> {
     }
 
     fn read(&self) -> Result<InstallationKey, InstallationKeyError> {
-        let result = self.runner.run(&find_args()).map_err(classify_command_io)?;
+        let result = self
+            .runner
+            .run(&find_args(), None)
+            .map_err(classify_command_io)?;
         if !result.succeeded() {
             return Err(classify_security_failure(&result));
         }
@@ -161,9 +186,10 @@ impl<R: CommandRunner, G: KeyGenerator> MacOsInstallationKeyStore<R, G> {
     fn create(&self) -> Result<InstallationKey, InstallationKeyError> {
         let key = InstallationKey(self.generator.generate().map_err(classify_command_io)?);
         let encoded = encode_key(&key);
+        let command = add_command(&encoded);
         let result = self
             .runner
-            .run(&add_args(&encoded))
+            .run(&interactive_args(), Some(command.as_bytes()))
             .map_err(classify_command_io)?;
         if result.succeeded() {
             Ok(key)
@@ -232,16 +258,14 @@ fn find_args() -> Vec<String> {
     ]
 }
 
-fn add_args(encoded_key: &str) -> Vec<String> {
-    vec![
-        "add-generic-password".to_string(),
-        "-s".to_string(),
-        INSTALLATION_KEY_SERVICE.to_string(),
-        "-a".to_string(),
-        INSTALLATION_KEY_ACCOUNT.to_string(),
-        "-w".to_string(),
-        encoded_key.to_string(),
-    ]
+fn interactive_args() -> Vec<String> {
+    vec!["-q".to_string(), "-i".to_string()]
+}
+
+fn add_command(encoded_key: &str) -> String {
+    format!(
+        "add-generic-password -s {INSTALLATION_KEY_SERVICE} -a {INSTALLATION_KEY_ACCOUNT} -w {encoded_key}\n"
+    )
 }
 
 fn classify_command_io(error: io::Error) -> InstallationKeyError {
@@ -304,193 +328,5 @@ fn encode_key(key: &InstallationKey) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::collections::VecDeque;
-    use std::io;
-    use std::sync::Mutex;
-
-    struct ScriptedRunner {
-        responses: Mutex<VecDeque<io::Result<CommandResult>>>,
-        calls: Mutex<Vec<Vec<String>>>,
-    }
-
-    impl ScriptedRunner {
-        fn with_responses(responses: Vec<io::Result<CommandResult>>) -> Self {
-            Self {
-                responses: Mutex::new(responses.into()),
-                calls: Mutex::new(Vec::new()),
-            }
-        }
-
-        fn calls(&self) -> Vec<Vec<String>> {
-            self.calls.lock().unwrap().clone()
-        }
-    }
-
-    impl CommandRunner for ScriptedRunner {
-        fn run(&self, args: &[String]) -> io::Result<CommandResult> {
-            self.calls.lock().unwrap().push(args.to_vec());
-            self.responses
-                .lock()
-                .unwrap()
-                .pop_front()
-                .expect("unexpected security command")
-        }
-    }
-
-    #[test]
-    fn test_adapters_can_construct_a_typed_installation_key() {
-        let key = InstallationKey::from_bytes([7; 32]);
-        assert!(key.as_bytes() == &[7; 32]);
-    }
-
-    #[test]
-    fn reads_the_one_app_owned_installation_key_item() {
-        let runner = ScriptedRunner::with_responses(vec![Ok(CommandResult::success(
-            b"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f\n",
-        ))]);
-        let store = MacOsInstallationKeyStore::with_runner(&runner, FixedGenerator([9; 32]));
-        let key = store.read().expect("key is valid");
-        assert!(
-            key.as_bytes()
-                == &[
-                    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
-                    22, 23, 24, 25, 26, 27, 28, 29, 30, 31
-                ]
-        );
-        assert_eq!(
-            runner.calls(),
-            vec![vec![
-                "find-generic-password".to_string(),
-                "-s".to_string(),
-                INSTALLATION_KEY_SERVICE.to_string(),
-                "-a".to_string(),
-                INSTALLATION_KEY_ACCOUNT.to_string(),
-                "-w".to_string(),
-            ]]
-        );
-    }
-
-    #[test]
-    fn reports_a_missing_keychain_item_separately() {
-        let runner = ScriptedRunner::with_responses(vec![Ok(CommandResult::failure(
-            44,
-            "security: SecKeychainSearchCopyNext: The specified item could not be found in the keychain.",
-        ))]);
-        let store = MacOsInstallationKeyStore::with_runner(&runner, FixedGenerator([9; 32]));
-        let error = store
-            .read()
-            .err()
-            .expect("missing item must not be accepted");
-
-        assert_eq!(error, InstallationKeyError::Missing);
-    }
-
-    #[test]
-    fn reports_denied_or_disallowed_keychain_access_separately() {
-        for response in [
-            CommandResult::failure(
-                51,
-                "security: SecKeychainItemCopyContent: User interaction is not allowed.",
-            ),
-            CommandResult::failure(128, "security: The user canceled the operation."),
-            CommandResult::failure(1, "security: errSecAuthFailed"),
-        ] {
-            let runner = ScriptedRunner::with_responses(vec![Ok(response)]);
-            let store = MacOsInstallationKeyStore::with_runner(&runner, FixedGenerator([9; 32]));
-            assert_eq!(store.read().err(), Some(InstallationKeyError::Denied));
-        }
-    }
-
-    #[test]
-    fn creates_with_add_only_and_never_updates_an_existing_item() {
-        let runner = ScriptedRunner::with_responses(vec![Ok(CommandResult::success(b""))]);
-        let store = MacOsInstallationKeyStore::with_runner(&runner, FixedGenerator([9; 32]));
-        let key = store.create().expect("new key is stored");
-
-        assert!(key.as_bytes() == &[9; 32]);
-        let calls = runner.calls();
-        assert_eq!(calls.len(), 1);
-        assert_eq!(
-            &calls[0][..6],
-            &[
-                "add-generic-password".to_string(),
-                "-s".to_string(),
-                INSTALLATION_KEY_SERVICE.to_string(),
-                "-a".to_string(),
-                INSTALLATION_KEY_ACCOUNT.to_string(),
-                "-w".to_string(),
-            ]
-        );
-        assert!(calls[0][6] == "0909090909090909090909090909090909090909090909090909090909090909");
-        assert!(!calls[0].iter().any(|arg| arg == "-U"));
-    }
-
-    #[test]
-    fn create_race_returns_the_key_that_won_the_keychain_insert() {
-        let runner = ScriptedRunner::with_responses(vec![
-            Ok(CommandResult::failure(
-                45,
-                "security: SecKeychainAddGenericPassword: The specified item already exists in the keychain.",
-            )),
-            Ok(CommandResult::success(
-                b"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f\n",
-            )),
-        ]);
-        let store = MacOsInstallationKeyStore::with_runner(&runner, FixedGenerator([9; 32]));
-
-        let key = store.create().expect("race winner is reread");
-
-        assert_eq!(key.as_bytes()[0], 0);
-        assert_eq!(key.as_bytes()[31], 31);
-        assert_eq!(runner.calls().len(), 2);
-        assert_eq!(runner.calls()[1], find_args());
-    }
-
-    #[test]
-    fn rejects_values_that_are_not_exactly_32_encoded_bytes() {
-        for value in [vec![b'0'; 62], vec![b'g'; 64], vec![0xff; 64]] {
-            let runner = ScriptedRunner::with_responses(vec![Ok(CommandResult::success(&value))]);
-            let store = MacOsInstallationKeyStore::with_runner(&runner, FixedGenerator([9; 32]));
-
-            assert_eq!(store.read().err(), Some(InstallationKeyError::Invalid));
-        }
-    }
-
-    #[test]
-    fn separates_an_unavailable_security_tool_from_other_io_failures() {
-        for (kind, expected) in [
-            (io::ErrorKind::NotFound, InstallationKeyError::Unavailable),
-            (io::ErrorKind::PermissionDenied, InstallationKeyError::Io),
-        ] {
-            let runner = ScriptedRunner::with_responses(vec![Err(io::Error::from(kind))]);
-            let store = MacOsInstallationKeyStore::with_runner(&runner, FixedGenerator([9; 32]));
-
-            assert_eq!(store.read().err(), Some(expected));
-        }
-    }
-
-    #[test]
-    fn reports_an_unclassified_security_failure_as_unavailable() {
-        let runner = ScriptedRunner::with_responses(vec![Ok(CommandResult::failure(
-            70,
-            "security subsystem unavailable",
-        ))]);
-        let store = MacOsInstallationKeyStore::with_runner(&runner, FixedGenerator([9; 32]));
-
-        assert_eq!(store.read().err(), Some(InstallationKeyError::Unavailable));
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    #[test]
-    fn unsupported_platform_neither_reads_nor_generates_a_key() {
-        let store = SystemInstallationKeyStore::new();
-
-        assert_eq!(store.read().err(), Some(InstallationKeyError::Unsupported));
-        assert_eq!(
-            store.create().err(),
-            Some(InstallationKeyError::Unsupported)
-        );
-    }
-}
+#[path = "keychain_tests.rs"]
+mod tests;

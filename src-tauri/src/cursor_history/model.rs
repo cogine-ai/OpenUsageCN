@@ -43,7 +43,6 @@ pub(crate) struct ScriptedHistory {
     pub to_ms: i64,
     pub fetched_at_ms: i64,
     pub time_zone: String,
-    pub utc_offset_seconds: i32,
     pub requested_page_size: usize,
     pub pages: Vec<ScriptedPage>,
 }

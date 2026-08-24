@@ -12,7 +12,6 @@ pub(crate) struct HistoryDemand {
     pub now_ms: i64,
     pub billing_cycle: Option<BillingCycle>,
     pub time_zone: String,
-    pub utc_offset_seconds: i32,
 }
 
 pub(crate) struct HistoryRefresh {
@@ -89,12 +88,7 @@ impl HistoryService {
         if demand.provider_id != "cursor" {
             return Err(HistoryError::UnsupportedProvider);
         }
-        let window = current_period_window(
-            demand.now_ms,
-            demand.billing_cycle,
-            demand.time_zone,
-            demand.utc_offset_seconds,
-        )?;
+        let window = current_period_window(demand.now_ms, demand.billing_cycle, demand.time_zone)?;
         let previous = self.store.load(&demand.provider_id, &demand.account_id)?;
         let lease = match self.credentials.acquire(CredentialRequest {
             provider_id: &demand.provider_id,
@@ -127,7 +121,6 @@ impl HistoryService {
             to_ms: window.to_ms,
             fetched_at_ms: demand.now_ms,
             time_zone: window.time_zone,
-            utc_offset_seconds: window.utc_offset_seconds,
         };
         let credentials = Arc::clone(&self.credentials);
         let transport = Arc::clone(&self.transport);

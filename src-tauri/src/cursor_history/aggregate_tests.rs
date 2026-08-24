@@ -44,11 +44,7 @@ fn aggregate(events: Vec<ScriptedEvent>) -> CompleteHistory {
     aggregate_scripted_history(script(events)).expect("fixture is a complete history")
 }
 
-fn assert_los_angeles_local_date(
-    timestamp_ms: i64,
-    current_utc_offset_seconds: i32,
-    expected_date: &str,
-) {
+fn assert_los_angeles_local_date(timestamp_ms: i64, expected_date: &str) {
     let event = token_event(
         i128::from(timestamp_ms),
         "model-dst",
@@ -62,7 +58,6 @@ fn assert_los_angeles_local_date(
         to_ms: timestamp_ms + 60_000,
         fetched_at_ms: timestamp_ms + 120_000,
         time_zone: "America/Los_Angeles".to_string(),
-        utc_offset_seconds: current_utc_offset_seconds,
         requested_page_size: 1_000,
         pages: vec![ScriptedPage {
             page: 1,
@@ -83,7 +78,6 @@ fn script(events: Vec<ScriptedEvent>) -> ScriptedHistory {
         to_ms: TO_MS,
         fetched_at_ms: TO_MS + 1,
         time_zone: "UTC".to_string(),
-        utc_offset_seconds: 0,
         requested_page_size: 1_000,
         pages: vec![ScriptedPage {
             page: 1,
@@ -101,7 +95,6 @@ fn aggregates_four_token_classes_by_local_date_and_raw_model() {
         to_ms: 1_704_153_600_000,
         fetched_at_ms: 1_704_160_000_000,
         time_zone: "Etc/GMT+1".to_string(),
-        utc_offset_seconds: -60 * 60,
         requested_page_size: 1_000,
         pages: vec![ScriptedPage {
             page: 1,
@@ -166,13 +159,11 @@ fn aggregates_four_token_classes_by_local_date_and_raw_model() {
 
 #[test]
 fn local_dates_use_historical_iana_offsets_across_dst_changes() {
-    // 2024-03-10 07:30Z was still 2024-03-09 in Los Angeles (UTC-8), even
-    // when the current browser offset supplied with the request is UTC-7.
-    assert_los_angeles_local_date(1_710_055_800_000, -7 * 60 * 60, "2024-03-09");
+    // 2024-03-10 07:30Z was still 2024-03-09 in Los Angeles (UTC-8).
+    assert_los_angeles_local_date(1_710_055_800_000, "2024-03-09");
 
-    // 2024-11-03 07:30Z was already 2024-11-03 in Los Angeles (UTC-7), even
-    // when the current browser offset supplied with the request is UTC-8.
-    assert_los_angeles_local_date(1_730_619_000_000, -8 * 60 * 60, "2024-11-03");
+    // 2024-11-03 07:30Z was already 2024-11-03 in Los Angeles (UTC-7).
+    assert_los_angeles_local_date(1_730_619_000_000, "2024-11-03");
 }
 
 #[test]
@@ -341,7 +332,6 @@ fn proven_adjacent_boundary_overlap_is_removed_before_aggregation() {
         to_ms: TO_MS,
         fetched_at_ms: TO_MS + 1,
         time_zone: "UTC".to_string(),
-        utc_offset_seconds: 0,
         requested_page_size: 1_000,
         pages: vec![
             ScriptedPage {

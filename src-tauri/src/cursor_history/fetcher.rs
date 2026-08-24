@@ -16,7 +16,6 @@ pub(crate) struct FetchRequest {
     pub to_ms: i64,
     pub fetched_at_ms: i64,
     pub time_zone: String,
-    pub utc_offset_seconds: i32,
 }
 
 #[cfg(test)]
@@ -95,7 +94,6 @@ pub(crate) fn fetch_complete_history_with_lease(
         to_ms: request.to_ms,
         fetched_at_ms: request.fetched_at_ms,
         time_zone: request.time_zone,
-        utc_offset_seconds: request.utc_offset_seconds,
         requested_page_size: PAGE_SIZE,
         pages,
     })?;

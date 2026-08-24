@@ -70,9 +70,10 @@ not available, it uses a bounded 30-day window. Every fetch first proves the ses
 
 The view groups complete results by local date and raw model name and shows input, output, cache
 write, and cache read tokens plus request counts. Local dates use the selected IANA time zone's
-rules at each event, including daylight-saving changes inside the window. Missing optional counters
-are zero; invalid or inexact totals fail the refresh without replacing the last complete result. A
-blank model name is displayed as `Unknown` but is not rewritten in storage.
+rules at each event, including daylight-saving changes inside the window. The UI sends only that
+time zone, while the backend chooses the current time once for the refresh. Missing
+optional counters are zero; invalid or inexact totals fail the refresh without replacing the last
+complete result. A blank model name is displayed as `Unknown` but is not rewritten in storage.
 
 `List-Price Equivalent` sums event-level model prices when present. `Metered Usage` is a separate
 whole-window value and is shown only when every in-window event has a valid charged amount. These

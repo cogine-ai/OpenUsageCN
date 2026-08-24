@@ -49,9 +49,7 @@ export type CursorHistoryRefreshResult = {
 export type CursorHistoryRefreshInput = {
   providerId: string
   accountId: string
-  nowMs: number
   timeZone: string
-  utcOffsetSeconds: number
 }
 
 export function getCursorHistorySnapshot(

@@ -12,14 +12,10 @@ const SYSTEM_ERROR: CursorHistoryRefreshError = {
   message: "Unable to load Model Usage. Try again.",
 }
 
-function localTimeContext(nowMs: number) {
+function localTimeZone() {
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
   if (!timeZone) throw new Error("Local time zone is unavailable")
-  return {
-    nowMs,
-    timeZone,
-    utcOffsetSeconds: -new Date(nowMs).getTimezoneOffset() * 60,
-  }
+  return timeZone
 }
 
 export function useCursorHistory(
@@ -59,11 +55,10 @@ export function useCursorHistory(
         setLoading(false)
         setRefreshing(true)
 
-        const timeContext = localTimeContext(Date.now())
         const result = await refreshCursorHistory({
           providerId,
           accountId,
-          ...timeContext,
+          timeZone: localTimeZone(),
         })
         if (!isCurrent()) return
         if (result.snapshot && result.snapshot.accountId !== accountId) {

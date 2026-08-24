@@ -31,6 +31,7 @@
 - Plugin installation and successful snapshot writes use cross-process locks, so simultaneous app and CLI runs do not read partial plugin updates or overwrite newer provider data.
 - Account-aware providers reconcile local identities into stable accounts before probing. The app and CLI both publish only the selected account into the existing provider cache.
 - Account selection, labels, identity fingerprints, and account-owned snapshots use separate versioned stores. Raw identities, credentials, and browser cookies are not stored there.
+- On macOS, the generated installation key is sent to Keychain without placing its value in process arguments. Existing service and account names remain unchanged across upgrades.
 - Account changes are serialized per provider and persisted before the in-memory view changes. Browser attachments carry a revision so an older process cannot restore a connection that was explicitly detached.
 - Account revision events contain only a provider id and monotonic revision. The frontend fresh-reads the account view instead of receiving account data in the event.
 - Switching to an account without a readable snapshot removes the previous account's provider projection while the new probe is loading. A failed probe does not overwrite a previously successful snapshot for the same selected account. If the account registry itself is unavailable, the last projection stays readable with an error instead of being silently deleted.
@@ -39,6 +40,7 @@
 ## Account-Scoped Detail Data
 
 - Cursor Model Usage is loaded only while a Cursor detail page has an active account.
+- The backend decides the current time once for each refresh. The UI supplies only the selected IANA time zone, whose rules are applied to each event.
 - Its job key includes provider, account, billing window, time zone, and credential generation. A selection or credential change rejects the old result before publication.
 - Only complete aggregates are stored by account. They are detail-only and do not enter the overview, tray, notifications, CLI, or Local HTTP cache.
 
