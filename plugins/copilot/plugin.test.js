@@ -481,6 +481,83 @@ describe("copilot plugin", () => {
     expect(ctx.host.keychain.writeGenericPassword).toHaveBeenCalled();
   });
 
+  it("preserves a newer state-file token when keychain delete is unavailable", async () => {
+    const ctx = makePluginTestContext();
+    setStateFileToken(ctx, "state_token");
+    ctx.host.keychain.deleteGenericPassword = undefined;
+    ctx.host.keychain.readGenericPassword.mockImplementation((service) => {
+      if (service === "OpenUsageCN-copilot") {
+        return JSON.stringify({ token: "stale_token" });
+      }
+      return null;
+    });
+    let callCount = 0;
+    ctx.host.http.request.mockImplementation((opts) => {
+      callCount++;
+      if (opts.headers.Authorization === "token stale_token") {
+        return { status: 401, bodyText: "" };
+      }
+      return { status: 200, bodyText: JSON.stringify(makeUsageResponse()) };
+    });
+
+    const plugin = await loadPlugin();
+    const result = plugin.probe(ctx);
+    expect(result.lines.find((l) => l.label === "Premium")).toBeTruthy();
+    expect(callCount).toBe(2);
+    expect(ctx.host.log.info).toHaveBeenCalledWith(
+      expect.stringContaining("keychain delete failed"),
+    );
+    expect(ctx.host.fs.readText(ctx.app.pluginDataDir + "/auth.json")).toBe(
+      JSON.stringify({ token: "state_token" }),
+    );
+  });
+
+  it("falls back to a newer state-file token after clearing stale keychain cache", async () => {
+    const ctx = makePluginTestContext();
+    setStateFileToken(ctx, "state_token");
+    ctx.host.keychain.readGenericPassword.mockImplementation((service) => {
+      if (service === "OpenUsageCN-copilot") {
+        return JSON.stringify({ token: "stale_token" });
+      }
+      return null;
+    });
+    ctx.host.keychain.deleteGenericPassword.mockImplementation(() => {});
+    let callCount = 0;
+    ctx.host.http.request.mockImplementation((opts) => {
+      callCount++;
+      if (opts.headers.Authorization === "token stale_token") {
+        return { status: 401, bodyText: "" };
+      }
+      return { status: 200, bodyText: JSON.stringify(makeUsageResponse()) };
+    });
+
+    const plugin = await loadPlugin();
+    const result = plugin.probe(ctx);
+    expect(result.lines.find((l) => l.label === "Premium")).toBeTruthy();
+    expect(callCount).toBe(2);
+    expect(ctx.host.keychain.deleteGenericPassword).toHaveBeenCalledWith("OpenUsageCN-copilot");
+    expect(ctx.host.fs.readText(ctx.app.pluginDataDir + "/auth.json")).toBe(
+      JSON.stringify({ token: "state_token" }),
+    );
+  });
+
+  it("clears matching stale state-file token when keychain cache is invalid", async () => {
+    const ctx = makePluginTestContext();
+    setStateFileToken(ctx, "stale_token");
+    ctx.host.keychain.readGenericPassword.mockImplementation((service) => {
+      if (service === "OpenUsageCN-copilot") {
+        return JSON.stringify({ token: "stale_token" });
+      }
+      return null;
+    });
+    ctx.host.keychain.deleteGenericPassword.mockImplementation(() => {});
+    ctx.host.http.request.mockReturnValue({ status: 401, bodyText: "" });
+
+    const plugin = await loadPlugin();
+    expect(() => plugin.probe(ctx)).toThrow("Token invalid");
+    expect(ctx.host.fs.readText(ctx.app.pluginDataDir + "/auth.json")).toBe("null");
+  });
+
   it("throws when stale keychain token and no fallback available", async () => {
     const ctx = makePluginTestContext();
     ctx.host.keychain.readGenericPassword.mockImplementation((service) => {
