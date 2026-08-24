@@ -318,6 +318,35 @@ fn enabled_providers_read_preferences_from_a_separate_settings_directory() {
 
 #[test]
 #[serial]
+fn cache_successful_output_clears_recorded_probe_error() {
+    let dir = temp_dir("probe-error-clear");
+    std::fs::create_dir_all(&dir).unwrap();
+
+    init(&dir, vec!["codex".to_string()], "test".to_string());
+    record_probe_error("codex", "Auth expired");
+    {
+        let state = cache_state().lock().unwrap();
+        assert_eq!(
+            state.errors.get("codex").map(String::as_str),
+            Some("Auth expired")
+        );
+    }
+
+    cache_successful_output(&make_output("codex", "Codex"));
+
+    {
+        let state = cache_state().lock().unwrap();
+        assert!(!state.errors.contains_key("codex"));
+        assert!(state.snapshots.contains_key("codex"));
+    }
+
+    wait_for_cache_writer_idle();
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+#[serial]
 fn cache_successful_output_debounces_disk_writes() {
     let dir = temp_dir("debounced-cache");
     std::fs::create_dir_all(&dir).unwrap();
@@ -454,4 +483,34 @@ fn snapshot_with_progress_line_round_trips() {
     let deserialized: CachedPluginSnapshot = serde_json::from_str(&json).unwrap();
     assert_eq!(deserialized.provider_id, "claude");
     assert_eq!(deserialized.lines.len(), 1);
+}
+
+#[test]
+#[serial]
+fn current_envelope_redacts_probe_errors_before_limits_api() {
+    let dir = temp_dir("limits-redaction");
+    std::fs::create_dir_all(&dir).unwrap();
+
+    init(
+        &dir,
+        vec!["codex".to_string()],
+        "test-version".to_string(),
+    );
+    record_probe_error(
+        "codex",
+        "auth failed with sk-1234567890abcdef",
+    );
+
+    let envelope =
+        crate::local_http_api::limits::current_envelope(&["codex".to_string()]);
+    assert_eq!(envelope.errors.len(), 1);
+    assert_eq!(envelope.errors[0].provider_id, "codex");
+    assert!(
+        !envelope.errors[0].message.contains("sk-1234567890abcdef"),
+        "probe error leaked API key: {}",
+        envelope.errors[0].message
+    );
+    assert!(envelope.errors[0].message.contains("sk-1...cdef"));
+
+    let _ = std::fs::remove_dir_all(&dir);
 }

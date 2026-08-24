@@ -479,4 +479,33 @@ mod tests {
             vec!["Resource 'requests': count resource is missing a stable unit"]
         );
     }
+
+    #[test]
+    fn balance_resources_expose_available_not_used() {
+        let line = MetricLine::Progress {
+            label: "Credits".to_string(),
+            limit_resource_key: Some("credits".to_string()),
+            used: 42.0,
+            limit: 100.0,
+            format: ProgressFormat::Dollars,
+            resets_at: None,
+            period_duration_ms: None,
+            color: None,
+        };
+        let resource = resource_from_line(
+            &LimitCatalogResource {
+                key: "credits".to_string(),
+                metric_label: "Credits".to_string(),
+                kind: LimitResourceKind::Balance,
+                count_unit: None,
+            },
+            &line,
+        )
+        .unwrap();
+        let json = serde_json::to_value(resource).unwrap();
+
+        assert!(json.get("used").is_none());
+        assert_eq!(json["available"], 42.0);
+        assert_eq!(json["unit"], "usd");
+    }
 }
