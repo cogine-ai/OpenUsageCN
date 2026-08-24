@@ -912,6 +912,27 @@ mod tests {
     }
 
     #[test]
+    fn probe_error_message_reads_only_error_badges() {
+        let plugin = test_plugin("");
+        let success = PluginOutput {
+            provider_id: "test".to_string(),
+            display_name: "Test".to_string(),
+            plan: None,
+            lines: vec![MetricLine::Text {
+                label: "Usage".to_string(),
+                value: "42%".to_string(),
+                color: None,
+                subtitle: None,
+            }],
+            icon_url: plugin.icon_data_url.clone(),
+        };
+        assert_eq!(probe_error_message(&success), None);
+
+        let error = error_output(&plugin, "AUTH".to_string());
+        assert_eq!(probe_error_message(&error), Some("AUTH"));
+    }
+
+    #[test]
     fn run_probe_times_out_cpu_bound_script() {
         let plugin = test_plugin(
             r#"
