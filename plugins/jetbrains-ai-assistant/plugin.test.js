@@ -212,6 +212,49 @@ describe("jetbrains-ai-assistant plugin", () => {
     expect(used && used.value).toBe("80")
   })
 
+  it("prefers later nextRefill over shared until even when used is lower", async () => {
+    const ctx = makeCtx()
+    ctx.app.platform = "unknown"
+
+    // Stale IDE cache: same subscription until, exhausted window, older refill.
+    ctx.host.fs.writeText(
+      DARWIN_PATH,
+      makeQuotaXml({
+        quotaInfo: {
+          type: "Available",
+          current: "100",
+          maximum: "100",
+          available: "0",
+          until: "2099-04-30T00:00:00Z",
+        },
+        nextRefill: { type: "Known", next: "2099-03-01T00:00:00Z", tariff: { amount: "0", duration: "PT720H" } },
+      })
+    )
+    // Current IDE after refill: same until, fresh window, low usage.
+    ctx.host.fs.writeText(
+      LINUX_PATH,
+      makeQuotaXml({
+        quotaInfo: {
+          type: "Available",
+          current: "5",
+          maximum: "100",
+          available: "95",
+          until: "2099-04-30T00:00:00Z",
+        },
+        nextRefill: { type: "Known", next: "2099-04-01T00:00:00Z", tariff: { amount: "0", duration: "PT720H" } },
+      })
+    )
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    const quota = result.lines.find((line) => line.label === "Quota")
+    const used = result.lines.find((line) => line.label === "Used")
+
+    expect(quota && quota.used).toBe(5)
+    expect(quota && quota.resetsAt).toBe("2099-04-01T00:00:00.000Z")
+    expect(used && used.value).toBe("5")
+  })
+
   it("converts JetBrains raw quota units to credits for display", async () => {
     const ctx = makeCtx()
     ctx.host.fs.writeText(
