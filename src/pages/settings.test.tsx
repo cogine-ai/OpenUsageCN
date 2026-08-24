@@ -57,8 +57,6 @@ import { SettingsPage } from "@/pages/settings"
 
 const macosCapabilities = {
   platform: "macos",
-  localHttpApi: true,
-  autostart: true,
   cli: true,
   paceNotifications: true,
   globalShortcuts: true,
@@ -68,8 +66,6 @@ const macosCapabilities = {
 
 const windowsCapabilities = {
   platform: "windows",
-  localHttpApi: true,
-  autostart: true,
   cli: false,
   paceNotifications: false,
   globalShortcuts: false,
