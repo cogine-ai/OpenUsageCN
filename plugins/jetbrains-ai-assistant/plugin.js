@@ -25,19 +25,26 @@
   ]
 
   function platformBaseDirs(platform) {
+    // Android Studio stores config under Google/, not JetBrains/.
     if (platform === "macos") {
-      return ["~/Library/Application Support/JetBrains"]
+      return [
+        "~/Library/Application Support/JetBrains",
+        "~/Library/Application Support/Google",
+      ]
     }
     if (platform === "linux") {
-      return ["~/.config/JetBrains"]
+      return ["~/.config/JetBrains", "~/.config/Google"]
     }
     if (platform === "windows") {
-      return ["~/AppData/Roaming/JetBrains"]
+      return ["~/AppData/Roaming/JetBrains", "~/AppData/Roaming/Google"]
     }
     return [
       "~/Library/Application Support/JetBrains",
+      "~/Library/Application Support/Google",
       "~/.config/JetBrains",
+      "~/.config/Google",
       "~/AppData/Roaming/JetBrains",
+      "~/AppData/Roaming/Google",
     ]
   }
 
