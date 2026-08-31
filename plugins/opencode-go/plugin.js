@@ -10,7 +10,14 @@
     monthly: 60,
   };
 
-  const HISTORY_EXISTS_SQL = `
+  const TABLES_SQL = `
+    SELECT name
+    FROM sqlite_master
+    WHERE type IN ('table', 'view')
+      AND name IN ('message', 'session_message', 'credential')
+  `;
+
+  const V1_HISTORY_EXISTS_SQL = `
     SELECT 1 AS present
     FROM message
     WHERE json_valid(data)
@@ -20,7 +27,7 @@
     LIMIT 1
   `;
 
-  const HISTORY_ROWS_SQL = `
+  const V1_HISTORY_ROWS_SQL = `
     SELECT
       CAST(COALESCE(json_extract(data, '$.time.created'), time_created) AS INTEGER) AS createdMs,
       CAST(json_extract(data, '$.cost') AS REAL) AS cost
@@ -29,6 +36,43 @@
       AND json_extract(data, '$.providerID') = 'opencode-go'
       AND json_extract(data, '$.role') = 'assistant'
       AND json_type(data, '$.cost') IN ('integer', 'real')
+  `;
+
+  const V2_PROVIDER_SQL =
+    "COALESCE(json_extract(data, '$.model.providerID'), json_extract(data, '$.providerID')) = 'opencode-go'";
+
+  const V2_HISTORY_EXISTS_SQL = `
+    SELECT 1 AS present
+    FROM session_message
+    WHERE json_valid(data)
+      AND ${V2_PROVIDER_SQL}
+      AND session_message.type = 'assistant'
+      AND json_type(data, '$.cost') IN ('integer', 'real')
+    LIMIT 1
+  `;
+
+  const V2_HISTORY_ROWS_SQL = `
+    SELECT
+      CAST(COALESCE(json_extract(data, '$.time.created'), time_created) AS INTEGER) AS createdMs,
+      CAST(json_extract(data, '$.cost') AS REAL) AS cost
+    FROM session_message
+    WHERE json_valid(data)
+      AND ${V2_PROVIDER_SQL}
+      AND session_message.type = 'assistant'
+      AND json_type(data, '$.cost') IN ('integer', 'real')
+  `;
+
+  const CREDENTIAL_SQL = `
+    SELECT TRIM(json_extract(value, '$.key')) AS key
+    FROM credential
+    WHERE json_valid(value)
+      AND length(TRIM(json_extract(value, '$.key'))) > 0
+      AND (
+        integration_id = 'opencode-go'
+        OR json_extract(value, '$.key') LIKE 'sk-%'
+      )
+    ORDER BY CASE WHEN integration_id = 'opencode-go' THEN 0 ELSE 1 END
+    LIMIT 1
   `;
 
   function readNumber(value) {
@@ -159,7 +203,29 @@
     }
   }
 
-  function loadAuthKey(ctx) {
+  function inspectDb(ctx) {
+    const listed = queryRows(ctx, TABLES_SQL);
+    if (!listed.ok) return { readable: false, names: {} };
+
+    const names = {};
+    for (let i = 0; i < listed.rows.length; i += 1) {
+      const name = listed.rows[i] && listed.rows[i].name;
+      if (typeof name === "string" && name) names[name] = true;
+    }
+    return { readable: true, names };
+  }
+
+  function historySql(tables, kind) {
+    if (tables.session_message) {
+      return kind === "exists" ? V2_HISTORY_EXISTS_SQL : V2_HISTORY_ROWS_SQL;
+    }
+    if (tables.message) {
+      return kind === "exists" ? V1_HISTORY_EXISTS_SQL : V1_HISTORY_ROWS_SQL;
+    }
+    return null;
+  }
+
+  function loadAuthFromFile(ctx) {
     if (!ctx.host.fs.exists(AUTH_PATH)) return null;
 
     try {
@@ -179,14 +245,37 @@
     }
   }
 
-  function hasHistory(ctx) {
-    const result = queryRows(ctx, HISTORY_EXISTS_SQL);
+  function loadAuthFromCredential(ctx, db) {
+    if (!db.readable || !db.names.credential) return null;
+    const result = queryRows(ctx, CREDENTIAL_SQL);
+    if (!result.ok) return null;
+    for (let i = 0; i < result.rows.length; i += 1) {
+      const row = result.rows[i];
+      const key = row && typeof row.key === "string" ? row.key.trim() : "";
+      if (key) return key;
+    }
+    return null;
+  }
+
+  function loadAuthKey(ctx, db) {
+    return loadAuthFromFile(ctx) || loadAuthFromCredential(ctx, db);
+  }
+
+  function hasHistory(ctx, db) {
+    if (!db.readable) return { ok: false, present: false };
+    const sql = historySql(db.names, "exists");
+    if (!sql) return { ok: true, present: false };
+    const result = queryRows(ctx, sql);
     if (!result.ok) return { ok: false, present: false };
     return { ok: true, present: result.rows.length > 0 };
   }
 
-  function loadHistory(ctx) {
-    const result = queryRows(ctx, HISTORY_ROWS_SQL);
+  function loadHistory(ctx, db) {
+    if (!db.readable) return { ok: false, rows: [] };
+    const sql = historySql(db.names, "rows");
+    if (!sql) return { ok: true, rows: [] };
+
+    const result = queryRows(ctx, sql);
     if (!result.ok) return result;
 
     const rows = [];
@@ -260,8 +349,9 @@
   }
 
   function probe(ctx) {
-    const authKey = loadAuthKey(ctx);
-    const history = hasHistory(ctx);
+    const db = inspectDb(ctx);
+    const authKey = loadAuthKey(ctx, db);
+    const history = hasHistory(ctx, db);
     const detected = !!authKey || (history.ok && history.present);
 
     if (!detected) {
@@ -272,7 +362,7 @@
       return { plan: "Go", lines: buildSoftEmptyLines(ctx) };
     }
 
-    const rowsResult = loadHistory(ctx);
+    const rowsResult = loadHistory(ctx, db);
     if (!rowsResult.ok) {
       return { plan: "Go", lines: buildSoftEmptyLines(ctx) };
     }
