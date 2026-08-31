@@ -18,42 +18,79 @@ function setAuth(ctx, value = "go-key") {
   );
 }
 
-function setHistoryQuery(ctx, rows, options = {}) {
-  const list = Array.isArray(rows) ? rows : [];
+function setSqlite(ctx, options = {}) {
+  const tables = Array.isArray(options.tables) ? options.tables : ["message"];
+  const history = Array.isArray(options.history) ? options.history : [];
+  const credentialKey =
+    typeof options.credentialKey === "string" ? options.credentialKey : null;
+  const throwOnQuery = options.throwOnQuery === true;
+  const malformed = options.malformed === true;
+  const assertFilters = options.assertFilters !== false;
+  const schema = tables.includes("session_message") ? "v2" : "v1";
+
   ctx.host.sqlite.query.mockImplementation((dbPath, sql) => {
     expect(dbPath).toBe("~/.local/share/opencode/opencode.db");
+    if (throwOnQuery) throw new Error("disk I/O error");
+    if (malformed) return "not-json";
 
-    if (String(sql).includes("SELECT 1 AS present")) {
-      if (options.assertFilters !== false) {
-        expect(String(sql)).toContain(
-          "json_extract(data, '$.providerID') = 'opencode-go'",
-        );
-        expect(String(sql)).toContain(
-          "json_extract(data, '$.role') = 'assistant'",
-        );
-        expect(String(sql)).toContain(
+    const text = String(sql);
+
+    if (text.includes("sqlite_master")) {
+      return JSON.stringify(tables.map((name) => ({ name })));
+    }
+
+    if (text.includes("FROM credential")) {
+      expect(tables).toContain("credential");
+      if (!credentialKey) return JSON.stringify([]);
+      return JSON.stringify([{ key: credentialKey }]);
+    }
+
+    if (schema === "v2") {
+      expect(text).toContain("session_message");
+      expect(text).not.toMatch(/\bFROM message\b/);
+      if (assertFilters) {
+        expect(text).toContain("$.model.providerID");
+        expect(text).toContain("session_message.type = 'assistant'");
+        expect(text).toContain(
           "json_type(data, '$.cost') IN ('integer', 'real')",
         );
       }
-      return JSON.stringify(list.length > 0 ? [{ present: 1 }] : []);
+    } else {
+      expect(text).toContain("FROM message");
+      expect(text).not.toContain("session_message");
+      if (assertFilters) {
+        expect(text).toContain(
+          "json_extract(data, '$.providerID') = 'opencode-go'",
+        );
+        expect(text).toContain("json_extract(data, '$.role') = 'assistant'");
+        expect(text).toContain(
+          "json_type(data, '$.cost') IN ('integer', 'real')",
+        );
+      }
     }
 
-    if (options.assertFilters !== false) {
-      expect(String(sql)).toContain(
-        "json_extract(data, '$.providerID') = 'opencode-go'",
-      );
-      expect(String(sql)).toContain(
-        "json_extract(data, '$.role') = 'assistant'",
-      );
-      expect(String(sql)).toContain(
-        "json_type(data, '$.cost') IN ('integer', 'real')",
-      );
-      expect(String(sql)).toContain(
+    if (text.includes("SELECT 1 AS present")) {
+      return JSON.stringify(history.length > 0 ? [{ present: 1 }] : []);
+    }
+
+    if (assertFilters) {
+      expect(text).toContain(
         "COALESCE(json_extract(data, '$.time.created'), time_created)",
       );
     }
 
-    return JSON.stringify(list);
+    return JSON.stringify(history);
+  });
+}
+
+function setHistoryQuery(ctx, rows, options = {}) {
+  setSqlite(ctx, {
+    tables: options.tables || ["message"],
+    history: rows,
+    credentialKey: options.credentialKey,
+    throwOnQuery: options.throwOnQuery,
+    malformed: options.malformed,
+    assertFilters: options.assertFilters,
   });
 }
 
@@ -244,9 +281,7 @@ describe("opencode-go plugin", () => {
   it("returns a soft empty state when sqlite is unreadable but auth exists", async () => {
     const ctx = makeCtx();
     setAuth(ctx);
-    ctx.host.sqlite.query.mockImplementation(() => {
-      throw new Error("disk I/O error");
-    });
+    setHistoryQuery(ctx, [], { throwOnQuery: true, assertFilters: false });
 
     const plugin = await loadPlugin();
     expect(plugin.probe(ctx)).toEqual({
@@ -265,7 +300,7 @@ describe("opencode-go plugin", () => {
   it("returns a soft empty state when sqlite returns malformed JSON and auth exists", async () => {
     const ctx = makeCtx();
     setAuth(ctx);
-    ctx.host.sqlite.query.mockReturnValue("not-json");
+    setHistoryQuery(ctx, [], { malformed: true, assertFilters: false });
 
     const plugin = await loadPlugin();
     expect(plugin.probe(ctx)).toEqual({
@@ -279,5 +314,64 @@ describe("opencode-go plugin", () => {
         },
       ],
     });
+  });
+
+  it("reads OpenCode 2 session_message history when auth.json is missing", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"));
+
+    const ctx = makeCtx();
+    setHistoryQuery(
+      ctx,
+      [{ createdMs: Date.parse("2026-03-06T11:00:00.000Z"), cost: 3 }],
+      { tables: ["session_message"] },
+    );
+
+    const plugin = await loadPlugin();
+    const result = plugin.probe(ctx);
+
+    expect(result.plan).toBe("Go");
+    expect(result.lines[0].used).toBe(25);
+  });
+
+  it("detects OpenCode 2 from the credential table when auth.json is missing", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"));
+
+    const ctx = makeCtx();
+    setSqlite(ctx, {
+      tables: ["session_message", "credential"],
+      history: [],
+      credentialKey: "sk-go-from-db",
+    });
+
+    const plugin = await loadPlugin();
+    const result = plugin.probe(ctx);
+
+    expect(result.plan).toBe("Go");
+    expect(result.lines.every((line) => line.used === 0)).toBe(true);
+  });
+
+  it("prefers session_message over the legacy message table", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"));
+
+    const ctx = makeCtx();
+    setSqlite(ctx, {
+      tables: ["message", "session_message"],
+      history: [
+        { createdMs: Date.parse("2026-03-06T11:00:00.000Z"), cost: 6 },
+      ],
+    });
+
+    const plugin = await loadPlugin();
+    const result = plugin.probe(ctx);
+
+    expect(result.lines[0].used).toBe(50);
+    const sql = ctx.host.sqlite.query.mock.calls
+      .map((call) => String(call[1]))
+      .filter((text) => text.includes("FROM session_message") || text.includes("FROM message"));
+    expect(sql.some((text) => text.includes("FROM session_message"))).toBe(true);
+    expect(sql.some((text) => /\bFROM message\b/.test(text))).toBe(false);
   });
 });

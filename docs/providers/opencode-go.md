@@ -5,7 +5,7 @@
 ## Overview
 
 - **Source of truth:** `~/.local/share/opencode/opencode.db`
-- **Auth discovery:** `~/.local/share/opencode/auth.json`
+- **Auth discovery:** `~/.local/share/opencode/auth.json`, then the OpenCode 2 `credential` table
 - **Provider ID:** `opencode-go`
 - **Usage scope:** local observed assistant spend only
 
@@ -14,22 +14,25 @@
 The plugin enables when either condition is true:
 
 - `~/.local/share/opencode/auth.json` contains an `opencode-go` entry with a non-empty `key`
+- the OpenCode 2 SQLite `credential` table has a Go key (`integration_id = 'opencode-go'`, otherwise an `sk-` key)
 - local OpenCode history already contains `opencode-go` assistant messages with numeric `cost`
 
-If neither signal exists, the plugin stays hidden.
+If none of these signals exist, the plugin stays hidden.
 
 ## Data Source
 
-OpenUsageCN reads the local OpenCode SQLite database directly:
+OpenUsageCN reads the local OpenCode SQLite database directly. OpenCode 2 stores assistant rows in `session_message` (`type = 'assistant'`, provider on `$.model.providerID`). OpenCode 1 used the `message` table (`$.role` / `$.providerID`). When both tables exist, OpenUsageCN reads `session_message`.
+
+OpenCode 2 example:
 
 ```sql
 SELECT
   CAST(COALESCE(json_extract(data, '$.time.created'), time_created) AS INTEGER) AS createdMs,
   CAST(json_extract(data, '$.cost') AS REAL) AS cost
-FROM message
+FROM session_message
 WHERE json_valid(data)
-  AND json_extract(data, '$.providerID') = 'opencode-go'
-  AND json_extract(data, '$.role') = 'assistant'
+  AND COALESCE(json_extract(data, '$.model.providerID'), json_extract(data, '$.providerID')) = 'opencode-go'
+  AND session_message.type = 'assistant'
   AND json_type(data, '$.cost') IN ('integer', 'real')
 ```
 
