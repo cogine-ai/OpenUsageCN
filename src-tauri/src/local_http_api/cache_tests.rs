@@ -431,6 +431,45 @@ fn failed_cache_write_stays_pending_for_retry() {
 }
 
 #[test]
+#[serial]
+fn superseded_probe_batch_does_not_write_stale_cache() {
+    use crate::probe_batches::LatestProbeBatches;
+
+    let dir = temp_dir("superseded-cache");
+    std::fs::create_dir_all(&dir).unwrap();
+
+    init(&dir, vec!["codex".to_string()], "test".to_string());
+    let batches = LatestProbeBatches::default();
+    batches.begin_batch("batch-a", &["codex".to_string()]);
+    batches.begin_batch("batch-b", &["codex".to_string()]);
+
+    let stale_output = make_output("codex", "Stale Codex");
+    let fresh_output = make_output("codex", "Fresh Codex");
+    let started_at = time::OffsetDateTime::now_utc();
+
+    assert!(
+        batches
+            .commit_if_latest("batch-a", "codex", || {
+                cache_successful_output(&stale_output, started_at);
+            })
+            .is_none(),
+        "superseded batches must not publish cache updates"
+    );
+    batches.commit_if_latest("batch-b", "codex", || {
+        cache_successful_output(&fresh_output, started_at);
+    });
+
+    flush_cache().unwrap();
+    let loaded = load_cache(&dir);
+    assert_eq!(loaded.len(), 1);
+    assert_eq!(loaded["codex"].display_name, "Fresh Codex");
+
+    wait_for_cache_writer_idle();
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn snapshot_with_progress_line_round_trips() {
     let snap = CachedPluginSnapshot {
         provider_id: "claude".to_string(),
