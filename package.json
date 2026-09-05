@@ -46,7 +46,7 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
-    "@steipete/sweet-cookie": "0.4.1",
+    "@steipete/sweet-cookie": "0.4.2",
     "@tauri-apps/cli": "^2.10.0",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.8.0",
