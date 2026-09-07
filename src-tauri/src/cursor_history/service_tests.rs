@@ -103,6 +103,51 @@ impl HistoryTransport for SuccessfulPageTransport {
 
 struct CommitRejectedCredentials;
 
+#[test]
+fn refresh_preserves_billing_period_separately_from_the_capped_fetch_window() {
+    let root =
+        std::env::temp_dir().join(format!("openusage-cursor-cycle-{}", uuid::Uuid::new_v4()));
+    let service = HistoryService::new(
+        Arc::new(ServiceCredentials),
+        Arc::new(SuccessfulPageTransport),
+        HistoryStore::new(&root),
+        HistoryScheduler::isolated_for_test(),
+    );
+    let now_ms = 1_800_000_000_000;
+    let day_ms = 86_400_000;
+    let refresh = service
+        .refresh(HistoryDemand {
+            provider_id: "cursor".to_string(),
+            account_id: "account-a".to_string(),
+            now_ms,
+            billing_cycle: Some(BillingCycle {
+                start_ms: now_ms - 45 * day_ms,
+                end_ms: now_ms + 5 * day_ms,
+            }),
+            time_zone: "UTC".to_string(),
+        })
+        .expect("schedule refresh")
+        .wait()
+        .expect("refresh state");
+    let history = refresh.snapshot.expect("complete snapshot");
+    let json = serde_json::to_value(&history).expect("serializable snapshot");
+
+    assert_eq!(
+        json["coverage"]["billingCycle"]["startMs"],
+        now_ms - 45 * day_ms
+    );
+    assert_eq!(
+        json["coverage"]["billingCycle"]["endMs"],
+        now_ms + 5 * day_ms
+    );
+    assert_eq!(history.coverage.from_ms, now_ms - 30 * day_ms);
+    assert_eq!(history.coverage.to_ms, now_ms);
+    assert!(
+        history.coverage.complete,
+        "complete denotes fetched pages, not the full billing period"
+    );
+}
+
 impl CredentialLeasePort for CommitRejectedCredentials {
     fn acquire(&self, request: CredentialRequest<'_>) -> Result<CredentialLease, HistoryError> {
         ServiceCredentials.acquire(request)

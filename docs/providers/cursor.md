@@ -81,6 +81,20 @@ figures describe dashboard data, not an invoice. If pagination, identity, numeri
 account ownership cannot be proven, the previous complete aggregate remains visible as stale and
 the incomplete result is not saved. Raw events and ownership fields are not persisted.
 
+OpenUsageCN keeps up to 12 recorded windows for each account. A successful refresh replaces the
+record for that billing cycle; it does not add overlapping usage again. Both the billing cycle and
+the actual fetched dates are retained. **Complete Pages** means that the requested pages were
+fully fetched, not that the whole billing cycle is covered.
+
+Choose **Recorded Windows** to view an earlier saved result without contacting Cursor. The
+comparison shows the selected and previous recorded windows side by side. Percentage changes
+appear only when their time zone, duration, and position within the billing cycle match. Missing
+cycle information, incomplete costs, and a zero previous value do not produce a percentage.
+
+**Export CSV** saves the selected stored window to the Downloads folder and shows the saved path.
+The file contains daily model details, source and coverage dates, and separate list-price and
+metered amounts. See [Usage History](../usage-history.md) for retention and export details.
+
 ## Endpoints
 
 ### POST /aiserver.v1.DashboardService/GetCurrentPeriodUsage

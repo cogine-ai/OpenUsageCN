@@ -87,6 +87,8 @@ pub(crate) struct HistoryCoverage {
     pub time_zone: String,
     pub complete: bool,
     pub scope: HistoryScope,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub billing_cycle: Option<super::BillingCycle>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

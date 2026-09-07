@@ -45,6 +45,7 @@ function snapshot() {
 describe("CursorModelUsage", () => {
   beforeEach(() => {
     tauri.invoke.mockReset()
+    tauri.invoke.mockResolvedValue([])
   })
 
   it("shows loading while the account cache is being read", () => {
@@ -88,8 +89,8 @@ describe("CursorModelUsage", () => {
     expect(screen.getByText("Output 200")).toBeInTheDocument()
     expect(screen.getByText("Cache Write 50")).toBeInTheDocument()
     expect(screen.getByText("Cache Read 300")).toBeInTheDocument()
-    expect(screen.getByText("Complete")).toBeInTheDocument()
-    expect(screen.getByText("Coverage 2026-08-22 – 2026-08-23")).toBeInTheDocument()
+    expect(screen.getByText("Complete Pages")).toBeInTheDocument()
+    expect(screen.getByText("Coverage 2026-08-22 20:00 – 2026-08-23 23:46")).toBeInTheDocument()
     expect(
       screen.getByText("Updated 2026-08-23 23:46 · Asia/Taipei")
     ).toBeInTheDocument()

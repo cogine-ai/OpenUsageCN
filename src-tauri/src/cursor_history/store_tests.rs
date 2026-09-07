@@ -27,6 +27,7 @@ pub(super) fn complete_history(account_id: &str, fetched_at_ms: i64) -> Complete
             time_zone: "Asia/Taipei".to_string(),
             complete: true,
             scope: HistoryScope::SessionVisible,
+            billing_cycle: None,
         },
         totals: HistoryTotals {
             metered_charged_usd: Some(0.5),
@@ -57,7 +58,7 @@ fn complete_account_snapshot_round_trips_at_the_account_scoped_path() {
         &std::fs::read_to_string(root.join("provider-history/cursor/account-a.json")).unwrap(),
     )
     .unwrap();
-    assert_eq!(stored["version"], 1);
+    assert_eq!(stored["version"], 2);
     assert_eq!(stored["history"]["accountId"], "account-a");
 }
 

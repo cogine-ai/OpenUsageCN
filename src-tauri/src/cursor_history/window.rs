@@ -1,5 +1,8 @@
 use super::HistoryError;
+use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct BillingCycle {
     pub start_ms: i64,
     pub end_ms: i64,
@@ -10,6 +13,7 @@ pub(crate) struct HistoryWindow {
     pub from_ms: i64,
     pub to_ms: i64,
     pub time_zone: String,
+    pub billing_cycle: Option<BillingCycle>,
 }
 
 pub(crate) fn current_period_window(
@@ -26,8 +30,10 @@ pub(crate) fn current_period_window(
         .checked_sub(THIRTY_DAYS_MS)
         .filter(|value| *value > 0)
         .ok_or(HistoryError::InvalidWindow)?;
+    let billing_cycle = billing_cycle
+        .filter(|cycle| cycle.start_ms > 0 && cycle.start_ms < now_ms && cycle.end_ms > now_ms);
     let from_ms = billing_cycle
-        .filter(|cycle| cycle.start_ms > 0 && cycle.start_ms < now_ms && cycle.end_ms > now_ms)
+        .as_ref()
         .map_or(fallback_start, |cycle| cycle.start_ms.max(fallback_start));
     if from_ms >= now_ms {
         return Err(HistoryError::InvalidWindow);
@@ -36,5 +42,6 @@ pub(crate) fn current_period_window(
         from_ms,
         to_ms: now_ms,
         time_zone,
+        billing_cycle,
     })
 }

@@ -1,5 +1,7 @@
 mod aggregate;
+pub(crate) mod commands;
 mod credential;
+mod export;
 mod fetcher;
 mod model;
 mod pagination;
@@ -56,6 +58,7 @@ pub(crate) fn aggregate_scripted_history(
             time_zone,
             complete: true,
             scope: HistoryScope::SessionVisible,
+            billing_cycle: None,
         },
         totals,
     })
@@ -63,6 +66,10 @@ pub(crate) fn aggregate_scripted_history(
 
 #[cfg(test)]
 mod aggregate_tests;
+#[cfg(test)]
+mod archive_tests;
+#[cfg(test)]
+mod export_tests;
 #[cfg(test)]
 mod fetcher_tests;
 #[cfg(test)]

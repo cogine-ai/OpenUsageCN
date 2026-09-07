@@ -1,4 +1,8 @@
+import { useState } from "react"
 import { Activity, AlertTriangle, RefreshCw } from "lucide-react"
+import { CursorHistoryControls, CursorHistoryComparison } from "@/components/cursor-history-controls"
+import { useCursorHistoryArchive } from "@/hooks/use-cursor-history-archive"
+import { snapshotTotals, snapshotKey, historyDateTime, HISTORY_USD_FORMAT as USD_FORMAT } from "@/lib/cursor-history-summary"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -6,43 +10,10 @@ import { useCursorHistory } from "@/hooks/use-cursor-history"
 import type { CompleteHistory, CursorHistoryListCostCoverage } from "@/lib/cursor-history"
 import { formatCountNumber } from "@/lib/utils"
 
-const USD_FORMAT = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 4,
-})
-
 type CursorModelUsageProps = {
   providerId: string
   accountId: string
   demandRevision?: number
-}
-
-function snapshotTotals(snapshot: CompleteHistory) {
-  let tokens = 0
-  let requests = 0
-  let listPrice = 0
-  let knownListPriceBuckets = 0
-  let partialListPrice = false
-
-  for (const bucket of snapshot.buckets) {
-    tokens +=
-      bucket.inputTokens +
-      bucket.outputTokens +
-      bucket.cacheWriteTokens +
-      bucket.cacheReadTokens
-    requests += bucket.requestCount
-    if (bucket.knownListCostUsd === null) {
-      partialListPrice = true
-    } else {
-      listPrice += bucket.knownListCostUsd
-      knownListPriceBuckets += 1
-    }
-    if (bucket.listCostCoverage !== "complete") partialListPrice = true
-  }
-
-  return { tokens, requests, listPrice, knownListPriceBuckets, partialListPrice }
 }
 
 type ModelTotal = {
@@ -99,39 +70,29 @@ function modelTotals(snapshot: CompleteHistory): ModelTotal[] {
   return [...models.values()]
 }
 
-function zonedParts(valueMs: number, timeZone: string) {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(new Date(valueMs))
-  return Object.fromEntries(parts.map((part) => [part.type, part.value]))
+export function CursorModelUsage(props: CursorModelUsageProps) {
+  return <CursorModelUsageAccount key={`${props.providerId}:${props.accountId}`} {...props} />
 }
 
-function zonedDate(valueMs: number, timeZone: string): string {
-  const parts = zonedParts(valueMs, timeZone)
-  return `${parts.year}-${parts.month}-${parts.day}`
-}
-
-function zonedDateTime(valueMs: number, timeZone: string): string {
-  const parts = zonedParts(valueMs, timeZone)
-  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`
-}
-
-export function CursorModelUsage({
+function CursorModelUsageAccount({
   providerId,
   accountId,
   demandRevision = 0,
 }: CursorModelUsageProps) {
-  const { snapshot, loading, refreshing, stale, error, unavailable } = useCursorHistory(
+  const { snapshot: current, loading, refreshing, stale: currentStale, error, unavailable } = useCursorHistory(
     providerId,
     accountId,
     demandRevision
   )
+  const archive = useCursorHistoryArchive(providerId, accountId, current)
+  const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  const snapshot = archive.snapshots.find((recorded) => snapshotKey(recorded) === selectedKey) ?? current
+  const archived = snapshot !== null && current !== null && snapshotKey(snapshot) !== snapshotKey(current)
+  const stale = !archived && currentStale
+  const previous = snapshot ? archive.snapshots.find((recorded) =>
+    recorded.coverage.fetchedAtMs < snapshot.coverage.fetchedAtMs
+    && recorded.coverage.billingCycle?.startMs !== snapshot.coverage.billingCycle?.startMs
+  ) : undefined
   const totals = snapshot ? snapshotTotals(snapshot) : null
   const models = snapshot ? modelTotals(snapshot) : []
   const terminalError = snapshot === null ? error : null
@@ -144,7 +105,7 @@ export function CursorModelUsage({
         : totals?.partialListPrice
           ? "Partial Cost"
           : snapshot?.coverage.complete
-            ? "Complete"
+            ? "Complete Pages"
             : null
 
   return (
@@ -158,13 +119,14 @@ export function CursorModelUsage({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {snapshot && refreshing ? <Badge variant="outline">Cached</Badge> : null}
-          {refreshing ? (
+          {snapshot && !archived && refreshing ? <Badge variant="outline">Cached</Badge> : null}
+          {!archived && refreshing ? (
             <Badge variant="outline" className="gap-1">
               <RefreshCw className="size-3 animate-spin" />
               Refreshing
             </Badge>
           ) : null}
+          {archived ? <Badge variant="outline">Stored Window</Badge> : null}
           {status ? <Badge variant="outline">{status}</Badge> : null}
         </div>
       </div>
@@ -193,6 +155,7 @@ export function CursorModelUsage({
 
       {snapshot && totals ? (
         <>
+          {current ? <CursorHistoryControls providerId={providerId} accountId={accountId} current={current} selected={snapshot} recorded={archive.snapshots} onSelect={setSelectedKey} error={archive.error} /> : null}
           <div className="grid gap-2 sm:grid-cols-3">
             <div className="rounded-md bg-muted/50 p-3">
               <p className="text-xs text-muted-foreground">Session-Visible Usage</p>
@@ -222,14 +185,17 @@ export function CursorModelUsage({
 
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
             <span>
-              Coverage {zonedDate(snapshot.coverage.fromMs, snapshot.coverage.timeZone)} –{" "}
-              {zonedDate(snapshot.coverage.toMs, snapshot.coverage.timeZone)}
+              Coverage {historyDateTime(snapshot.coverage.fromMs, snapshot.coverage.timeZone, true)} –{" "}
+              {historyDateTime(snapshot.coverage.toMs, snapshot.coverage.timeZone, true)}
             </span>
             <span>
-              Updated {zonedDateTime(snapshot.coverage.fetchedAtMs, snapshot.coverage.timeZone)} ·{" "}
+              Updated {historyDateTime(snapshot.coverage.fetchedAtMs, snapshot.coverage.timeZone, true)} ·{" "}
               {snapshot.coverage.timeZone}
             </span>
           </div>
+
+          <p className="text-xs text-muted-foreground">分页完整仅表示已取回所示窗口的数据，不代表完整账期；金额来自 Cursor 会话可见记录，不是账单。</p>
+          <CursorHistoryComparison selected={snapshot} previous={previous} />
 
           {stale ? (
             <Alert>
