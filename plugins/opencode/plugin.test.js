@@ -19,6 +19,19 @@ describe("opencode plugin", () => {
     vi.resetModules()
   })
 
+  it.each([0, 0.1, 0.5, 1, 17, 100])("keeps %s percent on the provider's percent scale", async (percent) => {
+    const ctx = makeCtx()
+    setEnv(ctx, { OPENCODE_COOKIE: "__Host-auth=public-cookie", OPENCODE_WORKSPACE_ID: "wrk_PUBLIC123" })
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify({ data: { rollingUsage: { usagePercent: percent }, weeklyUsage: { used: percent, limit: 100 } } }),
+    })
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    expect(result.lines.find((line) => line.label === "Session").used).toBe(percent)
+    expect(result.lines.find((line) => line.label === "Weekly").used).toBe(percent)
+  })
+
   it("ships web subscription metadata", () => {
     const manifest = JSON.parse(readFileSync("plugins/opencode/plugin.json", "utf8"))
     expect(manifest.id).toBe("opencode")

@@ -1,5 +1,7 @@
 # OpenCode
 
+Usage percentages retain the provider's 0–100 scale, including values at or below 1%. A 0.5% reading is displayed as 0.5%, not 50%. Values derived from used/limit follow the same scale.
+
 Tracks opencode.ai web subscription quota.
 
 This plugin is separate from OpenCode Go. OpenCode reads the web dashboard subscription usage; OpenCode Go reads local usage history from the Go tool.
