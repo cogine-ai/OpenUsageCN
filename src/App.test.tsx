@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import type { ReactNode } from "react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest"
@@ -29,6 +29,10 @@ const state = vi.hoisted(() => ({
   saveDisplayModeMock: vi.fn(),
   loadResetTimerDisplayModeMock: vi.fn(),
   saveResetTimerDisplayModeMock: vi.fn(),
+  loadTimeFormatModeMock: vi.fn(),
+  saveTimeFormatModeMock: vi.fn(),
+  loadPaceNotificationSettingsMock: vi.fn(),
+  savePaceNotificationSettingsMock: vi.fn(),
   loadMenubarIconStyleMock: vi.fn(),
   saveMenubarIconStyleMock: vi.fn(),
   loadMenubarMetricMock: vi.fn(),
@@ -254,6 +258,10 @@ vi.mock("@/lib/settings", async () => {
     saveDisplayMode: state.saveDisplayModeMock,
     loadResetTimerDisplayMode: state.loadResetTimerDisplayModeMock,
     saveResetTimerDisplayMode: state.saveResetTimerDisplayModeMock,
+    loadTimeFormatMode: state.loadTimeFormatModeMock,
+    saveTimeFormatMode: state.saveTimeFormatModeMock,
+    loadPaceNotificationSettings: state.loadPaceNotificationSettingsMock,
+    savePaceNotificationSettings: state.savePaceNotificationSettingsMock,
     loadMenubarIconStyle: state.loadMenubarIconStyleMock,
     saveMenubarIconStyle: state.saveMenubarIconStyleMock,
     loadMenubarMetric: state.loadMenubarMetricMock,
@@ -304,6 +312,10 @@ describe("App", () => {
     state.saveDisplayModeMock.mockReset()
     state.loadResetTimerDisplayModeMock.mockReset()
     state.saveResetTimerDisplayModeMock.mockReset()
+    state.loadTimeFormatModeMock.mockReset()
+    state.saveTimeFormatModeMock.mockReset()
+    state.loadPaceNotificationSettingsMock.mockReset()
+    state.savePaceNotificationSettingsMock.mockReset()
     state.loadMenubarIconStyleMock.mockReset()
     state.saveMenubarIconStyleMock.mockReset()
     state.loadMenubarMetricMock.mockReset()
@@ -344,6 +356,10 @@ describe("App", () => {
     state.saveDisplayModeMock.mockResolvedValue(undefined)
     state.loadResetTimerDisplayModeMock.mockResolvedValue("relative")
     state.saveResetTimerDisplayModeMock.mockResolvedValue(undefined)
+    state.loadTimeFormatModeMock.mockResolvedValue("auto")
+    state.saveTimeFormatModeMock.mockResolvedValue(undefined)
+    state.loadPaceNotificationSettingsMock.mockResolvedValue({ almostOut: false, closeToLimit: false, runningOut: false })
+    state.savePaceNotificationSettingsMock.mockResolvedValue(undefined)
     state.loadMenubarIconStyleMock.mockResolvedValue("provider")
     state.saveMenubarIconStyleMock.mockResolvedValue(undefined)
     state.loadMenubarMetricMock.mockResolvedValue("default")
@@ -1158,18 +1174,23 @@ describe("App", () => {
   it("reloads plugin from sidebar context menu", async () => {
     state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b"], disabled: [] })
     render(<App />)
-    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
-    state.probeHandlers?.onResult({
-      providerId: "b",
-      displayName: "Beta",
-      iconUrl: "icon-b",
-      lines: [{ type: "text", label: "Now", value: "OK" }],
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalledWith(["a", "b"]))
+    // Commit the simulated probe event before taking the native menu's state snapshot.
+    act(() => {
+      state.probeHandlers?.onResult({
+        providerId: "b",
+        displayName: "Beta",
+        iconUrl: "icon-b",
+        lines: [{ type: "text", label: "Now", value: "OK" }],
+      })
     })
     state.startBatchMock.mockClear()
-    const reloadAction = await triggerPluginContextAction("Beta", "b", "reload")
+    fireEvent.contextMenu(screen.getByRole("button", { name: "Beta" }))
+    await waitFor(() => expect(menuState.menuPopupMock).toHaveBeenCalled())
     const reloadConfig = menuState.iconMenuItemConfigs.find((item) => item.id === "ctx-reload-b")
     expect(reloadConfig?.enabled).toBe(true)
-    reloadAction()
+    expect(reloadConfig?.action).toBeDefined()
+    reloadConfig?.action?.()
 
     await waitFor(() =>
       expect(state.startBatchMock).toHaveBeenCalledWith(["b"], { manual: true })
