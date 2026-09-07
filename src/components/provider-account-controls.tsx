@@ -64,6 +64,12 @@ export function ProviderAccountControls({
     receipt?.sourceOutcomes
       .filter((outcome) => outcome.status === "unavailable")
       .map((outcome) => outcome.sourceKey) ?? []
+  const localHistoryAccount = providerId === "claude" && view?.providerId === providerId
+    ? view.accounts.find((account) => account.accountId === view.activeAccountId)
+    : undefined
+  const localHistoryConnection = localHistoryAccount?.connections.find(
+    (connection) => connection.kind === "cli" && connection.available
+  )
 
   return (
     <>
@@ -338,14 +344,12 @@ export function ProviderAccountControls({
           demandRevision={accountRevision}
         />
       ) : null}
-      {providerId === "claude" && !loading && !busy && view?.activeAccountId &&
-        view.accounts.find((account) => account.accountId === view.activeAccountId)
-          ?.connections.some((connection) => connection.kind === "cli" && connection.available) ? (
+      {!loading && localHistoryAccount && localHistoryConnection ? (
         <LocalUsageHistory
-          key={`${providerId}:${view.activeAccountId}`}
+          key={`${providerId}:${localHistoryAccount.accountId}:${localHistoryConnection.connectionId}`}
           providerId={providerId}
-          accountId={view.activeAccountId}
-          scopeRevision={accountRevision}
+          accountId={localHistoryAccount.accountId}
+          disabled={busy}
         />
       ) : null}
     </>

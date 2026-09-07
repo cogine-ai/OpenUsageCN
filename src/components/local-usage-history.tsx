@@ -7,12 +7,12 @@ import { useLocalHistory } from "@/hooks/use-local-history"
 type LocalUsageHistoryProps = {
   providerId: string
   accountId?: string | null
-  scopeRevision?: number
+  disabled?: boolean
 }
 
-export function LocalUsageHistory({ providerId, accountId = null, scopeRevision = 0 }: LocalUsageHistoryProps) {
+export function LocalUsageHistory({ providerId, accountId = null, disabled = false }: LocalUsageHistoryProps) {
   const capabilities = usePlatformCapabilities()
-  const { snapshot, loading, error, load } = useLocalHistory(providerId, accountId, scopeRevision)
+  const { snapshot, loading, error, load } = useLocalHistory(providerId, accountId)
   if (!capabilities || capabilities.platform === "windows") return null
 
   return (
@@ -22,7 +22,7 @@ export function LocalUsageHistory({ providerId, accountId = null, scopeRevision 
           <Activity className="size-4 shrink-0 text-muted-foreground" />
           Local History
         </h3>
-        <Button type="button" size="sm" variant="outline" disabled={loading} onClick={() => { void load() }}>
+        <Button type="button" size="sm" variant="outline" disabled={disabled || loading} onClick={() => { void load() }}>
           <RefreshCw className={loading ? "size-3 animate-spin" : "size-3"} />
           {loading ? "Loading…" : snapshot ? "Refresh Local History" : "Load Local History"}
         </Button>

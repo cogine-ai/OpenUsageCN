@@ -58,7 +58,7 @@
 - Codex and Claude quota probes do not run `ccusage`. The app, CLI, and fresh `/v1/usage` snapshots contain their live quota data without local history lines.
 - The detail page loads local history only after an explicit request. The history command and hook own their result, loading state, error, and update time; they never publish a quota event or write quota snapshots.
 - An old request cannot replace a newer request or a different account's result. Claude also checks the selected local connection, credential generation, verified identity, and persisted account binding before returning history. Accounts without that local connection cannot load it.
-- Local history describes the current log directory and API-price estimates, not an account bill. It is not persisted and does not enter the tray, notifications, CLI, or Local HTTP cache. Closing the detail page or changing its account scope clears it.
+- Local history describes the current log directory and API-price estimates, not an account bill. It is not persisted and does not enter the tray, notifications, CLI, or Local HTTP cache. Closing the detail page or changing its account or CLI connection clears it. Ordinary quota updates and same-account refreshes keep loaded and pending history; account operations temporarily disable new history requests.
 - History runner discovery and execution share a separate bounded runtime budget. A failed history request remains visible in the history section and leaves quota freshness unchanged.
 
 ## Account-Scoped Detail Data

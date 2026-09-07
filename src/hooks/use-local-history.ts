@@ -8,8 +8,8 @@ type HistoryState = {
   error: string | null
 }
 
-export function useLocalHistory(providerId: string, accountId: string | null, scopeRevision = 0) {
-  const scope = JSON.stringify([providerId, accountId, scopeRevision])
+export function useLocalHistory(providerId: string, accountId: string | null) {
+  const scope = JSON.stringify([providerId, accountId])
   const currentScope = useRef(scope)
   currentScope.current = scope
   const requestRevision = useRef(0)

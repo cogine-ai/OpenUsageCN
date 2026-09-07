@@ -49,21 +49,17 @@ describe("useLocalHistory", () => {
     expect(result.current.snapshot?.accountId).toBe("account-b")
   })
 
-  it("clears completed and pending history after an account generation revision", async () => {
-    const old = pending<LocalHistorySnapshot>()
-    tauri.invoke.mockResolvedValueOnce(history("account-a")).mockReturnValueOnce(old.promise)
-    const { result, rerender } = renderHook(({ revision }) => useLocalHistory("claude", "account-a", revision), {
-      initialProps: { revision: 0 },
+  it("clears completed history when the selected account changes", async () => {
+    tauri.invoke.mockResolvedValue(history("account-a"))
+    const { result, rerender } = renderHook(({ accountId }) => useLocalHistory("claude", accountId), {
+      initialProps: { accountId: "account-a" },
     })
     await act(() => result.current.load())
     expect(result.current.snapshot).not.toBeNull()
-    let oldLoad!: Promise<void>
-    act(() => { oldLoad = result.current.load() })
-    rerender({ revision: 1 })
-    await act(async () => { old.resolve(history("account-a")); await oldLoad })
+    rerender({ accountId: "account-b" })
     expect(result.current.snapshot).toBeNull()
     expect(result.current.loading).toBe(false)
-    expect(tauri.invoke).toHaveBeenCalledTimes(2)
+    expect(tauri.invoke).toHaveBeenCalledTimes(1)
   })
 
   it("keeps only the latest explicit request", async () => {
