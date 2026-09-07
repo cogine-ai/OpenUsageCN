@@ -2,7 +2,7 @@
 
 Base: `5fb7e01e34492a9361ed4100e1ad01daf0fd0347` (`v0.6.39`).
 Branch: `cliq/product-quality-20260907`.
-Worktree: `/Users/kiedis/Coding/AI/openusage-quality-20260907`.
+The task uses an isolated worktree and preserves the original checkout.
 
 ## Working Contract
 
@@ -191,9 +191,9 @@ or close the original PRs or change maintenance automations.
   the correction and 38 tests after it; overlapping runs are not added to the
   full-suite totals.
 - Browser evidence uses real components with mocked Tauri IPC and synthetic
-  accounts. Before/after screenshots, event/retry/export checks and benchmark data
-  are retained at
-  `/Users/kiedis/.codex/visualizations/2026/09/07/01a07bdb-6bb0-7522-a664-ee7ca187b589/openusage-quality`.
+  accounts. [Before/after screenshots](../.github/pr-assets/product-quality-20260907/README.md)
+  are included for PR review. Raw event/retry/export checks and benchmark data
+  remain in the local QA artifact directory outside the repository.
 - Windows file-credential coverage has seven passing plugin tests, including
   explicit `CODEX_HOME`, spaces and absent files. Actual Windows cross-compilation
   was attempted and failed because the macOS host has no Windows SDK `assert.h`
