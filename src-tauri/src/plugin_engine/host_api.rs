@@ -569,12 +569,10 @@ fn redact_body(body: &str) -> String {
         if let Ok(re) = regex_lite::Regex::new(&pattern) {
             result = re
                 .replace_all(&result, |caps: &regex_lite::Captures| {
-                    let value = &caps[1];
-                    format!(
-                        "\"{}\": {}",
-                        key,
-                        serde_json::Value::String(redact_value(value))
-                    )
+                    let value = serde_json::from_str::<String>(&format!("\"{}\"", &caps[1]))
+                        .map(|value| redact_value(&value))
+                        .unwrap_or_else(|_| "[REDACTED]".to_string());
+                    format!("\"{}\": {}", key, serde_json::Value::String(value))
                 })
                 .to_string();
         }

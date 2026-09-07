@@ -25,12 +25,24 @@ pub(super) fn amp_body(body: &str) -> String {
     let Ok(mut payload) = serde_json::from_str::<serde_json::Value>(body) else {
         return "[REDACTED AMP RESPONSE]".to_string();
     };
-    if let Some(display_text) = payload
-        .get_mut("result")
-        .and_then(|result| result.get_mut("displayText"))
-    {
-        *display_text = serde_json::Value::String("[REDACTED AMP DISPLAY TEXT]".to_string());
+    // HTTP bodies are logged before the plugin validates the response shape.
+    fn redact_display_text(value: &mut serde_json::Value) {
+        match value {
+            serde_json::Value::Object(object) => {
+                for (key, value) in object {
+                    if key == "displayText" {
+                        *value =
+                            serde_json::Value::String("[REDACTED AMP DISPLAY TEXT]".to_string());
+                    } else {
+                        redact_display_text(value);
+                    }
+                }
+            }
+            serde_json::Value::Array(values) => values.iter_mut().for_each(redact_display_text),
+            _ => {}
+        }
     }
+    redact_display_text(&mut payload);
     payload.to_string()
 }
 
@@ -61,6 +73,44 @@ mod tests {
             "credential leaked: {redacted}"
         );
         assert!(serde_json::from_str::<serde_json::Value>(&redacted).is_ok());
+    }
+
+    #[test]
+    fn short_json_credentials_with_escaped_quotes_are_fully_redacted() {
+        let body = r#"{"key":"abc\"def\"ghi","usagePercent":0.5}"#;
+        let redacted = redact_http_response_body("https://example.com/usage", body);
+        let payload: serde_json::Value = serde_json::from_str(&redacted).unwrap();
+        assert_eq!(payload["key"], "[REDACTED]");
+        assert_eq!(payload["usagePercent"], 0.5);
+    }
+
+    #[test]
+    fn short_json_credentials_with_unicode_escapes_are_fully_redacted() {
+        for body in [
+            r#"{"access":"\u0061\u0062\u0063\u0064\u0065\u0066\u0067\u0068"}"#,
+            r#"{"access":"\ud83d\ude80\u4f60\u597d"}"#,
+        ] {
+            let redacted = redact_http_response_body("https://example.com/usage", body);
+            let payload: serde_json::Value = serde_json::from_str(&redacted).unwrap();
+            assert_eq!(payload["access"], "[REDACTED]");
+        }
+    }
+
+    #[test]
+    fn long_json_credentials_preserve_only_decoded_diagnostic_edges() {
+        let body = r#"{"refresh":"\u0061\u0062\u0063\u0064-middle-\u0077\u0078\u0079\u007a"}"#;
+        let redacted = redact_http_response_body("https://example.com/usage", body);
+        let payload: serde_json::Value = serde_json::from_str(&redacted).unwrap();
+        assert_eq!(payload["refresh"], "abcd...wxyz");
+    }
+
+    #[test]
+    fn invalid_json_credential_escapes_are_fully_redacted() {
+        let body = r#"{"key":"abc\qprivate-suffix","usagePercent":0.5}"#;
+        let redacted = redact_http_response_body("https://example.com/usage", body);
+        let payload: serde_json::Value = serde_json::from_str(&redacted).unwrap();
+        assert_eq!(payload["key"], "[REDACTED]");
+        assert_eq!(payload["usagePercent"], 0.5);
     }
 
     #[test]
@@ -133,5 +183,31 @@ mod tests {
             ),
             "[REDACTED AMP RESPONSE]"
         );
+    }
+
+    #[test]
+    fn amp_display_text_is_redacted_at_any_object_or_array_path_only_for_amp() {
+        for body in [
+            r#"{"ok":true,"result":{"groups":[{"displayText":"Signed in as fixture-private@example.com (fixture-login)"}]},"count":2}"#,
+            r#"[{"result":{"displayText":"Signed in as fixture-private@example.com (fixture-login)"}},{"nested":{"displayText":"fixture-login"},"count":2}]"#,
+            r#"{"ok":true,"result":{"displayText":"usual text","details":[{"nested":{"displayText":"Signed in as fixture-private@example.com (fixture-login)"}}]},"count":2}"#,
+        ] {
+            let redacted = redact_http_response_body("https://ampcode.com/api/internal", body);
+            assert!(
+                !redacted.contains("fixture-private"),
+                "identity leaked: {redacted}"
+            );
+            assert!(
+                !redacted.contains("fixture-login"),
+                "identity leaked: {redacted}"
+            );
+            assert!(redacted.contains("[REDACTED AMP DISPLAY TEXT]"));
+            assert!(redacted.contains(r#""count":2"#));
+            assert!(serde_json::from_str::<serde_json::Value>(&redacted).is_ok());
+            assert_eq!(
+                redact_http_response_body("https://example.com/api/internal", body),
+                body
+            );
+        }
     }
 }
