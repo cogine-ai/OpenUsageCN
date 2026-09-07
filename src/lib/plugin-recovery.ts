@@ -76,7 +76,7 @@ export function getPluginRecovery(message: string, providerId?: string): PluginR
   if (/check your connection|unable to connect|request timed out|network (?:error|request failed)|connection refused|fetch failed|\b(?:ECONNREFUSED|ENOTFOUND|ETIMEDOUT)\b/i.test(message)) {
     return recovery("network", "连接失败", "请检查网络和代理设置，然后重试。")
   }
-  if (/(?:usage|quota|response|data).*(?:invalid|incomplete|missing .*fields)|invalid JSON/i.test(message)) {
+  if (/(?:usage|quota|response|data).*(?:invalid|incomplete|missing .*fields)|invalid JSON|could not parse usage data/i.test(message)) {
     return recovery("invalid_response", "返回的数据格式异常", "请稍后重试；若持续出现，请收集日志反馈。")
   }
   return recovery("unknown", "暂时无法更新", "原因尚未识别。请重试；若仍失败，可查看诊断详情并收集日志。")

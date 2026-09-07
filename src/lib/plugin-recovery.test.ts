@@ -18,6 +18,7 @@ describe("getPluginRecovery", () => {
     ["Usage request failed (HTTP 429). Try again later.", "rate_limit"],
     ["OpenCode Go is limiting requests. Try again later.", "rate_limit"],
     ["Usage response invalid. Try again later.", "invalid_response"],
+    ["Could not parse usage data.", "invalid_response"],
     ["OpenCode response missing subscription usage fields.", "invalid_response"],
     ["Quota data is incomplete or invalid. Try again later.", "invalid_response"],
   ])("classifies the known provider failure: %s", (message, kind) => {
