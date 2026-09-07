@@ -458,6 +458,8 @@ fn redact_url(url: &str) -> String {
     }
 }
 
+mod provider_redaction;
+
 /// Redact sensitive patterns in response body for logging
 fn redact_body(body: &str) -> String {
     let mut result = body.to_string();
@@ -500,6 +502,9 @@ fn redact_body(body: &str) -> String {
         "secret",
         "api_key",
         "apiKey",
+        "key",
+        "access",
+        "refresh",
         "authorization",
         "bearer",
         "credential",
@@ -557,13 +562,17 @@ fn redact_body(body: &str) -> String {
         "analytics_tracking_id",
     ];
     for key in sensitive_keys {
-        // Match "key": "value" or "key":"value"
-        let pattern = format!(r#""{}":\s*"([^"]+)""#, key);
+        // JSON strings may contain escaped quotes and whitespace around the colon.
+        let pattern = format!(r#""{}"\s*:\s*"((?:\\.|[^"\\])*)""#, key);
         if let Ok(re) = regex_lite::Regex::new(&pattern) {
             result = re
                 .replace_all(&result, |caps: &regex_lite::Captures| {
                     let value = &caps[1];
-                    format!("\"{}\": \"{}\"", key, redact_value(value))
+                    format!(
+                        "\"{}\": {}",
+                        key,
+                        serde_json::Value::String(redact_value(value))
+                    )
                 })
                 .to_string();
         }
@@ -595,6 +604,10 @@ fn redact_http_response_body(url: &str, body: &str) -> String {
     }
     let body = if path.ends_with("/wham/rate-limit-reset-credits") {
         redact_codex_reset_credit_inventory_sensitive_fields(body)
+    } else if path == "https://api.z.ai/api/biz/subscription/list" {
+        provider_redaction::subscription_body(body)
+    } else if path == "https://ampcode.com/api/internal" {
+        provider_redaction::amp_body(body)
     } else {
         body.to_string()
     };
@@ -2206,7 +2219,14 @@ fn ccusage_enriched_path() -> Option<OsString> {
     ccusage_enriched_path_with(home.as_deref(), existing_path.as_deref())
 }
 
-fn ccusage_runner_available(candidate: &str, enriched_path: Option<&OsStr>) -> bool {
+fn ccusage_runner_available(
+    candidate: &str,
+    enriched_path: Option<&OsStr>,
+    deadline: ProbeDeadline,
+) -> bool {
+    let Some(timeout) = deadline.clamp_duration(Duration::from_secs(2)) else {
+        return false;
+    };
     let mut command = std::process::Command::new(candidate);
     command.arg("--version");
     if let Some(path) = enriched_path {
@@ -2216,7 +2236,37 @@ fn ccusage_runner_available(candidate: &str, enriched_path: Option<&OsStr>) -> b
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null());
 
-    command.status().map(|s| s.success()).unwrap_or(false)
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        command.process_group(0);
+    }
+    let Ok(mut child) = command.spawn() else {
+        return false;
+    };
+    let started = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return status.success(),
+            Ok(None) if started.elapsed() < timeout => {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            status => {
+                if let Err(error) = status {
+                    log::warn!("ccusage runner availability check failed: {}", error);
+                } else {
+                    log::warn!("ccusage runner availability check timed out");
+                }
+                if let Err(error) = kill_ccusage_on_timeout(&mut child) {
+                    log::warn!("ccusage runner availability cleanup failed: {}", error);
+                }
+                if let Err(error) = child.wait() {
+                    log::warn!("ccusage runner availability wait failed: {}", error);
+                }
+                return false;
+            }
+        }
+    }
 }
 
 fn configure_ccusage_command(
@@ -2239,10 +2289,13 @@ fn configure_ccusage_command(
     }
 }
 
-fn resolve_ccusage_runner_binary(kind: CcusageRunnerKind) -> Option<String> {
+fn resolve_ccusage_runner_binary(
+    kind: CcusageRunnerKind,
+    deadline: ProbeDeadline,
+) -> Option<String> {
     let path = ccusage_enriched_path();
     for candidate in ccusage_runner_candidates(kind) {
-        if ccusage_runner_available(&candidate, path.as_deref()) {
+        if ccusage_runner_available(&candidate, path.as_deref(), deadline) {
             return Some(candidate);
         }
     }
@@ -2262,8 +2315,8 @@ where
     runners
 }
 
-fn collect_ccusage_runners() -> Vec<(CcusageRunnerKind, String)> {
-    collect_ccusage_runners_with(resolve_ccusage_runner_binary)
+fn collect_ccusage_runners(deadline: ProbeDeadline) -> Vec<(CcusageRunnerKind, String)> {
+    collect_ccusage_runners_with(|kind| resolve_ccusage_runner_binary(kind, deadline))
 }
 
 fn append_ccusage_common_args(
@@ -2716,7 +2769,7 @@ fn inject_ccusage<'js>(
                     log::warn!("[plugin:{}] ccusage query already running", pid);
                     return Ok(serde_json::json!({ "status": "runner_failed" }).to_string());
                 };
-                let runners = collect_ccusage_runners();
+                let runners = collect_ccusage_runners(deadline);
                 Ok(run_ccusage_query_with_runners(
                     runners,
                     &opts,
@@ -5129,6 +5182,7 @@ Saved lockfile
 
     #[cfg(unix)]
     #[test]
+    #[serial]
     fn ccusage_runner_retries_legacy_package_when_current_package_fails() {
         use std::io::Write;
         use std::os::unix::fs::PermissionsExt;
@@ -5207,6 +5261,31 @@ esac
         );
     }
 
+    #[cfg(unix)]
+    #[test]
+    #[serial]
+    fn ccusage_runner_availability_obeys_the_history_deadline() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = std::env::temp_dir().join(format!(
+            "openusage-ccusage-discovery-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&dir).expect("create test directory");
+        let program = dir.join("hanging-runner.sh");
+        std::fs::write(&program, "#!/bin/sh\nwhile :; do :; done\n").expect("write fake runner");
+        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755))
+            .expect("make fake runner executable");
+        let started = Instant::now();
+        assert!(!ccusage_runner_available(
+            program.to_str().unwrap(),
+            None,
+            ProbeDeadline::at(started + Duration::from_millis(100)),
+        ));
+        assert!(started.elapsed() < Duration::from_secs(1));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn probe_deadline_clamps_host_timeout_to_remaining_budget() {
         let deadline = ProbeDeadline::at(Instant::now() + Duration::from_millis(25));
@@ -5233,6 +5312,7 @@ esac
 
     #[cfg(unix)]
     #[test]
+    #[serial]
     fn ccusage_timeout_kills_descendant_and_closes_pipes() {
         use std::io::Write;
         use std::os::unix::fs::PermissionsExt;
