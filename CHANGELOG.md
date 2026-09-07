@@ -4,6 +4,68 @@
 
 暂无。
 
+## v0.6.40
+
+### New Features
+
+- 新增 `openusage guard`，让脚本按 session/weekly 和剩余额度阈值检查是否可以开始工作，并明确区分额度足够、不足和未知。 ([#216](https://github.com/cogine-ai/OpenUsageCN/pull/216)) by @lc708
+- Codex 和 Claude 的本地用量历史改为在详情页按需加载，实时额度刷新不再等待本地日志统计。 ([#216](https://github.com/cogine-ai/OpenUsageCN/pull/216)) by @lc708
+- Cursor 每个账号可保留最多 12 个已记录窗口，选择历史窗口、比较相同口径的数据，并将所选记录导出为 CSV。 ([#216](https://github.com/cogine-ai/OpenUsageCN/pull/216)) by @lc708
+
+### Bug Fixes
+
+- 修正 OpenRouter 重置型 Key 的本期额度和 BYOK 计算，以及 Z.ai/BigModel 的独立信用额度和真实重置窗口。 ([#216](https://github.com/cogine-ai/OpenUsageCN/pull/216)) by @lc708
+- OpenCode Go 改用官方账号用量接口，支持 OpenCode 2 的精确服务商凭据读取，并正确处理空凭据查询结果。 ([#216](https://github.com/cogine-ai/OpenUsageCN/pull/216)) by @lc708
+- 连接失败时保留上次成功的额度，提供清晰的恢复提示和重试；Windows Codex 增加文件凭据指引。 ([#216](https://github.com/cogine-ai/OpenUsageCN/pull/216)) by @lc708
+- 修正 OpenCode 小于 1% 的用量显示，支持 Amp 付费订阅额度，并保留真实、可验证的账期信息。 ([#216](https://github.com/cogine-ai/OpenUsageCN/pull/216)) by @lc708
+- 修复本地历史的并发加载和进程超时问题；保留 Cursor 不同未知账期，支持损坏历史备份后的重试恢复，并清理本次导出失败产生的不完整 CSV。 ([#216](https://github.com/cogine-ai/OpenUsageCN/pull/216)) by @lc708
+- 补齐凭据、服务商身份和错误详情的脱敏，避免敏感内容进入日志或界面。 ([#216](https://github.com/cogine-ai/OpenUsageCN/pull/216)) by @lc708
+
+### Chores
+
+- 同步服务商、CLI 和历史用量文档，补充回归测试及窄窗口交互验证记录。 ([#216](https://github.com/cogine-ai/OpenUsageCN/pull/216)) by @lc708
+
+---
+
+### Changelog
+
+**Full Changelog**: [v0.6.39...v0.6.40](https://github.com/cogine-ai/OpenUsageCN/compare/v0.6.39...v0.6.40)
+
+- [27660da](https://github.com/cogine-ai/OpenUsageCN/commit/27660da10113716048f788c236cb143760d45d2b) docs: record product quality delivery and validation plan by @lc708
+- [32d5701](https://github.com/cogine-ai/OpenUsageCN/commit/32d57015cd5e2902907e0853f7d2cad0b638832e) fix(openrouter): respect current key quota and BYOK limits by @lc708
+- [4ea5520](https://github.com/cogine-ai/OpenUsageCN/commit/4ea5520ed24a15005c7d9593f82ac8d4ea118a3c) fix(opencode-go): read account quotas from official usage API by @lc708
+- [3e37658](https://github.com/cogine-ai/OpenUsageCN/commit/3e37658b53fe1a328626dfd32c7bdbbb22e29dd6) fix(zhipu): parse credit quotas without fabricated usage by @lc708
+- [8e64cc8](https://github.com/cogine-ai/OpenUsageCN/commit/8e64cc8d9618da6fc8ba35bea591701a2307cc23) feat(cli): check quota thresholds before starting work by @lc708
+- [888690a](https://github.com/cogine-ai/OpenUsageCN/commit/888690a0aa27cbe0d4eb60e8d54033e5f26add92) fix(codex): explain required Windows file credentials by @lc708
+- [cfaf14b](https://github.com/cogine-ai/OpenUsageCN/commit/cfaf14b86d46ec29d8e7cc2a26d44d6c6413bc16) fix(opencode): preserve small usage percentages by @lc708
+- [fd61a9f](https://github.com/cogine-ai/OpenUsageCN/commit/fd61a9fdf3cf52a7a9eb9e5a3feec27fc614fb62) fix(ui): make provider connection failures recoverable by @lc708
+- [15c6bb8](https://github.com/cogine-ai/OpenUsageCN/commit/15c6bb8d859078c2c1e32c7470725e78f157df7a) fix(host): bound history runner checks and redact provider identities by @lc708
+- [15788c8](https://github.com/cogine-ai/OpenUsageCN/commit/15788c81b4a9a4b704c04a44b989cf65ed463295) fix(amp): show paid subscription quotas without invented resets by @lc708
+- [bb68d12](https://github.com/cogine-ai/OpenUsageCN/commit/bb68d12890fb82e3859ebbcd6e94956f092e084b) fix(ui): recognize Amp usage format failures by @lc708
+- [ee4c7cf](https://github.com/cogine-ai/OpenUsageCN/commit/ee4c7cffb0f620fbbf0398966bce3ae9b482e083) feat(cursor): retain comparable windows and export usage history by @lc708
+- [4e578b2](https://github.com/cogine-ai/OpenUsageCN/commit/4e578b2b3c9f5781eb8be9ca3f1a323a2de18af1) feat(history): load local usage separately from live quota by @lc708
+- [43a85e9](https://github.com/cogine-ai/OpenUsageCN/commit/43a85e9ad27a07b5a5f5f12097b309e43829ec23) docs: align quota and history behavior across app interfaces by @lc708
+- [817c2fa](https://github.com/cogine-ai/OpenUsageCN/commit/817c2fa86a9dc745124e3a36b19bca7e44b700b5) fix(cursor): keep history readable in narrow windows by @lc708
+- [10186f5](https://github.com/cogine-ai/OpenUsageCN/commit/10186f5af1a78cba49ecf1eaced2d95a8e303a21) fix(history): preserve local results during quota refreshes by @lc708
+- [2c67cda](https://github.com/cogine-ai/OpenUsageCN/commit/2c67cda9da97237c4ee90e1dda6781fe6c24d386) test(app): flush probe results before sidebar reload by @lc708
+- [f04bcc4](https://github.com/cogine-ai/OpenUsageCN/commit/f04bcc40da571e41c2eaecc54782ff0a4b2f5c58) docs: record completed quality work and verification boundaries by @lc708
+- [a43428c](https://github.com/cogine-ai/OpenUsageCN/commit/a43428cf6f19b8ae1e2a2faf724462c4fa59b06c) test(rust): isolate relative writes from directory changes by @lc708
+- [eeb331d](https://github.com/cogine-ai/OpenUsageCN/commit/eeb331d7cc3951e64bf7c18441764d5d5909ef7e) style(rust): sort the local history module declaration by @lc708
+- [4f52199](https://github.com/cogine-ai/OpenUsageCN/commit/4f521990b998a5abf45ec2088b0ae2e442db5695) docs: attach before and after screenshots for quality review by @lc708
+- [a7e9d67](https://github.com/cogine-ai/OpenUsageCN/commit/a7e9d6799035be261be8cf262f63bbe618b1d846) fix(opencode-go): recognize empty credential query results by @lc708
+- [238c7c4](https://github.com/cogine-ai/OpenUsageCN/commit/238c7c4b1abd730611f442e7bdb953ffb17ebdda) fix(history): bound pipe collection after runner exit by @lc708
+- [ac0f0ad](https://github.com/cogine-ai/OpenUsageCN/commit/ac0f0adcbacd82d75867ecb92d0f3c1cf4b130c9) fix(cursor): trust only reported billing cycle dates by @lc708
+- [9e57e4e](https://github.com/cogine-ai/OpenUsageCN/commit/9e57e4e20b5669da2c71ea5c0f8adfe6f0578f1d) fix(privacy): redact OpenRouter key creator identities by @lc708
+- [d944bdd](https://github.com/cogine-ai/OpenUsageCN/commit/d944bdd08f28517316fc575268387dab268b507a) docs: record shipping review fixes and fresh verification by @lc708
+- [c929395](https://github.com/cogine-ai/OpenUsageCN/commit/c9293958c119b2c5da58b4360c3b45023564f292) fix(cursor): retain distinct unknown billing windows by @lc708
+- [feb1806](https://github.com/cogine-ai/OpenUsageCN/commit/feb18063b2b985eb59cdcdbf9927d3dd0db11ff3) fix(cursor): remove incomplete CSV exports by @lc708
+- [a5d4edd](https://github.com/cogine-ai/OpenUsageCN/commit/a5d4edd1fc60547f4fc6429157e9c9b93b72ca8c) fix(history): redact errors before returning them to the UI by @lc708
+- [8e58f94](https://github.com/cogine-ai/OpenUsageCN/commit/8e58f940162f4bea08c53261d2650e58f1b70b6f) fix(history): ignore uncommitted scope renders by @lc708
+- [edc862e](https://github.com/cogine-ai/OpenUsageCN/commit/edc862e9b1de5fc6fb82a2f33c009866ae8ff5d6) fix(privacy): redact decoded credentials and nested Amp text by @lc708
+- [f2f9c73](https://github.com/cogine-ai/OpenUsageCN/commit/f2f9c73517f13e56d8087ec5a18f76259d2c6ce5) fix(cursor): preserve damaged history and allow retry by @lc708
+- [23e0c9a](https://github.com/cogine-ai/OpenUsageCN/commit/23e0c9a2ac06f97023e7478d81353c05a9401b63) docs: record PR review resolutions and final validation by @lc708
+- [fcd1d5b](https://github.com/cogine-ai/OpenUsageCN/commit/fcd1d5bf6316b2e63be06a5105919575c1d6d60a) Merge pull request #216 from cogine-ai/cliq/product-quality-20260907 by @lc708
+
 ## v0.6.39
 
 ### New Features
