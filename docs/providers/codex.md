@@ -140,7 +140,11 @@ On Windows:
 1. `CODEX_HOME/auth.json` when `CODEX_HOME` is set.
 2. `%USERPROFILE%\.codex\auth.json` otherwise.
 
-The Windows MVP does not read Windows Credential Manager or use the macOS Keychain API. If the file is missing or invalid, run `codex` to sign in and create file-based credentials.
+The Windows MVP does not read Windows Credential Manager or use the macOS Keychain API. When file credentials are missing or invalid, the app explains that file storage is required. Signing in again with `keyring` or `auto` may still leave no readable file.
+
+If you want to use file storage, set `cli_auth_credentials_store = "file"` in your Codex `config.toml`, then run `codex login` and retry in OpenUsageCN. Use the configuration under your `CODEX_HOME`, or `%USERPROFILE%\.codex` when it is unset. OpenUsageCN does not change this setting or move credentials for you. File storage keeps tokens in `auth.json`; keep this file private. See [Codex credential storage](https://learn.chatgpt.com/docs/auth#credential-storage).
+
+Paths containing spaces or Windows backslashes are supported. An explicitly configured `CODEX_HOME` remains authoritative: a missing file there does not make the app read another account from the default directory.
 
 On Windows, set `CODEX_HOME` for your user before the app starts, then fully exit and restart OpenUsageCN. A PowerShell `$env:CODEX_HOME` value is visible only when OpenUsageCN is launched from that terminal session.
 

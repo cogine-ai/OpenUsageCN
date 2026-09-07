@@ -89,6 +89,8 @@ Windows 发布还需要：
 
 Windows 安装器使用在线 WebView2 bootstrapper。没有 WebView2 Runtime 的电脑需要联网完成安装。
 
+Windows Codex 验收还应覆盖：默认文件凭据、带空格的自定义 `CODEX_HOME`、重新登录后的刷新，以及 `keyring`/`auto` 没有文件时的恢复提示。没有原生 Windows 运行记录时，只能报告解析测试或交叉编译通过，不能将其记为安装、休眠恢复或真实凭据验收完成。
+
 ## 发布方式
 
 推送 `vMAJOR.MINOR.PATCH` tag 后，`Publish` workflow 会先创建一份草稿 release，再分别构建 Apple Silicon、Intel 和 Windows x64 包。Windows 的 NSIS `*-setup.exe` 同时作为安装包和 updater 产物，并附带 updater 签名与 setup SHA-256。所有平台通过 updater 验签与发布校验后，workflow 才会发布正式 release。
