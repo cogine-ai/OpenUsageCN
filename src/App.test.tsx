@@ -1219,6 +1219,27 @@ describe("App", () => {
     expect(state.startBatchMock).not.toHaveBeenCalled()
   })
 
+  it("enables sidebar retry after failure during the previous success cooldown", async () => {
+    render(<App />)
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+    state.probeHandlers?.onResult({
+      providerId: "a", displayName: "Alpha", iconUrl: "icon-a",
+      lines: [{ type: "text", label: "Now", value: "OK" }],
+    }, { manual: true })
+    state.probeHandlers?.onResult({
+      providerId: "a", displayName: "Alpha", iconUrl: "icon-a",
+      lines: [{ type: "badge", label: "Error", text: "Session expired" }],
+    })
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument())
+    state.startBatchMock.mockClear()
+
+    const reloadAction = await triggerPluginContextAction("Alpha", "a", "reload")
+    const reloadConfig = menuState.iconMenuItemConfigs.find((item) => item.id === "ctx-reload-a")
+    expect(reloadConfig?.enabled).toBe(true)
+    reloadAction()
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalledWith(["a"], { manual: true }))
+  })
+
   it("closes sidebar context menu resources after popup", async () => {
     render(<App />)
 

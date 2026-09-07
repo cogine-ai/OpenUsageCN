@@ -904,7 +904,7 @@ describe("ProviderCard", () => {
     expect(document.querySelector('[data-slot="progress-refreshing"]')).toBeNull()
   })
 
-  it("shows inline warning with stale data on refresh error", () => {
+  it("shows recovery details with stale data on refresh error", () => {
     render(
       <ProviderCard
         name="StaleErr"
@@ -918,10 +918,8 @@ describe("ProviderCard", () => {
     )
     // Stale data still visible
     expect(screen.getByText("40%")).toBeInTheDocument()
-    // Inline warning shown (not the full PluginError alert) — error text appears
-    // in both the trigger and the tooltip content via our mocked Tooltip
-    expect(screen.getAllByText("Couldn't update data. Try again?").length).toBeGreaterThan(0)
-    expect(screen.queryByRole("alert")).toBeNull()
+    expect(screen.getByText("Couldn't update data. Try again?")).toBeInTheDocument()
+    expect(screen.getByRole("alert")).toBeInTheDocument()
   })
 
   it("shows full PluginError when errored without stale data", () => {

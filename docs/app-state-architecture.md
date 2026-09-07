@@ -25,6 +25,15 @@
 4. `App.tsx` passes derived values directly to `AppShell` and `AppContent`.
 5. `AppShell` and `AppContent` render from those direct props and source stores.
 
+## Connection Recovery
+
+- Provider cards show short recovery advice for recognized credential, login, permission, network, rate-limit, and response-format errors. Unrecognized failures stay explicitly unclassified.
+- Error details remain available as selectable text with common credential values hidden. URLs from error messages do not become action links.
+- A failed refresh keeps the last successful data visible beside the recovery message and Retry button.
+- Explicit retry from the card, sidebar, or Refresh All bypasses the previous successful refresh's cooldown for failed providers. Loading providers still cannot be retried twice at once. Successful providers keep the normal cooldown.
+- These actions do not add automatic retries or change failure backoff. Saving provider settings and switching accounts keep their existing immediate refresh paths.
+- Recovery advice does not edit credentials. Claude Code remains responsible for renewing its Keychain credentials.
+
 ## Shared usage readers
 
 - The menu-bar app and one-shot CLI both run the same plugin probes and read the same provider settings.

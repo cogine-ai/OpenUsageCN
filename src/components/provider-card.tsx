@@ -1,5 +1,5 @@
 import { Fragment, useMemo } from "react"
-import { AlertCircle, ExternalLink, Hourglass, RefreshCw } from "lucide-react"
+import { ExternalLink, Hourglass, RefreshCw } from "lucide-react"
 import { openUrl } from "@tauri-apps/plugin-opener"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -119,10 +119,10 @@ export function ProviderCard({
 }: ProviderCardProps) {
   const providerStatus = useProviderStatus(providerId ?? "", providerId ? statusPage : undefined)
   const cooldownRemainingMs = useMemo(() => {
-    if (!lastManualRefreshAt) return 0
+    if (error || !lastManualRefreshAt) return 0
     const remaining = REFRESH_COOLDOWN_MS - (Date.now() - lastManualRefreshAt)
     return remaining > 0 ? remaining : 0
-  }, [lastManualRefreshAt])
+  }, [error, lastManualRefreshAt])
 
   // Filter lines based on scope - match by label since runtime lines can differ from manifest
   const overviewLabels = new Set(
@@ -154,7 +154,7 @@ export function ProviderCard({
     stopAfterMs: cooldownRemainingMs > 0 && !hasResetCountdown ? cooldownRemainingMs : null,
   })
 
-  const inCooldown = lastManualRefreshAt
+  const inCooldown = !error && lastManualRefreshAt
     ? now - lastManualRefreshAt < REFRESH_COOLDOWN_MS
     : false
 
@@ -285,29 +285,12 @@ export function ProviderCard({
             ))}
           </div>
         )}
-        {error && !hasStaleData && <PluginError message={error} />}
+        {error && (
+          <PluginError message={error} providerId={providerId} onRetry={onRetry} retrying={loading} hasStaleData={hasStaleData} />
+        )}
 
         {statusPage && (
           <ProviderStatusNotice status={providerStatus} statusUrl={statusPage.url} />
-        )}
-
-        {error && hasStaleData && (
-          <Tooltip>
-            <TooltipTrigger
-              render={(props) => (
-                <div
-                  {...props}
-                  className="flex items-center gap-1.5 mb-2 text-xs text-destructive"
-                >
-                  <AlertCircle className="h-3 w-3 flex-shrink-0" />
-                  <span className="truncate">{error}</span>
-                </div>
-              )}
-            />
-            <TooltipContent side="top" className="max-w-xs break-words text-xs">
-              {error}
-            </TooltipContent>
-          </Tooltip>
         )}
 
         {loading && !hasStaleData && !error && (

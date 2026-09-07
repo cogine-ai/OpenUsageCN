@@ -46,6 +46,44 @@ describe("useProbeRefreshActions", () => {
     expect(startBatch).toHaveBeenCalledWith(["codex"], { manual: true })
   })
 
+  it("allows an explicit retry after failure during the previous success cooldown", () => {
+    const startBatch = vi.fn().mockResolvedValue([])
+    const { result } = renderHook(() => {
+      const state = useProbeState({})
+      const actions = useProbeRefreshActions({
+        pluginSettings: { order: ["codex"], disabled: [] },
+        pluginStatesRef: state.pluginStatesRef,
+        resetAutoUpdateSchedule: vi.fn(),
+        setLoadingForPlugins: state.setLoadingForPlugins,
+        setAccountTransitionForPlugins: state.setAccountTransitionForPlugins,
+        setErrorForPlugins: state.setErrorForPlugins,
+        startBatch,
+      })
+      return { ...state, ...actions }
+    })
+
+    act(() => {
+      result.current.handleProbeResult({
+        providerId: "codex", displayName: "Codex", iconUrl: "",
+        lines: [{ type: "text", label: "Usage", value: "40%" }],
+      }, { manual: true })
+      result.current.setErrorForPlugins(["codex"], "Session expired")
+    })
+    expect(startBatch).not.toHaveBeenCalled()
+
+    act(() => {
+      result.current.handleRetryPlugin("codex")
+      result.current.handleRetryPlugin("codex")
+    })
+
+    expect(startBatch).toHaveBeenCalledTimes(1)
+    expect(startBatch).toHaveBeenCalledWith(["codex"], { manual: true })
+    expect(result.current.pluginStates.codex.data?.lines).toEqual([
+      { type: "text", label: "Usage", value: "40%" },
+    ])
+    expect(result.current.pluginStates.codex.loading).toBe(true)
+  })
+
   it.each([
     {
       name: "loading",
@@ -154,12 +192,13 @@ describe("useProbeRefreshActions", () => {
 
     const { result } = renderHook(() =>
       useProbeRefreshActions({
-        pluginSettings: { order: ["a", "b", "c"], disabled: [] },
+        pluginSettings: { order: ["a", "b", "c", "failed"], disabled: [] },
         pluginStatesRef: {
           current: {
             a: { data: null, loading: true, error: null, lastManualRefreshAt: null, lastUpdatedAt: null },
             b: { data: null, loading: false, error: null, lastManualRefreshAt: 900_001, lastUpdatedAt: null },
             c: { data: null, loading: false, error: null, lastManualRefreshAt: null, lastUpdatedAt: null },
+            failed: { data: null, loading: false, error: "HTTP 429", lastManualRefreshAt: 900_001, lastUpdatedAt: 900_001 },
           },
         },
         resetAutoUpdateSchedule: vi.fn(),
@@ -174,8 +213,8 @@ describe("useProbeRefreshActions", () => {
       result.current.handleRefreshAll()
     })
 
-    expect(setLoadingForPlugins).toHaveBeenCalledWith(["c"])
-    expect(startBatch).toHaveBeenCalledWith(["c"], { manual: true })
+    expect(setLoadingForPlugins).toHaveBeenCalledWith(["c", "failed"])
+    expect(startBatch).toHaveBeenCalledWith(["c", "failed"], { manual: true })
     nowSpy.mockRestore()
   })
 
