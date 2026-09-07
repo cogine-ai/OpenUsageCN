@@ -251,3 +251,40 @@ mocked IPC; the native app and live provider acceptance boundaries above still
 apply. PR CI supplies separate native Windows build evidence when complete;
 its current checks and review-thread status are reported on the PR. This delivery
 does not merge the branch or publish a release.
+
+## PR Review Follow-Up
+
+[PR #216](https://github.com/cogine-ai/OpenUsageCN/pull/216) was opened against `main`.
+The first CI run at `d944bdd` passed every check, including both macOS helper
+architectures and the native Windows pipeline: 460 Windows Rust tests, binary
+checking, and the actual `OpenUsageCN_0.6.39_x64-setup.exe` build. These are build
+results, not interactive installation or live-account acceptance.
+
+The automated review returned eight comments. Seven boundary failures were
+reproduced and corrected; the remaining scheduling suggestion conflicted with
+the current refresh contract and was documented rather than implemented.
+
+| Review Topic | Resolution |
+| --- | --- |
+| Partial CSV after a failed write or sync | `feb1806` closes and removes the newly created incomplete file, logs failures, and retains the existing no-overwrite guarantee. The injected filesystem write/sync regression first failed; six export tests pass. |
+| Concurrent refreshes for different billing metadata | The scheduler intentionally lets a new refresh replace earlier work for the same account/session. Public refresh requests compute the current period; stored-window selection only reads local data. Changing the job key would not change the actual scheduler scope. Independent review confirmed the contract; all three existing scheduler tests pass and the provider doc now explains it. |
+| A damaged history document blocks future saves | `f2f9c73` preserves recognized v1/v2 documents that fail validation as unique `.invalid` files under the same cross-platform file lock used for reads/writes. The first operation still reports an error; a later explicit retry can save new history. Unknown/future formats, read errors and failed preservation retain the original path. Regression coverage includes exact bytes, retries, permissions and a concurrent writer. |
+| Unknown billing windows overwrite one another | `c929395` distinguishes these windows by covered dates, time zone and scope. Exact-window refreshes still replace, and the 12-window limit applies. Three new regressions first failed; eight archive tests passed afterward. |
+| Raw history errors reach the UI | `a5d4edd` returns the same redacted error that it logs. Real plugin-runtime and Claude account-adapter regressions first failed; all 12 local-history tests pass. |
+| Escaped short secrets leak diagnostic fragments | `edc862e` decodes JSON strings before redaction and fully hides malformed escapes. It preserves nonsensitive quota fields. |
+| Nested Amp display text reaches response logs | `edc862e` redacts the known sensitive field throughout that endpoint's response before plugin schema validation. Five new Host regressions first failed; all 103 Host tests and 49 Amp tests pass after both logging fixes. |
+| An abandoned React render leaves history loading | `8e58f94` invalidates requests only on committed scope changes. Real Suspense transitions reproduced both success and failure getting stuck; both pass after the fix, along with late-unmount and account-change checks. |
+
+Fresh verification for the final functional source, `f2f9c73`:
+
+- Production frontend build and all 111 files / 1,660 frontend/plugin tests passed.
+- All 488 Rust library tests passed, and the native macOS debug binary built.
+- All 33 changed Rust files passed scoped formatting; the full branch passed
+  `git diff --check`. The existing main-chunk warning is now 560.82kB.
+- The unchanged helper/updater checks and eight CLI subprocess checks remain
+  recorded above. CI is rerun on the follow-up commits and read back on the PR.
+
+CodeRabbit also reported an advisory docstring-coverage warning and a timed-out
+Clippy tool run. Those do not establish code failures or successful Clippy
+verification. The repository CI gates, existing full-format exceptions, and
+native/live-account acceptance boundaries remain explicitly separate.
