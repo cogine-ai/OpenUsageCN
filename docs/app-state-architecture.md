@@ -46,6 +46,21 @@
 - Switching to an account without a readable snapshot removes the previous account's provider projection while the new probe is loading. A failed probe does not overwrite a previously successful snapshot for the same selected account. If the account registry itself is unavailable, the last projection stays readable with an error instead of being silently deleted.
 - `/v1/limits` projects that cache into stable numeric resources. The CLI can also refresh stale data without starting the Tauri UI or local HTTP server.
 
+## Recorded Cursor Windows
+
+- Cursor history retains at most 12 recorded windows per account, separately from quota snapshots. A successful refresh replaces the saved snapshot for the same billing cycle without adding overlapping events twice.
+- Recorded windows keep their actual coverage, time zone and billing-cycle boundaries. Complete pagination does not imply a complete billing cycle. Old records without cycle metadata remain readable and are labelled as unknown-cycle coverage.
+- Selecting an older record reads local data only. CSV export reads the chosen stored record, uses a new file in Downloads, and keeps list-price estimates separate from metered amounts. Failed exports remain visible to the user and in logs.
+- Comparisons require matching coverage and cost completeness; unavailable comparisons do not show a change percentage. See [Usage History](usage-history.md).
+
+## Local Detail History
+
+- Codex and Claude quota probes do not run `ccusage`. The app, CLI, and fresh `/v1/usage` snapshots contain their live quota data without local history lines.
+- The detail page loads local history only after an explicit request. The history command and hook own their result, loading state, error, and update time; they never publish a quota event or write quota snapshots.
+- An old request cannot replace a newer request or a different account's result. Claude also checks the selected local connection, credential generation, verified identity, and persisted account binding before returning history. Accounts without that local connection cannot load it.
+- Local history describes the current log directory and API-price estimates, not an account bill. It is not persisted and does not enter the tray, notifications, CLI, or Local HTTP cache. Closing the detail page or changing its account scope clears it.
+- History runner discovery and execution share a separate bounded runtime budget. A failed history request remains visible in the history section and leaves quota freshness unchanged.
+
 ## Account-Scoped Detail Data
 
 - Cursor Model Usage is loaded only while a Cursor detail page has an active account.
