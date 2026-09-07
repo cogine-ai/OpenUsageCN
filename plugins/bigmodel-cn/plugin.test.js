@@ -167,15 +167,14 @@ describe("bigmodel-cn plugin", () => {
     })
 
     const web = result.lines.find((line) => line.label === "Web Searches")
-    const expected1st = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() + 1, 1))
     expect(web).toMatchObject({
       type: "progress",
       used: 224,
       limit: 4000,
       format: { kind: "count", suffix: "/ 4000" },
-      periodDurationMs: 30 * 24 * 60 * 60 * 1000,
-      resetsAt: expected1st.toISOString(),
     })
+    expect(web.periodDurationMs).toBeUndefined()
+    expect(web.resetsAt).toBeUndefined()
   })
 
   it("extracts plan from fallback plan fields without failing when missing", async () => {

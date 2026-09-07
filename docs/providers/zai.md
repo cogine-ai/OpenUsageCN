@@ -15,7 +15,12 @@ Z.ai is included in the Windows MVP and is disabled until you configure and enab
 - **Session utilization:** percentage (0-100)
 - **Weekly utilization:** percentage (0-100)
 - **Web searches:** count-based (used / limit)
-- **Reset periods:** 5 hours (session), 7 days (weekly), monthly (web searches, from subscription renewal date)
+- **Quota windows:** 5 hours (session), 7 days (weekly); web search windows follow the quota response
+- **Reset times:** shown only when the quota API provides a valid timestamp
+
+Both current credit plans (`CREDIT_LIMIT`) and older token plans (`TOKENS_LIMIT`) are supported.
+The card uses the provider's used percentage for each window; credits are not relabeled as tokens.
+Session, Weekly, and Web Searches load independently, so a missing Session does not hide the other quotas.
 
 ## Setup
 
@@ -91,11 +96,12 @@ Returns the user's active subscription(s). Used to extract the plan name.
 Used fields:
 
 - `productName` — plan display name (e.g. "GLM Coding Max")
-- `nextRenewTime` — monthly reset date for web search quota (ISO date, e.g. "2026-03-12")
+
+Subscription renewal dates are not used to guess quota reset times.
 
 ### GET /api/monitor/usage/quota/limit
 
-Returns session token usage and web search quotas.
+Returns session and weekly token or credit usage, plus optional web search quotas.
 
 #### Headers
 
@@ -150,15 +156,17 @@ Returns session token usage and web search quotas.
 }
 ```
 
-**TOKENS_LIMIT:**
+**TOKENS_LIMIT / CREDIT_LIMIT:**
 
-- `usage` — total token limit (e.g. 800M)
-- `currentValue` — tokens consumed
-- `remaining` — tokens remaining
+- `usage`, `currentValue`, `remaining` — provider-native amounts; token and credit plans use different units
 - `percentage` — usage as percentage (0-100)
 - `nextResetTime` — epoch milliseconds of next reset
 - `unit: 3, number: 5` — 5-hour rolling period (session)
-- `unit: 6, number: 7` — 7-day rolling period (weekly)
+- `unit: 6, number: 1` — one week (weekly)
+
+Window lengths use both `unit` and `number`: unit `1` means days, `3` hours, `5` minutes, and `6` weeks.
+Equivalent seven-day windows are accepted, such as `unit: 1, number: 7`.
+Missing or unsupported window metadata is not treated as five hours or one week.
 
 **TIME_LIMIT:**
 
@@ -167,15 +175,23 @@ Returns session token usage and web search quotas.
 - `remaining` — calls remaining
 - `percentage` — usage as percentage (0-100)
 - `usageDetails` — per-model breakdown (search-prime, web-reader, zread)
-- `unit: 5, number: 1` — monthly period (no `nextResetTime`; resets on the 1st of each month at 00:00 UTC)
+- `unit: 5, number: 1` — monthly MCP marker, not a one-minute window
+
+Web search counts remain visible without a reset timestamp. OpenUsageCN does not invent a first-of-month
+reset or a fixed 30-day pace estimate. Other reported web-search durations use their actual unit and number.
 
 ## Displayed Lines
 
 | Line         | Description                                                                  |
 |--------------|------------------------------------------------------------------------------|
-| Session      | Token usage as percentage (0-100%) with 5h reset timer                       |
-| Weekly       | Token usage as percentage (0-100%) with 7-day reset timer                   |
-| Web Searches | Web search/reader call count (used / limit), resets on the 1st of each month |
+| Session      | Token or credit quota used in the five-hour window                         |
+| Weekly       | Token or credit quota used in the seven-day window                         |
+| Web Searches | Web search/reader call count (used / limit)                                 |
+
+An invalid quota shows **Usage unavailable** while valid quotas keep loading. An unrecognized quota
+shows **Some usage unavailable**. Missing or invalid numbers are never displayed as zero usage.
+If no valid quota remains, refresh fails and the app keeps the last successful snapshot with an error.
+An explicitly empty quota list still shows **No usage data**.
 
 ## Errors
 
@@ -186,3 +202,9 @@ Returns session token usage and web search quotas.
 | HTTP error    | "Usage request failed (HTTP {status}). Try again later."   |
 | Network error | "Usage request failed. Check your connection."             |
 | Invalid JSON  | "Usage response invalid. Try again later."                 |
+| Invalid quota | "Quota data is incomplete or invalid. Try again later."    |
+
+## References
+
+- [Z.ai credit allowance and reset rules](https://docs.z.ai/devpack/overview)
+- [CodexBar quota format and window mapping](https://github.com/steipete/CodexBar/blob/4f760cfc9b5e1b9540ba35fbe976e15d24c3b5ae/Sources/CodexBarCore/Resources/Plugins/zai.js)

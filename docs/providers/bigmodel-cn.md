@@ -42,12 +42,20 @@ set -Ux BIGMODEL_API_KEY "YOUR_API_KEY"
 
 | Line         | Meaning                                      |
 |--------------|----------------------------------------------|
-| Session      | 5-hour token usage, shown as a percentage    |
-| Weekly       | Weekly token usage, shown as a percentage    |
+| Session      | 5-hour token or credit quota, shown as a used percentage |
+| Weekly       | 7-day token or credit quota, shown as a used percentage |
 | Web Searches | Monthly MCP / web search usage, shown as count |
 
 The plan name is best effort. If the quota payload includes `planName`, `plan`, `plan_type`, or `packageName`,
 OpenUsageCN shows it. If those fields are missing, usage still loads and the plan label stays blank.
+
+Each quota loads independently. A missing Session does not hide Weekly or Web Searches.
+Invalid numbers show **Usage unavailable** instead of zero. Unrecognized quota windows show
+**Some usage unavailable** while valid quotas remain visible. If no valid quota remains, refresh fails
+and the app keeps the last successful snapshot with an error. An explicitly empty list shows **No usage data**.
+
+Reset times come only from a valid `nextResetTime` in the quota response. Missing reset times stay unknown;
+the app does not assume the first day of next month. Monthly web-search quotas have no fixed 30-day pace estimate.
 
 ## Endpoint
 
@@ -61,10 +69,16 @@ Authorization: Bearer <api_key>
 Expected quota fields:
 
 - `data.limits[]`
-- `TOKENS_LIMIT` with `unit: 3` for the 5-hour Session line
-- `TOKENS_LIMIT` with `unit: 6` for the Weekly line
+- `TOKENS_LIMIT` or `CREDIT_LIMIT` with `unit: 3, number: 5` for the 5-hour Session line
+- `TOKENS_LIMIT` or `CREDIT_LIMIT` with `unit: 6, number: 1` for the Weekly line
 - `TIME_LIMIT` for the monthly Web Searches count
 - optional `data.planName`, `data.plan`, `data.plan_type`, or `data.packageName` for the plan label
+
+Window lengths use both fields: unit `1` means days, `3` hours, `5` minutes, and `6` weeks.
+Equivalent seven-day windows are accepted, such as `unit: 1, number: 7`.
+For `TIME_LIMIT` only, `unit: 5, number: 1` is the monthly MCP marker, not a one-minute window.
+Other web-search windows use their actual reported duration. Token and credit amounts are not interchangeable;
+the Session and Weekly lines use the provider's percentage.
 
 ## Errors
 
@@ -75,3 +89,7 @@ Expected quota fields:
 | HTTP error    | "Usage request failed (HTTP {status}). Try again later."          |
 | Network error | "Usage request failed. Check your connection."                    |
 | Invalid JSON  | "Usage response invalid. Try again later."                        |
+| Invalid quota | "Quota data is incomplete or invalid. Try again later."           |
+
+Quota types and window units follow the shared regional parser in
+[CodexBar](https://github.com/steipete/CodexBar/blob/4f760cfc9b5e1b9540ba35fbe976e15d24c3b5ae/Sources/CodexBarCore/Resources/Plugins/zai.js).
