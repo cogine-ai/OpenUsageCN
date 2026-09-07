@@ -91,6 +91,19 @@ impl ProviderAccountAdapter for QuickJsAccountAdapter {
         self.plugin.manifest.id == "cursor"
     }
 
+    fn probe_local_history(
+        &self,
+        connection_key: &str,
+        credential_generation: &str,
+    ) -> Result<crate::plugin_engine::runtime::PluginOutput, String> {
+        Ok(crate::plugin_engine::runtime::run_local_history(
+            &self.plugin,
+            &self.app_data_dir,
+            &self.app_version,
+            Some((connection_key, credential_generation)),
+        ))
+    }
+
     fn history_cookie(
         &self,
         connection_key: &str,

@@ -426,6 +426,12 @@ Reset-boundary refreshes only probe the provider that reported the boundary. A b
 
 Any token refresh logic (e.g., OAuth refresh) must run inside `probe(ctx)` at those times.
 
+Bundled Codex and Claude keep local log history in `probeHistory(ctx, connectionTarget?)` instead.
+That export is invoked only by an explicit **Load Local History** or **Refresh Local History**
+request in the detail page. It runs in a separate sandbox and cannot update quota freshness,
+notifications, account quota snapshots, or the Local HTTP cache. Claude receives the selected local
+connection and its credential generation; it does not renew credentials during history collection.
+
 ## Line Builders
 
 Helper functions for creating output lines. All builders use an options object pattern.
@@ -638,12 +644,17 @@ Returns a status envelope:
 ### Behavior
 
 - **Runtime runners**: Executes pinned `ccusage@20.0.20` via fallback chain `bunx -> pnpm dlx -> yarn dlx -> npm exec -> npx`
+- **Bounded work**: Each runner availability check (`--version`) has at most 2 seconds, and each execution has at most 15 seconds. Discovery, execution, and fallbacks share the history sandbox's 30-second budget; timed-out child processes are stopped and reaped.
 - **Provider-aware**: Resolves provider from `opts.provider` or plugin id (`claude`/`codex`)
 - **Focused commands**: Uses `ccusage claude daily` or `ccusage codex daily`; it intentionally does not use `ccusage daily` because that aggregates all detected agents
 - **Legacy fallback**: If `ccusage@20.0.20` cannot run through the package manager release-age policy, retries with release-age-safe `ccusage@18.0.11` for Claude or `@ccusage/codex@18.0.11` for Codex
 - **No provider API calls**: Usage is computed from local JSONL session files; the host does not call Claude/Codex (or other provider) APIs, but package runners may contact a package registry to download the `ccusage` CLI if it is not already available locally
 - **Graceful degradation**: returns `no_runner` when no runner exists, `runner_failed` when execution fails
 - **Pricing**: Uses ccusage's built-in LiteLLM pricing data
+
+The bundled local history views fix `since` and `until` from the same local date, covering today and
+the preceding 30 calendar days (31 days inclusive). History failures are shown in the detail section
+and leave live quota available. The CLI does not request this optional history.
 
 ### DailyUsage
 

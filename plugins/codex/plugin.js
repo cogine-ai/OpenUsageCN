@@ -504,7 +504,7 @@
     return fallbackKind
   }
 
-  function queryTokenUsage(ctx) {
+  function queryTokenUsage(ctx, now) {
     if (isWindows(ctx)) {
       return { status: "no_runner", data: null }
     }
@@ -512,14 +512,14 @@
       return { status: "no_runner", data: null }
     }
 
-    const since = new Date()
+    const since = new Date(now.getTime())
     // Inclusive range: today + previous 30 days = 31 calendar days.
     since.setDate(since.getDate() - 30)
     const y = since.getFullYear()
     const m = since.getMonth() + 1
     const d = since.getDate()
     const sinceStr = "" + y + (m < 10 ? "0" : "") + m + (d < 10 ? "0" : "") + d
-    const queryOpts = { provider: "codex", since: sinceStr }
+    const queryOpts = { provider: "codex", since: sinceStr, until: dayKeyFromDate(now).replace(/-/g, "") }
     const codexHome = readCodexHome(ctx)
     if (codexHome) {
       queryOpts.homePath = codexHome
@@ -1030,63 +1030,61 @@
 
   function probeHistory(ctx) {
     const lines = []
-    const tokenUsageResult = queryTokenUsage(ctx)
+    const now = new Date()
+    const tokenUsageResult = queryTokenUsage(ctx, now)
     if (tokenUsageResult.status !== "ok") {
       throw tokenUsageResult.status === "no_runner"
         ? "未找到本地用量工具，请安装 Bun 或 Node.js 后重试。"
         : "本地 Codex 用量暂时无法读取，请稍后重试。"
     }
-    {
-      const tokenUsage = tokenUsageResult.data
-      const now = new Date()
-      const todayKey = dayKeyFromDate(now)
-      const yesterday = new Date(now.getTime())
-      yesterday.setDate(yesterday.getDate() - 1)
-      const yesterdayKey = dayKeyFromDate(yesterday)
+    const tokenUsage = tokenUsageResult.data
+    const todayKey = dayKeyFromDate(now)
+    const yesterday = new Date(now.getTime())
+    yesterday.setDate(yesterday.getDate() - 1)
+    const yesterdayKey = dayKeyFromDate(yesterday)
 
-      let todayEntry = null
-      let yesterdayEntry = null
-      for (let i = 0; i < tokenUsage.daily.length; i++) {
-        const usageDayKey = dayKeyFromUsageDate(tokenUsage.daily[i].date)
-        if (usageDayKey === todayKey) {
-          todayEntry = tokenUsage.daily[i]
-          continue
-        }
-        if (usageDayKey === yesterdayKey) {
-          yesterdayEntry = tokenUsage.daily[i]
-        }
+    let todayEntry = null
+    let yesterdayEntry = null
+    for (let i = 0; i < tokenUsage.daily.length; i++) {
+      const usageDayKey = dayKeyFromUsageDate(tokenUsage.daily[i].date)
+      if (usageDayKey === todayKey) {
+        todayEntry = tokenUsage.daily[i]
+        continue
       }
-
-      pushDayUsageLine(lines, ctx, "今日", todayEntry)
-      pushDayUsageLine(lines, ctx, "昨日", yesterdayEntry)
-
-      let totalTokens = 0
-      let totalCostNanos = 0
-      let hasCost = false
-      for (let i = 0; i < tokenUsage.daily.length; i++) {
-        const day = tokenUsage.daily[i]
-        const dayTokens = Number(day.totalTokens)
-        if (Number.isFinite(dayTokens)) {
-          totalTokens += dayTokens
-        }
-
-        const dayCost = usageCostUsd(day)
-        if (dayCost != null) {
-          totalCostNanos += Math.round(dayCost * 1e9)
-          hasCost = true
-        }
+      if (usageDayKey === yesterdayKey) {
+        yesterdayEntry = tokenUsage.daily[i]
       }
-
-      if (totalTokens > 0) {
-        lines.push(ctx.line.text({
-          label: "近30天",
-          value: costAndTokensLabel({ tokens: totalTokens, costUSD: hasCost ? totalCostNanos / 1e9 : null })
-        }))
-      }
-
-      pushUsageChartLine(lines, ctx, tokenUsage.daily)
-      pushModelUsageLines(lines, ctx, tokenUsage.daily)
     }
+
+    pushDayUsageLine(lines, ctx, "今日", todayEntry)
+    pushDayUsageLine(lines, ctx, "昨日", yesterdayEntry)
+
+    let totalTokens = 0
+    let totalCostNanos = 0
+    let hasCost = false
+    for (let i = 0; i < tokenUsage.daily.length; i++) {
+      const day = tokenUsage.daily[i]
+      const dayTokens = Number(day.totalTokens)
+      if (Number.isFinite(dayTokens)) {
+        totalTokens += dayTokens
+      }
+
+      const dayCost = usageCostUsd(day)
+      if (dayCost != null) {
+        totalCostNanos += Math.round(dayCost * 1e9)
+        hasCost = true
+      }
+    }
+
+    if (totalTokens > 0) {
+      lines.push(ctx.line.text({
+        label: "近31天",
+        value: costAndTokensLabel({ tokens: totalTokens, costUSD: hasCost ? totalCostNanos / 1e9 : null })
+      }))
+    }
+
+    pushUsageChartLine(lines, ctx, tokenUsage.daily)
+    pushModelUsageLines(lines, ctx, tokenUsage.daily)
 
     return { lines: lines }
   }

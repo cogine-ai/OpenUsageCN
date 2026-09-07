@@ -87,6 +87,25 @@ The browser profile must be selected explicitly. Cookies, OAuth identity fields,
 responses remain in memory. Persisted account data contains only opaque identifiers, fingerprints,
 the selected profile locator, and local labels.
 
+## Local History
+
+Choose **Load Local History** in Claude details to read `Today`, `Yesterday`, `Last 31 Days`, model
+shares, and `Usage Trend`. **Refresh Local History** updates them independently. Opening the page
+or refreshing quota does not run `ccusage`.
+
+This view requires the selected account's available local CLI connection. OpenUsageCN checks the
+account, connection, and credential version before returning the result. Switching accounts or
+changing account connections clears the previous detail history; browser connections do not borrow
+the local CLI history.
+
+History uses `CLAUDE_CONFIG_DIR`, or the default Claude log directory, and includes today plus the
+preceding 30 calendar days. Costs are estimated at API prices. The directory can contain multiple
+sessions, so these totals are not a subscription bill or proof of complete account spending.
+
+The history tool has separate loading, errors, and an update time. Its result does not update quota
+freshness, account snapshots, notifications, or the Local HTTP cache. Fresh CLI and `/v1/usage`
+responses no longer include these local history lines; `/v1/limits` continues to report quotas.
+
 ## Authentication
 
 ### Token Location

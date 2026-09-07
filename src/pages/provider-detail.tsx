@@ -1,5 +1,6 @@
 import { ProviderAccountControls } from "@/components/provider-account-controls"
 import { ProviderCard } from "@/components/provider-card"
+import { LocalUsageHistory } from "@/components/local-usage-history"
 import type { PluginDisplayState } from "@/lib/plugin-types"
 import type { DisplayMode, ResetTimerDisplayMode, TimeFormatMode } from "@/lib/settings"
 
@@ -52,6 +53,7 @@ export function ProviderDetailPage({
         timeFormatMode={timeFormatMode}
         onResetTimerDisplayModeToggle={onResetTimerDisplayModeToggle}
       />
+      {plugin.meta.id === "codex" ? <LocalUsageHistory providerId="codex" /> : null}
       {plugin.meta.accountSupport ? (
         <ProviderAccountControls
           providerId={plugin.meta.id}

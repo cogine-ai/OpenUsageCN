@@ -496,7 +496,7 @@ describe("codex plugin", () => {
     const result = plugin.probe(ctx)
     expect(result.lines.find((l) => l.label === "今日")).toBeUndefined()
     expect(result.lines.find((l) => l.label === "昨日")).toBeUndefined()
-    expect(result.lines.find((l) => l.label === "近30天")).toBeUndefined()
+    expect(result.lines.find((l) => l.label === "近31天")).toBeUndefined()
     expect(result.lines.find((l) => l.label === "5小时")).toBeTruthy()
   })
 
@@ -531,17 +531,17 @@ describe("codex plugin", () => {
 
     try {
       const plugin = await loadPlugin()
-      const result = plugin.probe(ctx)
+      const result = plugin.probeHistory(ctx)
 
       const today = result.lines.find((l) => l.label === "今日")
       expect(today).toBeTruthy()
       expect(today.value).toContain("150.0 tokens")
       expect(today.value).toContain("$0.75")
 
-      const last30 = result.lines.find((l) => l.label === "近30天")
-      expect(last30).toBeTruthy()
-      expect(last30.value).toContain("450.0 tokens")
-      expect(last30.value).toContain("$1.75")
+      const last31 = result.lines.find((l) => l.label === "近31天")
+      expect(last31).toBeTruthy()
+      expect(last31.value).toContain("450.0 tokens")
+      expect(last31.value).toContain("$1.75")
 
       expect(ctx.host.ccusage.query).toHaveBeenCalled()
       const firstCall = ctx.host.ccusage.query.mock.calls[0][0]
@@ -572,14 +572,14 @@ describe("codex plugin", () => {
     ctx.host.ccusage.query.mockReturnValue({ status: "ok", data: { daily: [] } })
 
     const plugin = await loadPlugin()
-    plugin.probe(ctx)
+    plugin.probeHistory(ctx)
 
     expect(ctx.host.ccusage.query).toHaveBeenCalled()
     const firstCall = ctx.host.ccusage.query.mock.calls[0][0]
     expect(firstCall.homePath).toBe("/tmp/codex-home")
   })
 
-  it("queries ccusage on each probe", async () => {
+  it("queries ccusage on each history request", async () => {
     const ctx = makeCtx()
     ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
       tokens: { access_token: "token" },
@@ -596,8 +596,8 @@ describe("codex plugin", () => {
     })
 
     const plugin = await loadPlugin()
-    plugin.probe(ctx)
-    plugin.probe(ctx)
+    plugin.probeHistory(ctx)
+    plugin.probeHistory(ctx)
 
     expect(ctx.host.ccusage.query).toHaveBeenCalledTimes(2)
   })
@@ -616,7 +616,7 @@ describe("codex plugin", () => {
     ctx.host.ccusage.query.mockReturnValue({ status: "ok", data: { daily: [] } })
 
     const plugin = await loadPlugin()
-    const result = plugin.probe(ctx)
+    const result = plugin.probeHistory(ctx)
 
     const todayLine = result.lines.find((l) => l.label === "今日")
     expect(todayLine).toBeTruthy()
@@ -626,7 +626,7 @@ describe("codex plugin", () => {
     expect(yesterdayLine).toBeTruthy()
     expect(yesterdayLine.value).toContain("$0.00")
     expect(yesterdayLine.value).toContain("0.0 tokens")
-    expect(result.lines.find((l) => l.label === "近30天")).toBeUndefined()
+    expect(result.lines.find((l) => l.label === "近31天")).toBeUndefined()
   })
 
   it("shows empty Yesterday state when yesterday's totals are zero (regression)", async () => {
@@ -656,7 +656,7 @@ describe("codex plugin", () => {
     })
 
     const plugin = await loadPlugin()
-    const result = plugin.probe(ctx)
+    const result = plugin.probeHistory(ctx)
     const yesterdayLine = result.lines.find((l) => l.label === "昨日")
     expect(yesterdayLine).toBeTruthy()
     expect(yesterdayLine.value).toContain("$0.00")
@@ -684,7 +684,7 @@ describe("codex plugin", () => {
     })
 
     const plugin = await loadPlugin()
-    const result = plugin.probe(ctx)
+    const result = plugin.probeHistory(ctx)
 
     const todayLine = result.lines.find((l) => l.label === "今日")
     expect(todayLine).toBeTruthy()
@@ -695,10 +695,10 @@ describe("codex plugin", () => {
     expect(yesterdayLine.value).toContain("$0.00")
     expect(yesterdayLine.value).toContain("0.0 tokens")
 
-    const last30 = result.lines.find((l) => l.label === "近30天")
-    expect(last30).toBeTruthy()
-    expect(last30.value).toContain("300.0 tokens")
-    expect(last30.value).toContain("$1.00")
+    const last31 = result.lines.find((l) => l.label === "近31天")
+    expect(last31).toBeTruthy()
+    expect(last31.value).toContain("300.0 tokens")
+    expect(last31.value).toContain("$1.00")
   })
 
   it("adds Yesterday line from codex ccusage format", async () => {
@@ -728,7 +728,7 @@ describe("codex plugin", () => {
     })
 
     const plugin = await loadPlugin()
-    const result = plugin.probe(ctx)
+    const result = plugin.probeHistory(ctx)
     const yesterdayLine = result.lines.find((l) => l.label === "昨日")
     expect(yesterdayLine).toBeTruthy()
     expect(yesterdayLine.value).toContain("220.0 tokens")
@@ -755,7 +755,7 @@ describe("codex plugin", () => {
       })
 
       const plugin = await loadPlugin()
-      const result = plugin.probe(ctx)
+      const result = plugin.probeHistory(ctx)
       const todayLine = result.lines.find((line) => line.label === "今日")
       expect(todayLine).toBeTruthy()
       expect(todayLine.value).toContain("10.0 tokens")
@@ -784,7 +784,7 @@ describe("codex plugin", () => {
       })
 
       const plugin = await loadPlugin()
-      const result = plugin.probe(ctx)
+      const result = plugin.probeHistory(ctx)
       const todayLine = result.lines.find((line) => line.label === "今日")
       expect(todayLine).toBeTruthy()
       expect(todayLine.value).toContain("20.0 tokens")
@@ -813,7 +813,7 @@ describe("codex plugin", () => {
       })
 
       const plugin = await loadPlugin()
-      const result = plugin.probe(ctx)
+      const result = plugin.probeHistory(ctx)
       const todayLine = result.lines.find((line) => line.label === "今日")
       expect(todayLine).toBeTruthy()
       expect(todayLine.value).toContain("30.0 tokens")
@@ -1965,7 +1965,7 @@ describe("codex plugin", () => {
     const result = plugin.probe(ctx)
     expect(result.lines.find((l) => l.label === "今日")).toBeUndefined()
     expect(result.lines.find((l) => l.label === "昨日")).toBeUndefined()
-    expect(result.lines.find((l) => l.label === "近30天")).toBeUndefined()
+    expect(result.lines.find((l) => l.label === "近31天")).toBeUndefined()
     const statusLine = result.lines.find((l) => l.label === "Status")
     expect(statusLine).toBeTruthy()
     expect(statusLine.text).toBe("No usage data")
@@ -2370,11 +2370,11 @@ describe("codex plugin", () => {
       })
 
       const plugin = await loadPlugin()
-      const result = plugin.probe(ctx)
+      const result = plugin.probeHistory(ctx)
       const today = result.lines.find((line) => line.label === "今日")
-      const last30 = result.lines.find((line) => line.label === "近30天")
+      const last31 = result.lines.find((line) => line.label === "近31天")
       expect(today && today.value).toContain("125.0万 tokens")
-      expect(last30 && last30.value).toContain("0.3亿 tokens")
+      expect(last31 && last31.value).toContain("0.3亿 tokens")
     } finally {
       vi.useRealTimers()
     }
