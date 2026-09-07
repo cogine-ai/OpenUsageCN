@@ -279,6 +279,7 @@ describe("claude plugin", () => {
 
     expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
     expect(ctx.host.fs.readText).toHaveBeenCalledWith(configCredFile)
+    plugin.probeHistory(ctx)
     expect(ctx.host.ccusage.query).toHaveBeenCalledWith(
       expect.objectContaining({ homePath: configDir })
     )
@@ -494,7 +495,8 @@ describe("claude plugin", () => {
     expect(
       ctx.host.http.request.mock.calls.some((call) => String(call[0]?.url).includes("/api/oauth/usage"))
     ).toBe(false)
-    expect(result.lines.find((line) => line.label === "Last 30 Days")?.value).toContain("150 tokens")
+    expect(result.lines.find((line) => line.label === "Last 31 Days")).toBeUndefined()
+    expect(plugin.probeHistory(ctx).lines.find((line) => line.label === "Last 31 Days")?.value).toContain("150 tokens")
   })
 
   it("renders usage lines from response", async () => {
@@ -987,7 +989,7 @@ describe("claude plugin", () => {
     const result = plugin.probe(ctx)
     expect(result.lines.find((l) => l.label === "Today")).toBeUndefined()
     expect(result.lines.find((l) => l.label === "Yesterday")).toBeUndefined()
-    expect(result.lines.find((l) => l.label === "Last 30 Days")).toBeUndefined()
+    expect(result.lines.find((l) => l.label === "Last 31 Days")).toBeUndefined()
     const statusLine = result.lines.find((l) => l.label === "Status")
     expect(statusLine).toBeTruthy()
     expect(statusLine.text).toBe("No usage data")
@@ -1679,7 +1681,7 @@ describe("claude plugin", () => {
       const result = plugin.probe(ctx)
       expect(result.lines.find((l) => l.label === "Today")).toBeUndefined()
       expect(result.lines.find((l) => l.label === "Yesterday")).toBeUndefined()
-      expect(result.lines.find((l) => l.label === "Last 30 Days")).toBeUndefined()
+      expect(result.lines.find((l) => l.label === "Last 31 Days")).toBeUndefined()
     })
 
     it("rate-limit lines still appear when ccusage reports runner_failed", async () => {
@@ -1699,7 +1701,7 @@ describe("claude plugin", () => {
           ]),
       })
       const plugin = await loadPlugin()
-      const result = plugin.probe(ctx)
+      const result = plugin.probeHistory(ctx)
       const todayLine = result.lines.find((l) => l.label === "Today")
       expect(todayLine).toBeTruthy()
       expect(todayLine.type).toBe("text")
@@ -1717,7 +1719,7 @@ describe("claude plugin", () => {
           ]),
       })
       const plugin = await loadPlugin()
-      const result = plugin.probe(ctx)
+      const result = plugin.probeHistory(ctx)
       const yesterdayLine = result.lines.find((l) => l.label === "Yesterday")
       expect(yesterdayLine).toBeTruthy()
       expect(yesterdayLine.value).toContain("120 tokens")
@@ -1746,7 +1748,7 @@ describe("claude plugin", () => {
       })
 
       const plugin = await loadPlugin()
-      const result = plugin.probe(ctx)
+      const result = plugin.probeHistory(ctx)
 
       const todayLine = result.lines.find((l) => l.label === "Today")
       expect(todayLine).toBeTruthy()
@@ -1769,7 +1771,7 @@ describe("claude plugin", () => {
             ]),
         })
         const plugin = await loadPlugin()
-        const result = plugin.probe(ctx)
+        const result = plugin.probeHistory(ctx)
         const todayLine = result.lines.find((l) => l.label === "Today")
         expect(todayLine).toBeTruthy()
         expect(todayLine.value).toContain("10 tokens")
@@ -1788,7 +1790,7 @@ describe("claude plugin", () => {
             ]),
         })
         const plugin = await loadPlugin()
-        const result = plugin.probe(ctx)
+        const result = plugin.probeHistory(ctx)
         const todayLine = result.lines.find((l) => l.label === "Today")
         expect(todayLine).toBeTruthy()
         expect(todayLine.value).toContain("20 tokens")
@@ -1807,7 +1809,7 @@ describe("claude plugin", () => {
             ]),
         })
         const plugin = await loadPlugin()
-        const result = plugin.probe(ctx)
+        const result = plugin.probeHistory(ctx)
         const todayLine = result.lines.find((l) => l.label === "Today")
         expect(todayLine).toBeTruthy()
         expect(todayLine.value).toContain("30 tokens")
@@ -1816,7 +1818,7 @@ describe("claude plugin", () => {
       }
     })
 
-    it("adds Last 30 Days line summing all daily entries", async () => {
+    it("adds Last 31 Days line summing all daily entries", async () => {
       const todayKey = localDayKey(new Date())
       const ctx = makeProbeCtx({
         ccusageResult: okUsage([
@@ -1825,21 +1827,21 @@ describe("claude plugin", () => {
           ]),
       })
       const plugin = await loadPlugin()
-      const result = plugin.probe(ctx)
-      const last30 = result.lines.find((l) => l.label === "Last 30 Days")
-      expect(last30).toBeTruthy()
-      expect(last30.value).toContain("450 tokens")
-      expect(last30.value).toContain("$1.50")
+      const result = plugin.probeHistory(ctx)
+      const last31 = result.lines.find((l) => l.label === "Last 31 Days")
+      expect(last31).toBeTruthy()
+      expect(last31.value).toContain("450 tokens")
+      expect(last31.value).toContain("$1.50")
     })
 
-    it("shows empty Today/Yesterday and Last 30 Days when today has no entry", async () => {
+    it("shows empty Today/Yesterday and Last 31 Days when today has no entry", async () => {
       const ctx = makeProbeCtx({
         ccusageResult: okUsage([
             { date: "2026-02-01", inputTokens: 500, outputTokens: 100, cacheCreationTokens: 0, cacheReadTokens: 0, totalTokens: 600, totalCost: 2.0 },
           ]),
       })
       const plugin = await loadPlugin()
-      const result = plugin.probe(ctx)
+      const result = plugin.probeHistory(ctx)
       const todayLine = result.lines.find((l) => l.label === "Today")
       expect(todayLine).toBeTruthy()
       expect(todayLine.value).toContain("$0.00")
@@ -1848,15 +1850,15 @@ describe("claude plugin", () => {
       expect(yesterdayLine).toBeTruthy()
       expect(yesterdayLine.value).toContain("$0.00")
       expect(yesterdayLine.value).toContain("0 tokens")
-      const last30 = result.lines.find((l) => l.label === "Last 30 Days")
-      expect(last30).toBeTruthy()
-      expect(last30.value).toContain("600 tokens")
+      const last31 = result.lines.find((l) => l.label === "Last 31 Days")
+      expect(last31).toBeTruthy()
+      expect(last31.value).toContain("600 tokens")
     })
 
     it("shows empty Today state when ccusage returns ok with empty daily array", async () => {
       const ctx = makeProbeCtx({ ccusageResult: okUsage([]) })
       const plugin = await loadPlugin()
-      const result = plugin.probe(ctx)
+      const result = plugin.probeHistory(ctx)
       const todayLine = result.lines.find((l) => l.label === "Today")
       expect(todayLine).toBeTruthy()
       expect(todayLine.value).toContain("$0.00")
@@ -1865,7 +1867,7 @@ describe("claude plugin", () => {
       expect(yesterdayLine).toBeTruthy()
       expect(yesterdayLine.value).toContain("$0.00")
       expect(yesterdayLine.value).toContain("0 tokens")
-      expect(result.lines.find((l) => l.label === "Last 30 Days")).toBeUndefined()
+      expect(result.lines.find((l) => l.label === "Last 31 Days")).toBeUndefined()
     })
 
     it("omits cost when totalCost is null", async () => {
@@ -1876,7 +1878,7 @@ describe("claude plugin", () => {
           ]),
       })
       const plugin = await loadPlugin()
-      const result = plugin.probe(ctx)
+      const result = plugin.probeHistory(ctx)
       const todayLine = result.lines.find((l) => l.label === "Today")
       expect(todayLine).toBeTruthy()
       expect(todayLine.value).not.toContain("$")
@@ -1891,7 +1893,7 @@ describe("claude plugin", () => {
           ]),
       })
       const plugin = await loadPlugin()
-      const result = plugin.probe(ctx)
+      const result = plugin.probeHistory(ctx)
       const todayLine = result.lines.find((l) => l.label === "Today")
       expect(todayLine).toBeTruthy()
       expect(todayLine.value).toContain("$0.00")
@@ -1908,14 +1910,14 @@ describe("claude plugin", () => {
           ]),
       })
       const plugin = await loadPlugin()
-      const result = plugin.probe(ctx)
+      const result = plugin.probeHistory(ctx)
       const yesterdayLine = result.lines.find((l) => l.label === "Yesterday")
       expect(yesterdayLine).toBeTruthy()
       expect(yesterdayLine.value).toContain("$0.00")
       expect(yesterdayLine.value).toContain("0 tokens")
     })
 
-    it("queries ccusage on each probe", async () => {
+    it("queries ccusage on each history request", async () => {
       const todayKey = localDayKey(new Date())
       const ctx = makeProbeCtx({
         ccusageResult: okUsage([
@@ -1923,8 +1925,8 @@ describe("claude plugin", () => {
           ]),
       })
       const plugin = await loadPlugin()
-      plugin.probe(ctx)
-      plugin.probe(ctx)
+      plugin.probeHistory(ctx)
+      plugin.probeHistory(ctx)
       expect(ctx.host.ccusage.query).toHaveBeenCalledTimes(2)
     })
 
@@ -1934,7 +1936,7 @@ describe("claude plugin", () => {
       try {
         const ctx = makeProbeCtx({ ccusageResult: okUsage([]) })
         const plugin = await loadPlugin()
-        plugin.probe(ctx)
+        plugin.probeHistory(ctx)
         expect(ctx.host.ccusage.query).toHaveBeenCalled()
 
         const firstCall = ctx.host.ccusage.query.mock.calls[0][0]
@@ -1964,7 +1966,7 @@ describe("claude plugin", () => {
         ]),
       })
       const plugin = await loadPlugin()
-      const result = plugin.probe(ctx)
+      const result = plugin.probeHistory(ctx)
       const todayLine = result.lines.find((l) => l.label === "Today")
       expect(todayLine).toBeTruthy()
       expect(todayLine.value).toContain("150 tokens")
@@ -1979,7 +1981,7 @@ describe("claude plugin", () => {
           ]),
       })
       const plugin = await loadPlugin()
-      const result = plugin.probe(ctx)
+      const result = plugin.probeHistory(ctx)
       const todayLine = result.lines.find((l) => l.label === "Today")
       expect(todayLine).toBeTruthy()
       expect(todayLine.value).toContain("650 tokens")
@@ -2010,11 +2012,11 @@ describe("claude plugin", () => {
         ]),
       })
       const plugin = await loadPlugin()
-      const result = plugin.probe(ctx)
+      const result = plugin.probeHistory(ctx)
       const todayLine = result.lines.find((l) => l.label === "Today")
-      const last30 = result.lines.find((l) => l.label === "Last 30 Days")
+      const last31 = result.lines.find((l) => l.label === "Last 31 Days")
       expect(todayLine.value).toContain("1.5K tokens")
-      expect(last30.value).toContain("12K tokens")
+      expect(last31.value).toContain("12K tokens")
     })
 
     it("shows rate limited status after all retries exhausted", async () => {
@@ -2032,7 +2034,8 @@ describe("claude plugin", () => {
       })
       const plugin = await loadPlugin()
       const result = plugin.probe(ctx)
-      expect(result.lines.find((line) => line.label === "Today")).toBeTruthy()
+      expect(result.lines.find((line) => line.label === "Today")).toBeUndefined()
+      expect(plugin.probeHistory(ctx).lines.find((line) => line.label === "Today")).toBeTruthy()
       const statusLine = result.lines.find((line) => line.label === "Status")
       expect(statusLine).toBeTruthy()
       expect(statusLine.text).toContain("20m")

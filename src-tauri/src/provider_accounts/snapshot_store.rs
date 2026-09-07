@@ -15,6 +15,9 @@ pub(super) struct AccountSnapshot {
     pub(super) lines: Vec<MetricLine>,
     pub(super) started_at: String,
     pub(super) fetched_at: String,
+    // Older Cursor snapshots may contain a guessed 30-day period. Never reuse that guess.
+    #[serde(default)]
+    pub(super) cursor_billing_period_verified: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -93,6 +96,19 @@ impl SnapshotStore {
             lines: output.lines.clone(),
             started_at: started_at.to_string(),
             fetched_at: fetched_at.to_string(),
+            // Current Cursor producers emit this duration only for two reported dates.
+            cursor_billing_period_verified: provider_id == "cursor"
+                && output.lines.iter().any(|line| {
+                    matches!(
+                        line,
+                        MetricLine::Progress {
+                            label,
+                            resets_at: Some(_),
+                            period_duration_ms: Some(duration),
+                            ..
+                        } if label == "Total usage" && *duration > 0
+                    )
+                }),
         };
         if accounts
             .get(account_id)

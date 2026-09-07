@@ -5,7 +5,6 @@
   const QUOTA_URL = "https://open.bigmodel.cn/api/monitor/usage/quota/limit"
   const PERIOD_MS = 5 * 60 * 60 * 1000
   const WEEK_MS = 7 * 24 * 60 * 60 * 1000
-  const MONTH_MS = 30 * 24 * 60 * 60 * 1000
 
   function loadApiKey(ctx) {
     const configured = ctx.host.config && ctx.host.config.get
@@ -55,23 +54,35 @@
     return data
   }
 
-  function findLimit(limits, type, unit) {
-    let fallback = null
+  function quotaWindowMs(item) {
+    const units = { 1: 86400000, 3: 3600000, 5: 60000, 6: WEEK_MS }
+    if (!Number.isInteger(item.unit) || !Number.isInteger(item.number) || item.number <= 0) return null
+    const duration = units[item.unit] * item.number
+    return Number.isSafeInteger(duration) ? duration : null
+  }
+
+  function findLimit(limits, type, durationMs) {
     for (let i = 0; i < limits.length; i++) {
       const item = limits[i]
-      if (item.type === type || item.name === type) {
-        if (unit === undefined) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) continue
+      const kind = item.type || item.name
+      if (kind === type || (type === "TOKENS_LIMIT" && kind === "CREDIT_LIMIT")) {
+        if (durationMs === undefined || quotaWindowMs(item) === durationMs) {
           return item
-        }
-        if (item.unit === unit) {
-          return item
-        }
-        if (fallback === null && item.unit === undefined) {
-          fallback = item
         }
       }
     }
-    return fallback
+    return null
+  }
+
+  function resetTimeIso(ctx, item) {
+    const value = item.nextResetTime
+    if (value === undefined || value === null) return undefined
+    if (!Number.isSafeInteger(value) || value <= 0 || !Number.isFinite(new Date(value).getTime())) {
+      ctx.host.log.error("Quota reset time is not a valid epoch-millisecond timestamp")
+      return undefined
+    }
+    return new Date(value).toISOString()
   }
 
   function extractPlan(ctx, container, quota) {
@@ -94,6 +105,16 @@
     return ctx.line.badge({ label: "Session", text: "No usage data", color: "#a3a3a3" })
   }
 
+  function pushProgress(ctx, lines, options) {
+    const invalidCount = options.format.kind === "count" && (!Number.isSafeInteger(options.used) || !Number.isSafeInteger(options.limit))
+    if (invalidCount || !Number.isFinite(options.used) || options.used < 0 || !Number.isFinite(options.limit) || options.limit <= 0) {
+      ctx.host.log.error(options.label + " quota contains missing or invalid numeric values")
+      lines.push(ctx.line.badge({ label: options.label, text: "Usage unavailable", color: "#f59e0b" }))
+      return
+    }
+    lines.push(ctx.line.progress(options))
+  }
+
   function probe(ctx) {
     const apiKey = loadApiKey(ctx)
     if (!apiKey) {
@@ -103,35 +124,37 @@
     const quota = fetchQuota(ctx, apiKey)
     const container = quota.data || quota
     const plan = extractPlan(ctx, container, quota)
-    const limits = container.limits || container
-    if (!Array.isArray(limits) || limits.length === 0) {
+    const limits = Array.isArray(container) ? container : container.limits
+    if (!Array.isArray(limits)) {
+      ctx.host.log.error("Quota response limits is not an array")
+      throw "Quota data is incomplete or invalid. Try again later."
+    }
+    if (limits.length === 0) {
       return { plan, lines: [noUsageLine(ctx)] }
     }
 
     const lines = []
-    const tokenLimit = findLimit(limits, "TOKENS_LIMIT", 3)
-    if (!tokenLimit) {
-      return { plan, lines: [noUsageLine(ctx)] }
+    const tokenLimit = findLimit(limits, "TOKENS_LIMIT", PERIOD_MS)
+    if (tokenLimit) {
+      const used = tokenLimit.percentage
+      const resetsAt = resetTimeIso(ctx, tokenLimit)
+      const progressOpts = {
+        label: "Session",
+        used,
+        limit: 100,
+        format: { kind: "percent" },
+        periodDurationMs: PERIOD_MS,
+      }
+      if (resetsAt) {
+        progressOpts.resetsAt = resetsAt
+      }
+      pushProgress(ctx, lines, progressOpts)
     }
 
-    const used = typeof tokenLimit.percentage === "number" ? tokenLimit.percentage : 0
-    const resetsAt = tokenLimit.nextResetTime ? ctx.util.toIso(tokenLimit.nextResetTime) : undefined
-    const progressOpts = {
-      label: "Session",
-      used,
-      limit: 100,
-      format: { kind: "percent" },
-      periodDurationMs: PERIOD_MS,
-    }
-    if (resetsAt) {
-      progressOpts.resetsAt = resetsAt
-    }
-    lines.push(ctx.line.progress(progressOpts))
-
-    const weeklyTokenLimit = findLimit(limits, "TOKENS_LIMIT", 6)
+    const weeklyTokenLimit = findLimit(limits, "TOKENS_LIMIT", WEEK_MS)
     if (weeklyTokenLimit) {
-      const weeklyUsed = Number.isFinite(weeklyTokenLimit.percentage) ? weeklyTokenLimit.percentage : 0
-      const weeklyResetsAt = weeklyTokenLimit.nextResetTime ? ctx.util.toIso(weeklyTokenLimit.nextResetTime) : undefined
+      const weeklyUsed = weeklyTokenLimit.percentage
+      const weeklyResetsAt = resetTimeIso(ctx, weeklyTokenLimit)
       const weeklyOpts = {
         label: "Weekly",
         used: weeklyUsed,
@@ -142,32 +165,38 @@
       if (weeklyResetsAt) {
         weeklyOpts.resetsAt = weeklyResetsAt
       }
-      lines.push(ctx.line.progress(weeklyOpts))
+      pushProgress(ctx, lines, weeklyOpts)
     }
 
     const timeLimit = findLimit(limits, "TIME_LIMIT")
     if (timeLimit) {
-      const webUsed = typeof timeLimit.currentValue === "number" ? timeLimit.currentValue : 0
-      const webTotal = typeof timeLimit.usage === "number" ? timeLimit.usage : 0
-      const now = new Date()
-      const nextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1))
-      const webResetsAt = timeLimit.nextResetTime
-        ? ctx.util.toIso(timeLimit.nextResetTime)
-        : nextMonth.toISOString()
+      const webUsed = timeLimit.currentValue
+      const webTotal = timeLimit.usage
+      const webResetsAt = resetTimeIso(ctx, timeLimit)
+      // TIME_LIMIT unit 5 / number 1 is a monthly marker, not a one-minute window.
+      const webPeriodMs = timeLimit.unit === 5 && timeLimit.number === 1 ? null : quotaWindowMs(timeLimit)
 
       const webOpts = {
         label: "Web Searches",
         used: webUsed,
         limit: webTotal,
         format: { kind: "count", suffix: "/ " + webTotal },
-        periodDurationMs: MONTH_MS,
       }
+      if (webPeriodMs) webOpts.periodDurationMs = webPeriodMs
       if (webResetsAt) {
         webOpts.resetsAt = webResetsAt
       }
-      lines.push(ctx.line.progress(webOpts))
+      pushProgress(ctx, lines, webOpts)
     }
 
+    if (limits.some((item) => !item || (item !== tokenLimit && item !== weeklyTokenLimit && item !== timeLimit))) {
+      ctx.host.log.error("Quota response includes unsupported or malformed limits")
+      lines.push(ctx.line.badge({ label: "Quota", text: "Some usage unavailable", color: "#f59e0b" }))
+    }
+    if (!lines.some((line) => line.type === "progress")) {
+      ctx.host.log.error("Quota response has no supported, valid usage limits")
+      throw "Quota data is incomplete or invalid. Try again later."
+    }
     return { plan, lines }
   }
 

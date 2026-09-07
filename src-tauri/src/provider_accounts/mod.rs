@@ -10,6 +10,7 @@ mod history_lease;
 mod history_window;
 mod identity;
 mod keychain;
+mod local_history;
 mod model;
 mod operations;
 mod plugin_adapter;
@@ -41,6 +42,8 @@ mod claude_enrichment_tests;
 mod claude_profile_tests;
 #[cfg(test)]
 mod history_lease_tests;
+#[cfg(test)]
+mod local_history_tests;
 #[cfg(test)]
 mod plugin_adapter_claude_tests;
 #[cfg(test)]

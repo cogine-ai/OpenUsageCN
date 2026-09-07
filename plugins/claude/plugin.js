@@ -595,8 +595,8 @@
     return mins + "m"
   }
 
-  function queryTokenUsage(ctx, homePath) {
-    const since = new Date()
+  function queryTokenUsage(ctx, homePath, now) {
+    const since = new Date(now.getTime())
     // Inclusive range: today + previous 30 days = 31 calendar days.
     since.setDate(since.getDate() - 30)
     const y = since.getFullYear()
@@ -604,7 +604,7 @@
     const d = since.getDate()
     const sinceStr = "" + y + (m < 10 ? "0" : "") + m + (d < 10 ? "0" : "") + d
 
-    const queryOpts = { since: sinceStr }
+    const queryOpts = { since: sinceStr, until: dayKeyFromDate(now).replace(/-/g, "") }
     if (homePath) {
       queryOpts.homePath = homePath
     }
@@ -869,7 +869,6 @@
 
     const nowMs = Date.now()
     let accessToken = creds.oauth.accessToken
-    const homePath = getClaudeHomeOverride(ctx)
     const canFetchLiveUsage = hasProfileScope(creds)
 
     let data = null
@@ -1046,57 +1045,6 @@
       }
     }
 
-    const usageResult = queryTokenUsage(ctx, homePath)
-    if (usageResult.status === "ok") {
-      const usage = usageResult.data
-      const now = new Date()
-      const todayKey = dayKeyFromDate(now)
-      const yesterday = new Date(now.getTime())
-      yesterday.setDate(yesterday.getDate() - 1)
-      const yesterdayKey = dayKeyFromDate(yesterday)
-
-      let todayEntry = null
-      let yesterdayEntry = null
-      for (let i = 0; i < usage.daily.length; i++) {
-        const usageDayKey = dayKeyFromUsageDate(usage.daily[i].date)
-        if (usageDayKey === todayKey) {
-          todayEntry = usage.daily[i]
-          continue
-        }
-        if (usageDayKey === yesterdayKey) {
-          yesterdayEntry = usage.daily[i]
-        }
-      }
-
-      pushDayUsageLine(lines, ctx, "Today", todayEntry)
-      pushDayUsageLine(lines, ctx, "Yesterday", yesterdayEntry)
-
-      let totalTokens = 0
-      let totalCostNanos = 0
-      let hasCost = false
-      for (let i = 0; i < usage.daily.length; i++) {
-        const day = usage.daily[i]
-        const dayTokens = Number(day.totalTokens)
-        if (Number.isFinite(dayTokens)) {
-          totalTokens += dayTokens
-        }
-        const dayCost = usageCostUsd(day)
-        if (dayCost != null) {
-          totalCostNanos += Math.round(dayCost * 1e9)
-          hasCost = true
-        }
-      }
-      if (totalTokens > 0) {
-        lines.push(ctx.line.text({
-          label: "Last 30 Days",
-          value: costAndTokensLabel({ tokens: totalTokens, costUSD: hasCost ? totalCostNanos / 1e9 : null })
-        }))
-      }
-
-      pushUsageChartLine(lines, ctx, usage.daily)
-      pushModelUsageLines(lines, ctx, usage.daily)
-    }
-
     if (rateLimited) {
       const retryText = retryAfterSeconds !== null
         ? fmtRateLimitMinutes(retryAfterSeconds)
@@ -1116,6 +1064,75 @@
     return { plan: plan, lines: lines }
   }
 
+  function probeHistory(ctx, connectionTarget) {
+    const lines = []
+    const now = new Date()
+    const homePath = getClaudeHomeOverride(ctx)
+    const generation = connectionTarget
+      ? credentialGeneration(ctx, connectionTarget)
+      : null
+    if (connectionTarget && generation !== connectionTarget.credentialGeneration) {
+      throw "Claude credentials changed. Refresh this account and try again."
+    }
+    const usageResult = queryTokenUsage(ctx, homePath, now)
+    if (usageResult.status !== "ok") {
+      throw usageResult.status === "no_runner"
+        ? "未找到本地用量工具，请安装 Bun 或 Node.js 后重试。"
+        : "本地 Claude 用量暂时无法读取，请稍后重试。"
+    }
+    const usage = usageResult.data
+    const todayKey = dayKeyFromDate(now)
+    const yesterday = new Date(now.getTime())
+    yesterday.setDate(yesterday.getDate() - 1)
+    const yesterdayKey = dayKeyFromDate(yesterday)
+
+    let todayEntry = null
+    let yesterdayEntry = null
+    for (let i = 0; i < usage.daily.length; i++) {
+      const usageDayKey = dayKeyFromUsageDate(usage.daily[i].date)
+      if (usageDayKey === todayKey) {
+        todayEntry = usage.daily[i]
+        continue
+      }
+      if (usageDayKey === yesterdayKey) {
+        yesterdayEntry = usage.daily[i]
+      }
+    }
+
+    pushDayUsageLine(lines, ctx, "Today", todayEntry)
+    pushDayUsageLine(lines, ctx, "Yesterday", yesterdayEntry)
+
+    let totalTokens = 0
+    let totalCostNanos = 0
+    let hasCost = false
+    for (let i = 0; i < usage.daily.length; i++) {
+      const day = usage.daily[i]
+      const dayTokens = Number(day.totalTokens)
+      if (Number.isFinite(dayTokens)) {
+        totalTokens += dayTokens
+      }
+      const dayCost = usageCostUsd(day)
+      if (dayCost != null) {
+        totalCostNanos += Math.round(dayCost * 1e9)
+        hasCost = true
+      }
+    }
+    if (totalTokens > 0) {
+      lines.push(ctx.line.text({
+        label: "Last 31 Days",
+        value: costAndTokensLabel({ tokens: totalTokens, costUSD: hasCost ? totalCostNanos / 1e9 : null })
+      }))
+    }
+
+    pushUsageChartLine(lines, ctx, usage.daily)
+    pushModelUsageLines(lines, ctx, usage.daily)
+
+    if (connectionTarget && credentialGeneration(ctx, connectionTarget) !== generation) {
+      throw "Claude credentials changed. Refresh this account and try again."
+    }
+    return { lines: lines }
+  }
+
   // _resetState is a testing hook — resets module-scope rate-limit state between tests.
   // The production host never calls this.
   function _resetState() {
@@ -1127,6 +1144,7 @@
   globalThis.__openusage_plugin = {
     id: "claude",
     probe,
+    probeHistory,
     discoverConnections,
     credentialGeneration,
     oauthCredential,

@@ -43,6 +43,7 @@ fn short_final_page_returns_complete_account_aggregate() {
                 time_zone: "America/Los_Angeles".to_string(),
                 complete: true,
                 scope: HistoryScope::SessionVisible,
+                billing_cycle: None,
             },
             totals: HistoryTotals {
                 metered_charged_usd: Some(0.0),

@@ -188,7 +188,7 @@ On Windows, only the five Windows MVP providers are present; the rest of this ta
 |---|---|
 | `alibaba-coding-plan` | `session`, `weekly`, `monthly` |
 | `alibaba-token-plan` | `tokenQuota` |
-| `amp` | `free` |
+| `amp` | `free`, `other`, `orb` |
 | `antigravity` | `geminiPro`, `geminiFlash`, `claude` |
 | `bigmodel-cn` | `session`, `weekly`, `webSearches` |
 | `claude` | `session`, `weekly`, `sonnet`, `claudeDesign`, `extraUsage` |
@@ -220,6 +220,11 @@ On Windows, only the five Windows MVP providers are present; the rest of this ta
 - The single-provider endpoint (`/v1/usage/:providerId`) works for any known provider, including disabled ones.
 - The limits collection follows the same enabled-provider selection. `providers` is an object, so consumers must not rely on key order. Its single-provider route also works for disabled providers.
 - Limits freshness is five minutes. The HTTP API never triggers a refresh. Use the app when fresh data is required; on macOS, the [`openusage` CLI](cli.md) can also refresh it.
+- On macOS, `openusage guard <provider>` checks a session or weekly remaining-quota threshold and returns distinct results for enough quota, insufficient quota, and unknown data. It uses the same selected account and numeric resources. This adds no HTTP endpoint and does not change `openusage.limits.v1`.
+- OpenCode Go's session, weekly and monthly percentages and reset times come from its official account usage API. Local token history is not used to infer the remaining quota.
+- Z.ai and BigModel CN support token and credit plans without changing resource keys. An unavailable bucket is omitted from numeric resources while valid sibling quotas remain available. The API does not turn missing usage into zero or guess reset times.
+- Amp's paid `other` and `orb` resources are percentages. Approximate renewal days are display text only, so these resources do not claim an exact reset timestamp or fixed monthly pace.
+- Codex and Claude local-log history loads separately in the detail page. New quota snapshots and CLI refreshes do not scan local history or publish it through `/v1/usage`; existing cached snapshots are replaced after the next successful quota refresh.
 
 ## CORS
 

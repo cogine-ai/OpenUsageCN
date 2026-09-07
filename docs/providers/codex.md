@@ -12,7 +12,7 @@
 - **Timestamps:** unix seconds
 - **Window durations:** seconds (18000 = 5h, 604800 = 7d)
 
-Codex is enabled by default in the Windows MVP. Windows reads the same remote quota, credits, and manual reset data, but does not run `ccusage`; the local `今日`, `昨日`, `近30天`, and `用量趋势` lines are therefore omitted.
+Codex is enabled by default in the Windows MVP. Windows reads the same remote quota, credits, and manual reset data, but does not run `ccusage` or offer Local History.
 
 ## Endpoints
 
@@ -74,8 +74,8 @@ equivalent at `$0.04` per credit. For example, `820.6969075` renders as
 The plan identifiers `prolite`, `pro_lite`, and `pro-lite` are displayed as `Pro 5x`. Matching
 ignores surrounding whitespace and letter case.
 
-The Codex card uses short Chinese labels: `5小时`, `每周`, `代码审查`, `手动重置`, `点数`,
-`今日`, `昨日`, `近30天`, and `用量趋势`. `5小时` is shown only when an 18000-second window is
+The Codex quota card uses short Chinese labels: `5小时`, `每周`, `代码审查`, `手动重置`, and `点数`.
+`5小时` is shown only when an 18000-second window is
 present. Model names and the `tokens` unit stay unchanged.
 
 Token totals keep one decimal place. Values below `1万` use the original number, values from `1万`
@@ -115,6 +115,21 @@ OpenUsageCN ignores redeemed and expired resets, then shows the nearest valid ex
 `2 次可用 · 下一个2天3时后过期`, `2 次可用 · 下一个 18小时后过期`, and
 `2 次可用 · 下一个 <1小时后过期`. Expiries under 24 hours use a warning color.
 
+## Local History
+
+On macOS, choose **Load Local History** in Codex details to read `今日`, `昨日`, `近31天`, model
+shares, and `用量趋势`. Use **Refresh Local History** to read them again. Opening the page or
+refreshing quota does not launch the local history tool.
+
+History reads the current `CODEX_HOME` logs, or the default Codex directory, through `ccusage`.
+The window includes today and the preceding 30 calendar days. Costs are estimates at API prices;
+local logs may include several sessions and accounts, so these totals are not an account bill.
+
+History has its own loading state, error, and update time. A missing or slow runner does not delay
+quota, reset countdowns, or notifications. History is kept only in the open detail view and is not
+written into quota snapshots. Fresh CLI and `/v1/usage` results contain quota, credits, and resets;
+they no longer include these local history lines. `/v1/limits` remains a quota-only contract.
+
 ## Authentication
 
 ### Credential Storage Locations
@@ -140,7 +155,11 @@ On Windows:
 1. `CODEX_HOME/auth.json` when `CODEX_HOME` is set.
 2. `%USERPROFILE%\.codex\auth.json` otherwise.
 
-The Windows MVP does not read Windows Credential Manager or use the macOS Keychain API. If the file is missing or invalid, run `codex` to sign in and create file-based credentials.
+The Windows MVP does not read Windows Credential Manager or use the macOS Keychain API. When file credentials are missing or invalid, the app explains that file storage is required. Signing in again with `keyring` or `auto` may still leave no readable file.
+
+If you want to use file storage, set `cli_auth_credentials_store = "file"` in your Codex `config.toml`, then run `codex login` and retry in OpenUsageCN. Use the configuration under your `CODEX_HOME`, or `%USERPROFILE%\.codex` when it is unset. OpenUsageCN does not change this setting or move credentials for you. File storage keeps tokens in `auth.json`; keep this file private. See [Codex credential storage](https://learn.chatgpt.com/docs/auth#credential-storage).
+
+Paths containing spaces or Windows backslashes are supported. An explicitly configured `CODEX_HOME` remains authoritative: a missing file there does not make the app read another account from the default directory.
 
 On Windows, set `CODEX_HOME` for your user before the app starts, then fully exit and restart OpenUsageCN. A PowerShell `$env:CODEX_HOME` value is visible only when OpenUsageCN is launched from that terminal session.
 

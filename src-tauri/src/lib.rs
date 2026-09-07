@@ -6,6 +6,7 @@ pub mod cli;
 mod cli_installer;
 mod config;
 mod cursor_history;
+mod local_history;
 mod local_http_api;
 mod log_path;
 mod notifications;
@@ -1302,7 +1303,10 @@ pub fn run() {
             discover_browser_accounts,
             cancel_browser_discovery,
             get_cursor_history_snapshot,
+            cursor_history::commands::list_cursor_history_snapshots,
+            cursor_history::commands::export_cursor_history_csv,
             refresh_cursor_history,
+            local_history::refresh_local_history,
             platform_capabilities::get_platform_capabilities,
             windows_autostart::repair_windows_autostart_command,
             provider_status::get_provider_status,

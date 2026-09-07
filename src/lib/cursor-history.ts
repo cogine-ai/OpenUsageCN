@@ -21,6 +21,7 @@ export type CursorHistoryCoverage = {
   timeZone: string
   complete: boolean
   scope: "sessionVisible"
+  billingCycle?: { startMs: number; endMs: number }
 }
 
 export type CursorHistoryTotals = {
@@ -66,4 +67,17 @@ export function refreshCursorHistory(
   input: CursorHistoryRefreshInput
 ): Promise<CursorHistoryRefreshResult> {
   return invoke<CursorHistoryRefreshResult>("refresh_cursor_history", input)
+}
+
+export function listCursorHistorySnapshots(providerId: string, accountId: string): Promise<CompleteHistory[]> {
+  return invoke<CompleteHistory[]>("list_cursor_history_snapshots", { providerId, accountId })
+}
+
+export function exportCursorHistoryCsv(providerId: string, accountId: string, history: CompleteHistory): Promise<string> {
+  const { fromMs, toMs, fetchedAtMs } = history.coverage
+  return invoke<string>("export_cursor_history_csv", {
+    providerId,
+    accountId,
+    snapshot: { fromMs, toMs, fetchedAtMs },
+  })
 }

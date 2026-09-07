@@ -29,6 +29,16 @@ On Windows, environment fallbacks must be present before the app starts. Set the
 | Weekly Spend  | Weekly key usage, when returned         |
 | Monthly Spend | Monthly key usage, when returned        |
 
+Key Limit uses the key's remaining quota, including any BYOK spending counted by
+OpenRouter. Lifetime spending is not compared with a daily, weekly, or monthly
+limit. A key with a daily limit of $10 and $8 remaining therefore shows $2 used,
+even if its lifetime spending is $100. Negative remaining quota is shown as usage
+above the limit. If current quota data is invalid or missing, the refresh reports
+an error and keeps the previous successful reading.
+
+For an all-time key that omits the remaining field, lifetime usage is used, with
+BYOK usage included only when the key explicitly counts it toward the limit.
+
 ## Endpoint
 
 The plugin requests:
@@ -40,6 +50,10 @@ Authorization: Bearer <api_key>
 ```
 
 If one endpoint is unavailable but the other succeeds, OpenUsageCN still shows the available usage data.
+
+Diagnostic logs redact the key creator's user ID returned by the
+[current-key endpoint](https://openrouter.ai/docs/api/api-reference/api-keys/get-current-api-key).
+Quota counters and reset policies remain available for troubleshooting.
 
 ## Errors
 

@@ -7,7 +7,7 @@ Plugin structure, manifest format, output schema, and lifecycle.
 ```
 Auto-update timer fires (or app loads)
        |
-Tauri command `run_plugin_probes(pluginIds?)`
+Tauri command `start_probe_batch(pluginIds?)`
        |
 For each enabled plugin:
   -> Create fresh QuickJS sandbox
@@ -16,7 +16,7 @@ For each enabled plugin:
   -> Call `probe(ctx)`
   -> Parse returned `{ lines: MetricLine[] }`
        |
-Return `PluginOutput[]` to frontend
+Publish each current result as `probe:result`
        |
 UI renders via ProviderCard component
 ```
@@ -255,6 +255,12 @@ globalThis.__openusage_plugin = {
   probe: function(ctx) { ... }
 }
 ```
+
+Bundled Codex and Claude also export `probeHistory(ctx, connectionTarget?)`. The detail page calls
+it only after an explicit local history request, in its own sandbox. Its `{ lines }` result contains
+text and chart rows, is held only by the detail view, and does not replace the `probe` result.
+For Claude, the target carries the selected local connection key and credential generation. This
+optional detail entry point is currently enabled only for those two bundled providers.
 
 ## Output Schema
 

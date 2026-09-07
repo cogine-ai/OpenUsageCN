@@ -157,7 +157,6 @@ struct UsageBlock {
 struct LegacyUsage {
     #[serde(rename = "gpt-4")]
     gpt4: Option<LegacyModelUsage>,
-    start_of_month: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -313,7 +312,6 @@ fn decode_legacy_output(
         .or_else(|| nonnegative(model.num_requests))
         .ok_or(DecodeError::Invalid)?;
     let limit = positive(model.max_request_usage).ok_or(DecodeError::Invalid)?;
-    let resets_at = usage.start_of_month.as_deref().and_then(legacy_reset_at);
     let lines = vec![progress(
         "Requests",
         Some("requests"),
@@ -322,8 +320,8 @@ fn decode_legacy_output(
         ProgressFormat::Count {
             suffix: "requests".to_string(),
         },
-        resets_at,
-        Some(30 * 24 * 60 * 60 * 1_000),
+        None,
+        None,
     )];
     Ok(output(display_name, icon_url, membership_type, lines))
 }
@@ -436,19 +434,12 @@ fn billing_period_ms(start: Option<&str>, end: Option<&str>) -> Option<u64> {
     let format = &time::format_description::well_known::Rfc3339;
     let start = time::OffsetDateTime::parse(start?, format).ok()?;
     let end = time::OffsetDateTime::parse(end?, format).ok()?;
-    u64::try_from((end - start).whole_milliseconds()).ok()
-}
-
-fn legacy_reset_at(start: &str) -> Option<String> {
-    let date = time::Date::parse(
-        start,
-        &time::format_description::parse("[year]-[month]-[day]").ok()?,
-    )
-    .ok()?;
-    let reset = date.midnight().assume_utc() + time::Duration::days(30);
-    reset
-        .format(&time::format_description::well_known::Rfc3339)
+    if start.unix_timestamp_nanos() <= 0 || end <= start {
+        return None;
+    }
+    u64::try_from((end - start).whole_milliseconds())
         .ok()
+        .filter(|duration| *duration > 0)
 }
 
 fn decode_error_message(error: DecodeError) -> String {

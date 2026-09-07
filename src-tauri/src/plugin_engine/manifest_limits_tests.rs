@@ -99,7 +99,7 @@ fn bundled_provider_limit_resource_keys_are_stable() {
     let expected: BTreeMap<String, BTreeSet<String>> = [
         ("alibaba-coding-plan", &["monthly", "session", "weekly"][..]),
         ("alibaba-token-plan", &["tokenQuota"][..]),
-        ("amp", &["free"][..]),
+        ("amp", &["free", "orb", "other"][..]),
         ("antigravity", &["claude", "geminiFlash", "geminiPro"][..]),
         ("bigmodel-cn", &["session", "webSearches", "weekly"][..]),
         (

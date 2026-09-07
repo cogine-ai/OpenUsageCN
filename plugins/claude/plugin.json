@@ -23,10 +23,6 @@
     { "type": "progress", "label": "Weekly", "scope": "overview", "period": "weekly", "primaryOrder": 2, "limitResource": { "key": "weekly" } },
     { "type": "progress", "label": "Sonnet", "scope": "detail", "limitResource": { "key": "sonnet" } },
     { "type": "progress", "label": "Claude Design", "scope": "detail", "limitResource": { "key": "claudeDesign" } },
-    { "type": "progress", "label": "Extra usage spent", "scope": "overview", "primaryOrder": 3, "limitResource": { "key": "extraUsage" } },
-    { "type": "text", "label": "Today", "scope": "detail" },
-    { "type": "text", "label": "Yesterday", "scope": "detail" },
-    { "type": "text", "label": "Last 30 Days", "scope": "detail" },
-    { "type": "barChart", "label": "Usage Trend", "scope": "detail" }
+    { "type": "progress", "label": "Extra usage spent", "scope": "overview", "primaryOrder": 3, "limitResource": { "key": "extraUsage" } }
   ]
 }

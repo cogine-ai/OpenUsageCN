@@ -135,7 +135,7 @@ impl HistoryService {
                 request,
                 &|| cancel.is_cancelled(),
             );
-            let history = match fetched {
+            let mut history = match fetched {
                 Ok(history) => history,
                 Err(error) => return Ok(failed_refresh(prior_for_job, error)),
             };
@@ -151,6 +151,7 @@ impl HistoryService {
                 ));
             }
 
+            history.coverage.billing_cycle = window.billing_cycle;
             let mut commit = || {
                 if cancel.is_cancelled() {
                     return Err(HistoryError::Cancelled);

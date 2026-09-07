@@ -155,4 +155,73 @@ describe("openrouter plugin", () => {
     expect(result.lines.find((line) => line.label === "Key Limit").limit).toBe(25)
     expect(result.lines.find((line) => line.label === "Credits")).toBeUndefined()
   })
+
+  it.each(["daily", "weekly", "monthly", null])(
+    "uses remaining key quota instead of lifetime spend for a %s limit",
+    async (reset) => {
+      const ctx = makeCtx()
+      setEnv(ctx, { OPENROUTER_API_KEY: "fixture-key" })
+      ctx.host.http.request.mockImplementation((opts) => ({
+        status: opts.url.endsWith("/credits") ? 403 : 200,
+        bodyText: JSON.stringify({ data: {
+          limit: 10, limit_remaining: 8, limit_reset: reset,
+          usage: 100, usage_daily: 2, usage_weekly: 5, usage_monthly: 9,
+        } }),
+      }))
+      const result = (await loadPlugin()).probe(ctx)
+      expect(result.lines.find((line) => line.label === "Key Limit")).toMatchObject({
+        used: 2, limit: 10,
+      })
+    },
+  )
+
+  it("keeps exhausted and overdrawn key quotas distinct", async () => {
+    const plugin = await loadPlugin()
+    for (const [remaining, expectedUsed] of [[0, 10], [-2, 12]]) {
+      const ctx = makeCtx()
+      setEnv(ctx, { OPENROUTER_API_KEY: "fixture-key" })
+      ctx.host.http.request.mockReturnValue({
+        status: 200,
+        bodyText: JSON.stringify({ data: { limit: 10, limit_remaining: remaining, usage: 100 } }),
+      })
+      expect(plugin.probe(ctx).lines.find((line) => line.label === "Key Limit").used)
+        .toBe(expectedUsed)
+    }
+  })
+
+  it("does not substitute lifetime spend when a resettable key omits remaining quota", async () => {
+    const ctx = makeCtx()
+    setEnv(ctx, { OPENROUTER_API_KEY: "fixture-key" })
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify({ data: { limit: 10, limit_reset: "daily", usage: 100 } }),
+    })
+    await loadPlugin()
+    expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("Key quota is unavailable")
+    expect(ctx.host.log.error).toHaveBeenCalled()
+  })
+
+  it.each(["", "not-a-number", 11])("rejects invalid remaining key quota %s", async (remaining) => {
+    const ctx = makeCtx()
+    setEnv(ctx, { OPENROUTER_API_KEY: "fixture-key" })
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify({ data: { limit: 10, limit_remaining: remaining, usage: 100 } }),
+    })
+    const plugin = await loadPlugin()
+    expect(() => plugin.probe(ctx)).toThrow("Key quota is unavailable")
+  })
+
+  it("counts BYOK spend when an all-time key includes it in the limit", async () => {
+    const ctx = makeCtx()
+    setEnv(ctx, { OPENROUTER_API_KEY: "fixture-key" })
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify({ data: {
+        limit: 10, usage: 2, byok_usage: 3, include_byok_in_limit: true,
+      } }),
+    })
+    const result = (await loadPlugin()).probe(ctx)
+    expect(result.lines.find((line) => line.label === "Key Limit").used).toBe(5)
+  })
 })

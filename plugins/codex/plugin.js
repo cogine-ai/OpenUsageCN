@@ -10,6 +10,7 @@
   const REFRESH_AGE_MS = 8 * 24 * 60 * 60 * 1000
   const ACCESS_TOKEN_REFRESH_WINDOW_MS = 5 * 60 * 1000
   const ERR_NOT_LOGGED_IN = "Not logged in. Run `codex` to authenticate."
+  const ERR_WINDOWS_FILE_AUTH = 'Not logged in with readable file credentials. Windows requires Codex file storage: set `cli_auth_credentials_store = "file"` in your Codex `config.toml`, then run `codex login`.'
   const ERR_SESSION_EXPIRED = "Session expired. Run `codex` to log in again."
   const ERR_TOKEN_CONFLICT = "Token conflict. Run `codex` to log in again."
   const ERR_TOKEN_REVOKED = "Token revoked. Run `codex` to log in again."
@@ -503,7 +504,7 @@
     return fallbackKind
   }
 
-  function queryTokenUsage(ctx) {
+  function queryTokenUsage(ctx, now) {
     if (isWindows(ctx)) {
       return { status: "no_runner", data: null }
     }
@@ -511,14 +512,14 @@
       return { status: "no_runner", data: null }
     }
 
-    const since = new Date()
+    const since = new Date(now.getTime())
     // Inclusive range: today + previous 30 days = 31 calendar days.
     since.setDate(since.getDate() - 30)
     const y = since.getFullYear()
     const m = since.getMonth() + 1
     const d = since.getDate()
     const sinceStr = "" + y + (m < 10 ? "0" : "") + m + (d < 10 ? "0" : "") + d
-    const queryOpts = { provider: "codex", since: sinceStr }
+    const queryOpts = { provider: "codex", since: sinceStr, until: dayKeyFromDate(now).replace(/-/g, "") }
     const codexHome = readCodexHome(ctx)
     if (codexHome) {
       queryOpts.homePath = codexHome
@@ -729,7 +730,7 @@
     lines.push(ctx.line.barChart({
       label: "用量趋势",
       points: points,
-      note: "根据所选账号的本地 Codex 日志估算。",
+      note: "根据当前本地 Codex 日志按 API 价格估算，不代表账号账单。",
       color: "#74AA9C",
     }))
   }
@@ -1013,59 +1014,6 @@
         }
       }
 
-      const tokenUsageResult = queryTokenUsage(ctx)
-      if (tokenUsageResult.status === "ok") {
-        const tokenUsage = tokenUsageResult.data
-        const now = new Date()
-        const todayKey = dayKeyFromDate(now)
-        const yesterday = new Date(now.getTime())
-        yesterday.setDate(yesterday.getDate() - 1)
-        const yesterdayKey = dayKeyFromDate(yesterday)
-
-        let todayEntry = null
-        let yesterdayEntry = null
-        for (let i = 0; i < tokenUsage.daily.length; i++) {
-          const usageDayKey = dayKeyFromUsageDate(tokenUsage.daily[i].date)
-          if (usageDayKey === todayKey) {
-            todayEntry = tokenUsage.daily[i]
-            continue
-          }
-          if (usageDayKey === yesterdayKey) {
-            yesterdayEntry = tokenUsage.daily[i]
-          }
-        }
-
-        pushDayUsageLine(lines, ctx, "今日", todayEntry)
-        pushDayUsageLine(lines, ctx, "昨日", yesterdayEntry)
-
-        let totalTokens = 0
-        let totalCostNanos = 0
-        let hasCost = false
-        for (let i = 0; i < tokenUsage.daily.length; i++) {
-          const day = tokenUsage.daily[i]
-          const dayTokens = Number(day.totalTokens)
-          if (Number.isFinite(dayTokens)) {
-            totalTokens += dayTokens
-          }
-
-          const dayCost = usageCostUsd(day)
-          if (dayCost != null) {
-            totalCostNanos += Math.round(dayCost * 1e9)
-            hasCost = true
-          }
-        }
-
-        if (totalTokens > 0) {
-          lines.push(ctx.line.text({
-            label: "近30天",
-            value: costAndTokensLabel({ tokens: totalTokens, costUSD: hasCost ? totalCostNanos / 1e9 : null })
-          }))
-        }
-
-        pushUsageChartLine(lines, ctx, tokenUsage.daily)
-        pushModelUsageLines(lines, ctx, tokenUsage.daily)
-      }
-
       if (lines.length === 0) {
         lines.push(ctx.line.badge({ label: "Status", text: "No usage data", color: "#a3a3a3" }))
       }
@@ -1078,6 +1026,67 @@
     }
 
     throw ERR_NOT_LOGGED_IN
+  }
+
+  function probeHistory(ctx) {
+    const lines = []
+    const now = new Date()
+    const tokenUsageResult = queryTokenUsage(ctx, now)
+    if (tokenUsageResult.status !== "ok") {
+      throw tokenUsageResult.status === "no_runner"
+        ? "未找到本地用量工具，请安装 Bun 或 Node.js 后重试。"
+        : "本地 Codex 用量暂时无法读取，请稍后重试。"
+    }
+    const tokenUsage = tokenUsageResult.data
+    const todayKey = dayKeyFromDate(now)
+    const yesterday = new Date(now.getTime())
+    yesterday.setDate(yesterday.getDate() - 1)
+    const yesterdayKey = dayKeyFromDate(yesterday)
+
+    let todayEntry = null
+    let yesterdayEntry = null
+    for (let i = 0; i < tokenUsage.daily.length; i++) {
+      const usageDayKey = dayKeyFromUsageDate(tokenUsage.daily[i].date)
+      if (usageDayKey === todayKey) {
+        todayEntry = tokenUsage.daily[i]
+        continue
+      }
+      if (usageDayKey === yesterdayKey) {
+        yesterdayEntry = tokenUsage.daily[i]
+      }
+    }
+
+    pushDayUsageLine(lines, ctx, "今日", todayEntry)
+    pushDayUsageLine(lines, ctx, "昨日", yesterdayEntry)
+
+    let totalTokens = 0
+    let totalCostNanos = 0
+    let hasCost = false
+    for (let i = 0; i < tokenUsage.daily.length; i++) {
+      const day = tokenUsage.daily[i]
+      const dayTokens = Number(day.totalTokens)
+      if (Number.isFinite(dayTokens)) {
+        totalTokens += dayTokens
+      }
+
+      const dayCost = usageCostUsd(day)
+      if (dayCost != null) {
+        totalCostNanos += Math.round(dayCost * 1e9)
+        hasCost = true
+      }
+    }
+
+    if (totalTokens > 0) {
+      lines.push(ctx.line.text({
+        label: "近31天",
+        value: costAndTokensLabel({ tokens: totalTokens, costUSD: hasCost ? totalCostNanos / 1e9 : null })
+      }))
+    }
+
+    pushUsageChartLine(lines, ctx, tokenUsage.daily)
+    pushModelUsageLines(lines, ctx, tokenUsage.daily)
+
+    return { lines: lines }
   }
 
   function probe(ctx) {
@@ -1114,8 +1123,8 @@
     }
 
     ctx.host.log.error("probe failed: not logged in")
-    throw ERR_NOT_LOGGED_IN
+    throw isWindows(ctx) ? ERR_WINDOWS_FILE_AUTH : ERR_NOT_LOGGED_IN
   }
 
-  globalThis.__openusage_plugin = { id: "codex", probe }
+  globalThis.__openusage_plugin = { id: "codex", probe, probeHistory }
 })()

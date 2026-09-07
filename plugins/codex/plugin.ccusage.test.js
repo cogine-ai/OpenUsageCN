@@ -57,12 +57,12 @@ describe("codex plugin ccusage usage trend", () => {
     })
 
     const plugin = await loadPlugin()
-    const result = plugin.probe(ctx)
+    const result = plugin.probeHistory(ctx)
 
     const chart = result.lines.find((line) => line.label === "用量趋势")
     expect(chart).toMatchObject({
       type: "barChart",
-      note: "根据所选账号的本地 Codex 日志估算。",
+      note: "根据当前本地 Codex 日志按 API 价格估算，不代表账号账单。",
     })
     expect(chart.points.map((point) => point.value)).toEqual([150, 300])
 
@@ -102,7 +102,7 @@ describe("codex plugin ccusage usage trend", () => {
     })
 
     const plugin = await loadPlugin()
-    const result = plugin.probe(ctx)
+    const result = plugin.probeHistory(ctx)
     const chart = result.lines.find((line) => line.label === "用量趋势")
     expect(chart.points.map((point) => point.valueLabel)).toEqual([
       "9999.0 tokens",

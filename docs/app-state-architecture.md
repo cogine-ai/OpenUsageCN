@@ -25,6 +25,15 @@
 4. `App.tsx` passes derived values directly to `AppShell` and `AppContent`.
 5. `AppShell` and `AppContent` render from those direct props and source stores.
 
+## Connection Recovery
+
+- Provider cards show short recovery advice for recognized credential, login, permission, network, rate-limit, and response-format errors. Unrecognized failures stay explicitly unclassified.
+- Error details remain available as selectable text with common credential values hidden. URLs from error messages do not become action links.
+- A failed refresh keeps the last successful data visible beside the recovery message and Retry button.
+- Explicit retry from the card, sidebar, or Refresh All bypasses the previous successful refresh's cooldown for failed providers. Loading providers still cannot be retried twice at once. Successful providers keep the normal cooldown.
+- These actions do not add automatic retries or change failure backoff. Saving provider settings and switching accounts keep their existing immediate refresh paths.
+- Recovery advice does not edit credentials. Claude Code remains responsible for renewing its Keychain credentials.
+
 ## Shared usage readers
 
 - The menu-bar app and one-shot CLI both run the same plugin probes and read the same provider settings.
@@ -36,6 +45,22 @@
 - Account revision events contain only a provider id and monotonic revision. The frontend fresh-reads the account view instead of receiving account data in the event.
 - Switching to an account without a readable snapshot removes the previous account's provider projection while the new probe is loading. A failed probe does not overwrite a previously successful snapshot for the same selected account. If the account registry itself is unavailable, the last projection stays readable with an error instead of being silently deleted.
 - `/v1/limits` projects that cache into stable numeric resources. The CLI can also refresh stale data without starting the Tauri UI or local HTTP server.
+
+## Recorded Cursor Windows
+
+- Cursor history retains at most 12 recorded windows per account, separately from quota snapshots. A successful refresh replaces the saved snapshot for the same billing cycle without adding overlapping events twice.
+- Recorded windows keep their actual coverage, time zone and billing-cycle boundaries. Complete pagination does not imply a complete billing cycle. Old records without cycle metadata remain readable and are labelled as unknown-cycle coverage.
+- Selecting an older record reads local data only. CSV export reads the chosen stored record, uses a new file in Downloads, and keeps list-price estimates separate from metered amounts. Failed exports remain visible to the user and in logs.
+- Comparisons require matching coverage and cost completeness; unavailable comparisons do not show a change percentage. See [Usage History](usage-history.md).
+
+## Local Detail History
+
+- Codex and Claude quota probes do not run `ccusage`. The app, CLI, and fresh `/v1/usage` snapshots contain their live quota data without local history lines.
+- The detail page loads local history only after an explicit request. The history command and hook own their result, loading state, error, and update time; they never publish a quota event or write quota snapshots.
+- An old request cannot replace a newer request or a different account's result. Claude also checks the selected local connection, credential generation, verified identity, and persisted account binding before returning history. Accounts without that local connection cannot load it.
+- Local history describes the current log directory and API-price estimates, not an account bill. It is not persisted and does not enter the tray, notifications, CLI, or Local HTTP cache. Closing the detail page or changing its account or CLI connection clears it. Ordinary quota updates and same-account refreshes keep loaded and pending history; account operations temporarily disable new history requests.
+- History runner discovery and execution share a separate bounded runtime budget. A failed history request remains visible in the history section and leaves quota freshness unchanged.
+- History errors redact known credentials and local paths before they are logged or displayed.
 
 ## Account-Scoped Detail Data
 

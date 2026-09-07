@@ -1,0 +1,98 @@
+[
+  {
+    "accountId": "cursor-demo-account",
+    "buckets": [
+      {
+        "localDate": "2026-09-01",
+        "modelName": "gpt-5",
+        "inputTokens": 500000,
+        "outputTokens": 70000,
+        "cacheWriteTokens": 10000,
+        "cacheReadTokens": 180000,
+        "requestCount": 240,
+        "knownListCostUsd": 20,
+        "listCostCoverage": "complete"
+      }
+    ],
+    "coverage": {
+      "fromMs": 1788220800000,
+      "toMs": 1788739200000,
+      "fetchedAtMs": 1788739200000,
+      "timeZone": "Asia/Taipei",
+      "complete": true,
+      "scope": "sessionVisible",
+      "billingCycle": {
+        "startMs": 1788220800000,
+        "endMs": 1790812800000
+      }
+    },
+    "totals": {
+      "meteredChargedUsd": 12,
+      "meteredCoverage": "complete"
+    }
+  },
+  {
+    "accountId": "cursor-demo-account",
+    "buckets": [
+      {
+        "localDate": "2026-08-01",
+        "modelName": "claude-sonnet-4.5",
+        "inputTokens": 250000,
+        "outputTokens": 35000,
+        "cacheWriteTokens": 5000,
+        "cacheReadTokens": 90000,
+        "requestCount": 120,
+        "knownListCostUsd": 10,
+        "listCostCoverage": "complete"
+      }
+    ],
+    "coverage": {
+      "fromMs": 1785542400000,
+      "toMs": 1786060800000,
+      "fetchedAtMs": 1786060800000,
+      "timeZone": "Asia/Taipei",
+      "complete": true,
+      "scope": "sessionVisible",
+      "billingCycle": {
+        "startMs": 1785542400000,
+        "endMs": 1788220800000
+      }
+    },
+    "totals": {
+      "meteredChargedUsd": 6,
+      "meteredCoverage": "complete"
+    }
+  },
+  {
+    "accountId": "cursor-demo-account",
+    "buckets": [
+      {
+        "localDate": "2026-07-01",
+        "modelName": "composer-1.5",
+        "inputTokens": 250000,
+        "outputTokens": 35000,
+        "cacheWriteTokens": 5000,
+        "cacheReadTokens": 90000,
+        "requestCount": 120,
+        "knownListCostUsd": 10,
+        "listCostCoverage": "complete"
+      }
+    ],
+    "coverage": {
+      "fromMs": 1782864000000,
+      "toMs": 1783728000000,
+      "fetchedAtMs": 1783728000000,
+      "timeZone": "Asia/Taipei",
+      "complete": true,
+      "scope": "sessionVisible",
+      "billingCycle": {
+        "startMs": 1782864000000,
+        "endMs": 1785542400000
+      }
+    },
+    "totals": {
+      "meteredChargedUsd": 6,
+      "meteredCoverage": "complete"
+    }
+  }
+]

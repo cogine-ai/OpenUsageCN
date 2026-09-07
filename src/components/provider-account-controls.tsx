@@ -3,6 +3,7 @@ import { AlertTriangle, Globe2, Pencil, RefreshCw, Unlink } from "lucide-react"
 
 import { BrowserAccountManager } from "@/components/browser-account-manager"
 import { CursorModelUsage } from "@/components/cursor-model-usage"
+import { LocalUsageHistory } from "@/components/local-usage-history"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -63,6 +64,12 @@ export function ProviderAccountControls({
     receipt?.sourceOutcomes
       .filter((outcome) => outcome.status === "unavailable")
       .map((outcome) => outcome.sourceKey) ?? []
+  const localHistoryAccount = providerId === "claude" && view?.providerId === providerId
+    ? view.accounts.find((account) => account.accountId === view.activeAccountId)
+    : undefined
+  const localHistoryConnection = localHistoryAccount?.connections.find(
+    (connection) => connection.kind === "cli" && connection.available
+  )
 
   return (
     <>
@@ -335,6 +342,14 @@ export function ProviderAccountControls({
           providerId={providerId}
           accountId={view.activeAccountId}
           demandRevision={accountRevision}
+        />
+      ) : null}
+      {!loading && localHistoryAccount && localHistoryConnection ? (
+        <LocalUsageHistory
+          key={`${providerId}:${localHistoryAccount.accountId}:${localHistoryConnection.connectionId}`}
+          providerId={providerId}
+          accountId={localHistoryAccount.accountId}
+          disabled={busy}
         />
       ) : null}
     </>

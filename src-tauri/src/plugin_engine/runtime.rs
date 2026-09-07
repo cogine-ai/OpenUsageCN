@@ -7,6 +7,10 @@ use std::time::{Duration, Instant};
 
 const PROBE_TIMEOUT_SECS: u64 = 30;
 
+#[cfg(test)]
+#[path = "runtime_history_tests.rs"]
+mod history_tests;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum ProgressFormat {
@@ -82,6 +86,7 @@ pub fn run_probe(plugin: &LoadedPlugin, app_data_dir: &PathBuf, app_version: &st
         app_version,
         Duration::from_secs(PROBE_TIMEOUT_SECS),
         None,
+        "probe",
     )
 }
 
@@ -98,6 +103,23 @@ pub(crate) fn run_probe_for_connection(
         app_version,
         Duration::from_secs(PROBE_TIMEOUT_SECS),
         Some((connection_key, credential_generation)),
+        "probe",
+    )
+}
+
+pub(crate) fn run_local_history(
+    plugin: &LoadedPlugin,
+    app_data_dir: &PathBuf,
+    app_version: &str,
+    connection_target: Option<(&str, &str)>,
+) -> PluginOutput {
+    run_probe_with_timeout_and_connection(
+        plugin,
+        app_data_dir,
+        app_version,
+        Duration::from_secs(PROBE_TIMEOUT_SECS),
+        connection_target,
+        "probeHistory",
     )
 }
 
@@ -112,7 +134,7 @@ fn run_probe_with_timeout(
     app_version: &str,
     timeout: Duration,
 ) -> PluginOutput {
-    run_probe_with_timeout_and_connection(plugin, app_data_dir, app_version, timeout, None)
+    run_probe_with_timeout_and_connection(plugin, app_data_dir, app_version, timeout, None, "probe")
 }
 
 fn run_probe_with_timeout_and_connection(
@@ -121,6 +143,7 @@ fn run_probe_with_timeout_and_connection(
     app_version: &str,
     timeout: Duration,
     connection_target: Option<(&str, &str)>,
+    entrypoint: &str,
 ) -> PluginOutput {
     let fallback = error_output(plugin, "runtime error".to_string());
     let timeout_message = probe_timeout_message(timeout);
@@ -206,9 +229,9 @@ fn run_probe_with_timeout_and_connection(
             Err(_) => return error_output(plugin, "missing __openusage_plugin".to_string()),
         };
 
-        let probe_fn: rquickjs::Function = match plugin_obj.get("probe") {
+        let probe_fn: rquickjs::Function = match plugin_obj.get(entrypoint) {
             Ok(f) => f,
-            Err(_) => return error_output(plugin, "missing probe()".to_string()),
+            Err(_) => return error_output(plugin, format!("missing {entrypoint}()")),
         };
 
         let probe_ctx: Value = globals

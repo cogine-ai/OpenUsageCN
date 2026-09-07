@@ -23,14 +23,15 @@ OpenUsageCN 常驻菜单栏或系统托盘，用一个轻量面板展示各类 A
 
 - **集中查看。** 把多个 AI 工具的用量放在同一个托盘面板里。
 - **自动刷新。** 按你设置的间隔更新；已知额度重置后，会优先刷新对应服务商。
-- **故障提示。** 支持的服务商报告服务异常时，在用量卡片中显示状态页提示。
+- **故障恢复。** 登录、权限、网络和限流问题提供操作建议及重试入口；更新失败时保留上次成功的数据。支持的服务商还会显示状态页提示。
+- **[用量历史](docs/usage-history.md)。** Cursor 可查看已记录账期并导出 CSV；Codex 和 Claude 的本地历史在详情页按需加载，实时额度不等待日志统计。
 - **[额度通知](docs/pace-notifications.md)。** macOS 可按需开启即将用尽、接近上限和预计提前用尽三类系统通知。
 - **全局快捷键。** macOS 可以用快捷键从任何地方打开或关闭面板。
 - **轻量常驻。** 启动快，不打断当前工作流。
 - **登录时启动。** macOS 和 Windows 都可以在设置中开启。
 - **插件化服务商。** 新服务通过插件接入，主程序保持稳定。
 - **[本地 HTTP API](docs/local-http-api.md)。** 其他本地工具可以从 `127.0.0.1:6736` 读取用量，或通过 `/v1/limits` 获取稳定的机器可读额度。
-- **[全局 CLI](docs/cli.md)。** macOS 可安装 `openusage` 命令，让脚本和本地智能体读取或刷新额度。
+- **[全局 CLI](docs/cli.md)。** macOS 可安装 `openusage` 命令，让脚本和本地智能体读取或刷新额度；`openusage guard` 可在启动任务前检查剩余额度阈值，并区分不足与无法判断。
 - **[代理支持](docs/proxy.md)。** 服务商请求会继承环境变量及 macOS/Windows 系统代理，也可以使用手动配置的 SOCKS5 或 HTTP 代理。
 
 ## 支持的服务商
@@ -39,13 +40,13 @@ Windows MVP 仅启用和展示 **Codex、BigModel CN、OpenAI API、OpenRouter �
 
 - [**Alibaba Coding Plan**](docs/providers/alibaba-coding-plan.md)：5 小时、weekly、monthly coding plan quota
 - [**Alibaba Token Plan**](docs/providers/alibaba-token-plan.md)：token plan quota、remaining、expires
-- [**Amp**](docs/providers/amp.md)：免费额度、奖励额度、credits
+- [**Amp**](docs/providers/amp.md)：免费额度、付费 Other/Orb 额度、奖励额度、credits
 - [**Antigravity**](docs/providers/antigravity.md)：全部模型用量
-- [**BigModel CN**](docs/providers/bigmodel-cn.md)：session、weekly、web searches、设置页 API Key
-- [**Claude**](docs/providers/claude.md)：session、weekly、extra usage、本地 token 用量（ccusage）、可验证的 Team 席位
+- [**BigModel CN**](docs/providers/bigmodel-cn.md)：token/credit 计划的 session、weekly、web searches、设置页 API Key
+- [**Claude**](docs/providers/claude.md)：session、weekly、extra usage、按需加载本地 token 用量（ccusage）、可验证的 Team 席位
 - [**Codex**](docs/providers/codex.md)：5 小时、每周、代码审查、点数、手动重置及最近到期时间
 - [**Copilot**](docs/providers/copilot.md)：premium、chat、completions
-- [**Cursor**](docs/providers/cursor.md)：credits、总用量、Desktop/CLI/Chrome/Arc 多账号、当前账期按模型 token 用量
+- [**Cursor**](docs/providers/cursor.md)：credits、总用量、Desktop/CLI/Chrome/Arc 多账号、按模型用量、已记录账期比较和 CSV 导出
 - [**Factory / Droid**](docs/providers/factory.md)：standard、premium tokens
 - [**Gemini**](docs/providers/gemini.md)：Gemini CLI OAuth quota、Pro、Flash、Flash Lite
 - [**Grok**](docs/providers/grok.md)：credits used、plan、pay-as-you-go cap
@@ -55,12 +56,12 @@ Windows MVP 仅启用和展示 **Codex、BigModel CN、OpenAI API、OpenRouter �
 - [**MiniMax**](docs/providers/minimax.md)：coding plan session
 - [**OpenAI API**](docs/providers/openai-api.md)：organization spend、requests、tokens、legacy credits
 - [**OpenCode**](docs/providers/opencode.md)：opencode.ai session、weekly subscription usage
-- [**OpenCode Go**](docs/providers/opencode-go.md)：5h、weekly、monthly spend limits
+- [**OpenCode Go**](docs/providers/opencode-go.md)：账号级 5h、weekly、monthly 额度百分比及官方重置时间
 - [**OpenRouter**](docs/providers/openrouter.md)：credits、balance、key usage
 - [**Perplexity**](docs/providers/perplexity.md)：balance、usage analytics、本地 app session
 - [**Synthetic**](docs/providers/synthetic.md)：subscription、search、weekly token、5h limits
 - [**Devin**](docs/providers/devin.md)：weekly quota、extra usage
-- [**Z.ai**](docs/providers/zai.md)：session、weekly、web searches、设置页 API Key
+- [**Z.ai**](docs/providers/zai.md)：token/credit 计划的 session、weekly、web searches、设置页 API Key
 
 ## 参与项目
 

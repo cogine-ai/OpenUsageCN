@@ -272,6 +272,7 @@ function App() {
       const pluginState = pluginStates[pluginId]
       if (!pluginState) return true
       if (pluginState.loading) return false
+      if (pluginState.error) return true
       if (!pluginState.lastManualRefreshAt) return true
       return Date.now() - pluginState.lastManualRefreshAt >= REFRESH_COOLDOWN_MS
     },

@@ -35,6 +35,14 @@ pub(crate) trait ProviderAccountAdapter: Send + Sync {
         false
     }
 
+    fn probe_local_history(
+        &self,
+        _connection_key: &str,
+        _credential_generation: &str,
+    ) -> Result<PluginOutput, String> {
+        Err("Local history is unavailable for this connection.".to_string())
+    }
+
     fn history_cookie(
         &self,
         _connection_key: &str,
@@ -323,7 +331,7 @@ impl ProviderAccounts {
         ))
     }
 
-    fn local_connection_identity_is_current(
+    pub(super) fn local_connection_identity_is_current(
         &self,
         provider_id: &str,
         identity_namespace: &str,
@@ -348,7 +356,7 @@ impl ProviderAccounts {
     }
 }
 
-fn binding_is_current(
+pub(super) fn binding_is_current(
     providers: &std::collections::HashMap<String, super::state::ProviderState>,
     provider_id: &str,
     account_id: &str,
@@ -373,7 +381,7 @@ fn binding_is_current(
     })
 }
 
-fn persisted_binding_is_current(
+pub(super) fn persisted_binding_is_current(
     provider: &super::state::ProviderState,
     account_id: &str,
     identity_namespace: &str,

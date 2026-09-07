@@ -45,15 +45,7 @@ const QUOTA_RESPONSE_WITH_WEEKLY = {
   code: 200,
   data: {
     limits: [
-      {
-        type: "TOKENS_LIMIT",
-        usage: 800000000,
-        currentValue: 1900000,
-        percentage: 10,
-        nextResetTime: 1738368000000,
-        unit: 3,
-        number: 5,
-      },
+      QUOTA_RESPONSE.data.limits[0],
       {
         type: "TOKENS_LIMIT",
         usage: 1600000000,
@@ -61,41 +53,16 @@ const QUOTA_RESPONSE_WITH_WEEKLY = {
         percentage: 10,
         nextResetTime: 1738972800000,
         unit: 6,
-        number: 7,
-      },
-      {
-        type: "TIME_LIMIT",
-        usage: 4000,
-        currentValue: 1095,
-        percentage: 27,
-        remaining: 2905,
-        usageDetails: [
-          { modelCode: "search-prime", usage: 951 },
-          { modelCode: "web-reader", usage: 211 },
-          { modelCode: "zread", usage: 0 },
-        ],
-        unit: 5,
         number: 1,
       },
+      QUOTA_RESPONSE.data.limits[1],
     ],
   },
 }
 
 const QUOTA_RESPONSE_NO_TIME_LIMIT = {
   code: 200,
-  data: {
-    limits: [
-      {
-        type: "TOKENS_LIMIT",
-        usage: 800000000,
-        currentValue: 1900000,
-        percentage: 10,
-        nextResetTime: 1738368000000,
-        unit: 3,
-        number: 5,
-      },
-    ],
-  },
+  data: { limits: [QUOTA_RESPONSE.data.limits[0]] },
 }
 
 const SUBSCRIPTION_RESPONSE = {
@@ -302,7 +269,7 @@ describe("zai plugin", () => {
     expect(line.resetsAt).toBe(new Date(1738368000000).toISOString())
   })
 
-  it("renders Web Searches line with count format and 1st-of-month reset", async () => {
+  it("renders Web Searches counts without inventing a monthly reset", async () => {
     const ctx = makeCtx()
     mockEnvWithKey(ctx, "test-key")
     mockHttp(ctx)
@@ -315,10 +282,8 @@ describe("zai plugin", () => {
     expect(line.used).toBe(1095)
     expect(line.limit).toBe(4000)
     expect(line.format).toEqual({ kind: "count", suffix: "/ 4000" })
-    expect(line.periodDurationMs).toBe(30 * 24 * 60 * 60 * 1000)
-    const now = new Date()
-    const expected1st = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1))
-    expect(line.resetsAt).toBe(expected1st.toISOString())
+    expect(line.periodDurationMs).toBeUndefined()
+    expect(line.resetsAt).toBeUndefined()
   })
 
   it("skips Web Searches when TIME_LIMIT is absent", async () => {
@@ -337,7 +302,7 @@ describe("zai plugin", () => {
     expect(result.lines.find((l) => l.label === "Session")).toBeTruthy()
   })
 
-  it("Web Searches still has resetsAt (1st of month) even when subscription fails", async () => {
+  it("keeps Web Searches counts when the subscription lookup fails", async () => {
     const ctx = makeCtx()
     mockEnvWithKey(ctx, "test-key")
     ctx.host.http.request.mockImplementation((opts) => {
@@ -351,9 +316,8 @@ describe("zai plugin", () => {
     const result = plugin.probe(ctx)
     const line = result.lines.find((l) => l.label === "Web Searches")
     expect(line).toBeTruthy()
-    const now = new Date()
-    const expected1st = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1))
-    expect(line.resetsAt).toBe(expected1st.toISOString())
+    expect(line.used).toBe(1095)
+    expect(line.resetsAt).toBeUndefined()
   })
 
   it("handles missing nextResetTime gracefully", async () => {
@@ -362,7 +326,7 @@ describe("zai plugin", () => {
     const quotaNoReset = {
       data: {
         limits: [
-          { type: "TOKENS_LIMIT", percentage: 10 },
+          { type: "TOKENS_LIMIT", unit: 3, number: 5, percentage: 10 },
         ],
       },
     }
@@ -412,7 +376,7 @@ describe("zai plugin", () => {
     expect(result.lines.find((l) => l.label === "Session")).toBeTruthy()
   })
 
-  it("supports quota payloads where limits are top-level and optional fields are non-numeric", async () => {
+  it("supports valid quota payloads where limits are top-level", async () => {
     const ctx = makeCtx()
     mockEnvWithKey(ctx, "test-key")
     ctx.host.http.request.mockImplementation((opts) => {
@@ -422,8 +386,8 @@ describe("zai plugin", () => {
       return {
         status: 200,
         bodyText: JSON.stringify([
-          { type: "TOKENS_LIMIT", percentage: "10", nextResetTime: 1738368000000, unit: 3 },
-          { type: "TIME_LIMIT", currentValue: "1095", usage: "4000" },
+          { type: "TOKENS_LIMIT", percentage: 10, nextResetTime: 1738368000000, unit: 3, number: 5 },
+          { type: "TIME_LIMIT", currentValue: 1095, usage: 4000 },
         ]),
       }
     })
@@ -432,12 +396,12 @@ describe("zai plugin", () => {
     const result = plugin.probe(ctx)
     const session = result.lines.find((l) => l.label === "Session")
     const web = result.lines.find((l) => l.label === "Web Searches")
-    expect(session.used).toBe(0)
-    expect(web.used).toBe(0)
-    expect(web.limit).toBe(0)
+    expect(session.used).toBe(10)
+    expect(web.used).toBe(1095)
+    expect(web.limit).toBe(4000)
   })
 
-  it("shows no-usage badge when token limit entry is missing", async () => {
+  it("rejects an incomplete web quota when no valid token quota is available", async () => {
     const ctx = makeCtx()
     mockEnvWithKey(ctx, "test-key")
     ctx.host.http.request.mockImplementation((opts) => {
@@ -448,9 +412,7 @@ describe("zai plugin", () => {
     })
 
     const plugin = await loadPlugin()
-    const result = plugin.probe(ctx)
-    expect(result.lines).toHaveLength(1)
-    expect(result.lines[0].text).toBe("No usage data")
+    expect(() => plugin.probe(ctx)).toThrow("Quota data is incomplete or invalid. Try again later.")
   })
 
   it("renders Weekly line with percent format and 7-day reset", async () => {
@@ -506,7 +468,7 @@ describe("zai plugin", () => {
             percentage: 75,
             nextResetTime: 1738972800000,
             unit: 6,
-            number: 7,
+            number: 1,
           },
           {
             type: "TOKENS_LIMIT",

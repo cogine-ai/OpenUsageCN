@@ -266,7 +266,7 @@
       if (used !== null && limit !== null && limit > 0) percent = used / limit * 100
     }
     if (percent === null) return null
-    if (percent <= 1) percent *= 100
+    // Both provider percentages and used/limit * 100 are already on a 0-100 scale.
     percent = Math.round(Math.max(0, Math.min(100, percent)) * 10) / 10
 
     let resetIn = anyNumber(window, RESET_IN_KEYS)

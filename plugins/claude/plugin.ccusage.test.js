@@ -68,7 +68,7 @@ describe("claude plugin ccusage usage trend", () => {
       ]),
     })
     const plugin = await loadPlugin()
-    const result = plugin.probe(ctx)
+    const result = plugin.probeHistory(ctx)
 
     const chart = result.lines.find((line) => line.label === "Usage Trend")
     expect(chart).toMatchObject({

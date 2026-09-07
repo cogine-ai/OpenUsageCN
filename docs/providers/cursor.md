@@ -24,6 +24,11 @@
 | On-demand | `spendLimitUsage` | detail | dollars | Only when individual or pooled limit > 0 |
 
 **Enterprise flow** remains request-based via the REST `/api/usage` endpoint -- unchanged.
+Request counts remain available when that endpoint only supplies `startOfMonth`; OpenUsageCN
+does not assume a 30-day duration or invent the cycle's end date from it.
+
+Billing duration is shown only when Cursor supplies valid start and end dates. A reported end
+date can still be shown on its own, but it does not prove the duration or the billing cycle start.
 
 **Team detection**: an account is treated as "team" when `planName` is `"Team"`, or `spendLimitUsage.limitType` is `"team"`, or `spendLimitUsage.pooledLimit` is greater than `0`. Team accounts display Total usage in dollars; individual accounts display it as a percentage.
 
@@ -68,6 +73,10 @@ cycle, capped to the latest 30 days, from
 not available, it uses a bounded 30-day window. Every fetch first proves the session with
 `/api/auth/me` and uses the same accepted session for all pages.
 
+A newer refresh for the same account and session replaces an earlier in-progress refresh,
+including when newly available billing dates change its window. Recorded windows are read from
+local storage; selecting one does not start a separate historical fetch.
+
 The view groups complete results by local date and raw model name and shows input, output, cache
 write, and cache read tokens plus request counts. Local dates use the selected IANA time zone's
 rules at each event, including daylight-saving changes inside the window. The UI sends only that
@@ -80,6 +89,27 @@ whole-window value and is shown only when every in-window event has a valid char
 figures describe dashboard data, not an invoice. If pagination, identity, numeric validation, or
 account ownership cannot be proven, the previous complete aggregate remains visible as stale and
 the incomplete result is not saved. Raw events and ownership fields are not persisted.
+
+OpenUsageCN keeps up to 12 recorded windows for each account. A successful refresh replaces the
+record for that billing cycle; it does not add overlapping usage again. Both the billing cycle and
+the actual fetched dates are retained. **Complete Pages** means that the requested pages were
+fully fetched, not that the whole billing cycle is covered.
+
+History accepts billing dates only from a new quota reading with explicit start and end dates.
+Quota snapshots saved by older app versions remain visible, but their old duration fields are
+not used to infer a billing period. Until an explicit cycle is available, history uses the bounded
+window and labels its billing period as unknown.
+
+Choose **Recorded Windows** to view an earlier saved result without contacting Cursor. The
+comparison shows the selected and previous recorded windows side by side. Percentage changes
+appear only when their time zone, duration, and position within the billing cycle match. Missing
+cycle information, incomplete costs, and a zero previous value do not produce a percentage.
+
+**Export CSV** saves the selected stored window to the Downloads folder and shows the saved path.
+The file contains daily model details, source and coverage dates, and separate list-price and
+metered amounts. See [Usage History](../usage-history.md) for retention and export details.
+If writing or saving the file fails, the export reports an error and attempts to remove the
+incomplete file. An existing file is never overwritten or removed by the export.
 
 ## Endpoints
 

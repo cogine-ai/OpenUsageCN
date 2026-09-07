@@ -21,6 +21,7 @@
   "lines": [
     { "type": "progress", "label": "Session", "scope": "overview", "primaryOrder": 1, "limitResource": { "key": "session" } },
     { "type": "progress", "label": "Weekly", "scope": "overview", "period": "weekly", "limitResource": { "key": "weekly" } },
-    { "type": "progress", "label": "Web Searches", "scope": "overview", "limitResource": { "key": "webSearches", "countUnit": "searches" } }
+    { "type": "progress", "label": "Web Searches", "scope": "overview", "limitResource": { "key": "webSearches", "countUnit": "searches" } },
+    { "type": "badge", "label": "Quota", "scope": "overview" }
   ]
 }

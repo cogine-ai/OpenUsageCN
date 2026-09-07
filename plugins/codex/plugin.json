@@ -21,10 +21,6 @@
     { "type": "progress", "label": "Spark 每周", "scope": "detail", "limitResource": { "key": "sparkWeekly" } },
     { "type": "progress", "label": "代码审查", "scope": "detail", "limitResource": { "key": "codeReview" } },
     { "type": "text", "label": "手动重置", "scope": "detail" },
-    { "type": "text", "label": "点数", "scope": "detail" },
-    { "type": "text", "label": "今日", "scope": "detail" },
-    { "type": "text", "label": "昨日", "scope": "detail" },
-    { "type": "text", "label": "近30天", "scope": "detail" },
-    { "type": "barChart", "label": "用量趋势", "scope": "detail" }
+    { "type": "text", "label": "点数", "scope": "detail" }
   ]
 }
