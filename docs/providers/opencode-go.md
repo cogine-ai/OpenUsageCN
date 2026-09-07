@@ -14,6 +14,7 @@ Sign in to OpenCode Go in OpenCode as usual. OpenUsageCN reuses the saved Go API
    `opencode-go` and whose value contains `type: "key"`.
 
 The database is read-only. Keys belonging to other providers are never tried.
+Readable storage without a saved Go key is reported as **Not Detected**.
 These are OpenCode's default data locations; custom data directories and preview
 channel databases are not discovered by this plugin.
 

@@ -201,6 +201,28 @@ describe("opencode-go plugin", () => {
     expect(ctx.host.log.error).toHaveBeenCalled();
   });
 
+  it.each([
+    [false, ""],
+    [false, " \r\n\t"],
+    [true, ""],
+    [true, " \r\n\t"],
+  ])("treats successful empty SQLite output as absent credentials (table exists: %s, output: %j)", async (tableExists, raw) => {
+    const ctx = makeCtx();
+    ctx.host.fs.writeText("~/.local/share/opencode/opencode.db", "fixture database");
+    ctx.host.sqlite.query.mockImplementation((_path, sql) => {
+      if (tableExists && sql.includes("sqlite_master")) return '[{"name":"credential"}]';
+      // sqlite3 -json prints nothing, rather than [], when a SELECT returns no rows.
+      return raw;
+    });
+    const plugin = await loadPlugin();
+
+    expect(() => plugin.probe(ctx)).toThrow("OpenCode Go not detected. Log in with OpenCode Go first.");
+    expect(ctx.host.sqlite.query).toHaveBeenCalledTimes(tableExists ? 2 : 1);
+    expect(ctx.host.log.error.mock.calls).toEqual([["OpenCode Go credentials were not found."]]);
+    expect(ctx.host.http.request).not.toHaveBeenCalled();
+    expect(ctx.host.sqlite.exec).not.toHaveBeenCalled();
+  });
+
   it("surfaces unreadable credentials without logging the secret or falling back", async () => {
     const ctx = makeCtx();
     setAuth(ctx, "sensitive-key-value");

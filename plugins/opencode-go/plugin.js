@@ -36,6 +36,8 @@
       ctx.host.log.error("OpenCode Go credential database could not be read.");
       throw "OpenCode Go credentials could not be read. Check OpenCode's local files and try again.";
     }
+    // sqlite3 -json returns empty stdout for a successful SELECT with no rows.
+    if (raw.trim() === "") return [];
     const rows = ctx.util.tryParseJson(raw);
     if (!Array.isArray(rows)) {
       ctx.host.log.error("OpenCode Go credential database returned invalid rows.");
