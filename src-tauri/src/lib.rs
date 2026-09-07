@@ -6,8 +6,8 @@ pub mod cli;
 mod cli_installer;
 mod config;
 mod cursor_history;
-mod local_http_api;
 mod local_history;
+mod local_http_api;
 mod log_path;
 mod notifications;
 #[cfg(target_os = "macos")]
