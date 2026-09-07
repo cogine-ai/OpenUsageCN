@@ -1,4 +1,4 @@
-use std::fs::OpenOptions;
+use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
@@ -49,15 +49,30 @@ pub(super) fn write_new_csv(
     filename: &str,
     csv: &str,
 ) -> Result<PathBuf, HistoryError> {
+    write_new_csv_with(destination, filename, |file| {
+        file.write_all(csv.as_bytes()).and_then(|_| file.sync_all())
+    })
+}
+
+fn write_new_csv_with(
+    destination: &Path,
+    filename: &str,
+    write_and_sync: impl FnOnce(&mut File) -> std::io::Result<()>,
+) -> Result<PathBuf, HistoryError> {
     let path = destination.join(filename);
     let mut file = OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(&path)
         .map_err(|_| HistoryError::StorageWrite)?;
-    file.write_all(csv.as_bytes())
-        .and_then(|_| file.sync_all())
-        .map_err(|_| HistoryError::StorageWrite)?;
+    if let Err(error) = write_and_sync(&mut file) {
+        log::warn!("cursor CSV write or sync failed: {error}");
+        drop(file);
+        if let Err(error) = std::fs::remove_file(&path) {
+            log::warn!("cursor incomplete CSV cleanup failed: {error}");
+        }
+        return Err(HistoryError::StorageWrite);
+    }
     Ok(path)
 }
 
@@ -187,4 +202,27 @@ fn append_row(csv: &mut String, cells: &[String]) {
         csv.push('"');
     }
     csv.push_str("\r\n");
+}
+
+#[cfg(test)]
+mod write_tests {
+    use super::*;
+
+    #[test]
+    fn failed_writes_and_syncs_do_not_leave_an_exported_csv() {
+        let root =
+            std::env::temp_dir().join(format!("openusage-failed-csv-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&root).unwrap();
+        for (filename, written) in [("write.csv", "partial"), ("sync.csv", "complete\r\n")] {
+            let result = write_new_csv_with(&root, filename, |file| {
+                file.write_all(written.as_bytes())?;
+                Err(std::io::Error::other("injected export failure"))
+            });
+            assert_eq!(result, Err(HistoryError::StorageWrite));
+            assert!(
+                !root.join(filename).exists(),
+                "failed export remains: {filename}"
+            );
+        }
+    }
 }

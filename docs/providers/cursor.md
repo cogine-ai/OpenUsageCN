@@ -73,6 +73,10 @@ cycle, capped to the latest 30 days, from
 not available, it uses a bounded 30-day window. Every fetch first proves the session with
 `/api/auth/me` and uses the same accepted session for all pages.
 
+A newer refresh for the same account and session replaces an earlier in-progress refresh,
+including when newly available billing dates change its window. Recorded windows are read from
+local storage; selecting one does not start a separate historical fetch.
+
 The view groups complete results by local date and raw model name and shows input, output, cache
 write, and cache read tokens plus request counts. Local dates use the selected IANA time zone's
 rules at each event, including daylight-saving changes inside the window. The UI sends only that
@@ -104,6 +108,8 @@ cycle information, incomplete costs, and a zero previous value do not produce a 
 **Export CSV** saves the selected stored window to the Downloads folder and shows the saved path.
 The file contains daily model details, source and coverage dates, and separate list-price and
 metered amounts. See [Usage History](../usage-history.md) for retention and export details.
+If writing or saving the file fails, the export reports an error and attempts to remove the
+incomplete file. An existing file is never overwritten or removed by the export.
 
 ## Endpoints
 
