@@ -9,7 +9,7 @@
 
   function readNumber(value) {
     if (typeof value === "number") return Number.isFinite(value) ? value : null
-    if (typeof value !== "string") return null
+    if (typeof value !== "string" || !value.trim()) return null
     const n = Number(value.trim())
     return Number.isFinite(n) ? n : null
   }
@@ -103,8 +103,20 @@
 
   function pushKeyLines(ctx, lines, key) {
     const limit = readNumber(key && key.limit)
-    const usage = readNumber(key && key.usage)
-    if (limit !== null && limit > 0 && usage !== null) {
+    if (limit !== null && limit > 0) {
+      const remaining = readNumber(key.limit_remaining)
+      let usage = remaining === null ? null : limit - remaining
+      if (key.limit_remaining === undefined && key.limit_reset == null) {
+        usage = readNumber(key.usage)
+        if (key.include_byok_in_limit === true) {
+          const byok = readNumber(key.byok_usage)
+          usage = usage !== null && byok !== null ? usage + byok : null
+        }
+      }
+      if (usage === null || !Number.isFinite(usage) || usage < 0) {
+        ctx.host.log.error("OpenRouter key quota has invalid or missing current-window counters")
+        throw "Key quota is unavailable. Try again later."
+      }
       lines.push(ctx.line.progress({
         label: "Key Limit",
         used: usage,
