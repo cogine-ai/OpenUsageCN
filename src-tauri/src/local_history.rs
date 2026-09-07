@@ -3,6 +3,10 @@ use crate::{AppState, provider_accounts};
 use serde::Serialize;
 use std::sync::{Arc, Mutex};
 
+#[cfg(test)]
+#[path = "local_history_tests.rs"]
+mod tests;
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct LocalHistorySnapshot {
@@ -58,6 +62,14 @@ pub(crate) async fn refresh_local_history(
         log::error!("local history worker stopped: provider={}", provider_id);
         "本地用量读取意外停止，请重试。".to_string()
     })?;
+    local_history_snapshot(provider_id, account_id, result)
+}
+
+fn local_history_snapshot(
+    provider_id: String,
+    account_id: Option<String>,
+    result: Result<runtime::PluginOutput, String>,
+) -> Result<LocalHistorySnapshot, String> {
     let output = result
         .and_then(|output| match runtime::probe_error_message(&output) {
             Some(message) => Err(message.to_string()),
@@ -73,15 +85,16 @@ pub(crate) async fn refresh_local_history(
             None => Ok(output),
         })
         .map_err(|message| {
+            let redacted = host_api::redact_log_message(&message);
             log::warn!(
                 "local history failed: provider={}, reason={}",
                 provider_id,
-                host_api::redact_log_message(&message)
+                redacted
             );
             if message.starts_with("probe timed out") {
                 "本地用量读取超时，请稍后重试。".to_string()
             } else {
-                message
+                redacted
             }
         })?;
     let fetched_at = time::OffsetDateTime::now_utc()
