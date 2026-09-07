@@ -30,7 +30,7 @@ OpenUsageCN 常驻菜单栏或系统托盘，用一个轻量面板展示各类 A
 - **登录时启动。** macOS 和 Windows 都可以在设置中开启。
 - **插件化服务商。** 新服务通过插件接入，主程序保持稳定。
 - **[本地 HTTP API](docs/local-http-api.md)。** 其他本地工具可以从 `127.0.0.1:6736` 读取用量，或通过 `/v1/limits` 获取稳定的机器可读额度。
-- **[全局 CLI](docs/cli.md)。** macOS 可安装 `openusage` 命令，让脚本和本地智能体读取或刷新额度。
+- **[全局 CLI](docs/cli.md)。** macOS 可安装 `openusage` 命令，让脚本和本地智能体读取或刷新额度；`openusage guard` 可在启动任务前检查剩余额度阈值，并区分不足与无法判断。
 - **[代理支持](docs/proxy.md)。** 服务商请求会继承环境变量及 macOS/Windows 系统代理，也可以使用手动配置的 SOCKS5 或 HTTP 代理。
 
 ## 支持的服务商
@@ -55,7 +55,7 @@ Windows MVP 仅启用和展示 **Codex、BigModel CN、OpenAI API、OpenRouter �
 - [**MiniMax**](docs/providers/minimax.md)：coding plan session
 - [**OpenAI API**](docs/providers/openai-api.md)：organization spend、requests、tokens、legacy credits
 - [**OpenCode**](docs/providers/opencode.md)：opencode.ai session、weekly subscription usage
-- [**OpenCode Go**](docs/providers/opencode-go.md)：5h、weekly、monthly spend limits
+- [**OpenCode Go**](docs/providers/opencode-go.md)：账号级 5h、weekly、monthly 额度百分比及官方重置时间
 - [**OpenRouter**](docs/providers/openrouter.md)：credits、balance、key usage
 - [**Perplexity**](docs/providers/perplexity.md)：balance、usage analytics、本地 app session
 - [**Synthetic**](docs/providers/synthetic.md)：subscription、search、weekly token、5h limits

@@ -19,10 +19,10 @@ each is accepted and committed separately.
 | --- | --- | --- | --- |
 | Q1 | Correct Z.ai/BigModel credit windows, independent quota buckets, and invalid-number handling. Correct OpenRouter reset-aware key usage. Replace OpenCode Go local quota estimates with the account API, including OpenCode 2 credential discovery. | `docs/providers/zai.md`, `docs/providers/bigmodel-cn.md`, `docs/providers/openrouter.md`, `docs/providers/opencode-go.md`, `docs/local-http-api.md`, `README.md` | In progress |
 | Q2 | Make connection failures actionable. Classify known failures, retain the last successful reading, provide safe recovery actions, and recover promptly after an explicit credential/configuration change. | `docs/capture-logs.md`, `docs/app-state-architecture.md`, relevant provider docs | Queued |
-| Q3 | Add an independent CLI quota check using existing numeric limits: threshold met, below threshold, or unknown; preserve existing commands and exit codes. Test stale, missing, invalid and failed readings. | `docs/cli.md`, `docs/local-http-api.md`, `README.md` | Queued |
+| Q3 | Add an independent CLI quota check using existing numeric limits: threshold met, below threshold, or unknown; preserve existing commands and exit codes. Test stale, missing, invalid and failed readings. | `docs/cli.md`, `docs/local-http-api.md`, `README.md` | Implemented; integrated review pending |
 | Q4 | Separate current quota publication from optional local-history work. Measure and remove history-induced waiting; retain error visibility, account ownership and stale-history boundaries. Evaluate native incremental reading only after that separation is verified. | `docs/providers/codex.md`, `docs/providers/claude.md`, `docs/app-state-architecture.md`, `docs/cli.md` | Queued |
 | Q5 | Retain account-scoped Cursor history summaries across billing cycles; support a meaningful previous-period comparison and export with source/coverage labels. Never merge estimates with charged amounts or present incomplete data as complete. | `docs/providers/cursor.md`, new `docs/usage-history.md`, `docs/app-state-architecture.md` | Queued |
-| Q6 | Improve Windows within verifiable scope: inspect credential discovery and release checks, address deterministic gaps, and record native-only acceptance requirements. Signing and live Windows acceptance require their real environment. | `README.md`, `docs/release.md`, `docs/providers/codex.md`, `docs/specs/windows-mvp.md` | Queued |
+| Q6 | Improve Windows within verifiable scope: inspect credential discovery and release checks, address deterministic gaps, and record native-only acceptance requirements. Signing and live Windows acceptance require their real environment. | `README.md`, `docs/release.md`, `docs/providers/codex.md` | Queued |
 | Q7 | Review existing fix PRs and repeated maintenance proposals. Reuse validated fixes, avoid duplicate implementation, and record which proposals are superseded by the final work. | This delivery record; changed behavior docs as applicable | Queued |
 
 ## Acceptance
@@ -57,3 +57,7 @@ each is accepted and committed separately.
   when the key explicitly requires it. Request fields are unchanged; newly read
   remaining/reset/BYOK fields are nonsecret counters and policy flags. Existing
   Authorization and configured-key redaction covers the request credential.
+- CLI guard: 13 focused Rust tests pass, including existing CLI commands, exact
+  threshold boundaries, invalid arguments before provider access, stale and reset
+  windows, missing resources, and failed reads. The native debug binary builds.
+  Snapshot expiry and failed refreshes always produce an unknown decision.

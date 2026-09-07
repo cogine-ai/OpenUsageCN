@@ -220,6 +220,8 @@ On Windows, only the five Windows MVP providers are present; the rest of this ta
 - The single-provider endpoint (`/v1/usage/:providerId`) works for any known provider, including disabled ones.
 - The limits collection follows the same enabled-provider selection. `providers` is an object, so consumers must not rely on key order. Its single-provider route also works for disabled providers.
 - Limits freshness is five minutes. The HTTP API never triggers a refresh. Use the app when fresh data is required; on macOS, the [`openusage` CLI](cli.md) can also refresh it.
+- On macOS, `openusage guard <provider>` checks a session or weekly remaining-quota threshold and returns distinct results for enough quota, insufficient quota, and unknown data. It uses the same selected account and numeric resources. This adds no HTTP endpoint and does not change `openusage.limits.v1`.
+- OpenCode Go's session, weekly and monthly percentages and reset times come from its official account usage API. Local token history is not used to infer the remaining quota.
 
 ## CORS
 

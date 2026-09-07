@@ -1,6 +1,8 @@
 use crate::usage_reader::{LimitsReadError, read_limits_once};
 use std::ffi::{OsStr, OsString};
 
+mod guard;
+
 const EXIT_OK: i32 = 0;
 const EXIT_INVALID_ARGUMENTS: i32 = 2;
 const EXIT_NO_SNAPSHOT: i32 = 3;
@@ -34,7 +36,10 @@ pub fn run_from_env() -> i32 {
         .iter()
         .any(|argument| argument == "--help" || argument == "-h")
     {
-        println!("Usage: openusage [provider] [--force]");
+        println!(
+            "Usage: openusage [provider] [--force]\n       {}",
+            guard::USAGE
+        );
         return EXIT_OK;
     }
     if args
@@ -43,6 +48,10 @@ pub fn run_from_env() -> i32 {
     {
         println!("openusage {}", env!("CARGO_PKG_VERSION"));
         return EXIT_OK;
+    }
+
+    if args.first().is_some_and(|argument| argument == "guard") {
+        return guard::run(&args[1..]);
     }
 
     let arguments = match parse_arguments(&args) {
