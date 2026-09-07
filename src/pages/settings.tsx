@@ -346,25 +346,23 @@ export function SettingsPage({
           onGlobalShortcutChange={onGlobalShortcutChange}
         />
       ) : null}
-      {platformCapabilities?.localHttpApi ? <LocalHttpApiSection /> : null}
+      <LocalHttpApiSection />
       {platformCapabilities?.cli ? <CliSection /> : null}
-      {platformCapabilities?.autostart ? (
-        <section>
-          <h3 className="text-lg font-semibold mb-0">登录时启动</h3>
-          <p className="text-sm text-muted-foreground mb-2">
-            登录后自动打开 OpenUsageCN
-          </p>
-          <label className="flex items-center gap-2 text-sm select-none text-foreground">
-            <Checkbox
-              aria-label="登录时启动"
-              key={`start-on-login-${startOnLogin}`}
-              checked={startOnLogin}
-              onCheckedChange={(checked) => onStartOnLoginChange(checked === true)}
-            />
-            登录时启动
-          </label>
-        </section>
-      ) : null}
+      <section>
+        <h3 className="text-lg font-semibold mb-0">登录时启动</h3>
+        <p className="text-sm text-muted-foreground mb-2">
+          登录后自动打开 OpenUsageCN
+        </p>
+        <label className="flex items-center gap-2 text-sm select-none text-foreground">
+          <Checkbox
+            aria-label="登录时启动"
+            key={`start-on-login-${startOnLogin}`}
+            checked={startOnLogin}
+            onCheckedChange={(checked) => onStartOnLoginChange(checked === true)}
+          />
+          登录时启动
+        </label>
+      </section>
       <section>
         <h3 className="text-lg font-semibold mb-0">插件</h3>
         <p className="text-sm text-muted-foreground mb-2">
