@@ -288,6 +288,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn relative_destination_does_not_require_a_parent_directory() {
         let filename = format!("openusage-safe-file-{}.json", uuid::Uuid::new_v4());
         let path = Path::new(&filename);
