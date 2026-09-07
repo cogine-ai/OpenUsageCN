@@ -166,7 +166,9 @@ or close the original PRs or change maintenance automations.
   supports the explicit Windows file-storage guidance. OpenUsageCN never changes
   Codex's credential mode or logs a user in automatically.
 
-## Verification Record
+## Initial Implementation Verification
+
+The following evidence records the initial local delivery, before shipping review.
 
 - Final frontend verification at `2c67cda`: production build passed; all 110 files /
   1,632 frontend/plugin tests passed. Vite retains its existing main-chunk size
@@ -207,3 +209,45 @@ or close the original PRs or change maintenance automations.
   worktree is retained for review and uses approximately 6.2GB, including generated
   build dependencies and artifacts. The two temporary browser QA servers were
   stopped after verification. No source-branch reset, stash, merge or push occurred.
+
+## Shipping Review
+
+Reviewed the complete branch against the verified remote default branch, `main`,
+at the base above. The review included provider contracts, account ownership,
+cache migration, errors, CLI behavior, process cleanup, docs and screenshot
+evidence. The following confirmed findings were corrected before push:
+
+| Finding | Correction And Regression Evidence |
+| --- | --- |
+| Cursor's previous 30-day estimate could become a trusted history billing cycle. | Only explicit provider start/end dates establish a cycle. Old quota snapshots retain usage but need a fresh verified reading before comparison. Legacy request quotas have no invented reset. New plugin tests first had 20 failures; all 105 Cursor plugin tests passed after correction, as did native/cache/history/CSV tests. |
+| A history runner could exit while its descendant kept stdout open, bypassing the deadline. | Pipe collection stays inside the same deadline. A real process fixture first exceeded its 500ms budget and required external cleanup at two seconds; it now returns a timeout in approximately 0.52 seconds and terminates the descendant. All 25 ccusage tests passed. |
+| Successful SQLite queries with zero credential rows were reported as damaged OpenCode credentials. | Empty successful output means no matching credentials. Malformed output and failed commands still report errors. Four regressions first failed; all 49 OpenCode Go tests and an actual SQLite fixture passed after correction. |
+| OpenRouter's current-key response could expose its creator identifier in logs. | Both creator ID field spellings are redacted while quota counters and reset policy remain intact. The public response-log regression failed before the fix; all six provider-redaction tests passed afterward. |
+| A relative-file test raced with existing tests that change the process working directory. | The relative-file test now shares their serial guard. The three-test parallel reproduction failed before the fix and passed ten consecutive runs afterward. |
+
+Fresh local verification for the final functional source, `9e57e4e`:
+
+- `bun run bundle:plugins`: 24 production plugins; the README list matches.
+- `bun run build && bun run test --run`: production build and all 111 files /
+  1,657 frontend/plugin tests passed. The existing 560.87kB main-chunk warning remains.
+- `cargo test --manifest-path src-tauri/Cargo.toml --quiet`: all 471 Rust library
+  tests passed; binary/doc-test targets also completed without failures.
+- `cargo build --manifest-path src-tauri/Cargo.toml --bin openusagecn --quiet`:
+  the native macOS debug binary built. Eight real CLI subprocess checks passed,
+  covering help, version, missing/repeated/invalid arguments and stdout/stderr
+  exit contracts without requesting a real provider.
+- Earlier in this shipping review, the unchanged Cookie Helper passed all 18
+  tests and actual Apple Silicon binary verification. Both updater-signature
+  script tests passed.
+- All 32 changed Rust files passed `rustfmt --check` with module traversal
+  disabled. The whole-repository formatting command still reports existing
+  differences in `log_path.rs` and `webkit_config.rs`; the same two failures were
+  verified on the untouched base checkout. This branch's module-order issue was
+  corrected. The complete branch passed `git diff --check`.
+
+The PR contains before/after images for recovery, independent history, Cursor
+comparison/export and Amp subscription display. They use synthetic data and
+mocked IPC; the native app and live provider acceptance boundaries above still
+apply. PR CI supplies separate native Windows build evidence when complete;
+its current checks and review-thread status are reported on the PR. This delivery
+does not merge the branch or publish a release.
