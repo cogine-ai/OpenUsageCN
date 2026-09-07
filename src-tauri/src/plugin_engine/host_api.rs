@@ -2616,7 +2616,16 @@ fn run_ccusage_with_runner_timeout(
     let start = std::time::Instant::now();
     loop {
         match child.try_wait() {
-            Ok(Some(status)) => {
+            // A runner can exit while a descendant still owns an output pipe. Keep
+            // those readers inside the same deadline instead of blocking in join.
+            Ok(Some(status))
+                if stdout_reader
+                    .as_ref()
+                    .is_none_or(|reader| reader.is_finished())
+                    && stderr_reader
+                        .as_ref()
+                        .is_none_or(|reader| reader.is_finished()) =>
+            {
                 let stdout = stdout_reader
                     .take()
                     .and_then(|reader| reader.join().ok())
@@ -2648,7 +2657,7 @@ fn run_ccusage_with_runner_timeout(
                 );
                 return CcusageRunnerResult::Failed;
             }
-            Ok(None) => {
+            Ok(_) => {
                 if start.elapsed() > timeout {
                     if let Err(e) = kill_ccusage_on_timeout(&mut child) {
                         log::warn!(
@@ -5308,6 +5317,112 @@ esac
         let deadline = ProbeDeadline::at(Instant::now());
 
         assert_eq!(deadline.clamp_duration(Duration::from_secs(10)), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[serial]
+    fn ccusage_deadline_includes_pipes_held_after_runner_exit() {
+        use std::os::unix::fs::PermissionsExt;
+        use std::sync::mpsc;
+
+        struct FixtureProcessGroup(std::path::PathBuf);
+
+        impl Drop for FixtureProcessGroup {
+            fn drop(&mut self) {
+                if let Ok(pid) = std::fs::read_to_string(&self.0)
+                    .unwrap_or_default()
+                    .trim()
+                    .parse::<u32>()
+                {
+                    kill_ccusage_process_group(pid).expect("clean up fixture process group");
+                }
+            }
+        }
+
+        let dir = std::env::temp_dir().join(format!(
+            "openusage-ccusage-exited-runner-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&dir).expect("create test directory");
+        let program = dir.join("exited-runner.sh");
+        let group_path = dir.join("runner.pid");
+        let descendant_path = dir.join("descendant.pid");
+        std::fs::write(
+            &program,
+            format!(
+                "#!/bin/sh\necho $$ > \"{}\"\nsleep 30 &\necho $! > \"{}\"\nprintf '{{\"daily\":[]}}\\n'\n",
+                group_path.display(),
+                descendant_path.display(),
+            ),
+        )
+        .expect("write fake runner");
+        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755))
+            .expect("make fake runner executable");
+        let cleanup = FixtureProcessGroup(group_path.clone());
+
+        let (sender, receiver) = mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            let started = Instant::now();
+            let result = run_ccusage_with_runner_deadline(
+                CcusageRunnerKind::Bunx,
+                program.to_str().unwrap(),
+                &CcusageQueryOpts::default(),
+                CcusageProvider::Codex,
+                "codex",
+                ProbeDeadline::at(started + Duration::from_millis(500)),
+            );
+            sender
+                .send((result, started.elapsed()))
+                .expect("report fixture result");
+        });
+
+        let completed = receiver.recv_timeout(Duration::from_secs(2));
+        let (result, elapsed) = match completed {
+            Ok(result) => result,
+            Err(error) => {
+                let runner_pid: i32 = std::fs::read_to_string(&group_path)
+                    .expect("read fixture process group")
+                    .trim()
+                    .parse()
+                    .expect("parse fixture process group");
+                let runner_alive = unsafe { libc::kill(runner_pid, 0) == 0 };
+                // Even the broken implementation must be released before this test asserts.
+                drop(cleanup);
+                let released = receiver.recv_timeout(Duration::from_secs(2));
+                if released.is_ok() {
+                    worker
+                        .join()
+                        .expect("fixture worker finished after cleanup");
+                }
+                panic!(
+                    "history deadline did not bound inherited pipes: {error}; runner alive: {runner_alive}; after cleanup: {released:?}"
+                );
+            }
+        };
+        worker.join().expect("fixture worker finished");
+        assert_eq!(result, CcusageRunnerResult::TimedOut);
+        assert!(
+            elapsed < Duration::from_millis(1500),
+            "elapsed: {elapsed:?}"
+        );
+        assert!(group_path.exists(), "fixture runner must have started");
+        let descendant: i32 = std::fs::read_to_string(descendant_path)
+            .expect("read descendant pid")
+            .trim()
+            .parse()
+            .expect("parse descendant pid");
+        let cleanup_deadline = Instant::now() + Duration::from_secs(2);
+        while unsafe { libc::kill(descendant, 0) == 0 } && Instant::now() < cleanup_deadline {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert_ne!(
+            unsafe { libc::kill(descendant, 0) },
+            0,
+            "descendant survived"
+        );
+        drop(cleanup);
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[cfg(unix)]
