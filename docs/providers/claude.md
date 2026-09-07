@@ -95,8 +95,8 @@ or refreshing quota does not run `ccusage`.
 
 This view requires the selected account's available local CLI connection. OpenUsageCN checks the
 account, connection, and credential version before returning the result. Switching accounts or
-changing account connections clears the previous detail history; browser connections do not borrow
-the local CLI history.
+changing the CLI connection clears the previous detail history. Ordinary quota updates and
+same-account refreshes preserve it; browser connections do not borrow the local CLI history.
 
 History uses `CLAUDE_CONFIG_DIR`, or the default Claude log directory, and includes today plus the
 preceding 30 calendar days. Costs are estimated at API prices. The directory can contain multiple
