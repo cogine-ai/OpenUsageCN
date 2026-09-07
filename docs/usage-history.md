@@ -25,8 +25,14 @@ The billing dates and actual coverage dates are separate. Fetches cover at most 
 cover only part of a billing cycle. **Complete Pages** confirms that all requested pages were
 received. It does not mean a full billing cycle or a complete invoice.
 
-Failed or incomplete refreshes keep the previous complete record. If saved history cannot be
-read, the app reports the problem and preserves the file.
+Failed or incomplete refreshes keep the previous complete record. If a saved version 1 or 2
+history file fails validation, the app preserves its original contents in an `.invalid` file in
+the same folder and reports the error. Reopen the account detail page or refresh again to record
+new usage. The damaged file is kept for inspection and is not merged into the new result.
+
+Files from unsupported versions, unrecognized formats, and files the app cannot read are left
+in place with an error. If the app cannot preserve a damaged file, it also leaves the original
+in place. These cases require the file or access problem to be resolved before history can resume.
 
 ## Comparing Windows
 

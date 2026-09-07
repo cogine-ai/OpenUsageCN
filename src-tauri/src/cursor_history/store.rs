@@ -44,35 +44,62 @@ impl HistoryStore {
         account_id: &str,
     ) -> Result<Option<HistoryDocument>, HistoryError> {
         let path = self.document_path(provider_id, account_id)?;
+        let _lock_file = self.lock()?;
+        self.read_document_locked(&path, account_id)
+    }
+
+    fn read_document_locked(
+        &self,
+        path: &Path,
+        account_id: &str,
+    ) -> Result<Option<HistoryDocument>, HistoryError> {
         let content = match std::fs::read_to_string(path) {
             Ok(content) => content,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(_) => return Err(HistoryError::StorageRead),
         };
-        let document: HistoryDocument =
+        let value: serde_json::Value =
             serde_json::from_str(&content).map_err(|_| HistoryError::StorageInvalid)?;
-        if !matches!(document.version, 1 | 2)
-            || (document.version == 2 && document.archived.is_none())
-            || (document.version == 1 && document.archived.is_some())
-        {
+        // Unknown formats may belong to a newer app. Leave them in place.
+        if !matches!(
+            value.get("version").and_then(serde_json::Value::as_u64),
+            Some(1 | 2)
+        ) {
             return Err(HistoryError::StorageInvalid);
         }
-        let histories: Vec<_> = std::iter::once(&document.history)
-            .chain(document.archived.iter().flatten())
-            .collect();
-        if histories.len() > MAX_RECORDED_WINDOWS
-            || histories
-                .iter()
-                .any(|history| !valid_history(history, account_id))
-            || histories.iter().enumerate().any(|(index, history)| {
-                histories[..index]
-                    .iter()
-                    .any(|previous| same_period(history, previous))
-            })
-        {
-            return Err(HistoryError::StorageInvalid);
+        let document = serde_json::from_value::<HistoryDocument>(value)
+            .ok()
+            .filter(|document| {
+                let histories: Vec<_> = std::iter::once(&document.history)
+                    .chain(document.archived.iter().flatten())
+                    .collect();
+                (document.version == 2) == document.archived.is_some()
+                    && histories.len() <= MAX_RECORDED_WINDOWS
+                    && histories
+                        .iter()
+                        .all(|history| valid_history(history, account_id))
+                    && !histories.iter().enumerate().any(|(index, history)| {
+                        histories[..index]
+                            .iter()
+                            .any(|previous| same_period(history, previous))
+                    })
+            });
+        if let Some(document) = document {
+            return Ok(Some(document));
         }
-        Ok(Some(document))
+
+        let backup = path.with_extension(format!("json.{}.invalid", uuid::Uuid::new_v4()));
+        std::fs::rename(path, backup).map_err(|error| {
+            log::error!(
+                "cursor damaged history could not be preserved: {:?}",
+                error.kind()
+            );
+            HistoryError::StorageWrite
+        })?;
+        log::error!(
+            "cursor history validation failed; original document preserved as an .invalid file"
+        );
+        Err(HistoryError::StorageInvalid)
     }
 
     pub(crate) fn list(
@@ -104,15 +131,15 @@ impl HistoryStore {
         if !valid_history(history, account_id) {
             return Err(HistoryError::StorageInvalid);
         }
-        std::fs::create_dir_all(&self.root).map_err(|_| HistoryError::StorageWrite)?;
-        let lock_file = OpenOptions::new()
-            .create(true)
-            .read(true)
-            .write(true)
-            .open(self.root.join(HISTORY_LOCK_FILE_NAME))
-            .map_err(|_| HistoryError::StorageWrite)?;
-        lock_history_file(&lock_file)?;
-        let mut archived = self.list(provider_id, account_id)?;
+        let path = self.document_path(provider_id, account_id)?;
+        let _lock_file = self.lock()?;
+        let mut archived =
+            self.read_document_locked(&path, account_id)?
+                .map_or_else(Vec::new, |document| {
+                    std::iter::once(document.history)
+                        .chain(document.archived.into_iter().flatten())
+                        .collect::<Vec<_>>()
+                });
         if archived
             .first()
             .is_some_and(|stored| !history_is_at_least_as_new(history, stored))
@@ -122,7 +149,6 @@ impl HistoryStore {
         // A refresh replaces the whole recorded window; overlapping events are never added.
         archived.retain(|stored| !same_period(history, stored));
         archived.truncate(MAX_RECORDED_WINDOWS - 1);
-        let path = self.document_path(provider_id, account_id)?;
         let content = serde_json::to_string(&HistoryDocument {
             version: 2,
             history: history.clone(),
@@ -130,6 +156,18 @@ impl HistoryStore {
         })
         .map_err(|_| HistoryError::StorageWrite)?;
         crate::safe_file::write_text(&path, &content).map_err(|_| HistoryError::StorageWrite)
+    }
+
+    fn lock(&self) -> Result<std::fs::File, HistoryError> {
+        std::fs::create_dir_all(&self.root).map_err(|_| HistoryError::StorageWrite)?;
+        let lock_file = OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .open(self.root.join(HISTORY_LOCK_FILE_NAME))
+            .map_err(|_| HistoryError::StorageWrite)?;
+        lock_file.lock().map_err(|_| HistoryError::StorageWrite)?;
+        Ok(lock_file)
     }
 
     pub(super) fn document_path(
@@ -178,22 +216,6 @@ fn history_is_at_least_as_new(incoming: &CompleteHistory, stored: &CompleteHisto
     incoming.coverage.fetched_at_ms > stored.coverage.fetched_at_ms
         || (incoming.coverage.fetched_at_ms == stored.coverage.fetched_at_ms
             && incoming.coverage.to_ms >= stored.coverage.to_ms)
-}
-
-#[cfg(unix)]
-fn lock_history_file(file: &std::fs::File) -> Result<(), HistoryError> {
-    use std::os::fd::AsRawFd;
-    let result = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX) };
-    if result == 0 {
-        Ok(())
-    } else {
-        Err(HistoryError::StorageWrite)
-    }
-}
-
-#[cfg(not(unix))]
-fn lock_history_file(_file: &std::fs::File) -> Result<(), HistoryError> {
-    Ok(())
 }
 
 fn valid_component(value: &str) -> bool {

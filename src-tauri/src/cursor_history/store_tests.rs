@@ -142,3 +142,148 @@ fn storage_keys_cannot_escape_the_provider_history_root() {
         Err(HistoryError::InvalidStorageKey)
     );
 }
+
+#[test]
+fn a_save_that_finds_invalid_supported_history_keeps_the_first_error_and_original_bytes() {
+    let root = temp_root();
+    let store = HistoryStore::new(&root);
+    let path = store.document_path("cursor", "account-a").unwrap();
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let damaged = b"{ \n  \"version\": 1, \"history\": null\n}\n";
+    std::fs::write(&path, damaged).unwrap();
+    let current = complete_history("account-a", 1_700_086_400_001);
+
+    assert_eq!(
+        store.save("cursor", "account-a", &current),
+        Err(HistoryError::StorageInvalid)
+    );
+    let files: Vec<_> = std::fs::read_dir(path.parent().unwrap())
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    assert_eq!(files.len(), 1);
+    assert_eq!(files[0].extension().unwrap(), "invalid");
+    assert_eq!(std::fs::read(&files[0]).unwrap(), damaged);
+    assert!(!path.exists());
+
+    store.save("cursor", "account-a", &current).unwrap();
+    assert_eq!(store.load("cursor", "account-a").unwrap(), Some(current));
+    assert_eq!(std::fs::read(&files[0]).unwrap(), damaged);
+}
+
+#[test]
+fn future_versions_and_unrecognized_formats_are_never_quarantined_or_overwritten() {
+    for content in [
+        r#"{"version":3,"history":null,"newFormat":[]}"#,
+        r#"{"version":10000000000,"history":null}"#,
+        r#"{"history":null}"#,
+        "not JSON",
+    ] {
+        let root = temp_root();
+        let store = HistoryStore::new(&root);
+        let path = store.document_path("cursor", "account-a").unwrap();
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, content).unwrap();
+        assert_eq!(
+            store.load("cursor", "account-a"),
+            Err(HistoryError::StorageInvalid)
+        );
+        assert_eq!(
+            store.save(
+                "cursor",
+                "account-a",
+                &complete_history("account-a", 1_700_086_400_001)
+            ),
+            Err(HistoryError::StorageInvalid)
+        );
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), content);
+        assert_eq!(
+            std::fs::read_dir(path.parent().unwrap()).unwrap().count(),
+            1
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn unreadable_history_and_failed_quarantine_leave_the_original_in_place() {
+    use std::os::unix::fs::PermissionsExt;
+    if unsafe { libc::geteuid() } == 0 {
+        return; // Root bypasses these filesystem permission boundaries.
+    }
+    let root = temp_root();
+    let store = HistoryStore::new(&root);
+    let path = store.document_path("cursor", "account-a").unwrap();
+    let parent = path.parent().unwrap();
+    std::fs::create_dir_all(parent).unwrap();
+    let damaged = b"{\"version\":1,\"history\":null}";
+    std::fs::write(&path, damaged).unwrap();
+
+    let original = std::fs::metadata(&path).unwrap().permissions();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let unreadable = store.load("cursor", "account-a");
+    std::fs::set_permissions(&path, original).unwrap();
+    assert_eq!(unreadable, Err(HistoryError::StorageRead));
+    assert_eq!(std::fs::read(&path).unwrap(), damaged);
+    assert_eq!(std::fs::read_dir(parent).unwrap().count(), 1);
+
+    let original = std::fs::metadata(parent).unwrap().permissions();
+    std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o500)).unwrap();
+    let quarantine_failed = store.load("cursor", "account-a");
+    std::fs::set_permissions(parent, original).unwrap();
+    assert_eq!(quarantine_failed, Err(HistoryError::StorageWrite));
+    assert_eq!(std::fs::read(&path).unwrap(), damaged);
+    assert_eq!(std::fs::read_dir(parent).unwrap().count(), 1);
+}
+
+#[test]
+fn loading_waits_for_the_writer_before_deciding_to_quarantine() {
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    let root = temp_root();
+    let store = HistoryStore::new(&root);
+    let path = store.document_path("cursor", "account-a").unwrap();
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, b"{\"version\":1,\"history\":null}").unwrap();
+    let lock = std::fs::OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .open(root.join("provider-history/.history.lock"))
+        .unwrap();
+    lock.lock().unwrap();
+    let (started_tx, started_rx) = mpsc::channel();
+    let (result_tx, result_rx) = mpsc::channel();
+    let reader = std::thread::spawn(move || {
+        started_tx.send(()).unwrap();
+        result_tx.send(store.load("cursor", "account-a")).unwrap();
+    });
+    started_rx.recv().unwrap();
+    assert!(matches!(
+        result_rx.recv_timeout(Duration::from_millis(50)),
+        Err(mpsc::RecvTimeoutError::Timeout)
+    ));
+    let current = complete_history("account-a", 1_700_086_400_001);
+    std::fs::write(
+        &path,
+        serde_json::to_vec(&serde_json::json!({
+            "version": 2, "history": current, "archived": []
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    drop(lock);
+    assert_eq!(
+        result_rx
+            .recv_timeout(Duration::from_secs(2))
+            .unwrap()
+            .unwrap(),
+        Some(current)
+    );
+    reader.join().unwrap();
+    assert_eq!(
+        std::fs::read_dir(path.parent().unwrap()).unwrap().count(),
+        1
+    );
+}

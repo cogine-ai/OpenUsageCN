@@ -158,10 +158,11 @@ fn a_v1_snapshot_remains_readable_and_is_preserved_during_migration() {
 }
 
 #[test]
-fn damaged_v2_or_wrong_account_archives_fail_without_overwriting_the_file() {
+fn damaged_v2_archives_are_preserved_and_a_later_save_can_recover() {
     for archived in [
         serde_json::Value::Null,
         serde_json::json!([period_history("account-b", 0)]),
+        serde_json::json!([period_history("account-a", 1)]),
     ] {
         let root =
             std::env::temp_dir().join(format!("openusage-cursor-archive-{}", uuid::Uuid::new_v4()));
@@ -174,10 +175,21 @@ fn damaged_v2_or_wrong_account_archives_fail_without_overwriting_the_file() {
             store.list("cursor", "account-a"),
             Err(HistoryError::StorageInvalid)
         );
-        assert_eq!(
-            store.save("cursor", "account-a", &period_history("account-a", 2)),
-            Err(HistoryError::StorageInvalid)
-        );
-        assert_eq!(std::fs::read_to_string(path).unwrap(), damaged);
+        let backups: Vec<_> = std::fs::read_dir(path.parent().unwrap())
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .filter(|entry| {
+                entry
+                    .extension()
+                    .is_some_and(|extension| extension == "invalid")
+            })
+            .collect();
+        assert_eq!(backups.len(), 1);
+        assert_eq!(std::fs::read(&backups[0]).unwrap(), damaged.as_bytes());
+        assert!(!path.exists());
+        let current = period_history("account-a", 2);
+        store.save("cursor", "account-a", &current).unwrap();
+        assert_eq!(store.list("cursor", "account-a").unwrap(), vec![current]);
+        assert_eq!(std::fs::read(&backups[0]).unwrap(), damaged.as_bytes());
     }
 }
