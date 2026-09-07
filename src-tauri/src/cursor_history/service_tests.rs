@@ -244,6 +244,7 @@ fn complete_verified_refresh_replaces_only_its_account_snapshot() {
     assert!(refresh.error.is_none());
     let history = refresh.snapshot.expect("complete snapshot");
     assert_eq!(history.account_id, "account-a");
+    assert_eq!(history.coverage.billing_cycle, None);
     assert_eq!(history.buckets[0].input_tokens, 10);
     assert_eq!(
         service

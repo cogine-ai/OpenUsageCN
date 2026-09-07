@@ -13,6 +13,11 @@ newer refresh replaces that record without counting overlapping usage twice.
 - **Unknown Billing Period** identifies a result without reliable billing dates, including older
   saved data. Existing data remains readable when updating the app.
 
+Only a quota reading with explicit start and end dates can establish a billing period. A legacy
+`startOfMonth` value or a reset date alone is insufficient. On upgrade, older quota caches remain
+visible but their possibly estimated durations are not reused as verified billing dates. A fresh
+quota reading can supply those dates; the app does not rewrite earlier history by guessing them.
+
 The billing dates and actual coverage dates are separate. Fetches cover at most 30 days and may
 cover only part of a billing cycle. **Complete Pages** confirms that all requested pages were
 received. It does not mean a full billing cycle or a complete invoice.

@@ -24,6 +24,11 @@
 | On-demand | `spendLimitUsage` | detail | dollars | Only when individual or pooled limit > 0 |
 
 **Enterprise flow** remains request-based via the REST `/api/usage` endpoint -- unchanged.
+Request counts remain available when that endpoint only supplies `startOfMonth`; OpenUsageCN
+does not assume a 30-day duration or invent the cycle's end date from it.
+
+Billing duration is shown only when Cursor supplies valid start and end dates. A reported end
+date can still be shown on its own, but it does not prove the duration or the billing cycle start.
 
 **Team detection**: an account is treated as "team" when `planName` is `"Team"`, or `spendLimitUsage.limitType` is `"team"`, or `spendLimitUsage.pooledLimit` is greater than `0`. Team accounts display Total usage in dollars; individual accounts display it as a percentage.
 
@@ -85,6 +90,11 @@ OpenUsageCN keeps up to 12 recorded windows for each account. A successful refre
 record for that billing cycle; it does not add overlapping usage again. Both the billing cycle and
 the actual fetched dates are retained. **Complete Pages** means that the requested pages were
 fully fetched, not that the whole billing cycle is covered.
+
+History accepts billing dates only from a new quota reading with explicit start and end dates.
+Quota snapshots saved by older app versions remain visible, but their old duration fields are
+not used to infer a billing period. Until an explicit cycle is available, history uses the bounded
+window and labels its billing period as unknown.
 
 Choose **Recorded Windows** to view an earlier saved result without contacting Cursor. The
 comparison shows the selected and previous recorded windows side by side. Percentage changes

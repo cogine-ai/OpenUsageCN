@@ -560,6 +560,12 @@
     return ctx.fmt.planLabel(rawPlan) || null
   }
 
+  function parseBillingTimestamp(raw) {
+    if (typeof raw !== "number" && (typeof raw !== "string" || !/^\d+$/.test(raw.trim()))) return null
+    var value = Number(raw)
+    return Number.isSafeInteger(value) && value > 0 && value <= 8640000000000000 ? value : null
+  }
+
   function buildRequestBasedResult(ctx, accessToken, planName, unavailableMessage) {
     var requestUsage = fetchRequestBasedUsage(ctx, accessToken)
     var lines = []
@@ -570,19 +576,11 @@
         var used = gpt4.numRequests || 0
         var limit = gpt4.maxRequestUsage
 
-        var billingPeriodMs = 30 * 24 * 60 * 60 * 1000
-        var cycleStart = requestUsage.startOfMonth
-          ? ctx.util.parseDateMs(requestUsage.startOfMonth)
-          : null
-        var cycleEndMs = cycleStart ? cycleStart + billingPeriodMs : null
-
         lines.push(ctx.line.progress({
           label: "Requests",
           used: used,
           limit: limit,
           format: { kind: "count", suffix: "requests" },
-          resetsAt: ctx.util.toIso(cycleEndMs),
-          periodDurationMs: billingPeriodMs,
         }))
       }
     }
@@ -873,13 +871,12 @@
       ? pu.totalPercentUsed
       : computedPercentUsed
 
-    // Calculate billing cycle period duration
-    var billingPeriodMs = 30 * 24 * 60 * 60 * 1000 // 30 days default
-    var cycleStart = Number(usage.billingCycleStart)
-    var cycleEnd = Number(usage.billingCycleEnd)
-    if (Number.isFinite(cycleStart) && Number.isFinite(cycleEnd) && cycleEnd > cycleStart) {
-      billingPeriodMs = cycleEnd - cycleStart // already in ms
-    }
+    // Only provider-reported start and end dates define a billing period.
+    var cycleStart = parseBillingTimestamp(usage.billingCycleStart)
+    var cycleEnd = parseBillingTimestamp(usage.billingCycleEnd)
+    var billingPeriodMs = cycleStart !== null && cycleEnd !== null && cycleEnd > cycleStart
+      ? cycleEnd - cycleStart
+      : null
 
     const su = usage.spendLimitUsage
     const isTeamAccount = (
@@ -898,7 +895,7 @@
         used: ctx.fmt.dollars(planUsed),
         limit: ctx.fmt.dollars(pu.limit),
         format: { kind: "dollars" },
-        resetsAt: ctx.util.toIso(usage.billingCycleEnd),
+        resetsAt: ctx.util.toIso(cycleEnd),
         periodDurationMs: billingPeriodMs
       }))
 
@@ -911,7 +908,7 @@
         used: totalUsagePercent,
         limit: 100,
         format: { kind: "percent" },
-        resetsAt: ctx.util.toIso(usage.billingCycleEnd),
+        resetsAt: ctx.util.toIso(cycleEnd),
         periodDurationMs: billingPeriodMs
       }))
     }
@@ -922,7 +919,7 @@
         used: pu.autoPercentUsed,
         limit: 100,
         format: { kind: "percent" },
-        resetsAt: ctx.util.toIso(usage.billingCycleEnd),
+        resetsAt: ctx.util.toIso(cycleEnd),
         periodDurationMs: billingPeriodMs
       }))
     }
@@ -933,7 +930,7 @@
         used: pu.apiPercentUsed,
         limit: 100,
         format: { kind: "percent" },
-        resetsAt: ctx.util.toIso(usage.billingCycleEnd),
+        resetsAt: ctx.util.toIso(cycleEnd),
         periodDurationMs: billingPeriodMs
       }))
     }

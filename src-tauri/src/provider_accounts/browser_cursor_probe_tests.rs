@@ -118,10 +118,17 @@ fn browser_legacy_request_usage_remains_available_when_summary_has_no_plan_quota
             used,
             limit,
             format,
+            resets_at,
+            period_duration_ms,
             ..
         } => {
             assert_eq!(label, "Requests");
             assert_eq!((*used, *limit), (240.0, 500.0));
+            assert_eq!(
+                *resets_at, None,
+                "startOfMonth does not prove a billing end"
+            );
+            assert_eq!(*period_duration_ms, None);
             assert!(matches!(
                 format,
                 ProgressFormat::Count { suffix } if suffix == "requests"

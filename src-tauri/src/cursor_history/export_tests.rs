@@ -1,6 +1,16 @@
 use super::{HistoryError, HistoryStore, export};
 
 #[test]
+fn unknown_billing_period_exports_coverage_without_inventing_cycle_dates() {
+    let mut history = super::archive_tests::period_history("account-a", 0);
+    history.coverage.billing_cycle = None;
+    let csv = export::history_csv(&history).unwrap();
+    let summary = csv.lines().nth(1).unwrap();
+    assert!(summary.contains("\"Asia/Taipei\",\"\",\"\",\"2023-11-14T22:13:20Z\""));
+    assert!(!summary.contains("2023-12-14T22:13:20Z"));
+}
+
+#[test]
 fn csv_carries_exact_coverage_and_keeps_cost_meanings_separate() {
     let history = super::archive_tests::period_history("account-a", 0);
     let csv = export::history_csv(&history).unwrap();
