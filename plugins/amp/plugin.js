@@ -13,7 +13,7 @@
         return parsed[SECRETS_KEY]
       }
     } catch (e) {
-      ctx.host.log.warn("secrets file read failed: " + String(e))
+      ctx.host.log.warn("secrets file read failed")
     }
     return null
   }
@@ -45,6 +45,10 @@
       bonusPct: null,
       bonusDays: null,
       credits: null,
+      subscriptionPlan: null,
+      otherRemaining: null,
+      orbRemaining: null,
+      renewalDays: null,
     }
 
     var balanceMatch = text.match(/\$([0-9][0-9,]*(?:\.[0-9]+)?)\/\$([0-9][0-9,]*(?:\.[0-9]+)?) remaining/)
@@ -79,7 +83,28 @@
       if (Number.isFinite(credits)) result.credits = credits
     }
 
-    if (result.total === null && result.credits === null) return null
+    var subscriptionLine = text.match(/^[ \t]*Subscription\b[^\r\n]*/im)
+    if (subscriptionLine) {
+      var subscriptionMatch = subscriptionLine[0].match(
+        /^[ \t]*Subscription\s+([^:]+):\s*([0-9]+(?:\.[0-9]+)?)%\s+other usage and\s+([0-9]+(?:\.[0-9]+)?)%\s+orb usage remaining(?:\s*-\s*resets upon renewal in\s+(\d+)\s+days?)?\s*$/i
+      )
+      if (!subscriptionMatch) return null
+      var planName = subscriptionMatch[1].trim()
+      var otherRemaining = Number(subscriptionMatch[2])
+      var orbRemaining = Number(subscriptionMatch[3])
+      if (!planName || !Number.isFinite(otherRemaining) || otherRemaining < 0 || otherRemaining > 100
+          || !Number.isFinite(orbRemaining) || orbRemaining < 0 || orbRemaining > 100) return null
+      result.subscriptionPlan = planName
+      result.otherRemaining = otherRemaining
+      result.orbRemaining = orbRemaining
+      if (subscriptionMatch[4] !== undefined) {
+        var renewalDays = Number(subscriptionMatch[4])
+        if (!Number.isSafeInteger(renewalDays) || renewalDays < 0) return null
+        result.renewalDays = renewalDays
+      }
+    }
+
+    if (result.total === null && result.credits === null && result.subscriptionPlan === null) return null
 
     return result
   }
@@ -94,7 +119,7 @@
     try {
       result = fetchBalanceInfo(ctx, apiKey)
     } catch (e) {
-      ctx.host.log.error("balance info request failed: " + String(e))
+      ctx.host.log.error("balance info request failed")
       throw "Request failed. Check your connection."
     }
 
@@ -107,7 +132,7 @@
     if (resp.status < 200 || resp.status >= 300) {
       var detail = json && json.error && json.error.message ? json.error.message : ""
       if (detail) {
-        ctx.host.log.error("api returned " + resp.status + ": " + detail)
+        ctx.host.log.error("api returned " + resp.status)
         throw detail
       }
       ctx.host.log.error("api returned: " + resp.status)
@@ -121,16 +146,31 @@
 
     var balance = parseBalanceText(json.result.displayText)
     if (!balance) {
-      if (/Amp Free/.test(json.result.displayText)) {
-        ctx.host.log.error("failed to parse display text: " + json.result.displayText)
-        throw "Could not parse usage data."
-      }
-      ctx.host.log.warn("no balance data found, assuming credits-only: " + json.result.displayText)
-      balance = { remaining: null, total: null, hourlyRate: 0, bonusPct: null, bonusDays: null, credits: 0 }
+      ctx.host.log.error("failed to parse Amp usage display text")
+      throw "Could not parse usage data."
     }
 
     var lines = []
     var plan = "Free"
+
+    if (balance.subscriptionPlan !== null) {
+      plan = ctx.fmt.planLabel(balance.subscriptionPlan)
+      lines.push(ctx.line.progress({
+        label: "Other Usage",
+        used: 100 - balance.otherRemaining,
+        limit: 100,
+        format: { kind: "percent" },
+      }))
+      lines.push(ctx.line.progress({
+        label: "Orb Usage",
+        used: 100 - balance.orbRemaining,
+        limit: 100,
+        format: { kind: "percent" },
+      }))
+      if (balance.renewalDays !== null) {
+        lines.push(ctx.line.text({ label: "Renews", value: "约 " + balance.renewalDays + " 天" }))
+      }
+    }
 
     if (balance.total !== null) {
       var used = Math.max(0, balance.total - balance.remaining)
@@ -159,9 +199,9 @@
       }
     }
 
-    if (balance.credits !== null && balance.total === null) plan = "Credits"
+    if (balance.credits !== null && balance.total === null && balance.subscriptionPlan === null) plan = "Credits"
 
-    if (balance.credits !== null && (balance.credits > 0 || balance.total === null)) {
+    if (balance.credits !== null && (balance.credits > 0 || (balance.total === null && balance.subscriptionPlan === null))) {
       lines.push(ctx.line.text({
         label: "Credits",
         value: "$" + balance.credits.toFixed(2),

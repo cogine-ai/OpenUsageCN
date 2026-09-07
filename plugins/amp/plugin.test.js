@@ -335,16 +335,12 @@ describe("amp plugin", () => {
     expect(creditsLine.value).toBe("$10.00")
   })
 
-  it("falls back to credits-only when no balance or credits parsed", async () => {
+  it("fails when no balance or credits can be parsed instead of inventing zero credits", async () => {
     var ctx = makeCtx()
     writeSecrets(ctx)
     ctx.host.http.request.mockReturnValue(balanceResponse("Signed in as user@test.com (testuser)"))
     var plugin = await loadPlugin()
-    var result = plugin.probe(ctx)
-    expect(result.plan).toBe("Credits")
-    expect(result.lines.length).toBe(1)
-    expect(result.lines[0].label).toBe("Credits")
-    expect(result.lines[0].value).toBe("$0.00")
+    expect(() => plugin.probe(ctx)).toThrow("Could not parse usage data")
   })
 
   // --- Credits-only $0 ---
