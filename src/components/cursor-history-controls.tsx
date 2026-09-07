@@ -109,19 +109,26 @@ export function CursorHistoryComparison({ selected, previous }: {
       <p className="text-xs text-muted-foreground">
         上一窗口：{historyDateTime(previous.coverage.fromMs, previous.coverage.timeZone, true)} – {historyDateTime(previous.coverage.toMs, previous.coverage.timeZone, true)} · {previous.coverage.timeZone}
       </p>
-      <table className="w-full text-xs">
-        <thead className="text-muted-foreground">
-          <tr><th className="py-1 text-left font-normal">Metric</th><th className="text-right font-normal">Selected</th><th className="text-right font-normal">Previous</th><th className="text-right font-normal">Change</th></tr>
-        </thead>
-        <tbody>{rows.map((row) => {
-          const format = (value: number | null) => value === null ? "Unavailable" : row.money ? HISTORY_USD_FORMAT.format(value) : formatCountNumber(value)
-          const change = row.comparable && row.current !== null && row.previous !== null ? percentageChange(row.current, row.previous) : null
-          return <tr key={row.label}>
-            <td className="py-1">{row.label}</td><td className="text-right tabular-nums">{format(row.current)}{row.currentPartial ? " · Partial" : ""}</td><td className="text-right tabular-nums">{format(row.previous)}{row.previousPartial ? " · Partial" : ""}</td>
-            <td className="text-right tabular-nums">{change === null ? "—" : `${change > 0 ? "+" : ""}${change.toFixed(1)}%`}</td>
-          </tr>
-        })}</tbody>
-      </table>
+      <div
+        role="region"
+        aria-label="Recorded Window Comparison"
+        tabIndex={0}
+        className="overflow-x-auto rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <table className="w-full min-w-96 text-xs [&_th]:px-3 [&_th]:py-1.5 [&_td]:px-3 [&_td]:py-1.5 [&_th:first-child]:pl-0 [&_td:first-child]:pl-0 [&_th:last-child]:pr-0 [&_td:last-child]:pr-0 [&_th:not(:first-child)]:whitespace-nowrap [&_td:not(:first-child)]:whitespace-nowrap">
+          <thead className="text-muted-foreground">
+            <tr><th className="py-1 text-left font-normal">Metric</th><th className="text-right font-normal">Selected</th><th className="text-right font-normal">Previous</th><th className="text-right font-normal">Change</th></tr>
+          </thead>
+          <tbody>{rows.map((row) => {
+            const format = (value: number | null) => value === null ? "Unavailable" : row.money ? HISTORY_USD_FORMAT.format(value) : formatCountNumber(value)
+            const change = row.comparable && row.current !== null && row.previous !== null ? percentageChange(row.current, row.previous) : null
+            return <tr key={row.label}>
+              <td className="py-1">{row.label}</td><td className="text-right tabular-nums">{format(row.current)}{row.currentPartial ? " · Partial" : ""}</td><td className="text-right tabular-nums">{format(row.previous)}{row.previousPartial ? " · Partial" : ""}</td>
+              <td className="text-right tabular-nums">{change === null ? "—" : `${change > 0 ? "+" : ""}${change.toFixed(1)}%`}</td>
+            </tr>
+          })}</tbody>
+        </table>
+      </div>
       {reason ? <p className="text-xs text-muted-foreground"><span className="font-medium">Cannot Compare</span> · {reason}仅并列展示，不计算变化百分比。</p>
         : <p className="text-xs text-muted-foreground">仅对相同覆盖范围计算变化；金额资料不完整或上一值为零时不计算百分比。</p>}
     </div>

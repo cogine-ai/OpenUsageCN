@@ -110,15 +110,12 @@ function CursorModelUsageAccount({
 
   return (
     <section className="mt-4 space-y-3 rounded-lg border border-border bg-background p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-2">
-          <Activity className="mt-0.5 size-4 text-muted-foreground" />
-          <div>
-            <h3 className="text-sm font-semibold">Model Usage</h3>
-            <p className="text-xs text-muted-foreground">当前 Cursor 会话可见的模型用量</p>
-          </div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <div className="flex shrink-0 items-center gap-2">
+          <Activity className="size-4 shrink-0 text-muted-foreground" />
+          <h3 className="whitespace-nowrap text-sm font-semibold">Model Usage</h3>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="ml-auto flex max-w-full flex-wrap items-center gap-2 [&>*]:shrink-0 [&>*]:whitespace-nowrap">
           {snapshot && !archived && refreshing ? <Badge variant="outline">Cached</Badge> : null}
           {!archived && refreshing ? (
             <Badge variant="outline" className="gap-1">
@@ -129,6 +126,7 @@ function CursorModelUsageAccount({
           {archived ? <Badge variant="outline">Stored Window</Badge> : null}
           {status ? <Badge variant="outline">{status}</Badge> : null}
         </div>
+        <p className="w-full text-xs text-muted-foreground">当前 Cursor 会话可见的模型用量</p>
       </div>
 
       {!snapshot && (loading || refreshing) ? (
