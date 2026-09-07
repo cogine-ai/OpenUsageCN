@@ -545,6 +545,8 @@ fn redact_body(body: &str) -> String {
         "refreshToken",
         "user_id",
         "userId",
+        "creator_user_id",
+        "creatorUserId",
         "account_id",
         "accountId",
         "team_id",

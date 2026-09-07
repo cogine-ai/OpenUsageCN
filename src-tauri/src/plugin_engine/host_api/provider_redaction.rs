@@ -64,6 +64,27 @@ mod tests {
     }
 
     #[test]
+    fn openrouter_key_creator_is_redacted_without_losing_quota_diagnostics() {
+        let body = r#"{"data":{"creator_user_id":"creator-private-1234567890","creatorUserId":"creator-private-0987654321","limit":100,"limit_remaining":74.5,"usage":25.5,"byok_usage":3,"include_byok_in_limit":true,"limit_reset":"monthly"}}"#;
+        let redacted = redact_http_response_body("https://openrouter.ai/api/v1/key", body);
+        for identity in ["creator-private-1234567890", "creator-private-0987654321"] {
+            assert!(!redacted.contains(identity), "identity leaked: {redacted}");
+        }
+        let original: serde_json::Value = serde_json::from_str(body).unwrap();
+        let payload: serde_json::Value = serde_json::from_str(&redacted).unwrap();
+        for field in [
+            "limit",
+            "limit_remaining",
+            "usage",
+            "byok_usage",
+            "include_byok_in_limit",
+            "limit_reset",
+        ] {
+            assert_eq!(payload["data"][field], original["data"][field]);
+        }
+    }
+
+    #[test]
     fn subscription_identifiers_are_redacted_without_losing_plan_diagnostics() {
         let body = r#"{"data":[{"id":"subscription-1234567890","customerId":"customer-1234567890","productName":"GLM Coding Pro","nextRenewTime":"2026-10-01T00:00:00Z","nested":{"id":123456789012345}}]}"#;
         let redacted =

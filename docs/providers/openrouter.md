@@ -51,6 +51,10 @@ Authorization: Bearer <api_key>
 
 If one endpoint is unavailable but the other succeeds, OpenUsageCN still shows the available usage data.
 
+Diagnostic logs redact the key creator's user ID returned by the
+[current-key endpoint](https://openrouter.ai/docs/api/api-reference/api-keys/get-current-api-key).
+Quota counters and reset policies remain available for troubleshooting.
+
 ## Errors
 
 | Condition     | Message                                                  |
