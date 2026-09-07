@@ -1,4 +1,5 @@
-import { act, renderHook, waitFor } from "@testing-library/react"
+import { startTransition, Suspense, useState } from "react"
+import { act, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { LocalHistorySnapshot } from "@/lib/local-history"
 
@@ -13,8 +14,9 @@ function history(accountId: string | null, value = "12K tokens"): LocalHistorySn
 
 function pending<T>() {
   let resolve!: (value: T) => void
-  const promise = new Promise<T>((done) => { resolve = done })
-  return { promise, resolve }
+  let reject!: (reason: string) => void
+  const promise = new Promise<T>((done, fail) => { resolve = done; reject = fail })
+  return { promise, resolve, reject }
 }
 
 describe("useLocalHistory", () => {
@@ -60,6 +62,63 @@ describe("useLocalHistory", () => {
     expect(result.current.snapshot).toBeNull()
     expect(result.current.loading).toBe(false)
     expect(tauri.invoke).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(["success", "error"])("settles the committed account's %s after an uncommitted scope render", async (outcome) => {
+    const request = pending<LocalHistorySnapshot>()
+    const suspended = pending<void>()
+    const attemptedScopeChange = vi.fn()
+    const log = vi.spyOn(console, "error").mockImplementation(() => {})
+    tauri.invoke.mockReturnValue(request.promise)
+
+    function HistoryView() {
+      const [accountId, setAccountId] = useState("account-a")
+      const local = useLocalHistory("claude", accountId)
+      if (accountId === "account-b") {
+        attemptedScopeChange()
+        throw suspended.promise
+      }
+      return <>
+        <p>{accountId}</p>
+        <button onClick={() => { void local.load() }}>Load</button>
+        <button onClick={() => startTransition(() => setAccountId("account-b"))}>Change Account</button>
+        <p>{local.loading ? "Loading" : "Idle"}</p>
+        {local.snapshot && <p>History Ready</p>}
+        {local.error && <p role="alert">{local.error}</p>}
+      </>
+    }
+
+    render(<Suspense fallback={<p>Pending Account</p>}><HistoryView /></Suspense>)
+    fireEvent.click(screen.getByRole("button", { name: "Load" }))
+    fireEvent.click(screen.getByRole("button", { name: "Change Account" }))
+    expect(attemptedScopeChange).toHaveBeenCalled()
+    expect(screen.getByText("account-a")).toBeInTheDocument()
+    expect(screen.queryByText("Pending Account")).not.toBeInTheDocument()
+
+    await act(async () => {
+      if (outcome === "success") request.resolve(history("account-a"))
+      else request.reject("本地用量暂时无法读取。")
+      await request.promise.catch(() => {})
+    })
+
+    expect(screen.getByText("Idle")).toBeInTheDocument()
+    if (outcome === "success") expect(screen.getByText("History Ready")).toBeInTheDocument()
+    else expect(screen.getByRole("alert")).toHaveTextContent("本地用量暂时无法读取。")
+    expect(tauri.invoke).toHaveBeenCalledTimes(1)
+    log.mockRestore()
+  })
+
+  it("ignores a late rejection after unmount", async () => {
+    const request = pending<LocalHistorySnapshot>()
+    const log = vi.spyOn(console, "error").mockImplementation(() => {})
+    tauri.invoke.mockReturnValue(request.promise)
+    const { result, unmount } = renderHook(() => useLocalHistory("claude", "account-a"))
+    let load!: Promise<void>
+    act(() => { load = result.current.load() })
+    unmount()
+    await act(async () => { request.reject("Late private error"); await load })
+    expect(log).not.toHaveBeenCalled()
+    log.mockRestore()
   })
 
   it("keeps only the latest explicit request", async () => {

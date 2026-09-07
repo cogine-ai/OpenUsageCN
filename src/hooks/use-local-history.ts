@@ -10,11 +10,10 @@ type HistoryState = {
 
 export function useLocalHistory(providerId: string, accountId: string | null) {
   const scope = JSON.stringify([providerId, accountId])
-  const currentScope = useRef(scope)
-  currentScope.current = scope
   const requestRevision = useRef(0)
   const [state, setState] = useState<HistoryState>({ scope, snapshot: null, loading: false, error: null })
 
+  // Only committed scope changes invalidate requests; suspended renders may be abandoned.
   useEffect(() => {
     requestRevision.current += 1
     setState({ scope, snapshot: null, loading: false, error: null })
@@ -23,7 +22,7 @@ export function useLocalHistory(providerId: string, accountId: string | null) {
 
   const load = useCallback(async () => {
     const revision = ++requestRevision.current
-    const isCurrent = () => currentScope.current === scope && requestRevision.current === revision
+    const isCurrent = () => requestRevision.current === revision
     setState({ scope, snapshot: null, loading: true, error: null })
     try {
       const snapshot = await refreshLocalHistory(providerId, accountId)
