@@ -148,7 +148,16 @@ impl HistoryStore {
 }
 
 fn same_period(left: &CompleteHistory, right: &CompleteHistory) -> bool {
-    left.coverage.billing_cycle == right.coverage.billing_cycle
+    match (&left.coverage.billing_cycle, &right.coverage.billing_cycle) {
+        (Some(left), Some(right)) => left == right,
+        (None, None) => {
+            left.coverage.from_ms == right.coverage.from_ms
+                && left.coverage.to_ms == right.coverage.to_ms
+                && left.coverage.time_zone == right.coverage.time_zone
+                && left.coverage.scope == right.coverage.scope
+        }
+        _ => false,
+    }
 }
 
 fn valid_history(history: &CompleteHistory, account_id: &str) -> bool {

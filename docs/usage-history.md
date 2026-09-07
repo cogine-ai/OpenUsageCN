@@ -5,6 +5,9 @@
 Open Cursor's account detail page to load **Model Usage**. OpenUsageCN records successful results
 for the selected account and keeps the latest 12 windows. Each billing cycle has one record; a
 newer refresh replaces that record without counting overlapping usage twice.
+When billing dates are unknown, different covered dates or time zones remain separate records.
+Refreshing the same covered dates and time zone replaces that record. The same 12-window limit
+applies to these results, and overlapping records are never added together.
 
 - **Recorded Windows** selects an earlier local result. Choosing it does not refresh old accounts
   or fetch missing historical data.

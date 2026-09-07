@@ -47,6 +47,72 @@ fn overlapping_refresh_replaces_a_period_without_adding_counts() {
 }
 
 #[test]
+fn unknown_billing_windows_keep_distinct_coverage_and_replace_exact_refreshes() {
+    let root =
+        std::env::temp_dir().join(format!("openusage-cursor-archive-{}", uuid::Uuid::new_v4()));
+    let store = HistoryStore::new(&root);
+    let mut previous = period_history("account-a", 0);
+    previous.coverage.billing_cycle = None;
+    let mut current = previous.clone();
+    current.coverage.to_ms += 86_400_000;
+    current.coverage.fetched_at_ms += 86_400_000;
+    store.save("cursor", "account-a", &previous).unwrap();
+    store.save("cursor", "account-a", &current).unwrap();
+    assert_eq!(
+        store.list("cursor", "account-a").unwrap(),
+        vec![current.clone(), previous.clone()]
+    );
+
+    let mut refreshed = current;
+    refreshed.coverage.fetched_at_ms += 10;
+    refreshed.buckets[0].input_tokens = 25;
+    store.save("cursor", "account-a", &refreshed).unwrap();
+    assert_eq!(
+        store.list("cursor", "account-a").unwrap(),
+        vec![refreshed, previous]
+    );
+}
+
+#[test]
+fn unknown_billing_windows_keep_their_recorded_time_zone() {
+    let root =
+        std::env::temp_dir().join(format!("openusage-cursor-archive-{}", uuid::Uuid::new_v4()));
+    let store = HistoryStore::new(&root);
+    let mut previous = period_history("account-a", 0);
+    previous.coverage.billing_cycle = None;
+    let mut current = previous.clone();
+    current.coverage.time_zone = "America/New_York".to_string();
+    current.coverage.fetched_at_ms += 10;
+    store.save("cursor", "account-a", &previous).unwrap();
+    store.save("cursor", "account-a", &current).unwrap();
+    assert_eq!(
+        store.list("cursor", "account-a").unwrap(),
+        vec![current, previous]
+    );
+}
+
+#[test]
+fn unknown_billing_windows_respect_the_twelve_window_limit() {
+    let root =
+        std::env::temp_dir().join(format!("openusage-cursor-archive-{}", uuid::Uuid::new_v4()));
+    let store = HistoryStore::new(&root);
+    let windows: Vec<_> = (0..15)
+        .map(|period| {
+            let mut history = period_history("account-a", period);
+            history.coverage.billing_cycle = None;
+            history
+        })
+        .collect();
+    for history in &windows {
+        store.save("cursor", "account-a", history).unwrap();
+    }
+    let recorded = store.list("cursor", "account-a").unwrap();
+    assert_eq!(recorded.len(), 12);
+    assert_eq!(recorded.first(), windows.last());
+    assert_eq!(recorded.last(), windows.get(3));
+}
+
+#[test]
 fn retention_keeps_only_the_latest_twelve_recorded_windows() {
     let root =
         std::env::temp_dir().join(format!("openusage-cursor-archive-{}", uuid::Uuid::new_v4()));
