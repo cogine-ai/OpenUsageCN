@@ -1,5 +1,6 @@
 use super::*;
 use crate::plugin_engine::runtime::{MetricLine, PluginOutput, ProgressFormat};
+use crate::probe_batches::LatestProbeBatches;
 use serial_test::serial;
 use std::time::Instant;
 
@@ -428,6 +429,46 @@ fn failed_cache_write_stays_pending_for_retry() {
     }
 
     let _ = std::fs::remove_dir_all(&parent);
+}
+
+#[test]
+#[serial]
+fn superseded_probe_batches_do_not_publish_successful_output_to_cache() {
+    let dir = temp_dir("superseded-probe-cache");
+    std::fs::create_dir_all(&dir).unwrap();
+
+    init(&dir, vec!["codex".to_string()], "test".to_string());
+    cache_successful_output(
+        &make_output("codex", "Initial Codex"),
+        time::OffsetDateTime::now_utc(),
+    );
+    flush_cache().unwrap();
+
+    let batches = LatestProbeBatches::default();
+    batches.begin_batch("batch-a", &["codex".to_string()]);
+    batches.begin_batch("batch-b", &["codex".to_string()]);
+
+    let stale_output = make_output("codex", "Stale Codex");
+    let fresh_output = make_output("codex", "Fresh Codex");
+    let started_at = time::OffsetDateTime::now_utc();
+
+    let stale_committed = batches.commit_if_latest("batch-a", "codex", || {
+        cache_successful_output(&stale_output, started_at);
+    });
+    let fresh_committed = batches.commit_if_latest("batch-b", "codex", || {
+        cache_successful_output(&fresh_output, started_at);
+    });
+
+    assert!(stale_committed.is_none(), "older batch must not cache");
+    assert!(fresh_committed.is_some(), "latest batch should cache");
+    flush_cache().unwrap();
+
+    let loaded = load_cache(&dir);
+    assert_eq!(loaded["codex"].display_name, "Fresh Codex");
+    assert_ne!(loaded["codex"].display_name, "Stale Codex");
+
+    wait_for_cache_writer_idle();
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
