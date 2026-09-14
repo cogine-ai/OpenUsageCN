@@ -31,7 +31,6 @@ import {
   loadMenubarMetric,
   loadPaceNotificationSettings,
   migrateLegacyTraySettings,
-  migrateWindsurfToDevin,
   loadPluginSettings,
   loadResetTimerDisplayMode,
   loadStartOnLogin,
@@ -118,8 +117,7 @@ export function useSettingsBootstrap({
         setPluginsMeta(availablePlugins)
 
         const storedSettings = await loadPluginSettings()
-        const migratedSettings = migrateWindsurfToDevin(storedSettings)
-        const normalized = normalizePluginSettings(migratedSettings, availablePlugins)
+        const normalized = normalizePluginSettings(storedSettings, availablePlugins)
         if (!arePluginSettingsEqual(storedSettings, normalized)) {
           await savePluginSettings(normalized)
         }
@@ -198,7 +196,6 @@ export function useSettingsBootstrap({
     setDisplayMode,
     setErrorForPlugins,
     setLoadingForPlugins,
-    migrateWindsurfToDevin,
     setPluginSettings,
     setPluginsMeta,
     setResetTimerDisplayMode,
@@ -222,19 +219,17 @@ export function useSettingsBootstrap({
         if (isMounted) setGlobalShortcut(storedGlobalShortcut)
       }
 
-      if (platformCapabilities.autostart) {
-        let storedStartOnLogin = DEFAULT_START_ON_LOGIN
-        try {
-          storedStartOnLogin = await loadStartOnLogin()
-        } catch (error) {
-          console.error("Failed to load start on login:", error)
-        }
-        if (isMounted) setStartOnLogin(storedStartOnLogin)
-        try {
-          await applyStartOnLogin(storedStartOnLogin)
-        } catch (error) {
-          console.error("Failed to apply start on login setting:", error)
-        }
+      let storedStartOnLogin = DEFAULT_START_ON_LOGIN
+      try {
+        storedStartOnLogin = await loadStartOnLogin()
+      } catch (error) {
+        console.error("Failed to load start on login:", error)
+      }
+      if (isMounted) setStartOnLogin(storedStartOnLogin)
+      try {
+        await applyStartOnLogin(storedStartOnLogin)
+      } catch (error) {
+        console.error("Failed to apply start on login setting:", error)
       }
 
       if (platformCapabilities.dynamicTrayIconSettings) {
