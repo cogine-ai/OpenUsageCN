@@ -983,8 +983,8 @@ fn inject_fs<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()> {
             ctx.clone(),
             move |ctx_inner: Ctx<'_>, path: String, content: String| -> rquickjs::Result<()> {
                 let expanded = expand_path(&path);
-                std::fs::write(&expanded, &content)
-                    .map_err(|e| Exception::throw_message(&ctx_inner, &e.to_string()))
+                crate::safe_file::write_text(Path::new(&expanded), &content)
+                    .map_err(|e| Exception::throw_message(&ctx_inner, &e))
             },
         )?,
     )?;
@@ -3507,6 +3507,44 @@ mod tests {
                 "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
             );
         });
+    }
+
+    #[test]
+    fn fs_write_text_replaces_existing_content_without_leaving_temp_files() {
+        let dir = std::env::temp_dir().join(format!(
+            "openusage-host-fs-write-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&dir).expect("create temp directory");
+        let path = dir.join("auth.json");
+        std::fs::write(&path, "original-credentials").expect("seed auth file");
+        let path_json = serde_json::to_string(&path.to_string_lossy()).expect("encode path");
+
+        let rt = Runtime::new().expect("runtime");
+        let ctx = Context::full(&rt).expect("context");
+        ctx.with(|ctx| {
+            inject_host_api(&ctx, "test", &dir, "0.0.0").expect("inject host api");
+            ctx.eval::<(), _>(format!(
+                "__openusage_ctx.host.fs.writeText({path_json}, 'rotated-credentials')"
+            ))
+            .expect("writeText");
+        });
+
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "rotated-credentials"
+        );
+        let leftovers: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.file_name().to_string_lossy().contains(".tmp-"))
+            .map(|entry| entry.path())
+            .collect();
+        assert!(
+            leftovers.is_empty(),
+            "temporary write files remain: {leftovers:?}"
+        );
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
