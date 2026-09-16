@@ -17,11 +17,23 @@
 | Metric | Source field | Scope | Format | Notes |
 |---|---|---|---|---|
 | Credits | `GetCreditGrantsBalance` + `/api/auth/stripe.customerBalance` | overview | dollars | Combined total: active grant total + Stripe prepaid balance (negative `customerBalance`). Used stays based on grant usage. |
-| Total usage | `planUsage.totalPercentUsed` | overview | percent (individual) / dollars (team) | Falls back to computed `(limit - remaining) / limit * 100` when `totalPercentUsed` is not finite. Free/individual payloads observed on 2026-03-06 may omit `limit`; plugin uses `totalPercentUsed` directly in that case. Team accounts use dollars format and still require `limit`. |
-| Auto usage | `planUsage.autoPercentUsed` | detail | percent | Omitted when field is missing or non-finite |
-| API usage | `planUsage.apiPercentUsed` | detail | percent | Omitted when field is missing or non-finite |
+| Total usage | `planUsage.totalPercentUsed` | overview | percent (individual) / dollars (team) | Falls back to `totalSpend / limit * 100` (or `(limit - remaining) / limit * 100` without spend) when `totalPercentUsed` is not finite. Free/individual payloads observed on 2026-03-06 may omit `limit`; plugin uses `totalPercentUsed` directly in that case. Team accounts use dollars format and still require `limit`. |
+| Cursor Models | `planUsage.autoPercentUsed` | overview + detail | percent | Cursor model pool; omitted when missing or non-finite |
+| Other Models | `planUsage.apiPercentUsed` | overview + detail | percent | Third-party model pool; omitted when missing or non-finite |
+| Grok Bot | `GetSandUsageStatus.usagePercent` | overview + detail | percent | Separate included allowance; its own reset dates, or a trial without recurring reset |
 | Requests | `/api/usage` (enterprise) | overview | count | Enterprise accounts only; unchanged from previous behavior |
 | On-demand | `spendLimitUsage` | detail | dollars | Only when individual or pooled limit > 0 |
+
+The overview shows the individual model pools and Grok Bot separately. When both model pools
+are available, their percentage Total is omitted there to avoid repeating the same information.
+Team dollar budgets and accounts without both pools retain Total. The detail page labels it **Monthly Total**;
+it remains the provider-reported total, not a sum or average of the displayed percentages.
+Grok Bot weekly usage is never added to monthly Total. Credits, legacy Requests and on-demand
+spending keep their existing meanings. The tray's primary metric selection is unchanged.
+
+The underlying resource keys `autoUsage`, `apiUsage` and `totalUsage` remain stable for CLI and
+Local HTTP API consumers. Grok Bot adds `grokBotUsage`. The Auto routing mode can use different
+model pools; **Cursor Models** describes the quota pool, not the routing mode.
 
 **Enterprise flow** remains request-based via the REST `/api/usage` endpoint -- unchanged.
 Request counts remain available when that endpoint only supplies `startOfMonth`; OpenUsageCN
@@ -104,6 +116,28 @@ The file contains daily model details, source and coverage dates, and separate l
 metered amounts. See [Usage History](../usage-history.md) for caching and export details.
 If writing or saving the file fails, the export reports an error and attempts to remove the
 incomplete file. An existing file is never overwritten or removed by the export.
+
+## Grok Bot Allowance
+
+Desktop/CLI reads `POST https://api2.cursor.sh/aiserver.v1.DashboardService/GetSandUsageStatus`
+with the same account token as the main quota request. Browser accounts read
+`POST https://cursor.com/api/dashboard/get-sand-usage-status` with their selected browser session.
+Both send an empty JSON object. No other account or browser session is used as a fallback.
+
+The response supplies `usagePercent`, `currentPeriodStart` and `nextResetTimestampUtc`.
+Percentages are already in percent units: `0.36` means 0.36%, not 36%. Displayed Grok Bot usage
+is capped at 100%; exhausted allowance stays visible. Reset time and period length come from
+valid response timestamps rather than the connection time or monthly billing cycle.
+
+An explicitly absent included allowance is omitted. Active trial allowance may be shown, but
+trial expiry is not presented as a recurring weekly reset. Unsupported pooled allowances are
+not shown as a personal weekly quota. If the optional request fails or returns invalid data,
+the other Cursor quotas remain usable and Grok Bot is marked unavailable; the failure is logged.
+
+Weekly included usage and paid on-demand spending are separate. These percentages cannot be
+used to infer a token limit or dollar allowance. See Cursor's
+[usage pools](https://cursor.com/help/models-and-usage/usage-limits) and
+[Grok Bot billing](https://cursor.com/help/grok-bot/plans) documentation.
 
 ## Endpoints
 

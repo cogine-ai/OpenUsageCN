@@ -1,6 +1,20 @@
 import { ProviderCard } from "@/components/provider-card"
-import type { PluginDisplayState } from "@/lib/plugin-types"
+import type { MetricLine, ManifestLine, PluginDisplayState } from "@/lib/plugin-types"
 import type { DisplayMode, ResetTimerDisplayMode, TimeFormatMode } from "@/lib/settings"
+
+function overviewLines<T extends MetricLine | ManifestLine>(
+  providerId: string, lines: T[], available: (MetricLine | ManifestLine)[] = lines
+): T[] {
+  if (providerId !== "cursor") return lines
+  const hasMonthlyPools = ["Cursor Models", "Other Models"].every((label) =>
+    available.some((line) => line.type === "progress" && line.label === label)
+  )
+  const hasDollarTotal = available.some((line) =>
+    line.type === "progress" && line.label === "Total usage" &&
+    "format" in line && line.format.kind === "dollars"
+  )
+  return hasMonthlyPools && !hasDollarTotal ? lines.filter((line) => line.label !== "Total usage") : lines
+}
 
 interface OverviewPageProps {
   plugins: PluginDisplayState[]
@@ -38,8 +52,8 @@ export function OverviewPage({
           showSeparator={index < plugins.length - 1}
           loading={plugin.loading}
           error={plugin.error}
-          lines={plugin.data?.lines ?? []}
-          skeletonLines={plugin.meta.lines}
+          lines={overviewLines(plugin.meta.id, plugin.data?.lines ?? [])}
+          skeletonLines={overviewLines(plugin.meta.id, plugin.meta.lines, plugin.data?.lines ?? plugin.meta.lines)}
           statusPage={plugin.meta.statusPage}
           lastManualRefreshAt={plugin.lastManualRefreshAt}
           lastUpdatedAt={plugin.lastUpdatedAt}

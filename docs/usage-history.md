@@ -1,5 +1,9 @@
 # Usage History
 
+The Cursor Models, Other Models and Grok Bot quota bars are current allowances with their own
+reset dates. They are separate from the model-usage cache described below; weekly Grok Bot
+allowance is not calculated from cached events or added to monthly Total.
+
 ## Cursor Usage Cache
 
 Open Cursor's account detail page to load **Model Usage**. Each account keeps only its latest

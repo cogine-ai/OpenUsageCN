@@ -51,6 +51,35 @@ mod tests {
     use super::super::{redact_body, redact_http_response_body};
 
     #[test]
+    fn cursor_grok_usage_redacts_identity_and_preserves_quota_metadata() {
+        let body = serde_json::json!({
+            "userId": "synthetic-private-user-1234567890",
+            "email": "synthetic-private@example.com",
+            "usagePercent": 0.36,
+            "includedLimitZero": false,
+            "hasNonZeroIncludedLimit": true,
+            "hasAvailableUsage": true,
+            "usesPooledEnterpriseAllowance": false,
+            "currentPeriodStart": "2026-09-10T00:00:00Z",
+            "nextResetTimestampUtc": "2026-09-17T00:00:00Z",
+            "sandTrialExpiresAt": null,
+        });
+        let redacted = redact_http_response_body(
+            "https://api2.cursor.sh/aiserver.v1.DashboardService/GetSandUsageStatus",
+            &body.to_string(),
+        );
+        let output: serde_json::Value = serde_json::from_str(&redacted).unwrap();
+        for (key, value) in body.as_object().unwrap() {
+            if matches!(key.as_str(), "userId" | "email") {
+                assert_ne!(&output[key], value, "identity must be redacted");
+                assert!(!redacted.contains(value.as_str().unwrap()));
+            } else {
+                assert_eq!(&output[key], value, "quota metadata must remain readable");
+            }
+        }
+    }
+
+    #[test]
     fn opencode_v2_credentials_are_redacted_without_recognizable_prefixes() {
         let body = r#"{"credential":{"type":"key","key":"opaque-value-1234567890"},"oauth":{"access":"opaque-access-1234567890","refresh":"opaque-refresh-1234567890"},"usagePercent":0.5}"#;
         let redacted = redact_body(body);

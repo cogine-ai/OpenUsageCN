@@ -5,6 +5,7 @@
   const KEYCHAIN_REFRESH_TOKEN_SERVICE = "cursor-refresh-token"
   const BASE_URL = "https://api2.cursor.sh"
   const USAGE_URL = BASE_URL + "/aiserver.v1.DashboardService/GetCurrentPeriodUsage"
+  const SAND_URL = BASE_URL + "/aiserver.v1.DashboardService/GetSandUsageStatus"
   const PLAN_URL = BASE_URL + "/aiserver.v1.DashboardService/GetPlanInfo"
   const REFRESH_URL = BASE_URL + "/oauth/token"
   const CREDITS_URL = BASE_URL + "/aiserver.v1.DashboardService/GetCreditGrantsBalance"
@@ -408,7 +409,7 @@
     }
   }
 
-  function connectPost(ctx, url, token) {
+  function connectPost(ctx, url, token, timeoutMs) {
     return ctx.util.request({
       method: "POST",
       url: url,
@@ -418,7 +419,7 @@
         "Connect-Protocol-Version": "1",
       },
       bodyText: "{}",
-      timeoutMs: 10000,
+      timeoutMs: timeoutMs || 10000,
     })
   }
 
@@ -493,6 +494,44 @@
     }
     return {
       cookieHeader: "WorkosCursorSessionToken=" + session.sessionToken,
+    }
+  }
+
+  function grokBotLine(ctx, accessToken) {
+    try {
+      const response = connectPost(ctx, SAND_URL, accessToken, 5000)
+      if (response.status < 200 || response.status >= 300) throw new Error("request failed")
+      const status = ctx.util.tryParseJson(response.bodyText)
+      if (!status || typeof status !== "object" || Array.isArray(status)) throw new Error("invalid response")
+      if (status.usesPooledEnterpriseAllowance === true) return null
+      const hasLimit = typeof status.includedLimitZero === "boolean"
+        ? !status.includedLimitZero
+        : status.hasNonZeroIncludedLimit
+      function parseDate(value) {
+        return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value)
+          ? Date.parse(value) : NaN
+      }
+      const trialEnd = parseDate(status.sandTrialExpiresAt)
+      const trial = hasLimit !== true && Number.isFinite(trialEnd) && trialEnd > Date.now()
+      if (hasLimit === false && !trial) return null
+      if (hasLimit !== true && !trial) throw new Error("allowance unavailable")
+      const used = status.usagePercent
+      if (typeof used !== "number" || !Number.isFinite(used) || used < 0) throw new Error("invalid percentage")
+      const start = parseDate(status.currentPeriodStart)
+      const end = parseDate(status.nextResetTimestampUtc)
+      return ctx.line.progress({
+        label: "Grok Bot",
+        used: Math.min(100, used),
+        limit: 100,
+        format: { kind: "percent" },
+        resetsAt: !trial && Number.isFinite(end) ? ctx.util.toIso(end) : null,
+        periodDurationMs: !trial && Number.isFinite(start) && Number.isFinite(end) && end > start
+          ? end - start : null,
+      })
+    } catch (_) {
+      // Never include response bodies, credentials, or transport exception text in logs.
+      ctx.host.log.warn("Grok Bot usage unavailable; keeping the current Cursor plan usage")
+      return ctx.line.text({ label: "Grok Bot", value: "Unavailable" })
     }
   }
 
@@ -591,6 +630,8 @@
     }
 
     var plan = formatCursorPlan(ctx, planName)
+    const grokBot = grokBotLine(ctx, accessToken)
+    if (grokBot) lines.push(grokBot)
 
     return { plan: plan, lines: lines }
   }
@@ -915,7 +956,7 @@
 
     if (typeof pu.autoPercentUsed === "number" && Number.isFinite(pu.autoPercentUsed)) {
       lines.push(ctx.line.progress({
-        label: "Auto usage",
+        label: "Cursor Models",
         used: pu.autoPercentUsed,
         limit: 100,
         format: { kind: "percent" },
@@ -926,7 +967,7 @@
 
     if (typeof pu.apiPercentUsed === "number" && Number.isFinite(pu.apiPercentUsed)) {
       lines.push(ctx.line.progress({
-        label: "API usage",
+        label: "Other Models",
         used: pu.apiPercentUsed,
         limit: 100,
         format: { kind: "percent" },
@@ -934,6 +975,9 @@
         periodDurationMs: billingPeriodMs
       }))
     }
+
+    const grokBot = grokBotLine(ctx, accessToken)
+    if (grokBot) lines.push(grokBot)
 
     // On-demand (if available) - not a primary candidate
     if (su) {

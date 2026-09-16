@@ -41,8 +41,16 @@ export function ProviderDetailPage({
         showSeparator={false}
         loading={plugin.loading}
         error={plugin.error}
-        lines={plugin.data?.lines ?? []}
-        skeletonLines={plugin.meta.lines}
+        lines={(plugin.data?.lines ?? []).map((line) =>
+          plugin.meta.id === "cursor" && line.label === "Total usage"
+            ? { ...line, label: "Monthly Total" }
+            : line
+        )}
+        skeletonLines={plugin.meta.lines.map((line) =>
+          plugin.meta.id === "cursor" && line.label === "Total usage"
+            ? { ...line, label: "Monthly Total" }
+            : line
+        )}
         statusPage={plugin.meta.statusPage}
         lastManualRefreshAt={plugin.lastManualRefreshAt}
         lastUpdatedAt={plugin.lastUpdatedAt}

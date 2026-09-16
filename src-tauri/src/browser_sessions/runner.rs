@@ -381,7 +381,8 @@ mod tests {
     #[serial]
     fn sidecar_uses_a_curated_environment_and_runner_owned_temporary_directory() {
         let fake_root = TestDirectory::new("openusage-runner-environment");
-        let inherited_temp = TestDirectory::new("openusage-inherited-temp");
+        // Do not redirect the process-wide temp root: parallel tests also use it.
+        let inherited_temp = std::env::temp_dir();
         let marker = fake_root.path().join("environment.txt");
         let sidecar = fake_root.path().join("fake-sidecar");
         write_executable(
@@ -395,10 +396,6 @@ mod tests {
             ("BUN_OPTIONS", "--preload=/tmp/injected.js"),
             ("NODE_OPTIONS", "--require=/tmp/injected.js"),
             ("DYLD_INSERT_LIBRARIES", "/tmp/injected.dylib"),
-            (
-                "TMPDIR",
-                inherited_temp.path().to_str().expect("utf-8 temp path"),
-            ),
         ]);
 
         let output = match run_sidecar(&sidecar, b"{}\n", Duration::from_secs(1), 1_024) {
@@ -412,8 +409,8 @@ mod tests {
             &lines[..4],
             ["unset", "unset", "unset", "/usr/bin:/bin:/usr/sbin:/sbin"]
         );
-        assert_ne!(Path::new(lines[4]), inherited_temp.path());
-        assert!(Path::new(lines[4]).starts_with(inherited_temp.path()));
+        assert_ne!(Path::new(lines[4]), inherited_temp.as_path());
+        assert!(Path::new(lines[4]).starts_with(&inherited_temp));
         assert!(!Path::new(lines[4]).exists());
         assert_eq!(
             fs::canonicalize(lines[5]).expect("canonical child cwd"),
@@ -425,7 +422,6 @@ mod tests {
     #[serial]
     fn sidecar_timeout_removes_snapshot_tree_owned_by_the_parent() {
         let fake_root = TestDirectory::new("openusage-runner-timeout");
-        let inherited_temp = TestDirectory::new("openusage-timeout-parent");
         let marker = fake_root.path().join("snapshot-path.txt");
         let sidecar = fake_root.path().join("fake-sidecar");
         write_executable(
@@ -435,11 +431,6 @@ mod tests {
                 marker.display()
             ),
         );
-        let _environment = EnvironmentGuard::set(&[(
-            "TMPDIR",
-            inherited_temp.path().to_str().expect("utf-8 temp path"),
-        )]);
-
         let result = run_sidecar(&sidecar, b"{}\n", Duration::from_secs(1), 1_024);
         assert!(matches!(result, Err(ProcessRunError::TimedOut)));
         let snapshot = PathBuf::from(fs::read_to_string(marker).expect("read snapshot marker"));

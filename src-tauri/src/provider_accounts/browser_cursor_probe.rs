@@ -35,7 +35,7 @@ impl FixedBrowserCursorProbe {
             "usage-summary",
             correlation_id,
         )?;
-        match decode_usage_summary_output(&summary_body, display_name, icon_url) {
+        let mut output = match decode_usage_summary_output(&summary_body, display_name, icon_url) {
             Ok(output) => Ok(output),
             Err(DecodeError::NoQuota { membership_type }) => {
                 let user_id = subject
@@ -60,7 +60,14 @@ impl FixedBrowserCursorProbe {
                 .map_err(decode_error_message)
             }
             Err(error) => Err(decode_error_message(error)),
-        }
+        }?;
+        super::browser_cursor_grok::append_grok_usage(
+            &mut output,
+            super::browser_cursor_grok::fetch_grok_usage(&self.client, cookie_header),
+            time::OffsetDateTime::now_utc(),
+            correlation_id,
+        );
+        Ok(output)
     }
 
     fn get_json(
@@ -245,7 +252,7 @@ fn decode_usage_summary_output(
     }
     if let Some(value) = nonnegative(primary.auto_percent_used) {
         lines.push(progress(
-            "Auto usage",
+            "Cursor Models",
             Some("autoUsage"),
             value,
             100.0,
@@ -256,7 +263,7 @@ fn decode_usage_summary_output(
     }
     if let Some(value) = nonnegative(primary.api_percent_used) {
         lines.push(progress(
-            "API usage",
+            "Other Models",
             Some("apiUsage"),
             value,
             100.0,
