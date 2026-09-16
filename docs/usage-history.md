@@ -1,52 +1,38 @@
 # Usage History
 
-## Cursor Recorded Windows
+## Cursor Usage Cache
 
-Open Cursor's account detail page to load **Model Usage**. OpenUsageCN records successful results
-for the selected account and keeps the latest 12 windows. Each billing cycle has one record; a
-newer refresh replaces that record without counting overlapping usage twice.
-When billing dates are unknown, different covered dates or time zones remain separate records.
-Refreshing the same covered dates and time zone replaces that record. The same 12-window limit
-applies to these results, and overlapping records are never added together.
+Open Cursor's account detail page to load **Model Usage**. Each account keeps only its latest
+successful result as a local cache. A successful refresh replaces the entire result, even when
+dates overlap or the billing period changes. Results are never added together or compared with
+older local windows.
 
-- **Recorded Windows** selects an earlier local result. Choosing it does not refresh old accounts
-  or fetch missing historical data.
-- **Latest** is the newest recorded result, even when a failed refresh leaves it marked **Stale**.
-- **Stored Window** identifies an earlier result you selected.
-- **Unknown Billing Period** identifies a result without reliable billing dates, including older
-  saved data. Existing data remains readable when updating the app.
+Fetches cover the current billing cycle, capped to the latest 30 days. Without reliable billing
+dates, they cover a bounded 30-day interval. Actual coverage dates appear beside the export icon;
+receiving all requested pages does not mean a full billing cycle or a complete invoice.
+The data notes include the update time and time zone.
 
-Only a quota reading with explicit start and end dates can establish a billing period. A legacy
-`startOfMonth` value or a reset date alone is insufficient. On upgrade, older quota caches remain
-visible but their possibly estimated durations are not reused as verified billing dates. A fresh
-quota reading can supply those dates; the app does not rewrite earlier history by guessing them.
+Failed or incomplete refreshes keep the previous successful result, marked **Stale**. Removing
+an account clears its quota and model-usage caches and all its connections in OpenUsageCN.
+Other accounts remain unaffected. Adding that account again fetches fresh data; it does not
+restore the old cache. Removing one browser connection leaves the account and its cache intact.
+Neither action signs out of Cursor, its CLI, or the browser.
+If removal reports a cache-cleanup failure, retry on the same page after resolving the file-access
+problem. Closing the page loses this retry control; the account remains removed, but leftover
+files may need manual cleanup.
 
-The billing dates and actual coverage dates are separate. Fetches cover at most 30 days and may
-cover only part of a billing cycle. **Complete Pages** confirms that all requested pages were
-received. It does not mean a full billing cycle or a complete invoice.
+Older saved files remain readable, but only their latest result is used. The next successful save
+replaces the file with a single cached result. Earlier windows cannot be selected or exported.
+Damaged recognized files are preserved with an `.invalid` suffix and an error is reported.
+Unsupported or unreadable files remain in place with an error until the problem is resolved.
 
-Failed or incomplete refreshes keep the previous complete record. If a saved version 1 or 2
-history file fails validation, the app preserves its original contents in an `.invalid` file in
-the same folder and reports the error. Reopen the account detail page or refresh again to record
-new usage. The damaged file is kept for inspection and is not merged into the new result.
-
-Files from unsupported versions, unrecognized formats, and files the app cannot read are left
-in place with an error. If the app cannot preserve a damaged file, it also leaves the original
-in place. These cases require the file or access problem to be resolved before history can resume.
-
-## Comparing Windows
-
-The selected result is shown beside the previous recorded window. Percentage changes require the
-same account, session-visible source, time zone, covered duration, and position within the billing
-cycle. Different coverage is labeled **Cannot Compare**; the amounts remain visible side by side.
-
-List-price equivalent and metered usage keep their separate meanings. A cost percentage requires
-complete amounts on both sides. A zero previous value never produces a percentage. These figures
-come from Cursor dashboard records and are not invoices.
+Model rows show total tokens, requests and list-price equivalents. Expand a model to see its
+input, output and cache counts. Metered usage and list-price equivalents have separate meanings;
+these dashboard figures are not invoices.
 
 ## Export CSV
 
-**Export CSV** saves the selected stored result to your Downloads folder. The app shows the actual
+The download icon (**Export CSV**) saves the currently displayed cached result to your Downloads folder. The app shows the actual
 saved path, or an error if it could not write the file. Every export has a generated filename and
 cannot overwrite an existing file.
 
@@ -57,5 +43,5 @@ request counts, and known list-price equivalents with their coverage status. Mis
 blank, and metered usage is not assigned to individual models.
 
 Commas, quotes, and line breaks in model names are escaped. Names that could be interpreted as
-spreadsheet formulas receive a visible `Text: ` prefix in the CSV; the saved history retains the
+spreadsheet formulas receive a visible `Text: ` prefix in the CSV; the cached result retains the
 original name. This avoids relying only on quote escaping when a spreadsheet saves the CSV again.

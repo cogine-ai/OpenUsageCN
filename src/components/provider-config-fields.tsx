@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { compactFieldClassName } from "@/components/ui/field"
 import type { PluginConfigField } from "@/lib/plugin-types"
 import {
   deleteProviderConfigField,
@@ -175,11 +176,7 @@ export function ProviderConfigFields({
                   onChange={(event) =>
                     setDraft((current) => ({ ...current, [field.id]: event.target.value }))
                   }
-                  className={cn(
-                    "h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-sm outline-none",
-                    "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
-                    "disabled:cursor-not-allowed disabled:opacity-50"
-                  )}
+                  className={cn(compactFieldClassName, "flex-1")}
                 />
                 {saved?.type === "secret" && saved.configured ? (
                   <Button
@@ -204,11 +201,7 @@ export function ProviderConfigFields({
                 onChange={(event) =>
                   setDraft((current) => ({ ...current, [field.id]: event.target.value }))
                 }
-                className={cn(
-                  "h-8 w-full rounded-md border border-input bg-background px-2 text-sm outline-none",
-                  "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
-                  "disabled:cursor-not-allowed disabled:opacity-50"
-                )}
+                className={cn(compactFieldClassName, "w-full")}
               />
             ) : null}
             {field.type === "select" ? (
@@ -219,11 +212,7 @@ export function ProviderConfigFields({
                 onChange={(event) =>
                   setDraft((current) => ({ ...current, [field.id]: event.target.value }))
                 }
-                className={cn(
-                  "h-8 w-full rounded-md border border-input bg-background px-2 text-sm outline-none",
-                  "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
-                  "disabled:cursor-not-allowed disabled:opacity-50"
-                )}
+                className={cn(compactFieldClassName, "w-full")}
               >
                 {field.options.map((option) => (
                   <option key={option.value} value={option.value}>

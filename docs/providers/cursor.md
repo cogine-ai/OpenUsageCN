@@ -74,8 +74,8 @@ not available, it uses a bounded 30-day window. Every fetch first proves the ses
 `/api/auth/me` and uses the same accepted session for all pages.
 
 A newer refresh for the same account and session replaces an earlier in-progress refresh,
-including when newly available billing dates change its window. Recorded windows are read from
-local storage; selecting one does not start a separate historical fetch.
+including when newly available billing dates change its window. Only the latest successful result
+is cached locally for each account.
 
 The view groups complete results by local date and raw model name and shows input, output, cache
 write, and cache read tokens plus request counts. Local dates use the selected IANA time zone's
@@ -90,24 +90,18 @@ figures describe dashboard data, not an invoice. If pagination, identity, numeri
 account ownership cannot be proven, the previous complete aggregate remains visible as stale and
 the incomplete result is not saved. Raw events and ownership fields are not persisted.
 
-OpenUsageCN keeps up to 12 recorded windows for each account. A successful refresh replaces the
-record for that billing cycle; it does not add overlapping usage again. Both the billing cycle and
-the actual fetched dates are retained. **Complete Pages** means that the requested pages were
-fully fetched, not that the whole billing cycle is covered.
+A successful refresh replaces the whole cached result without adding overlapping usage. Older
+billing periods are not archived or compared. Actual coverage and billing dates remain separate;
+complete pagination means only that all requested pages were fetched.
 
 History accepts billing dates only from a new quota reading with explicit start and end dates.
 Quota snapshots saved by older app versions remain visible, but their old duration fields are
 not used to infer a billing period. Until an explicit cycle is available, history uses the bounded
 window and labels its billing period as unknown.
 
-Choose **Recorded Windows** to view an earlier saved result without contacting Cursor. The
-comparison shows the selected and previous recorded windows side by side. Percentage changes
-appear only when their time zone, duration, and position within the billing cycle match. Missing
-cycle information, incomplete costs, and a zero previous value do not produce a percentage.
-
-**Export CSV** saves the selected stored window to the Downloads folder and shows the saved path.
+**Export CSV** saves the currently displayed cached result to Downloads and shows the saved path.
 The file contains daily model details, source and coverage dates, and separate list-price and
-metered amounts. See [Usage History](../usage-history.md) for retention and export details.
+metered amounts. See [Usage History](../usage-history.md) for caching and export details.
 If writing or saving the file fails, the export reports an error and attempts to remove the
 incomplete file. An existing file is never overwritten or removed by the export.
 
@@ -315,3 +309,18 @@ WorkosCursorSessionToken=<userId>%3A%3A<access_token>
 ```
 
 `userId` is derived from JWT `sub` (e.g. `google-oauth2|user_abc` -> `user_abc`).
+
+### Reading Account Details
+
+Accounts are collapsed by default. The summary identifies the current account and its connection
+sources; expand it to switch, rename, add or remove accounts. Unavailable states remain visible.
+
+Removing an account removes all its OpenUsageCN connections and clears its quota and model-usage
+caches. Ordinary refresh does not rediscover the removed identity. Use **重新添加本机账号** for a
+local Desktop/CLI account, or add a browser profile again explicitly. Readding starts with a fresh
+cache. This does not sign out of the external app or browser. Other accounts remain available.
+If cache cleanup fails after removal, the account section provides a retry action.
+
+A browser connection can also be detached individually, keeping its account and cache.
+Account refresh and CSV export use icon buttons with hover descriptions. Model rows expand to
+show input, output and cache counts; see [Usage History](../usage-history.md).

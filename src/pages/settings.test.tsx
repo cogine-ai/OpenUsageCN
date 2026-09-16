@@ -209,7 +209,7 @@ describe("SettingsPage", () => {
 
   it("shows auto-update helper text", () => {
     render(<SettingsPage {...defaultProps} />)
-    expect(screen.getByText("选择刷新频率")).toBeInTheDocument()
+    expect(screen.queryByText("选择刷新频率")).not.toBeInTheDocument()
   })
 
   it("updates quota notification toggles", async () => {
@@ -263,7 +263,7 @@ describe("SettingsPage", () => {
   it("renders app theme section with theme options", () => {
     render(<SettingsPage {...defaultProps} />)
     expect(screen.getByText("应用主题")).toBeInTheDocument()
-    expect(screen.getByText("选择界面外观")).toBeInTheDocument()
+    expect(screen.queryByText("选择界面外观")).not.toBeInTheDocument()
     expect(screen.getByText("跟随系统")).toBeInTheDocument()
     expect(screen.getByText("浅色")).toBeInTheDocument()
     expect(screen.getByText("深色")).toBeInTheDocument()
@@ -318,7 +318,7 @@ describe("SettingsPage", () => {
   it("renders time format section heading", () => {
     render(<SettingsPage {...defaultProps} />)
     expect(screen.getByText("时间格式")).toBeInTheDocument()
-    expect(screen.getByText("选择 12/24 小时制")).toBeInTheDocument()
+    expect(screen.queryByText("选择 12/24 小时制")).not.toBeInTheDocument()
   })
 
   it("updates time format mode to 12h", async () => {
@@ -348,7 +348,7 @@ describe("SettingsPage", () => {
   it("renders menubar icon section", () => {
     render(<SettingsPage {...defaultProps} />)
     expect(screen.getByText("菜单栏图标")).toBeInTheDocument()
-    expect(screen.getByText("设置菜单栏显示样式")).toBeInTheDocument()
+    expect(screen.queryByText("设置菜单栏显示样式")).not.toBeInTheDocument()
   })
 
   it("clicking Bars triggers onMenubarIconStyleChange(\"bars\")", async () => {

@@ -56,6 +56,7 @@ export function ProviderDetailPage({
       {plugin.meta.id === "codex" ? <LocalUsageHistory providerId="codex" /> : null}
       {plugin.meta.accountSupport ? (
         <ProviderAccountControls
+          key={plugin.meta.id}
           providerId={plugin.meta.id}
           browserBinding={plugin.meta.accountSupport.browserBinding}
           modelHistory={plugin.meta.accountSupport.modelHistory}

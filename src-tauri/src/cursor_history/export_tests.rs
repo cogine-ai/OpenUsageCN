@@ -2,7 +2,7 @@ use super::{HistoryError, HistoryStore, export};
 
 #[test]
 fn unknown_billing_period_exports_coverage_without_inventing_cycle_dates() {
-    let mut history = super::archive_tests::period_history("account-a", 0);
+    let mut history = super::cache_tests::period_history("account-a", 0);
     history.coverage.billing_cycle = None;
     let csv = export::history_csv(&history).unwrap();
     let summary = csv.lines().nth(1).unwrap();
@@ -12,14 +12,14 @@ fn unknown_billing_period_exports_coverage_without_inventing_cycle_dates() {
 
 #[test]
 fn csv_carries_exact_coverage_and_keeps_cost_meanings_separate() {
-    let history = super::archive_tests::period_history("account-a", 0);
+    let history = super::cache_tests::period_history("account-a", 0);
     let csv = export::history_csv(&history).unwrap();
     let rows: Vec<_> = csv.lines().collect();
     assert_eq!(rows.len(), 3);
     assert!(rows[0].contains("\"Billing Cycle Start UTC\""));
     assert!(rows[0].contains("\"Coverage From UTC\""));
     assert!(rows[1].contains("https://cursor.com/api/dashboard/get-filtered-usage-events"));
-    assert!(rows[1].contains("Recorded Window Only; Not An Invoice"));
+    assert!(rows[1].contains("Current Result Only; Not An Invoice"));
     assert!(rows[1].ends_with("\"0.5\",\"Complete\""));
     assert!(rows[2].ends_with("\"0.25\",\"Complete\",\"\",\"\""));
     assert!(csv.ends_with("\r\n"));
@@ -41,7 +41,7 @@ fn csv_escapes_multiline_names_and_neutralizes_formula_prefixes() {
         "－1",
         "＠1",
     ] {
-        let mut history = super::archive_tests::period_history("account-a", 0);
+        let mut history = super::cache_tests::period_history("account-a", 0);
         history.buckets[0].model_name = model.to_string();
         let csv = export::history_csv(&history).unwrap();
         assert!(
@@ -50,7 +50,7 @@ fn csv_escapes_multiline_names_and_neutralizes_formula_prefixes() {
         );
         assert_eq!(history.buckets[0].model_name, model);
     }
-    let mut history = super::archive_tests::period_history("account-a", 0);
+    let mut history = super::cache_tests::period_history("account-a", 0);
     history.buckets[0].model_name = "model,\"quoted\"\nnext".to_string();
     assert!(
         export::history_csv(&history)
@@ -77,16 +77,9 @@ fn export_uses_only_the_selected_stored_account_window_and_a_generated_filename(
     let root =
         std::env::temp_dir().join(format!("openusage-cursor-export-{}", uuid::Uuid::new_v4()));
     let store = HistoryStore::new(&root);
-    let mut old = super::archive_tests::period_history("account-a", 0);
+    let mut old = super::cache_tests::period_history("account-a", 0);
     old.buckets[0].model_name = "../../attacker".to_string();
     store.save("cursor", "account-a", &old).unwrap();
-    store
-        .save(
-            "cursor",
-            "account-a",
-            &super::archive_tests::period_history("account-a", 1),
-        )
-        .unwrap();
     let key = export::SnapshotKey {
         from_ms: old.coverage.from_ms,
         to_ms: old.coverage.to_ms,
@@ -108,6 +101,30 @@ fn export_uses_only_the_selected_stored_account_window_and_a_generated_filename(
     );
     assert_eq!(
         export::export_stored_snapshot(&store, "cursor", "account-b", &key, &root),
+        Err(HistoryError::StorageRead)
+    );
+}
+
+#[test]
+fn export_rejects_a_replaced_snapshot_even_for_the_same_account() {
+    let root = std::env::temp_dir().join(format!("cursor-export-{}", uuid::Uuid::new_v4()));
+    let store = HistoryStore::new(&root);
+    let old = super::cache_tests::period_history("account-a", 0);
+    store.save("cursor", "account-a", &old).unwrap();
+    store
+        .save(
+            "cursor",
+            "account-a",
+            &super::cache_tests::period_history("account-a", 1),
+        )
+        .unwrap();
+    let key = export::SnapshotKey {
+        from_ms: old.coverage.from_ms,
+        to_ms: old.coverage.to_ms,
+        fetched_at_ms: old.coverage.fetched_at_ms,
+    };
+    assert_eq!(
+        export::export_stored_snapshot(&store, "cursor", "account-a", &key, &root),
         Err(HistoryError::StorageRead)
     );
 }

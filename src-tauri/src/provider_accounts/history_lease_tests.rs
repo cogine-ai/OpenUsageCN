@@ -326,3 +326,36 @@ fn detached_browser_history_is_not_reacquired_after_restart() {
     ));
     assert_eq!(runner.0.load(Ordering::SeqCst), 1);
 }
+
+#[test]
+fn another_process_removal_rejects_history_commit() {
+    let directory = temporary_app_data_dir("remove-inflight");
+    let generation = Arc::new(Mutex::new("c".repeat(64)));
+    let first = ProviderAccounts::with_store([47; 32], &directory).unwrap();
+    register(&first, &generation);
+    discover(&first);
+    let account_id = first.view("cursor").unwrap().active_account_id.unwrap();
+    let lease = first
+        .acquire(CredentialRequest {
+            provider_id: "cursor",
+            account_id: &account_id,
+        })
+        .unwrap();
+    let second = ProviderAccounts::with_store([47; 32], &directory).unwrap();
+    assert_eq!(
+        second
+            .perform("cursor", ProviderOperation::RemoveAccount { account_id })
+            .status,
+        OperationStatus::Succeeded
+    );
+    let mut committed = false;
+    let mut commit = || {
+        committed = true;
+        Ok(())
+    };
+    assert_eq!(
+        first.with_current_lease(&lease, &mut commit),
+        Err(HistoryError::CredentialLeaseChanged)
+    );
+    assert!(!committed);
+}

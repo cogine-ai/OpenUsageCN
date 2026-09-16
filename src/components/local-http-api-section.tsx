@@ -91,7 +91,7 @@ export function LocalHttpApiSection() {
 
   return (
     <section>
-      <h3 className="text-lg font-semibold mb-0">本地 API</h3>
+      <h3 className="text-sm font-semibold mb-0">本地 API</h3>
       <p className="text-sm text-muted-foreground mb-2">
         本机工具可读取同一份用量数据
       </p>

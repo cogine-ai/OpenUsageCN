@@ -46,12 +46,13 @@
 - Switching to an account without a readable snapshot removes the previous account's provider projection while the new probe is loading. A failed probe does not overwrite a previously successful snapshot for the same selected account. If the account registry itself is unavailable, the last projection stays readable with an error instead of being silently deleted.
 - `/v1/limits` projects that cache into stable numeric resources. The CLI can also refresh stale data without starting the Tauri UI or local HTTP server.
 
-## Recorded Cursor Windows
+## Cursor Usage Cache
 
-- Cursor history retains at most 12 recorded windows per account, separately from quota snapshots. A successful refresh replaces the saved snapshot for the same billing cycle without adding overlapping events twice.
-- Recorded windows keep their actual coverage, time zone and billing-cycle boundaries. Complete pagination does not imply a complete billing cycle. Old records without cycle metadata remain readable and are labelled as unknown-cycle coverage.
-- Selecting an older record reads local data only. CSV export reads the chosen stored record, uses a new file in Downloads, and keeps list-price estimates separate from metered amounts. Failed exports remain visible to the user and in logs.
-- Comparisons require matching coverage and cost completeness; unavailable comparisons do not show a change percentage. See [Usage History](usage-history.md).
+- Each account keeps its latest successful Model Usage result separately from quota snapshots. Successful refreshes replace it completely; overlapping data is never accumulated.
+- The result retains actual coverage, time zone and billing dates when known. Complete pagination does not imply a complete billing cycle.
+- CSV export verifies the displayed result still matches the current cache and writes a new file in Downloads. Failed exports remain visible and logged. There are no local archive selectors or comparisons.
+- Account removal clears its connections and usage caches. Persisted removal markers prevent older processes and ordinary discovery from restoring it. Explicit readding creates a fresh account cache; no old usage is restored.
+- Removal invalidates in-flight account results. If cache cleanup fails, the removed account remains suppressed and cleanup can be retried. See [Usage History](usage-history.md).
 
 ## Local Detail History
 

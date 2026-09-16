@@ -67,7 +67,7 @@ pub(crate) fn aggregate_scripted_history(
 #[cfg(test)]
 mod aggregate_tests;
 #[cfg(test)]
-mod archive_tests;
+mod cache_tests;
 #[cfg(test)]
 mod export_tests;
 #[cfg(test)]

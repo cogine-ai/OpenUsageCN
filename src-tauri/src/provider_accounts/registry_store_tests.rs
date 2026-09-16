@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use super::keychain::{InstallationKey, InstallationKeyError, InstallationKeyStore};
 use crate::plugin_engine::runtime::{MetricLine, PluginOutput};
 
-struct PersistedCursorAdapter;
+pub(super) struct PersistedCursorAdapter;
 
 impl ProviderAccountAdapter for PersistedCursorAdapter {
     fn discover_default(&self) -> Result<DiscoveryReport, String> {
@@ -29,7 +29,7 @@ impl ProviderAccountAdapter for PersistedCursorAdapter {
     }
 }
 
-fn temporary_app_data_dir(test_name: &str) -> PathBuf {
+pub(super) fn temporary_app_data_dir(test_name: &str) -> PathBuf {
     std::env::temp_dir().join(format!(
         "openusage-provider-accounts-{test_name}-{}",
         uuid::Uuid::new_v4()

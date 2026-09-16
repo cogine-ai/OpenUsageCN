@@ -7,6 +7,8 @@
 | 英文 | 中文 |
 | --- | --- |
 | Provider | 服务商 |
+| Provider Accounts | 账号 |
+| Add Browser Account | 添加账号 |
 | Plugin | 插件 |
 | Usage | 用量 |
 | Quota | 额度 |

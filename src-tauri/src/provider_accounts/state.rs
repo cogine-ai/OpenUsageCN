@@ -7,6 +7,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct ProviderState {
+    #[serde(default)]
+    pub(super) removed_account_ids: std::collections::HashSet<String>,
+    // Odd revisions suppress discovery; even revisions permit explicit reconnection.
+    #[serde(default)]
+    pub(super) identity_revisions: std::collections::HashMap<String, u64>,
     pub(super) selection: AccountSelection,
     #[serde(default)]
     pub(super) selection_revision: u64,

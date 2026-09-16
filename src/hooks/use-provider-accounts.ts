@@ -193,6 +193,15 @@ export function useProviderAccounts(providerId: string) {
     [runOperation]
   )
 
+  const removeAccount = useCallback(
+    (accountId: string) => runOperation({ kind: "removeAccount", accountId }),
+    [runOperation]
+  )
+  const reconnectLocal = useCallback(
+    () => runOperation({ kind: "reconnectLocal" }),
+    [runOperation]
+  )
+
   return {
     view,
     loading,
@@ -206,5 +215,7 @@ export function useProviderAccounts(providerId: string) {
     renameAccount,
     attachBrowserCandidate,
     detachConnection,
+    removeAccount,
+    reconnectLocal,
   }
 }

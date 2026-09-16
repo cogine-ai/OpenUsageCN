@@ -241,7 +241,7 @@ export function ProviderCard({
                           e.currentTarget.blur()
                           onRetry()
                         }}
-                        className="opacity-0 hover:opacity-100 focus-visible:opacity-100"
+                        className="text-muted-foreground hover:text-foreground"
                         style={{ transform: "translateZ(0)", backfaceVisibility: "hidden" }}
                       >
                         <RefreshCw className="h-3 w-3" />

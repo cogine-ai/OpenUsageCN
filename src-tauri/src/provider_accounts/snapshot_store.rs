@@ -124,6 +124,26 @@ impl SnapshotStore {
         Ok(true)
     }
 
+    pub(super) fn clear(&self, provider_id: &str, account_id: &str) -> Result<(), String> {
+        std::fs::create_dir_all(&self.app_data_dir)
+            .map_err(|_| "provider account snapshot directory could not be created")?;
+        let lock_file = OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .open(self.app_data_dir.join(SNAPSHOT_LOCK_FILE_NAME))
+            .map_err(|_| "provider account snapshot lock could not be opened")?;
+        lock_snapshot_file(&lock_file)?;
+        let mut file = self.load_file()?;
+        if let Some(accounts) = file.providers.get_mut(provider_id) {
+            accounts.remove(account_id);
+        }
+        let json = serde_json::to_string(&file)
+            .map_err(|_| "provider account snapshots could not be serialized")?;
+        crate::safe_file::write_text(&self.app_data_dir.join(SNAPSHOT_FILE_NAME), &json)
+            .map_err(|_| "provider account snapshots could not be cleared".to_string())
+    }
+
     fn load_file(&self) -> Result<SnapshotFile, String> {
         let data = match std::fs::read_to_string(self.app_data_dir.join(SNAPSHOT_FILE_NAME)) {
             Ok(data) => data,

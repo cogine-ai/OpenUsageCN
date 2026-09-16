@@ -32,7 +32,7 @@ describe("BrowserAccountManager", () => {
     )
 
     expect(tauri.invoke).not.toHaveBeenCalled()
-    await user.click(screen.getByRole("button", { name: "Add Browser Account" }))
+    await user.click(screen.getByRole("button", { name: "添加账号" }))
     expect(tauri.invoke).not.toHaveBeenCalled()
 
     await user.click(screen.getByRole("button", { name: "Chrome" }))
@@ -64,7 +64,7 @@ describe("BrowserAccountManager", () => {
       </StrictMode>
     )
 
-    await user.click(screen.getByRole("button", { name: "Add Browser Account" }))
+    await user.click(screen.getByRole("button", { name: "添加账号" }))
     await user.click(screen.getByRole("button", { name: "Chrome" }))
 
     expect(await screen.findByRole("option", { name: "Main (Default)" })).toBeInTheDocument()
@@ -114,7 +114,7 @@ describe("BrowserAccountManager", () => {
     const user = userEvent.setup()
     render(<BrowserAccountManager busy={false} onAttach={onAttach} />)
 
-    await user.click(screen.getByRole("button", { name: "Add Browser Account" }))
+    await user.click(screen.getByRole("button", { name: "添加账号" }))
     await user.click(screen.getByRole("button", { name: "Chrome" }))
     await user.selectOptions(
       await screen.findByRole("combobox", { name: "Browser Profile" }),
@@ -138,7 +138,7 @@ describe("BrowserAccountManager", () => {
     await user.click(screen.getByRole("button", { name: "Attach Work" }))
 
     expect(onAttach).toHaveBeenCalledWith("candidate-1")
-    expect(screen.getByRole("button", { name: "Add Browser Account" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "添加账号" })).toBeInTheDocument()
   })
 
   it("requires one exact profile for Claude discovery", async () => {
@@ -167,7 +167,7 @@ describe("BrowserAccountManager", () => {
       />
     )
 
-    await user.click(screen.getByRole("button", { name: "Add Browser Account" }))
+    await user.click(screen.getByRole("button", { name: "添加账号" }))
     await user.click(screen.getByRole("button", { name: "Chrome" }))
     const profile = await screen.findByRole("combobox", { name: "Browser Profile" })
     expect(screen.queryByRole("option", { name: "All Profiles" })).not.toBeInTheDocument()
@@ -228,7 +228,7 @@ describe("BrowserAccountManager", () => {
     const user = userEvent.setup()
     render(<BrowserAccountManager busy={false} onAttach={vi.fn()} />)
 
-    await user.click(screen.getByRole("button", { name: "Add Browser Account" }))
+    await user.click(screen.getByRole("button", { name: "添加账号" }))
     await user.click(screen.getByRole("button", { name: "Arc" }))
     await user.selectOptions(
       await screen.findByRole("combobox", { name: "Browser Profile" }),
@@ -266,7 +266,7 @@ describe("BrowserAccountManager", () => {
       <BrowserAccountManager busy={false} onAttach={vi.fn()} />
     )
 
-    await user.click(screen.getByRole("button", { name: "Add Browser Account" }))
+    await user.click(screen.getByRole("button", { name: "添加账号" }))
     await user.click(screen.getByRole("button", { name: "Chrome" }))
     await user.selectOptions(
       await screen.findByRole("combobox", { name: "Browser Profile" }),
@@ -299,7 +299,7 @@ describe("BrowserAccountManager", () => {
     const user = userEvent.setup()
     render(<BrowserAccountManager busy={false} onAttach={vi.fn()} />)
 
-    await user.click(screen.getByRole("button", { name: "Add Browser Account" }))
+    await user.click(screen.getByRole("button", { name: "添加账号" }))
     await user.click(screen.getByRole("button", { name: "Chrome" }))
     await user.selectOptions(
       await screen.findByRole("combobox", { name: "Browser Profile" }),
@@ -312,7 +312,7 @@ describe("BrowserAccountManager", () => {
 
     await user.click(screen.getByRole("button", { name: "Close Add Browser Account" }))
 
-    expect(screen.getByRole("button", { name: "Add Browser Account" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "添加账号" })).toBeInTheDocument()
     expect(tauri.invoke).toHaveBeenCalledWith("cancel_browser_discovery", {
       requestId: discoveryCall?.[1].requestId,
     })
@@ -346,7 +346,7 @@ describe("BrowserAccountManager", () => {
     const user = userEvent.setup()
     render(<BrowserAccountManager busy={false} onAttach={vi.fn()} />)
 
-    await user.click(screen.getByRole("button", { name: "Add Browser Account" }))
+    await user.click(screen.getByRole("button", { name: "添加账号" }))
     await user.click(screen.getByRole("button", { name: "Chrome" }))
     await user.selectOptions(
       await screen.findByRole("combobox", { name: "Browser Profile" }),
@@ -413,7 +413,7 @@ describe("BrowserAccountManager", () => {
     const user = userEvent.setup()
     render(<BrowserAccountManager busy={false} onAttach={vi.fn()} />)
 
-    await user.click(screen.getByRole("button", { name: "Add Browser Account" }))
+    await user.click(screen.getByRole("button", { name: "添加账号" }))
     await user.click(screen.getByRole("button", { name: "Chrome" }))
     await user.selectOptions(
       await screen.findByRole("combobox", { name: "Browser Profile" }),
