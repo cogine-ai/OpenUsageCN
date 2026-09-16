@@ -43,5 +43,5 @@ request counts, and known list-price equivalents with their coverage status. Mis
 blank, and metered usage is not assigned to individual models.
 
 Commas, quotes, and line breaks in model names are escaped. Names that could be interpreted as
-spreadsheet formulas receive a visible `Text: ` prefix in the CSV; the cached result retains the
-original name. This avoids relying only on quote escaping when a spreadsheet saves the CSV again.
+spreadsheet formulas receive a visible `Text:` prefix followed by a space in the CSV; the cached
+result retains the original name. This avoids relying only on quote escaping when a spreadsheet saves the CSV again.
