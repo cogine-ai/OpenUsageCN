@@ -88,7 +88,7 @@ export function PaceNotificationSettingsSection({
         <Bell className="mt-0.5 size-4 text-muted-foreground" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <h3 className="text-lg font-semibold leading-none">额度通知</h3>
+            <h3 className="text-sm font-semibold leading-none">额度通知</h3>
             {anyEnabled && permission !== "granted" ? (
               <TriangleAlert className="size-4 text-amber-500" aria-label="系统通知权限未开启" />
             ) : null}

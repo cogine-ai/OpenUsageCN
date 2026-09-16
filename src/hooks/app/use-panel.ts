@@ -7,7 +7,8 @@ import type { DisplayPluginState } from "@/hooks/app/use-app-plugin-views"
 
 const PANEL_WIDTH = 400
 const MAX_HEIGHT_FALLBACK_PX = 600
-const MAX_HEIGHT_FRACTION_OF_MONITOR = 0.8
+const MAX_PANEL_HEIGHT_PX = 720
+const WORK_AREA_MARGIN_PX = 32
 
 type UsePanelArgs = {
   platform: string | null
@@ -164,24 +165,22 @@ export function usePanel({
       const width = Math.ceil(PANEL_WIDTH * factor)
       const desiredHeightLogical = Math.max(1, container.scrollHeight)
 
-      let maxHeightPhysical: number | null = null
-      let maxHeightLogical: number | null = null
+      let availableHeightLogical = Number(window.screen?.availHeight) || MAX_HEIGHT_FALLBACK_PX
 
       try {
         const monitor = await currentMonitor()
         if (monitor) {
-          maxHeightPhysical = Math.floor(monitor.size.height * MAX_HEIGHT_FRACTION_OF_MONITOR)
-          maxHeightLogical = Math.floor(maxHeightPhysical / factor)
+          availableHeightLogical = monitor.workArea.size.height / factor
         }
-      } catch {
-        // fall through to fallback
+      } catch (error) {
+        console.error("Failed to read monitor work area:", error)
       }
 
-      if (maxHeightLogical === null) {
-        const screenAvailHeight = Number(window.screen?.availHeight) || MAX_HEIGHT_FALLBACK_PX
-        maxHeightLogical = Math.floor(screenAvailHeight * MAX_HEIGHT_FRACTION_OF_MONITOR)
-        maxHeightPhysical = Math.floor(maxHeightLogical * factor)
-      }
+      const maxHeightLogical = Math.max(
+        1,
+        Math.min(MAX_PANEL_HEIGHT_PX, Math.floor(availableHeightLogical - WORK_AREA_MARGIN_PX))
+      )
+      const maxHeightPhysical = Math.floor(maxHeightLogical * factor)
 
       if (maxPanelHeightPxRef.current !== maxHeightLogical) {
         maxPanelHeightPxRef.current = maxHeightLogical
@@ -189,7 +188,7 @@ export function usePanel({
       }
 
       const desiredHeightPhysical = Math.ceil(desiredHeightLogical * factor)
-      const height = Math.ceil(Math.min(desiredHeightPhysical, maxHeightPhysical!))
+      const height = Math.ceil(Math.min(desiredHeightPhysical, maxHeightPhysical))
 
       try {
         const currentWindow = getCurrentWindow()
@@ -233,7 +232,12 @@ export function usePanel({
     ro.observe(el)
 
     const mo = new MutationObserver(check)
-    mo.observe(el, { childList: true, subtree: true })
+    mo.observe(el, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["open", "hidden"],
+    })
 
     return () => {
       el.removeEventListener("scroll", check)

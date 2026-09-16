@@ -67,27 +67,44 @@ impl ProviderAccounts {
                 };
             }
         };
-        let result = match operation {
-            ProviderOperation::RefreshActive => self.refresh_active(provider_id),
-            ProviderOperation::SelectActive { account_id } => self
-                .select_active(provider_id, &account_id)
-                .map(|_| (OperationStatus::Succeeded, Vec::new())),
-            ProviderOperation::FollowDefaultConnection => self
-                .follow_default(provider_id)
-                .map(|_| (OperationStatus::Succeeded, Vec::new())),
-            ProviderOperation::RenameAccount { account_id, label } => self
-                .rename_account(provider_id, &account_id, &label)
-                .map(|_| (OperationStatus::Succeeded, Vec::new())),
-            ProviderOperation::AttachBrowserCandidate { candidate_id } => {
-                self.attach_browser_candidate(provider_id, &candidate_id)
+        let result = (|| {
+            if let Some(store) = &self.registry_store {
+                let mut providers = self
+                    .providers
+                    .lock()
+                    .map_err(|_| "provider account state is unavailable")?;
+                let current = providers.get(provider_id).cloned().unwrap_or_default();
+                providers.insert(
+                    provider_id.to_string(),
+                    store.refresh_runtime(provider_id, current)?,
+                );
             }
-            ProviderOperation::DetachConnection {
-                account_id,
-                connection_id,
-            } => self
-                .detach_browser_connection(provider_id, &account_id, &connection_id)
-                .map(|_| (OperationStatus::Succeeded, Vec::new())),
-        };
+            match operation {
+                ProviderOperation::RefreshActive => self.refresh_active(provider_id, false),
+                ProviderOperation::ReconnectLocal => self.refresh_active(provider_id, true),
+                ProviderOperation::RemoveAccount { account_id } => self
+                    .remove_account(provider_id, &account_id)
+                    .map(|_| (OperationStatus::Succeeded, Vec::new())),
+                ProviderOperation::SelectActive { account_id } => self
+                    .select_active(provider_id, &account_id)
+                    .map(|_| (OperationStatus::Succeeded, Vec::new())),
+                ProviderOperation::FollowDefaultConnection => self
+                    .follow_default(provider_id)
+                    .map(|_| (OperationStatus::Succeeded, Vec::new())),
+                ProviderOperation::RenameAccount { account_id, label } => self
+                    .rename_account(provider_id, &account_id, &label)
+                    .map(|_| (OperationStatus::Succeeded, Vec::new())),
+                ProviderOperation::AttachBrowserCandidate { candidate_id } => {
+                    self.attach_browser_candidate(provider_id, &candidate_id)
+                }
+                ProviderOperation::DetachConnection {
+                    account_id,
+                    connection_id,
+                } => self
+                    .detach_browser_connection(provider_id, &account_id, &connection_id)
+                    .map(|_| (OperationStatus::Succeeded, Vec::new())),
+            }
+        })();
         match result {
             Ok((status, source_outcomes)) if status != OperationStatus::Failed => {
                 ProviderOperationReceipt {
@@ -108,7 +125,11 @@ impl ProviderAccounts {
                     error: Some(operation_error(provider_id, is_refresh)),
                 }
             }
-            Err(_) => {
+            Err(reason) => {
+                log::error!(
+                    "provider account operation failed: {}",
+                    crate::plugin_engine::host_api::redact_log_message(&reason)
+                );
                 log_operation_failure(provider_id, &operation_id);
                 ProviderOperationReceipt {
                     operation_id,
@@ -129,6 +150,7 @@ impl ProviderAccounts {
     fn refresh_active(
         &self,
         provider_id: &str,
+        reconnect: bool,
     ) -> Result<(OperationStatus, Vec<SourceOutcome>), String> {
         let adapter = self
             .adapters
@@ -169,6 +191,19 @@ impl ProviderAccounts {
                 &observed.identity_namespace,
                 &observed.normalized_identity,
             );
+            if provider
+                .identity_revisions
+                .get(&fingerprint)
+                .is_some_and(|revision| revision % 2 == 1)
+            {
+                if !reconnect {
+                    continue;
+                }
+                let revision = provider.identity_revisions.get_mut(&fingerprint).unwrap();
+                *revision = revision
+                    .checked_add(1)
+                    .ok_or("identity revision is exhausted")?;
+            }
             let account_index = provider
                 .accounts
                 .iter()
@@ -208,12 +243,10 @@ impl ProviderAccounts {
             }
             last_observed_account_id = Some(account.account_id.clone());
         }
-        let observed_account_id = default_account_id
-            .or(last_observed_account_id)
-            .ok_or_else(|| "provider returned no usable account observations".to_string())?;
-        provider.default_account_id = Some(observed_account_id.clone());
+        let observed_account_id = default_account_id.or(last_observed_account_id);
+        provider.default_account_id = observed_account_id.clone();
         if provider.selection == AccountSelection::Auto {
-            provider.active_account_id = Some(observed_account_id);
+            provider.active_account_id = observed_account_id;
         }
         let status = if report
             .source_outcomes

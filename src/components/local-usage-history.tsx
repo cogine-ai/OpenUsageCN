@@ -1,5 +1,6 @@
-import { Activity, RefreshCw } from "lucide-react"
+import { RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { UsageSparkline } from "@/components/usage-sparkline"
 import { usePlatformCapabilities } from "@/hooks/app/use-platform-capabilities"
 import { useLocalHistory } from "@/hooks/use-local-history"
@@ -16,16 +17,29 @@ export function LocalUsageHistory({ providerId, accountId = null, disabled = fal
   if (!capabilities || capabilities.platform === "windows") return null
 
   return (
-    <section className="mt-4 space-y-3 rounded-lg border border-border bg-background p-4">
+    <section className="mt-4 space-y-3 rounded-lg border border-border bg-background p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="flex items-center gap-2 whitespace-nowrap text-sm font-semibold">
-          <Activity className="size-4 shrink-0 text-muted-foreground" />
           Local History
         </h3>
-        <Button type="button" size="sm" variant="outline" disabled={disabled || loading} onClick={() => { void load() }}>
-          <RefreshCw className={loading ? "size-3 animate-spin" : "size-3"} />
-          {loading ? "Loading…" : snapshot ? "Refresh Local History" : "Load Local History"}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                type="button"
+                size={snapshot ? "icon-sm" : "sm"}
+                variant="outline"
+                aria-label={snapshot ? "Refresh Local History" : "Load Local History"}
+                disabled={disabled || loading}
+                onClick={() => { void load() }}
+              >
+                <RefreshCw className={loading ? "size-4 animate-spin" : "size-4"} />
+                {!snapshot ? (loading ? "Loading…" : "Load Local History") : null}
+              </Button>
+            }
+          />
+          <TooltipContent>{snapshot ? "Refresh Local History" : "Load Local History"}</TooltipContent>
+        </Tooltip>
       </div>
       <p className="text-xs text-muted-foreground">
         本地日志按 API 价格估算，可能包含多个会话；不代表账号账单。

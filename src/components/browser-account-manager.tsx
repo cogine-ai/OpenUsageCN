@@ -13,6 +13,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { compactFieldClassName } from "@/components/ui/field"
 import {
   cancelBrowserDiscovery,
   discoverBrowserAccounts,
@@ -198,7 +199,7 @@ export function BrowserAccountManager({
         onClick={() => setOpen(true)}
       >
         <Plus className="size-4" />
-        Add Browser Account
+        添加账号
       </Button>
     )
   }
@@ -206,7 +207,7 @@ export function BrowserAccountManager({
   return (
     <div className="space-y-3 rounded-md border border-border p-3">
       <div className="flex items-center justify-between gap-3">
-        <h4 className="text-sm font-semibold">Add Browser Account</h4>
+        <h4 className="text-sm font-semibold">添加账号</h4>
         <Button
           type="button"
           size="icon-xs"
@@ -260,7 +261,7 @@ export function BrowserAccountManager({
             aria-label="Browser Profile"
             value={profileKey}
             onChange={(event) => setProfileKey(event.target.value)}
-            className="h-9 w-full rounded-md border border-input bg-background px-2 outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            className={`${compactFieldClassName} w-full`}
           >
             <option value="" disabled>
               Choose A Profile

@@ -17,6 +17,7 @@ mod plugin_adapter;
 mod probe;
 mod projection;
 mod registry_store;
+mod removal;
 mod snapshot_store;
 mod state;
 
@@ -58,3 +59,6 @@ mod registry_store_tests;
 mod snapshot_store_tests;
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod removal_tests;

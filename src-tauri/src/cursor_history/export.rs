@@ -26,9 +26,8 @@ pub(super) fn export_stored_snapshot(
         return Err(HistoryError::UnsupportedProvider);
     }
     let snapshot = store
-        .list(provider_id, account_id)?
-        .into_iter()
-        .find(|history| {
+        .load(provider_id, account_id)?
+        .filter(|history| {
             history.coverage.from_ms == key.from_ms
                 && history.coverage.to_ms == key.to_ms
                 && history.coverage.fetched_at_ms == key.fetched_at_ms
@@ -96,7 +95,7 @@ pub(super) fn history_csv(history: &CompleteHistory) -> Result<String, HistoryEr
         utc_time(coverage.to_ms)?,
         utc_time(coverage.fetched_at_ms)?,
         coverage.complete.to_string(),
-        "Recorded Window Only; Not An Invoice".to_string(),
+        "Current Result Only; Not An Invoice".to_string(),
     ];
     let mut csv = String::new();
     append_row(

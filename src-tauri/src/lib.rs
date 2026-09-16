@@ -872,8 +872,16 @@ fn perform_provider_account_operation(
     operation: provider_accounts::ProviderOperation,
     accounts: tauri::State<'_, Arc<provider_accounts::ProviderAccounts>>,
 ) -> provider_accounts::ProviderOperationReceipt {
+    let removed_account_id = match &operation {
+        provider_accounts::ProviderOperation::RemoveAccount { account_id } => Some(account_id.clone()),
+        _ => None,
+    };
     let receipt = accounts.perform(&provider_id, operation);
-    if receipt.status != provider_accounts::OperationStatus::Failed {
+    // Cache cleanup can fail after the removal is already committed. Publish the
+    // changed account selection even while the receipt asks the user to retry cleanup.
+    let committed_removal = removed_account_id.as_deref()
+        .is_some_and(|account_id| accounts.removal_committed(&provider_id, account_id));
+    if receipt.status != provider_accounts::OperationStatus::Failed || committed_removal {
         if let Err(error) = sync_active_account_projection(&accounts, &provider_id) {
             let redacted = plugin_engine::host_api::redact_log_message(&error);
             log::error!(
@@ -885,7 +893,12 @@ fn perform_provider_account_operation(
             local_http_api::record_probe_error(&provider_id, redacted);
         }
     }
-    if let Some(event) = accounts.changed_event(&provider_id, &receipt) {
+    let event = if committed_removal {
+        Some(accounts.view_changed_event(&provider_id))
+    } else {
+        accounts.changed_event(&provider_id, &receipt)
+    };
+    if let Some(event) = event {
         if let Err(error) = app_handle.emit("provider-account-view-changed", event) {
             log::error!(
                 "provider account revision event failed: provider={}, operation_id={}, error={}",
@@ -1303,7 +1316,6 @@ pub fn run() {
             discover_browser_accounts,
             cancel_browser_discovery,
             get_cursor_history_snapshot,
-            cursor_history::commands::list_cursor_history_snapshots,
             cursor_history::commands::export_cursor_history_csv,
             refresh_cursor_history,
             local_history::refresh_local_history,

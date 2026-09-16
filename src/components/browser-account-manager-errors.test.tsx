@@ -26,7 +26,7 @@ describe("BrowserAccountManager errors", () => {
     const user = userEvent.setup()
     render(<BrowserAccountManager busy={false} onAttach={vi.fn()} />)
 
-    await user.click(screen.getByRole("button", { name: "Add Browser Account" }))
+    await user.click(screen.getByRole("button", { name: "添加账号" }))
     await user.click(screen.getByRole("button", { name: "Chrome" }))
 
     expect(
@@ -58,7 +58,7 @@ describe("BrowserAccountManager errors", () => {
     const user = userEvent.setup()
     render(<BrowserAccountManager busy={false} onAttach={vi.fn()} />)
 
-    await user.click(screen.getByRole("button", { name: "Add Browser Account" }))
+    await user.click(screen.getByRole("button", { name: "添加账号" }))
     await user.click(screen.getByRole("button", { name: "Chrome" }))
     await user.selectOptions(
       await screen.findByRole("combobox", { name: "Browser Profile" }),

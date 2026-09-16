@@ -105,6 +105,7 @@ describe("Claude local history during account view updates", () => {
     await startHistory()
     expect(await screen.findByText("12K tokens")).toBeInTheDocument()
 
+    fireEvent.click(screen.getByRole("button", { name: "账号" }))
     fireEvent.click(screen.getByRole("button", { name: "刷新账号" }))
 
     expect(screen.getByText("12K tokens")).toBeInTheDocument()

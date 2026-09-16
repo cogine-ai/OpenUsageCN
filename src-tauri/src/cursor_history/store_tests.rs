@@ -58,7 +58,7 @@ fn complete_account_snapshot_round_trips_at_the_account_scoped_path() {
         &std::fs::read_to_string(root.join("provider-history/cursor/account-a.json")).unwrap(),
     )
     .unwrap();
-    assert_eq!(stored["version"], 2);
+    assert_eq!(stored["version"], 3);
     assert_eq!(stored["history"]["accountId"], "account-a");
 }
 
@@ -174,7 +174,7 @@ fn a_save_that_finds_invalid_supported_history_keeps_the_first_error_and_origina
 #[test]
 fn future_versions_and_unrecognized_formats_are_never_quarantined_or_overwritten() {
     for content in [
-        r#"{"version":3,"history":null,"newFormat":[]}"#,
+        r#"{"version":4,"history":null,"newFormat":[]}"#,
         r#"{"version":10000000000,"history":null}"#,
         r#"{"history":null}"#,
         "not JSON",

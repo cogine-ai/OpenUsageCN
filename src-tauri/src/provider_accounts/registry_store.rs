@@ -52,6 +52,19 @@ impl RegistryStore {
         Ok(self.load_registry()?.providers)
     }
 
+    pub(super) fn refresh_runtime(
+        &self,
+        provider_id: &str,
+        runtime: ProviderState,
+    ) -> Result<ProviderState, String> {
+        Ok(self
+            .load_registry()?
+            .providers
+            .remove(provider_id)
+            .map(|stored| merge_provider(stored, runtime.clone()))
+            .unwrap_or(runtime))
+    }
+
     pub(super) fn registry_exists(&self) -> Result<bool, String> {
         match std::fs::metadata(self.app_data_dir.join(REGISTRY_FILE_NAME)) {
             Ok(metadata) => Ok(metadata.is_file()),
@@ -133,7 +146,27 @@ impl RegistryStore {
 
 fn merge_provider(mut stored: ProviderState, incoming: ProviderState) -> ProviderState {
     let incoming_selection_wins = incoming.selection_revision >= stored.selection_revision;
+    stored
+        .removed_account_ids
+        .extend(incoming.removed_account_ids);
+    for (identity, revision) in incoming.identity_revisions {
+        let current = stored.identity_revisions.entry(identity).or_default();
+        *current = (*current).max(revision);
+    }
+    stored
+        .accounts
+        .retain(|account| !stored.removed_account_ids.contains(&account.account_id));
     for incoming_account in incoming.accounts {
+        if stored
+            .removed_account_ids
+            .contains(&incoming_account.account_id)
+            || stored
+                .identity_revisions
+                .get(&incoming_account.identity_fingerprint)
+                .is_some_and(|revision| revision % 2 == 1)
+        {
+            continue;
+        }
         if let Some(stored_account) = stored.accounts.iter_mut().find(|account| {
             account.account_id == incoming_account.account_id
                 || account.identity_fingerprint == incoming_account.identity_fingerprint
@@ -150,6 +183,27 @@ fn merge_provider(mut stored: ProviderState, incoming: ProviderState) -> Provide
     }
     if incoming.default_account_id.is_some() {
         stored.default_account_id = incoming.default_account_id;
+    }
+    let valid = |id: &String| {
+        stored
+            .accounts
+            .iter()
+            .any(|account| &account.account_id == id)
+    };
+    if stored
+        .active_account_id
+        .as_ref()
+        .is_some_and(|id| !valid(id))
+    {
+        stored.active_account_id = None;
+        stored.selection = super::model::AccountSelection::Auto;
+    }
+    if stored
+        .default_account_id
+        .as_ref()
+        .is_some_and(|id| !valid(id))
+    {
+        stored.default_account_id = None;
     }
     stored
 }

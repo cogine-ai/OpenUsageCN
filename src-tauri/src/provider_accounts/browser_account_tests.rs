@@ -293,3 +293,47 @@ fn a_stale_process_cannot_reattach_an_explicitly_detached_browser_profile() {
     assert!(account.connections.is_empty());
     let _ = std::fs::remove_dir_all(directory);
 }
+
+#[test]
+fn removing_account_releases_every_connection_and_browser_readd_is_fresh() {
+    let accounts = ProviderAccounts::in_memory([43; 32]);
+    let broker = broker("auth0|shared-subject");
+    accounts.set_browser_broker(Arc::clone(&broker));
+    accounts.register_adapter("cursor", Box::new(SharedLocalAdapter));
+    accounts.perform("cursor", ProviderOperation::RefreshActive);
+    accounts.perform(
+        "cursor",
+        ProviderOperation::AttachBrowserCandidate {
+            candidate_id: candidate_id(&broker),
+        },
+    );
+    let before = accounts.view("cursor").unwrap();
+    assert_eq!(before.accounts[0].connections.len(), 2);
+    let id = before.accounts[0].account_id.clone();
+    let session = accounts.providers.lock().unwrap()["cursor"].accounts[0]
+        .connections
+        .iter()
+        .find_map(|connection| connection.session_ref.clone())
+        .unwrap();
+    let receipt = accounts.perform(
+        "cursor",
+        ProviderOperation::RemoveAccount {
+            account_id: id.clone(),
+        },
+    );
+    assert_eq!(receipt.status, OperationStatus::Succeeded);
+    assert!(receipt.view.accounts.is_empty());
+    assert!(receipt.view.active_account_id.is_none());
+    assert!(broker.session_credential(&session).is_err());
+    accounts.perform("cursor", ProviderOperation::RefreshActive);
+    assert!(accounts.view("cursor").unwrap().accounts.is_empty());
+    let receipt = accounts.perform(
+        "cursor",
+        ProviderOperation::AttachBrowserCandidate {
+            candidate_id: candidate_id(&broker),
+        },
+    );
+    assert_eq!(receipt.status, OperationStatus::Succeeded);
+    assert_ne!(receipt.view.accounts[0].account_id, id);
+    assert_eq!(receipt.view.accounts[0].connections.len(), 1);
+}

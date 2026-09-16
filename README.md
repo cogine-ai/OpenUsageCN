@@ -24,7 +24,7 @@ OpenUsageCN 常驻菜单栏或系统托盘，用一个轻量面板展示各类 A
 - **集中查看。** 把多个 AI 工具的用量放在同一个托盘面板里。
 - **自动刷新。** 按你设置的间隔更新；已知额度重置后，会优先刷新对应服务商。
 - **故障恢复。** 登录、权限、网络和限流问题提供操作建议及重试入口；更新失败时保留上次成功的数据。支持的服务商还会显示状态页提示。
-- **[用量历史](docs/usage-history.md)。** Cursor 可查看已记录账期并导出 CSV；Codex 和 Claude 的本地历史在详情页按需加载，实时额度不等待日志统计。
+- **[用量历史](docs/usage-history.md)。** Cursor 显示最近成功读取的用量并导出 CSV；Codex 和 Claude 的本地历史在详情页按需加载，实时额度不等待日志统计。
 - **[额度通知](docs/pace-notifications.md)。** macOS 可按需开启即将用尽、接近上限和预计提前用尽三类系统通知。
 - **全局快捷键。** macOS 可以用快捷键从任何地方打开或关闭面板。
 - **轻量常驻。** 启动快，不打断当前工作流。
@@ -46,7 +46,7 @@ Windows MVP 仅启用和展示 **Codex、BigModel CN、OpenAI API、OpenRouter �
 - [**Claude**](docs/providers/claude.md)：session、weekly、extra usage、按需加载本地 token 用量（ccusage）、可验证的 Team 席位
 - [**Codex**](docs/providers/codex.md)：5 小时、每周、代码审查、点数、手动重置及最近到期时间
 - [**Copilot**](docs/providers/copilot.md)：premium、chat、completions
-- [**Cursor**](docs/providers/cursor.md)：credits、总用量、Desktop/CLI/Chrome/Arc 多账号、按模型用量、已记录账期比较和 CSV 导出
+- [**Cursor**](docs/providers/cursor.md)：credits、总用量、Desktop/CLI/Chrome/Arc 多账号、按模型用量、最新结果缓存和 CSV 导出
 - [**Factory / Droid**](docs/providers/factory.md)：standard、premium tokens
 - [**Gemini**](docs/providers/gemini.md)：Gemini CLI OAuth quota、Pro、Flash、Flash Lite
 - [**Grok**](docs/providers/grok.md)：credits used、plan、pay-as-you-go cap

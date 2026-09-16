@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const tauri = vi.hoisted(() => ({
@@ -64,7 +64,8 @@ describe("CursorModelUsage", () => {
 
     render(<CursorModelUsage providerId="cursor" accountId="account-1" />)
 
-    expect(await screen.findByText("Cached")).toBeInTheDocument()
+    expect(await screen.findByText("Refreshing")).toBeInTheDocument()
+    expect(screen.queryByText("Cached")).not.toBeInTheDocument()
     expect(screen.getByText("Refreshing")).toBeInTheDocument()
     expect(screen.getByText("composer-1.5")).toBeInTheDocument()
   })
@@ -89,11 +90,39 @@ describe("CursorModelUsage", () => {
     expect(screen.getByText("Output 200")).toBeInTheDocument()
     expect(screen.getByText("Cache Write 50")).toBeInTheDocument()
     expect(screen.getByText("Cache Read 300")).toBeInTheDocument()
-    expect(screen.getByText("Complete Pages")).toBeInTheDocument()
+    expect(screen.queryByText("Complete Pages")).not.toBeInTheDocument()
     expect(screen.getByText("Coverage 2026-08-22 20:00 – 2026-08-23 23:46")).toBeInTheDocument()
     expect(
       screen.getByText("Updated 2026-08-23 23:46 · Asia/Taipei")
     ).toBeInTheDocument()
+  })
+
+  it("expands token details without fetching and resets expansion when the account changes", async () => {
+    const complete = snapshot()
+    tauri.invoke.mockImplementation((command: string, args: { accountId: string }) => {
+      const record = { ...complete, accountId: args.accountId }
+      if (command === "get_cursor_history_snapshot") return Promise.resolve(record)
+      if (command === "refresh_cursor_history") return Promise.resolve({ snapshot: record, stale: false })
+      return Promise.resolve([])
+    })
+    const { rerender } = render(<CursorModelUsage providerId="cursor" accountId="account-1" />)
+    const heading = await screen.findByRole("heading", { name: "composer-1.5" })
+    const details = heading.closest("details")!
+    expect(details.open).toBe(false)
+    const calls = tauri.invoke.mock.calls.length
+    fireEvent.click(heading.closest("summary")!)
+    await waitFor(() => expect(details.open).toBe(true))
+    fireEvent(details, new Event("toggle"))
+    expect(screen.getByText("Input 1,000")).toBeVisible()
+    expect(tauri.invoke.mock.calls.length).toBe(calls)
+    complete.coverage.fetchedAtMs += 1_000
+    rerender(<CursorModelUsage providerId="cursor" accountId="account-1" demandRevision={1} />)
+    await waitFor(() => expect(tauri.invoke.mock.calls.length).toBeGreaterThan(calls))
+    await waitFor(() => expect(screen.queryByText("Refreshing")).not.toBeInTheDocument())
+    expect(details.open).toBe(true)
+    expect(screen.getByRole("heading", { name: "composer-1.5" }).closest("details")).toHaveAttribute("open")
+    rerender(<CursorModelUsage providerId="cursor" accountId="account-2" />)
+    expect((await screen.findByRole("heading", { name: "composer-1.5" })).closest("details")).not.toHaveAttribute("open")
   })
 
   it("combines daily buckets into one total row per model", async () => {
@@ -116,7 +145,7 @@ describe("CursorModelUsage", () => {
 
     expect(await screen.findAllByRole("heading", { name: "composer-1.5" })).toHaveLength(1)
     expect(screen.getByText("3 Requests · 1,800 Tokens")).toBeInTheDocument()
-    expect(screen.getByText("Total Tokens 1,800")).toBeInTheDocument()
+    expect(screen.getByText("Total Tokens 1,800 · 3 Requests")).toBeInTheDocument()
     expect(screen.getByText("Input 1,100")).toBeInTheDocument()
     expect(screen.getByText("Output 250")).toBeInTheDocument()
     expect(screen.getByText("Cache Read 400")).toBeInTheDocument()

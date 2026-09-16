@@ -63,7 +63,7 @@ describe("ProviderDetailPage", () => {
       />
     )
     expect(screen.getAllByText("Alpha").length).toBeGreaterThan(0)
-    expect(screen.queryByRole("heading", { name: "Provider Accounts" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "账号" })).not.toBeInTheDocument()
   })
 
   it("renders quick links when provided by plugin meta", () => {
@@ -133,9 +133,10 @@ describe("ProviderDetailPage", () => {
     )
 
     expect(
-      await screen.findByRole("heading", { name: "Provider Accounts" })
+      await screen.findByRole("heading", { name: "账号" })
     ).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Add Browser Account" })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "账号" }))
+    expect(screen.getByRole("button", { name: "添加账号" })).toBeInTheDocument()
     expect(await screen.findByRole("heading", { name: "Model Usage" })).toBeInTheDocument()
   })
 
@@ -206,6 +207,7 @@ describe("ProviderDetailPage", () => {
       />
     )
 
+    await user.click(screen.getByRole("button", { name: "账号" }))
     await user.click(await screen.findByRole("radio", { name: /Personal/i }))
 
     await waitFor(() => expect(onAccountChangeRefresh).toHaveBeenCalledTimes(1))

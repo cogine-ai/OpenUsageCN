@@ -379,7 +379,7 @@ describe("App", () => {
         return 100
       },
     })
-    state.currentMonitorMock.mockResolvedValue({ size: { height: 1000 } })
+    state.currentMonitorMock.mockResolvedValue({ size: { height: 1000 }, workArea: { size: { height: 960 } } })
     state.startBatchMock.mockResolvedValue(["a"])
     state.trayGetByIdMock.mockResolvedValue({
       setIcon: state.traySetIconMock.mockResolvedValue(undefined),

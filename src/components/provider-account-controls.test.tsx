@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react"
+import { render as testingRender, fireEvent, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -16,6 +16,12 @@ vi.mock("@tauri-apps/api/event", () => ({
 }))
 
 import { ProviderAccountControls } from "@/components/provider-account-controls"
+
+const render: typeof testingRender = (element, options) => {
+  const result = testingRender(element, options)
+  fireEvent.click(screen.getByRole("button", { name: "账号" }))
+  return result
+}
 
 describe("ProviderAccountControls", () => {
   beforeEach(() => {
@@ -52,7 +58,7 @@ describe("ProviderAccountControls", () => {
     render(<ProviderAccountControls providerId="cursor" />)
 
     expect(screen.getByText("正在读取账号…")).toBeInTheDocument()
-    expect(await screen.findByRole("heading", { name: "Provider Accounts" })).toBeInTheDocument()
+    expect(await screen.findByRole("radio", { name: /自动跟随/i })).toBeInTheDocument()
     expect(screen.getByRole("radio", { name: /自动跟随/i })).toBeChecked()
     expect(screen.getByRole("radio", { name: /Work/i })).not.toBeChecked()
     expect(screen.getByText("Desktop · CLI")).toBeInTheDocument()
@@ -246,7 +252,7 @@ describe("ProviderAccountControls", () => {
     await user.type(input, "Personal")
     await user.click(screen.getByRole("button", { name: "保存名称" }))
 
-    expect(await screen.findByText("Personal")).toBeInTheDocument()
+    expect(await screen.findByRole("radio", { name: /Personal/i })).toBeInTheDocument()
     expect(screen.queryByRole("textbox", { name: "账号名称" })).not.toBeInTheDocument()
   })
 
@@ -302,11 +308,11 @@ describe("ProviderAccountControls", () => {
     render(<ProviderAccountControls providerId="cursor" browserBinding />)
 
     expect(
-      await screen.findByRole("button", { name: "Add Browser Account" })
+      await screen.findByRole("button", { name: "添加账号" })
     ).toBeInTheDocument()
     expect(screen.getByText("Chrome · Profile 2")).toBeInTheDocument()
     expect(screen.getByText("Arc · Default")).toBeInTheDocument()
-    expect(screen.getByText("Available")).toBeInTheDocument()
+    expect(screen.queryByText("Available")).not.toBeInTheDocument()
     expect(screen.getByText("Unavailable")).toBeInTheDocument()
 
     await user.click(
@@ -347,7 +353,7 @@ describe("ProviderAccountControls", () => {
 
       expect(await screen.findByRole("radio", { name: /自动跟随/i })).toBeInTheDocument()
       expect(
-        screen.queryByRole("button", { name: "Add Browser Account" })
+        screen.queryByRole("button", { name: "添加账号" })
       ).not.toBeInTheDocument()
     }
   )
@@ -363,7 +369,7 @@ describe("ProviderAccountControls", () => {
     render(<ProviderAccountControls providerId="claude" browserBinding />)
 
     expect(
-      await screen.findByRole("button", { name: "Add Browser Account" })
+      await screen.findByRole("button", { name: "添加账号" })
     ).toBeInTheDocument()
   })
 

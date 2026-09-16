@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react"
+import { render as testingRender, fireEvent, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -16,6 +16,12 @@ vi.mock("@tauri-apps/api/event", () => ({
 }))
 
 import { ProviderAccountControls } from "@/components/provider-account-controls"
+
+function renderControls(element: Parameters<typeof testingRender>[0]) {
+  const result = testingRender(element)
+  fireEvent.click(screen.getByRole("button", { name: "账号" }))
+  return result
+}
 
 function account(accountId: string, label: string, selected: boolean) {
   return {
@@ -74,7 +80,7 @@ describe("ProviderAccountControls quota refresh", () => {
     const onAccountChangeRefresh = vi.fn()
     const user = userEvent.setup()
 
-    render(
+    renderControls(
       <ProviderAccountControls
         providerId="cursor"
         onAccountChangeRefresh={onAccountChangeRefresh}
@@ -103,7 +109,7 @@ describe("ProviderAccountControls quota refresh", () => {
     const onAccountChangeRefresh = vi.fn()
     const user = userEvent.setup()
 
-    render(
+    renderControls(
       <ProviderAccountControls
         providerId="cursor"
         onAccountChangeRefresh={onAccountChangeRefresh}
@@ -127,7 +133,7 @@ describe("ProviderAccountControls quota refresh", () => {
     const onAccountChangeRefresh = vi.fn()
     const user = userEvent.setup()
 
-    render(
+    renderControls(
       <ProviderAccountControls
         providerId="cursor"
         onAccountChangeRefresh={onAccountChangeRefresh}
@@ -147,7 +153,7 @@ describe("ProviderAccountControls quota refresh", () => {
     const onAccountChangeRefresh = vi.fn()
     const user = userEvent.setup()
 
-    render(
+    renderControls(
       <ProviderAccountControls
         providerId="cursor"
         onAccountChangeRefresh={onAccountChangeRefresh}
@@ -185,7 +191,7 @@ describe("ProviderAccountControls quota refresh", () => {
     const onAccountChangeRefresh = vi.fn()
     const user = userEvent.setup()
 
-    render(
+    renderControls(
       <ProviderAccountControls
         providerId="cursor"
         browserBinding
@@ -243,7 +249,7 @@ describe("ProviderAccountControls quota refresh", () => {
     const onAccountChangeRefresh = vi.fn()
     const user = userEvent.setup()
 
-    render(
+    renderControls(
       <ProviderAccountControls
         providerId="cursor"
         browserBinding
@@ -251,7 +257,7 @@ describe("ProviderAccountControls quota refresh", () => {
       />
     )
 
-    await user.click(await screen.findByRole("button", { name: "Add Browser Account" }))
+    await user.click(await screen.findByRole("button", { name: "添加账号" }))
     await user.click(screen.getByRole("button", { name: "Chrome" }))
     await user.selectOptions(
       await screen.findByRole("combobox", { name: "Browser Profile" }),
@@ -327,7 +333,7 @@ describe("ProviderAccountControls quota refresh", () => {
     const onAccountChangeRefresh = vi.fn()
     const user = userEvent.setup()
 
-    render(
+    renderControls(
       <ProviderAccountControls
         providerId="claude"
         browserBinding
@@ -335,7 +341,7 @@ describe("ProviderAccountControls quota refresh", () => {
       />
     )
 
-    await user.click(await screen.findByRole("button", { name: "Add Browser Account" }))
+    await user.click(await screen.findByRole("button", { name: "添加账号" }))
     await user.click(screen.getByRole("button", { name: "Chrome" }))
     await user.selectOptions(
       await screen.findByRole("combobox", { name: "Browser Profile" }),

@@ -28,11 +28,11 @@ describe("BrowserAccountManager response ordering", () => {
 
     const user = userEvent.setup()
     render(<BrowserAccountManager busy={false} onAttach={vi.fn()} />)
-    await user.click(screen.getByRole("button", { name: "Add Browser Account" }))
+    await user.click(screen.getByRole("button", { name: "添加账号" }))
     await user.click(screen.getByRole("button", { name: "Chrome" }))
     expect(screen.getByRole("status")).toHaveTextContent("Loading Browser Profiles")
     await user.click(screen.getByRole("button", { name: "Close Add Browser Account" }))
-    await user.click(screen.getByRole("button", { name: "Add Browser Account" }))
+    await user.click(screen.getByRole("button", { name: "添加账号" }))
     await user.click(screen.getByRole("button", { name: "Arc" }))
     expect(await screen.findByRole("option", { name: "Arc Main (Default)" })).toBeInTheDocument()
 

@@ -126,6 +126,8 @@ export type ProviderAccountView = {
 
 export type ProviderAccountOperation =
   | { kind: "refreshActive" }
+  | { kind: "removeAccount"; accountId: string }
+  | { kind: "reconnectLocal" }
   | { kind: "selectActive"; accountId: string }
   | { kind: "followDefaultConnection" }
   | { kind: "renameAccount"; accountId: string; label: string }

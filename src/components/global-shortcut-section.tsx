@@ -243,7 +243,7 @@ export function GlobalShortcutSection({
 
   return (
     <section>
-      <h3 className="text-lg font-semibold mb-0">全局快捷键</h3>
+      <h3 className="text-sm font-semibold mb-0">全局快捷键</h3>
       <p className="text-sm text-muted-foreground mb-2">
         随时打开面板
       </p>

@@ -123,10 +123,7 @@ export function SettingsPage({
   return (
     <div className="py-3 space-y-4">
       <section>
-        <h3 className="text-lg font-semibold mb-0">自动刷新</h3>
-        <p className="text-sm text-muted-foreground mb-2">
-          选择刷新频率
-        </p>
+        <h3 className="text-sm font-semibold mb-2">自动刷新</h3>
         <div className="bg-muted/50 rounded-lg p-1">
           <div className="flex gap-1" role="radiogroup" aria-label="自动刷新频率">
             {AUTO_UPDATE_OPTIONS.map((option) => {
@@ -156,10 +153,7 @@ export function SettingsPage({
         />
       ) : null}
       <section>
-        <h3 className="text-lg font-semibold mb-0">用量显示</h3>
-        <p className="text-sm text-muted-foreground mb-2">
-          显示已用或剩余
-        </p>
+        <h3 className="text-sm font-semibold mb-2">用量显示</h3>
         <div className="bg-muted/50 rounded-lg p-1">
           <div className="flex gap-1" role="radiogroup" aria-label="用量显示方式">
             {DISPLAY_MODE_OPTIONS.map((option) => {
@@ -183,7 +177,7 @@ export function SettingsPage({
         </div>
       </section>
       <section>
-        <h3 className="text-lg font-semibold mb-0">重置时间</h3>
+        <h3 className="text-sm font-semibold mb-0">重置时间</h3>
         <p className="text-sm text-muted-foreground mb-2">
           倒计时或具体时间
         </p>
@@ -220,10 +214,7 @@ export function SettingsPage({
         </div>
       </section>
       <section>
-        <h3 className="text-lg font-semibold mb-0">时间格式</h3>
-        <p className="text-sm text-muted-foreground mb-2">
-          选择 12/24 小时制
-        </p>
+        <h3 className="text-sm font-semibold mb-2">时间格式</h3>
         <div className="bg-muted/50 rounded-lg p-1">
           <div className="flex gap-1" role="radiogroup" aria-label="时间格式">
             {TIME_FORMAT_OPTIONS.map((option) => {
@@ -258,10 +249,7 @@ export function SettingsPage({
       </section>
       {platformCapabilities?.dynamicTrayIconSettings ? (
         <section>
-          <h3 className="text-lg font-semibold mb-0">菜单栏图标</h3>
-          <p className="text-sm text-muted-foreground mb-2">
-            设置菜单栏显示样式
-          </p>
+          <h3 className="text-sm font-semibold mb-2">菜单栏图标</h3>
           <div className="bg-muted/50 rounded-lg p-1">
             <div className="flex gap-1" role="radiogroup" aria-label="菜单栏图标样式">
               {MENUBAR_ICON_STYLE_OPTIONS.map((option) => {
@@ -314,10 +302,7 @@ export function SettingsPage({
         </section>
       ) : null}
       <section>
-        <h3 className="text-lg font-semibold mb-0">应用主题</h3>
-        <p className="text-sm text-muted-foreground mb-2">
-          选择界面外观
-        </p>
+        <h3 className="text-sm font-semibold mb-2">应用主题</h3>
         <div className="bg-muted/50 rounded-lg p-1">
           <div className="flex gap-1" role="radiogroup" aria-label="主题模式">
             {THEME_OPTIONS.map((option) => {
@@ -350,7 +335,7 @@ export function SettingsPage({
       {platformCapabilities?.cli ? <CliSection /> : null}
       {platformCapabilities?.autostart ? (
         <section>
-          <h3 className="text-lg font-semibold mb-0">登录时启动</h3>
+          <h3 className="text-sm font-semibold mb-0">登录时启动</h3>
           <p className="text-sm text-muted-foreground mb-2">
             登录后自动打开 OpenUsageCN
           </p>
@@ -366,7 +351,7 @@ export function SettingsPage({
         </section>
       ) : null}
       <section>
-        <h3 className="text-lg font-semibold mb-0">插件</h3>
+        <h3 className="text-sm font-semibold mb-0">插件</h3>
         <p className="text-sm text-muted-foreground mb-2">
           选择要显示的服务商
         </p>

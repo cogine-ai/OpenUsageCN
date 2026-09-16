@@ -90,6 +90,13 @@ impl ProviderAccounts {
             .get(provider_id)
             .cloned()
             .unwrap_or_default();
+        if let Some(revision) = provider.identity_revisions.get_mut(&fingerprint) {
+            if *revision % 2 == 1 {
+                *revision = revision
+                    .checked_add(1)
+                    .ok_or("identity revision is exhausted")?;
+            }
+        }
         let mut replaced_sessions = Vec::new();
         for account in &mut provider.accounts {
             for connection in &mut account.connections {
@@ -160,10 +167,20 @@ impl ProviderAccounts {
                 .checked_add(1)
                 .ok_or_else(|| "account selection revision is exhausted".to_string())?;
             provider.selection = AccountSelection::Pinned(account_id.clone());
-            provider.active_account_id = Some(account_id);
+            provider.active_account_id = Some(account_id.clone());
         }
         let persisted = self.persist_provider(provider_id, &provider)?;
+        let attached = persisted.accounts.iter().any(|account| {
+            account.account_id == account_id
+                && account.connections.iter().any(|connection| {
+                    connection.attached
+                        && connection.session_ref.as_deref() == Some(claim.session_ref())
+                })
+        });
         self.replace_provider_state(provider_id, persisted)?;
+        if !attached {
+            return Err("Account was removed during connection. Add it again.".to_string());
+        }
         for session_ref in replaced_sessions {
             broker.release_session(&session_ref);
         }

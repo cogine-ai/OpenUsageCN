@@ -230,13 +230,3 @@ body,
     animation: none;
   }
 }
-
-/* Remove focus rings - this is a menu bar app, not keyboard-navigated */
-*:focus,
-*:focus-visible {
-  outline: none !important;
-  box-shadow: none !important;
-  --tw-ring-shadow: 0 0 #0000 !important;
-  --tw-ring-offset-shadow: 0 0 #0000 !important;
-  border-color: transparent !important;
-}
