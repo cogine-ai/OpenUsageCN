@@ -69,14 +69,16 @@ export function AppShell({
 
   const appVersion = useAppVersion()
   const { updateStatus, triggerInstall, checkForUpdates } = useAppUpdate()
+  const trayArrowSide = platformCapabilities?.platform === "windows" ? "bottom" : "top"
+  const panelPadding = trayArrowSide === "bottom" ? "pt-6 pb-1.5" : "pt-1.5 pb-6"
 
   return (
     <div
       ref={containerRef}
       tabIndex={-1}
-      className="flex flex-col items-center p-6 pt-1.5 bg-transparent outline-none"
+      className={`flex flex-col items-center px-6 ${panelPadding} bg-transparent outline-none`}
     >
-      <div className="tray-arrow" />
+      <div className="tray-arrow" data-side={trayArrowSide} />
       <div
         className="relative bg-card rounded-xl overflow-hidden select-none w-full border shadow-lg flex flex-col"
         style={maxPanelHeightPx ? { maxHeight: `${maxPanelHeightPx - ARROW_OVERHEAD_PX}px` } : undefined}
