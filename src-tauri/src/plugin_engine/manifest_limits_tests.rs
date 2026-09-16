@@ -117,6 +117,7 @@ fn bundled_provider_limit_resource_keys_are_stable() {
                 "apiUsage",
                 "autoUsage",
                 "credits",
+                "grokBotUsage",
                 "onDemand",
                 "requests",
                 "totalUsage",

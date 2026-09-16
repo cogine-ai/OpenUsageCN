@@ -46,7 +46,7 @@ Windows MVP 仅启用和展示 **Codex、BigModel CN、OpenAI API、OpenRouter �
 - [**Claude**](docs/providers/claude.md)：session、weekly、extra usage、按需加载本地 token 用量（ccusage）、可验证的 Team 席位
 - [**Codex**](docs/providers/codex.md)：5 小时、每周、代码审查、点数、手动重置及最近到期时间
 - [**Copilot**](docs/providers/copilot.md)：premium、chat、completions
-- [**Cursor**](docs/providers/cursor.md)：credits、总用量、Desktop/CLI/Chrome/Arc 多账号、按模型用量、最新结果缓存和 CSV 导出
+- [**Cursor**](docs/providers/cursor.md)：credits、总用量、Desktop/CLI/Chrome/Arc 多账号、Cursor Models / Other Models 月额度、Grok Bot 周额度、按模型用量和 CSV 导出
 - [**Factory / Droid**](docs/providers/factory.md)：standard、premium tokens
 - [**Gemini**](docs/providers/gemini.md)：Gemini CLI OAuth quota、Pro、Flash、Flash Lite
 - [**Grok**](docs/providers/grok.md)：credits used、plan、pay-as-you-go cap

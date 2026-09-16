@@ -1,5 +1,6 @@
 mod account_records_serde;
 mod browser_cursor_probe;
+mod browser_cursor_grok;
 mod browser_operations;
 mod browser_probe_operation;
 mod claude_browser;
@@ -62,3 +63,6 @@ mod tests;
 
 #[cfg(test)]
 mod removal_tests;
+
+#[cfg(test)]
+mod browser_cursor_grok_tests;

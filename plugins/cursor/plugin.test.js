@@ -1912,7 +1912,7 @@ describe("cursor plugin", () => {
     expect(result.lines[0].label).toBe("Total usage")
   })
 
-  it("emits Auto usage and API usage percent lines when available", async () => {
+  it("emits Cursor Models and Other Models percent lines when available", async () => {
     const ctx = makeCtx()
     ctx.host.sqlite.query.mockReturnValue(JSON.stringify([{ value: "token" }]))
     ctx.host.http.request.mockImplementation((opts) => {
@@ -1938,8 +1938,8 @@ describe("cursor plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
     const totalLine = result.lines.find((line) => line.label === "Total usage")
-    const autoLine = result.lines.find((line) => line.label === "Auto usage")
-    const apiLine = result.lines.find((line) => line.label === "API usage")
+    const autoLine = result.lines.find((line) => line.label === "Cursor Models")
+    const apiLine = result.lines.find((line) => line.label === "Other Models")
 
     expect(totalLine).toBeTruthy()
     expect(totalLine.used).toBe(20)
@@ -1970,7 +1970,7 @@ describe("cursor plugin", () => {
     expect(totalLine.used).toBe(50)
   })
 
-  it("omits Auto usage and API usage when percent fields missing", async () => {
+  it("omits Cursor Models and Other Models when percent fields missing", async () => {
     const ctx = makeCtx()
     ctx.host.sqlite.query.mockReturnValue(JSON.stringify([{ value: "token" }]))
     ctx.host.http.request.mockReturnValue({
@@ -1984,8 +1984,8 @@ describe("cursor plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
     expect(result.lines.find((line) => line.label === "Total usage")).toBeTruthy()
-    expect(result.lines.find((line) => line.label === "Auto usage")).toBeUndefined()
-    expect(result.lines.find((line) => line.label === "API usage")).toBeUndefined()
+    expect(result.lines.find((line) => line.label === "Cursor Models")).toBeUndefined()
+    expect(result.lines.find((line) => line.label === "Other Models")).toBeUndefined()
   })
 
   it("team account uses dollars format for Total usage", async () => {

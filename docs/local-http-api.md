@@ -194,7 +194,7 @@ On Windows, only the five Windows MVP providers are present; the rest of this ta
 | `claude` | `session`, `weekly`, `sonnet`, `claudeDesign`, `extraUsage` |
 | `codex` | `session`, `weekly`, `spark`, `sparkWeekly`, `codeReview` |
 | `copilot` | `premiumCredits`, `chat`, `completions` |
-| `cursor` | `credits`, `totalUsage`, `requests`, `autoUsage`, `apiUsage`, `onDemand` |
+| `cursor` | `credits`, `totalUsage`, `requests`, `autoUsage`, `apiUsage`, `grokBotUsage`, `onDemand` |
 | `devin` | `weekly`, `daily` |
 | `factory` | `standard`, `premium` |
 | `gemini` | `pro`, `flash`, `flashLite` |
