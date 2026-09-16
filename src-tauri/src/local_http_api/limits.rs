@@ -428,6 +428,80 @@ mod tests {
         assert!(errors.is_empty());
     }
 
+    fn test_cache_state() -> CacheState {
+        super::super::cache::empty_cache_state_for_tests()
+    }
+
+    #[test]
+    fn envelope_from_state_redacts_probe_errors() {
+        let jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
+        let mut state = test_cache_state();
+        state
+            .errors
+            .insert("codex".to_string(), format!("refresh failed: token={jwt}"));
+
+        let envelope = envelope_from_state(&["codex".to_string()], &state);
+
+        assert_eq!(envelope.errors.len(), 1);
+        assert_eq!(envelope.errors[0].provider_id, "codex");
+        assert!(
+            !envelope.errors[0].message.contains(jwt),
+            "probe error leaked JWT: {}",
+            envelope.errors[0].message
+        );
+        assert!(envelope.providers.is_empty());
+    }
+
+    #[test]
+    fn envelope_from_state_keeps_valid_resources_when_projection_degrades() {
+        let mut snapshot = snapshot();
+        snapshot.lines.push(MetricLine::Progress {
+            label: "Requests".to_string(),
+            limit_resource_key: None,
+            used: 12.0,
+            limit: 100.0,
+            format: ProgressFormat::Count {
+                suffix: "req".to_string(),
+            },
+            resets_at: None,
+            period_duration_ms: None,
+            color: None,
+        });
+        let catalog = ProviderLimitCatalog {
+            provider_id: "codex".to_string(),
+            resources: vec![
+                LimitCatalogResource {
+                    key: "session".to_string(),
+                    metric_label: "Session".to_string(),
+                    kind: LimitResourceKind::Consumption,
+                    count_unit: None,
+                },
+                LimitCatalogResource {
+                    key: "requests".to_string(),
+                    metric_label: "Requests".to_string(),
+                    kind: LimitResourceKind::Consumption,
+                    count_unit: None,
+                },
+            ],
+        };
+        let mut state = test_cache_state();
+        state.snapshots.insert("codex".to_string(), snapshot);
+        state
+            .limit_catalog
+            .insert("codex".to_string(), catalog);
+
+        let envelope = envelope_from_state(&["codex".to_string()], &state);
+
+        assert!(envelope.providers.contains_key("codex"));
+        assert!(envelope.providers["codex"].resources.contains_key("session"));
+        assert!(!envelope.providers["codex"].resources.contains_key("requests"));
+        assert_eq!(envelope.errors.len(), 1);
+        assert_eq!(
+            envelope.errors[0].message,
+            "Resource 'requests': count resource is missing a stable unit"
+        );
+    }
+
     #[test]
     fn invalid_resource_does_not_remove_valid_provider_resources() {
         let mut snapshot = snapshot();

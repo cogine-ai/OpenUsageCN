@@ -1,5 +1,8 @@
 use super::super::cache::{CachedPluginSnapshot, cache_state};
+use super::super::limits::{LimitCatalogResource, ProviderLimitCatalog};
 use super::*;
+use crate::plugin_engine::manifest::LimitResourceKind;
+use crate::plugin_engine::runtime::{MetricLine, ProgressFormat};
 use serial_test::serial;
 use std::net::Shutdown;
 use std::thread;
@@ -303,4 +306,90 @@ fn header_value_is_case_insensitive() {
         header_value(request, "host").as_deref(),
         Some("127.0.0.1:6736")
     );
+}
+
+#[test]
+#[serial]
+fn route_limits_provider_with_probe_error_returns_200_and_redacted_message() {
+    let jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
+    {
+        let mut state = cache_state().lock().unwrap();
+        state.known_plugin_ids = vec!["codex".to_string()];
+        state.snapshots.clear();
+        state.limit_catalog.clear();
+        state.errors.clear();
+        state
+            .errors
+            .insert("codex".to_string(), format!("refresh failed: token={jwt}"));
+    }
+
+    let resp = route("GET", "/v1/limits/codex", None, None);
+
+    assert!(resp.starts_with("HTTP/1.1 200"), "unexpected response: {resp}");
+    assert!(resp.contains(r#""errors""#));
+    assert!(
+        !resp.contains(jwt),
+        "probe error leaked JWT in HTTP response: {resp}"
+    );
+}
+
+#[test]
+#[serial]
+fn route_limits_provider_with_partial_resources_returns_200_and_resource_errors() {
+    let mut snapshot = make_snapshot("codex", "Codex");
+    snapshot.lines = vec![
+        MetricLine::Progress {
+            label: "Session".to_string(),
+            limit_resource_key: Some("session".to_string()),
+            used: 34.0,
+            limit: 100.0,
+            format: ProgressFormat::Percent,
+            resets_at: Some("2026-07-14T09:00:00Z".to_string()),
+            period_duration_ms: Some(18_000_000),
+            color: None,
+        },
+        MetricLine::Progress {
+            label: "Requests".to_string(),
+            limit_resource_key: None,
+            used: 12.0,
+            limit: 100.0,
+            format: ProgressFormat::Count {
+                suffix: "req".to_string(),
+            },
+            resets_at: None,
+            period_duration_ms: None,
+            color: None,
+        },
+    ];
+    let catalog = ProviderLimitCatalog {
+        provider_id: "codex".to_string(),
+        resources: vec![
+            LimitCatalogResource {
+                key: "session".to_string(),
+                metric_label: "Session".to_string(),
+                kind: LimitResourceKind::Consumption,
+                count_unit: None,
+            },
+            LimitCatalogResource {
+                key: "requests".to_string(),
+                metric_label: "Requests".to_string(),
+                kind: LimitResourceKind::Consumption,
+                count_unit: None,
+            },
+        ],
+    };
+
+    {
+        let mut state = cache_state().lock().unwrap();
+        state.known_plugin_ids = vec!["codex".to_string()];
+        state.snapshots.insert("codex".to_string(), snapshot);
+        state.errors.clear();
+        state.limit_catalog.insert("codex".to_string(), catalog);
+    }
+
+    let resp = route("GET", "/v1/limits/codex", None, None);
+
+    assert!(resp.starts_with("HTTP/1.1 200"), "unexpected response: {resp}");
+    assert!(resp.contains(r#""session""#));
+    assert!(resp.contains("count resource is missing a stable unit"));
 }
