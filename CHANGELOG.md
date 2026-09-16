@@ -4,6 +4,39 @@
 
 暂无。
 
+## v0.6.41
+
+### New Features
+
+- 账号管理默认折叠，支持移除账号及其应用内连接和缓存，并可重新添加本机或浏览器账号；外部应用的登录状态不受影响。 ([#231](https://github.com/cogine-ai/OpenUsageCN/pull/231)) by @lc708
+- Cursor 分别展示 Cursor Models、Other Models 月额度和独立的 Grok Bot 额度；Grok Bot 获取失败时保留其他额度，其用量不计入月度总量。 ([#232](https://github.com/cogine-ai/OpenUsageCN/pull/232)) by @lc708
+
+### Refactor
+
+- Cursor 每个账号仅保留最新一次成功读取的模型用量，显示实际覆盖日期并支持导出当前结果的 CSV。旧账期选择和比较已移除；旧文件仍可读取最新结果，下次成功保存会替换旧归档。 ([#231](https://github.com/cogine-ai/OpenUsageCN/pull/231)) by @lc708
+- 精简账号、模型和设置页面布局，将面板高度限制在可用工作区内，最高 720 逻辑像素。 ([#231](https://github.com/cogine-ai/OpenUsageCN/pull/231)) by @lc708
+
+### Bug Fixes
+
+- 防止已移除的账号及缓存被并发请求或旧进程重新写回；清理失败时提供错误提示和重试。 ([#231](https://github.com/cogine-ai/OpenUsageCN/pull/231)) by @lc708
+- 恢复键盘操作的焦点提示，并修正账号折叠后的滚动提示更新。 ([#231](https://github.com/cogine-ai/OpenUsageCN/pull/231)) by @lc708
+
+### Chores
+
+- 同步账号、Cursor 额度、缓存及 CSV 文档，补充隐私与并发回归测试，并修正 Cookie Helper 测试的临时目录竞争。 ([#231](https://github.com/cogine-ai/OpenUsageCN/pull/231), [#232](https://github.com/cogine-ai/OpenUsageCN/pull/232)) by @lc708
+
+---
+
+### Changelog
+
+**Full Changelog**: [v0.6.40...v0.6.41](https://github.com/cogine-ai/OpenUsageCN/compare/v0.6.40...v0.6.41)
+
+- [841960d](https://github.com/cogine-ai/OpenUsageCN/commit/841960df847edfe874a922a906eb5765b0d81353) feat: simplify account management and Cursor usage cache by @lc708
+- [e7648fe](https://github.com/cogine-ai/OpenUsageCN/commit/e7648feb29f51cb903afe8a2c42b5d392f16d1fa) docs: clarify the CSV formula prefix by @lc708
+- [19a36a2](https://github.com/cogine-ai/OpenUsageCN/commit/19a36a20e70d2093f26d4ac2a64e10495a599b1e) Merge pull request #231 from cogine-ai/cliq/compact-accounts-latest-cache by @lc708
+- [d978a55](https://github.com/cogine-ai/OpenUsageCN/commit/d978a554c8dc5a110c192da6f83d9ecdd9e7efce) feat(cursor): show model pools and Grok Bot allowance by @lc708
+- [0417425](https://github.com/cogine-ai/OpenUsageCN/commit/041742580f201114da18d8fc587552b6554ea80d) Merge pull request #232 from cogine-ai/cliq/cursor-grokbot-quotas by @lc708
+
 ## v0.6.40
 
 ### New Features
