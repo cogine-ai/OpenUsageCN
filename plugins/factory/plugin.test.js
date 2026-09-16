@@ -278,14 +278,130 @@ describe("factory plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
     expect(result.lines.find((line) => line.label === "Standard")).toBeTruthy()
-    expect(ctx.host.fs.writeText).toHaveBeenCalledTimes(1)
-    expect(ctx.host.fs.writeText).toHaveBeenCalledWith("~/.factory/auth.v2.file", expect.any(String))
+    expect(ctx.host.fs.writeTextIfUnchanged).toHaveBeenCalledTimes(1)
+    expect(ctx.host.fs.writeTextIfUnchanged).toHaveBeenCalledWith(
+      "~/.factory/auth.v2.file",
+      expect.any(String),
+      expect.any(String),
+    )
+    expect(ctx.host.fs.writeText).not.toHaveBeenCalled()
 
     const persistedEnvelope = ctx.host.fs.readText("~/.factory/auth.v2.file")
     const persistedRaw = ctx.host.crypto.decryptAes256Gcm(persistedEnvelope, authV2.keyB64)
     const persisted = JSON.parse(persistedRaw)
     expect(persisted.refresh_token).toBe("new-refresh")
     expect(persisted.access_token).toBe(makeJwt(futureExp))
+  })
+
+  it("preserves a newer auth.json when it changes mid-refresh", async () => {
+    const ctx = makeCtx()
+    const nearExp = Math.floor(Date.now() / 1000) + 12 * 60 * 60
+    const futureExp = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60
+    const staleAuth = JSON.stringify({
+      access_token: makeJwt(nearExp),
+      refresh_token: "stale-refresh",
+      active_organization_id: "org_stale",
+    }, null, 2)
+    const newerAuth = JSON.stringify({
+      access_token: makeJwt(futureExp),
+      refresh_token: "newer-refresh",
+      active_organization_id: "org_newer",
+    }, null, 2)
+    ctx.host.fs.writeText("~/.factory/auth.json", staleAuth)
+    ctx.host.fs.writeText.mockClear()
+    ctx.host.fs.writeTextIfUnchanged.mockClear()
+
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("workos.com")) {
+        ctx.host.fs.writeText("~/.factory/auth.json", newerAuth)
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            access_token: makeJwt(futureExp),
+            refresh_token: "openusage-rotated-refresh",
+          }),
+        }
+      }
+      return {
+        status: 200,
+        headers: {},
+        bodyText: JSON.stringify({
+          usage: {
+            startDate: 1770623326000,
+            endDate: 1772956800000,
+            standard: { orgTotalTokensUsed: 0, totalAllowance: 20000000 },
+            premium: { orgTotalTokensUsed: 0, totalAllowance: 0 },
+          },
+        }),
+      }
+    })
+
+    const plugin = await loadPlugin()
+    plugin.probe(ctx)
+
+    expect(ctx.host.fs.readText("~/.factory/auth.json")).toBe(newerAuth)
+    expect(ctx.host.fs.readText("~/.factory/auth.json")).not.toContain("openusage-rotated-refresh")
+    expect(ctx.host.fs.writeTextIfUnchanged).toHaveBeenCalled()
+    expect(ctx.host.log.warn).toHaveBeenCalledWith(
+      expect.stringContaining("auth file changed mid-refresh"),
+    )
+  })
+
+  it("preserves a newer auth.v2.file when it changes mid-refresh", async () => {
+    const ctx = makeCtx()
+    const nearExp = Math.floor(Date.now() / 1000) + 12 * 60 * 60
+    const futureExp = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60
+    const staleAuthV2 = makeEncryptedAuthV2({
+      access_token: makeJwt(nearExp),
+      refresh_token: "stale-refresh",
+    })
+    const newerAuthV2 = makeEncryptedAuthV2({
+      access_token: makeJwt(futureExp),
+      refresh_token: "newer-refresh",
+    })
+    ctx.host.fs.writeText("~/.factory/auth.v2.file", staleAuthV2.envelope)
+    ctx.host.fs.writeText("~/.factory/auth.v2.key", staleAuthV2.keyB64)
+    ctx.host.fs.writeText.mockClear()
+    ctx.host.fs.writeTextIfUnchanged.mockClear()
+
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("workos.com")) {
+        ctx.host.fs.writeText("~/.factory/auth.v2.file", newerAuthV2.envelope)
+        ctx.host.fs.writeText("~/.factory/auth.v2.key", newerAuthV2.keyB64)
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            access_token: makeJwt(futureExp),
+            refresh_token: "openusage-rotated-refresh",
+          }),
+        }
+      }
+      return {
+        status: 200,
+        headers: {},
+        bodyText: JSON.stringify({
+          usage: {
+            startDate: 1770623326000,
+            endDate: 1772956800000,
+            standard: { orgTotalTokensUsed: 0, totalAllowance: 20000000 },
+            premium: { orgTotalTokensUsed: 0, totalAllowance: 0 },
+          },
+        }),
+      }
+    })
+
+    const plugin = await loadPlugin()
+    plugin.probe(ctx)
+
+    const persistedEnvelope = ctx.host.fs.readText("~/.factory/auth.v2.file")
+    expect(persistedEnvelope).toBe(newerAuthV2.envelope)
+    const persistedRaw = ctx.host.crypto.decryptAes256Gcm(persistedEnvelope, newerAuthV2.keyB64)
+    expect(persistedRaw).toContain("newer-refresh")
+    expect(persistedRaw).not.toContain("openusage-rotated-refresh")
+    expect(ctx.host.fs.writeTextIfUnchanged).toHaveBeenCalled()
+    expect(ctx.host.log.warn).toHaveBeenCalledWith(
+      expect.stringContaining("auth file changed mid-refresh"),
+    )
   })
 
   it("prefers auth.encrypted over stale auth.json when both exist", async () => {
@@ -614,7 +730,7 @@ describe("factory plugin", () => {
 
     expect(refreshCalled).toBe(true)
     // Verify auth file was updated
-    expect(ctx.host.fs.writeText).toHaveBeenCalled()
+    expect(ctx.host.fs.writeTextIfUnchanged).toHaveBeenCalled()
   })
 
   it("falls back to existing token when proactive refresh throws", async () => {
