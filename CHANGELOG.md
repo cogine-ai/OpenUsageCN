@@ -4,6 +4,28 @@
 
 暂无。
 
+## v0.6.42
+
+### New Features
+
+- 新增 DeepSeek、Moonshot、Ollama Cloud、豆包和 xAI 用量插件；首次发现已保存或环境变量中的可用凭据时，自动启用对应服务商。 ([#236](https://github.com/cogine-ai/OpenUsageCN/pull/236)) by @lc708
+
+### Bug Fixes
+
+- shell 凭据检查失败时保留未确认服务商供下次启动重试，同时保存其他已确认服务商的结果。 ([#236](https://github.com/cogine-ai/OpenUsageCN/pull/236)) by @lc708
+- 检查 Moonshot 和豆包的地区环境变量，并为启动时的 shell 检查设置五秒上限，避免误启用或无限等待。 ([#236](https://github.com/cogine-ai/OpenUsageCN/pull/236)) by @lc708
+
+---
+
+### Changelog
+
+**Full Changelog**: [v0.6.41...v0.6.42](https://github.com/cogine-ai/OpenUsageCN/compare/v0.6.41...v0.6.42)
+
+- [41db6fc](https://github.com/cogine-ai/OpenUsageCN/commit/41db6fc115f06bab153e4b116202ad060be37120) feat: add five provider plugins and startup detection by @lc708
+- [65c4df0](https://github.com/cogine-ai/OpenUsageCN/commit/65c4df0f09491fc0f25b6ea43aeff628d30d9510) fix: keep startup credential checks retryable by @lc708
+- [0b21085](https://github.com/cogine-ai/OpenUsageCN/commit/0b210855ed1e8f34626900c64045ab55fa90b276) fix: resolve startup provider checks independently by @lc708
+- [666ad75](https://github.com/cogine-ai/OpenUsageCN/commit/666ad75fbe9d8d16f753c6e76fabcc6bb5b21cdb) Merge pull request #236 by @lc708
+
 ## v0.6.41
 
 ### New Features
