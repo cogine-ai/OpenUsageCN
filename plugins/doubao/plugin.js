@@ -146,8 +146,14 @@
     const access = setting(ctx, "accessKeyId", "VOLCENGINE_ACCESS_KEY_ID")
     const secret = setting(ctx, "secretAccessKey", "VOLCENGINE_SECRET_ACCESS_KEY")
     const region = setting(ctx, "region", "VOLCENGINE_REGION") || "cn-beijing"
-    if (!access || !secret) throw "No Volcengine AK/SK found. Add both keys in Doubao Settings or set VOLCENGINE_ACCESS_KEY_ID and VOLCENGINE_SECRET_ACCESS_KEY."
-    if (!/^[A-Za-z0-9-]+$/.test(region)) throw "Invalid Volcengine region."
+    if (!access || !secret) {
+      ctx.host.log.error("Doubao Volcengine Access Key ID or Secret Access Key is missing")
+      throw "No Volcengine AK/SK found. Add both keys in Doubao Settings or set VOLCENGINE_ACCESS_KEY_ID and VOLCENGINE_SECRET_ACCESS_KEY."
+    }
+    if (!/^[A-Za-z0-9-]+$/.test(region)) {
+      ctx.host.log.error("Doubao Volcengine region is invalid")
+      throw "Invalid Volcengine region."
+    }
     const credentials = { access, secret, region }
     let lines
     try {

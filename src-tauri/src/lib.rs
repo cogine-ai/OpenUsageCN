@@ -829,7 +829,7 @@ fn get_provider_config(
 fn detect_local_provider_credentials(
     plugin_ids: Vec<String>,
     state: tauri::State<'_, Mutex<AppState>>,
-) -> Vec<String> {
+) -> Result<Vec<String>, String> {
     let plugins = {
         let locked = state.lock().expect("plugin state poisoned");
         locked.plugins.clone()

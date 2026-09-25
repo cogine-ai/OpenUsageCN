@@ -31,6 +31,7 @@ describe("xAI provider", () => {
       const ctx = makeCtx()
       configured(ctx, "management-key", team)
       expect(() => subject.probe(ctx)).toThrow("Missing or invalid xAI Team ID.")
+      expect(ctx.host.log.error).toHaveBeenCalledWith("xAI Team ID is missing or invalid")
       expect(ctx.host.http.request).not.toHaveBeenCalled()
     }
   })
@@ -39,6 +40,7 @@ describe("xAI provider", () => {
     const subject = await plugin()
     const missing = makeCtx()
     expect(() => subject.probe(missing)).toThrow("No xAI Management API key")
+    expect(missing.host.log.error).toHaveBeenCalledWith("xAI Management API key is missing")
     const invalid = makeCtx()
     configured(invalid)
     invalid.host.http.request.mockReturnValue({ status: 403, bodyText: "{}" })

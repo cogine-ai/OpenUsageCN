@@ -73,8 +73,14 @@
   function probe(ctx) {
     const key = setting(ctx, "managementKey", "XAI_MANAGEMENT_API_KEY")
     const team = setting(ctx, "teamId", "XAI_TEAM_ID")
-    if (!key) throw "No xAI Management API key found. Add one in Settings or set XAI_MANAGEMENT_API_KEY."
-    if (!team || !/^[A-Za-z0-9_-]+$/.test(team)) throw "Missing or invalid xAI Team ID."
+    if (!key) {
+      ctx.host.log.error("xAI Management API key is missing")
+      throw "No xAI Management API key found. Add one in Settings or set XAI_MANAGEMENT_API_KEY."
+    }
+    if (!team || !/^[A-Za-z0-9_-]+$/.test(team)) {
+      ctx.host.log.error("xAI Team ID is missing or invalid")
+      throw "Missing or invalid xAI Team ID."
+    }
 
     const root = ROOT + encodeURIComponent(team)
     const headers = { Authorization: "Bearer " + key, Accept: "application/json" }

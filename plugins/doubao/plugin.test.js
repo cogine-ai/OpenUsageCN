@@ -8,9 +8,9 @@ async function plugin() {
   return globalThis.__openusage_plugin
 }
 
-function configured(ctx) {
+function configured(ctx, region = "cn-beijing") {
   ctx.host.config.get.mockImplementation((name) => ({
-    accessKeyId: "fixture-access-id", secretAccessKey: "fixture-secret-key", region: "cn-beijing",
+    accessKeyId: "fixture-access-id", secretAccessKey: "fixture-secret-key", region,
   })[name] ?? null)
 }
 
@@ -42,6 +42,16 @@ describe("Doubao provider", () => {
     const ctx = makeCtx()
     const subject = await plugin()
     expect(() => subject.probe(ctx)).toThrow("No Volcengine AK/SK found")
+    expect(ctx.host.log.error).toHaveBeenCalledWith(expect.stringContaining("is missing"))
+    expect(ctx.host.http.request).not.toHaveBeenCalled()
+  })
+
+  it("logs an invalid region before making a signed request", async () => {
+    const ctx = makeCtx()
+    configured(ctx, "../wrong")
+    const subject = await plugin()
+    expect(() => subject.probe(ctx)).toThrow("Invalid Volcengine region")
+    expect(ctx.host.log.error).toHaveBeenCalledWith("Doubao Volcengine region is invalid")
     expect(ctx.host.http.request).not.toHaveBeenCalled()
   })
 

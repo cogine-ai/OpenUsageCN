@@ -56,6 +56,7 @@
     const selectedRegion = region(ctx)
     const key = apiKey(ctx, selectedRegion)
     if (!key) {
+      ctx.host.log.error("Moonshot API key for selected region is missing")
       throw "No Moonshot API key for this region. Add it in Settings or set MOONSHOT_API_KEY and MOONSHOT_REGION."
     }
 

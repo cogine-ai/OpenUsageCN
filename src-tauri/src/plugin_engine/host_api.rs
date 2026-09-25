@@ -377,7 +377,16 @@ fn resolve_env_value(name: &str) -> Option<String> {
 
 /// Resolve several startup hints with one shell launch per shell, using the same
 /// process, cache, and interactive-shell sources as plugin probes.
-pub(crate) fn resolve_env_values(names: &[&str]) -> HashMap<String, Option<String>> {
+pub(crate) fn resolve_env_values(
+    names: &[&str],
+) -> Result<HashMap<String, Option<String>>, &'static str> {
+    resolve_env_values_using_shells(names, &interactive_shell_programs())
+}
+
+fn resolve_env_values_using_shells(
+    names: &[&str],
+    programs: &[String],
+) -> Result<HashMap<String, Option<String>>, &'static str> {
     let mut values = HashMap::new();
     let mut pending = Vec::new();
     for &name in names {
@@ -395,7 +404,8 @@ pub(crate) fn resolve_env_values(names: &[&str]) -> HashMap<String, Option<Strin
     }
 
     let uncached = pending.clone();
-    for program in interactive_shell_programs() {
+    let mut shell_succeeded = false;
+    for program in programs {
         if pending.is_empty() {
             break;
         }
@@ -409,9 +419,10 @@ pub(crate) fn resolve_env_values(names: &[&str]) -> HashMap<String, Option<Strin
             })
             .collect::<Vec<_>>()
             .join("; ");
-        let Some(output) = read_command_stdout(&program, &["-ilc", &script]) else {
+        let Some(output) = read_command_stdout(program, &["-ilc", &script]) else {
             continue;
         };
+        shell_succeeded = true;
         pending = pending
             .into_iter()
             .enumerate()
@@ -431,12 +442,17 @@ pub(crate) fn resolve_env_values(names: &[&str]) -> HashMap<String, Option<Strin
     for name in pending {
         values.insert(name, None);
     }
-    if let Ok(mut cache) = terminal_env_cache().lock() {
-        for name in uncached {
-            cache.insert(name.clone(), values.get(&name).cloned().flatten());
+    if !uncached.is_empty() && !shell_succeeded && !cfg!(target_os = "windows") {
+        return Err("all interactive shell lookups failed");
+    }
+    if shell_succeeded {
+        if let Ok(mut cache) = terminal_env_cache().lock() {
+            for name in uncached {
+                cache.insert(name.clone(), values.get(&name).cloned().flatten());
+            }
         }
     }
-    values
+    Ok(values)
 }
 
 /// Redact sensitive value to first4...last4 format (UTF-8 safe)
@@ -3558,6 +3574,23 @@ mod tests {
             "__OPENUSAGECN_ENV_END__",
         );
         assert_eq!(value.as_deref(), Some("sk-test-key-12345"));
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn batch_env_resolution_does_not_cache_an_unavailable_shell() {
+        let name = format!(
+            "OPENUSAGECN_BATCH_ENV_TEST_{}",
+            uuid::Uuid::new_v4().simple()
+        );
+        let result = resolve_env_values_using_shells(&[&name], &[]);
+        assert_eq!(result.unwrap_err(), "all interactive shell lookups failed");
+        assert!(
+            !terminal_env_cache()
+                .lock()
+                .expect("env cache")
+                .contains_key(&name)
+        );
     }
 
     #[test]

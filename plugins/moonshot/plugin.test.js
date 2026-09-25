@@ -77,6 +77,7 @@ describe("moonshot plugin", () => {
     const plugin = await loadPlugin()
 
     expect(() => plugin.probe(ctx)).toThrow("No Moonshot API key for this region")
+    expect(ctx.host.log.error).toHaveBeenCalledWith("Moonshot API key for selected region is missing")
     expect(ctx.host.http.request).not.toHaveBeenCalled()
   })
 

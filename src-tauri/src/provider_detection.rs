@@ -7,7 +7,7 @@ use crate::provider_config;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 
-pub fn detect(plugins: &[LoadedPlugin], candidate_ids: &[String]) -> Vec<String> {
+pub fn detect(plugins: &[LoadedPlugin], candidate_ids: &[String]) -> Result<Vec<String>, String> {
     let candidates: HashSet<&str> = candidate_ids.iter().map(String::as_str).collect();
     let env_names: Vec<&str> = [
         ("deepseek", &["DEEPSEEK_API_KEY"][..]),
@@ -27,8 +27,11 @@ pub fn detect(plugins: &[LoadedPlugin], candidate_ids: &[String]) -> Vec<String>
     .filter(|(id, _)| candidates.contains(id))
     .flat_map(|(_, names)| names.iter().copied())
     .collect();
-    let env_values = host_api::resolve_env_values(&env_names);
-    plugins
+    let env_values = host_api::resolve_env_values(&env_names).map_err(|error| {
+        log::error!("provider startup detection failed: {error}");
+        "Could not inspect local shell credentials. Restart the app to retry.".to_string()
+    })?;
+    Ok(plugins
         .iter()
         .filter(|plugin| candidates.contains(plugin.manifest.id.as_str()))
         .filter_map(|plugin| {
@@ -41,7 +44,7 @@ pub fn detect(plugins: &[LoadedPlugin], candidate_ids: &[String]) -> Vec<String>
             has_credentials(id, &values, &|name| env_values.get(name).cloned().flatten())
                 .then(|| plugin.manifest.id.clone())
         })
-        .collect()
+        .collect())
 }
 
 fn configured(values: &HashMap<String, Value>, field: &str) -> Option<String> {
