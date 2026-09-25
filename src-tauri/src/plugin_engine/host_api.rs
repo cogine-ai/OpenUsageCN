@@ -6,6 +6,7 @@ use aes_gcm::{
     aes::Aes256,
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
+use hmac::{Hmac, Mac};
 use rquickjs::{Ctx, Exception, Function, IntoJs, Object, Value, function::Rest};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
@@ -15,7 +16,7 @@ use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-const WHITELISTED_ENV_VARS: [&str; 33] = [
+const WHITELISTED_ENV_VARS: [&str; 42] = [
     "CODEX_HOME",
     "CLAUDE_CONFIG_DIR",
     "CLAUDE_CODE_OAUTH_TOKEN",
@@ -49,6 +50,15 @@ const WHITELISTED_ENV_VARS: [&str; 33] = [
     "ALIBABA_TOKEN_PLAN_COOKIE",
     "OPENCODE_COOKIE",
     "OPENCODE_WORKSPACE_ID",
+    "DEEPSEEK_API_KEY",
+    "MOONSHOT_API_KEY",
+    "MOONSHOT_REGION",
+    "OLLAMA_CLOUD_COOKIE",
+    "VOLCENGINE_ACCESS_KEY_ID",
+    "VOLCENGINE_SECRET_ACCESS_KEY",
+    "VOLCENGINE_REGION",
+    "XAI_MANAGEMENT_API_KEY",
+    "XAI_TEAM_ID",
 ];
 const MIN_BLOCKING_TIMEOUT: Duration = Duration::from_millis(1);
 
@@ -98,6 +108,14 @@ fn is_env_var_allowed_for_plugin(plugin_id: &str, name: &str) -> bool {
         ),
         "alibaba-token-plan" => matches!(name, "ALIBABA_TOKEN_PLAN_COOKIE"),
         "opencode" => matches!(name, "OPENCODE_COOKIE" | "OPENCODE_WORKSPACE_ID"),
+        "deepseek" => matches!(name, "DEEPSEEK_API_KEY"),
+        "moonshot" => matches!(name, "MOONSHOT_API_KEY" | "MOONSHOT_REGION"),
+        "ollama" => matches!(name, "OLLAMA_CLOUD_COOKIE"),
+        "doubao" => matches!(
+            name,
+            "VOLCENGINE_ACCESS_KEY_ID" | "VOLCENGINE_SECRET_ACCESS_KEY" | "VOLCENGINE_REGION"
+        ),
+        "xai" => matches!(name, "XAI_MANAGEMENT_API_KEY" | "XAI_TEAM_ID"),
         _ => false,
     }
 }
@@ -173,6 +191,28 @@ fn extract_marked_value(text: &str, start_marker: &str, end_marker: &str) -> Opt
     sanitize_env_value(&after_start[..end])
 }
 
+fn extract_batch_shell_value(
+    text: &str,
+    start_marker: &str,
+    end_marker: &str,
+) -> Option<Option<String>> {
+    let mut lines = text.lines();
+    while let Some(line) = lines.next() {
+        if line.trim() != start_marker {
+            continue;
+        }
+        let mut marked = String::new();
+        for line in &mut lines {
+            if line.trim() == end_marker {
+                return Some(sanitize_env_value(&marked));
+            }
+            marked.push_str(line);
+            marked.push('\n');
+        }
+    }
+    None
+}
+
 fn parse_interactive_shell_env_output(
     text: &str,
     start_marker: &str,
@@ -201,6 +241,58 @@ fn read_command_stdout(program: &str, args: &[&str]) -> Option<String> {
         return None;
     }
     Some(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+fn read_command_stdout_with_timeout(
+    program: &str,
+    args: &[&str],
+    timeout: Duration,
+) -> Option<String> {
+    let mut command = Command::new(program);
+    command
+        .args(args)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null());
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        command.process_group(0);
+    }
+    let mut child = command.spawn().ok()?;
+    let mut stdout = child.stdout.take()?;
+    let reader = std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        let _ = std::io::Read::read_to_end(&mut stdout, &mut bytes);
+        bytes
+    });
+    let started = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) if reader.is_finished() => {
+                let bytes = reader.join().ok()?;
+                return status
+                    .success()
+                    .then(|| String::from_utf8_lossy(&bytes).into_owned());
+            }
+            Ok(_) if started.elapsed() < timeout => {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            status => {
+                if let Err(error) = status {
+                    log::error!("provider startup shell lookup failed: {}", error);
+                } else {
+                    log::error!("provider startup shell lookup timed out");
+                }
+                if let Err(error) = kill_process_group_on_timeout(&mut child) {
+                    log::error!("provider startup shell cleanup failed: {}", error);
+                    let _ = child.kill();
+                }
+                let _ = child.wait();
+                return None;
+            }
+        }
+    }
 }
 
 fn read_env_value_via_command(program: &str, args: &[&str]) -> Option<String> {
@@ -306,7 +398,7 @@ fn read_env_from_interactive_shell(program: &str, name: &str) -> Option<String> 
     parse_interactive_shell_env_output(&output, START_MARKER, END_MARKER)
 }
 
-fn read_env_from_interactive_shells(name: &str) -> Option<String> {
+fn interactive_shell_programs() -> Vec<String> {
     let mut programs: Vec<String> = Vec::new();
 
     if let Some(shell) = shell_from_env() {
@@ -325,7 +417,11 @@ fn read_env_from_interactive_shells(name: &str) -> Option<String> {
         }
     }
 
-    for program in programs {
+    programs
+}
+
+fn read_env_from_interactive_shells(name: &str) -> Option<String> {
+    for program in interactive_shell_programs() {
         if let Some(value) = read_env_from_interactive_shell(program.as_str(), name) {
             return Some(value);
         }
@@ -351,6 +447,103 @@ fn resolve_env_value(name: &str) -> Option<String> {
         cache.insert(name.to_string(), resolved.clone());
     }
     resolved
+}
+
+/// Resolve several startup hints with one shell launch per shell, using the same
+/// process, cache, and interactive-shell sources as plugin probes.
+pub(crate) struct ResolvedEnvValues {
+    pub values: HashMap<String, Option<String>>,
+    pub unresolved: HashSet<String>,
+}
+
+pub(crate) fn resolve_env_values(names: &[&str]) -> ResolvedEnvValues {
+    resolve_env_values_using_shells(names, &interactive_shell_programs())
+}
+
+fn resolve_env_values_using_shells(names: &[&str], programs: &[String]) -> ResolvedEnvValues {
+    let mut values = HashMap::new();
+    let mut pending = Vec::new();
+    for &name in names {
+        if let Some(value) = read_env_from_process(name) {
+            values.insert(name.to_string(), Some(value));
+        } else if let Some(cached) = terminal_env_cache()
+            .lock()
+            .ok()
+            .and_then(|cache| cache.get(name).cloned())
+        {
+            values.insert(name.to_string(), cached);
+        } else {
+            pending.push(name.to_string());
+        }
+    }
+
+    let uncached = pending.clone();
+    let mut observed = HashSet::new();
+    let started = Instant::now();
+    for program in programs {
+        if pending.is_empty() {
+            break;
+        }
+        let Some(remaining) = Duration::from_secs(5).checked_sub(started.elapsed()) else {
+            log::error!("provider startup shell lookup exceeded its time limit");
+            break;
+        };
+        let script = pending
+            .iter()
+            .enumerate()
+            .map(|(index, name)| {
+                format!(
+                    "printf '__OPENUSAGECN_ENV_START_{index}__\\n'; printenv {name}; printf '__OPENUSAGECN_ENV_END_{index}__\\n'"
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("; ");
+        let Some(output) = read_command_stdout_with_timeout(program, &["-ilc", &script], remaining)
+        else {
+            continue;
+        };
+        pending = pending
+            .into_iter()
+            .enumerate()
+            .filter_map(|(index, name)| {
+                let start = format!("__OPENUSAGECN_ENV_START_{index}__");
+                let end = format!("__OPENUSAGECN_ENV_END_{index}__");
+                match extract_batch_shell_value(&output, &start, &end) {
+                    Some(Some(value)) => {
+                        observed.insert(name.clone());
+                        values.insert(name, Some(value));
+                        None
+                    }
+                    Some(None) => {
+                        observed.insert(name.clone());
+                        Some(name)
+                    }
+                    None => Some(name),
+                }
+            })
+            .collect();
+    }
+
+    let unresolved = if cfg!(target_os = "windows") {
+        HashSet::new()
+    } else {
+        pending
+            .iter()
+            .filter(|name| !observed.contains(*name))
+            .cloned()
+            .collect()
+    };
+    for name in pending {
+        values.insert(name, None);
+    }
+    if let Ok(mut cache) = terminal_env_cache().lock() {
+        for name in uncached {
+            if !unresolved.contains(&name) {
+                cache.insert(name.clone(), values.get(&name).cloned().flatten());
+            }
+        }
+    }
+    ResolvedEnvValues { values, unresolved }
 }
 
 /// Redact sensitive value to first4...last4 format (UTF-8 safe)
@@ -389,6 +582,16 @@ pub(crate) fn register_secret_for_redaction(value: &str) {
 
 /// Redact sensitive query parameters in URL
 fn redact_url(url: &str) -> String {
+    let url = if let Some(rest) = url.strip_prefix("https://management-api.x.ai/v1/billing/teams/")
+    {
+        let team_end = rest.find(&['/', '?', '#'][..]).unwrap_or(rest.len());
+        format!(
+            "https://management-api.x.ai/v1/billing/teams/[REDACTED]{}",
+            &rest[team_end..]
+        )
+    } else {
+        url.to_string()
+    };
     let sensitive_params = [
         "key",
         "api_key",
@@ -454,7 +657,7 @@ fn redact_url(url: &str) -> String {
             .collect();
         format!("{}{}", base, redacted_params.join("&"))
     } else {
-        url.to_string()
+        url
     }
 }
 
@@ -599,6 +802,9 @@ fn redact_body(body: &str) -> String {
 
 fn redact_http_response_body(url: &str, body: &str) -> String {
     let path = url.split('?').next().unwrap_or(url);
+    if path == "https://ollama.com/api/usage" || path == "https://ollama.com/settings" {
+        return "[REDACTED OLLAMA ACCOUNT RESPONSE]".to_string();
+    }
     if path.ends_with("/api/auth/me") {
         return "[REDACTED CURSOR IDENTITY RESPONSE]".to_string();
     }
@@ -1084,6 +1290,44 @@ fn inject_crypto<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()
             }
             out
         })?,
+    )?;
+
+    crypto_obj.set(
+        "hmacSha256Hex",
+        Function::new(
+            ctx.clone(),
+            move |ctx_inner: Ctx<'_>,
+                  key: String,
+                  message: String,
+                  key_is_hex: bool|
+                  -> rquickjs::Result<String> {
+                let key_bytes = if key_is_hex {
+                    if key.len() % 2 != 0 || !key.is_ascii() {
+                        return Err(Exception::throw_message(&ctx_inner, "invalid HMAC hex key"));
+                    }
+                    key.as_bytes()
+                        .chunks_exact(2)
+                        .map(|pair| {
+                            let pair = std::str::from_utf8(pair).expect("ASCII checked");
+                            u8::from_str_radix(pair, 16)
+                        })
+                        .collect::<Result<Vec<_>, _>>()
+                        .map_err(|_| Exception::throw_message(&ctx_inner, "invalid HMAC hex key"))?
+                } else {
+                    key.into_bytes()
+                };
+                let mut mac = <Hmac<Sha256> as hmac::KeyInit>::new_from_slice(&key_bytes)
+                    .map_err(|_| Exception::throw_message(&ctx_inner, "invalid HMAC key"))?;
+                mac.update(message.as_bytes());
+                let digest = mac.finalize().into_bytes();
+                let mut out = String::with_capacity(digest.len() * 2);
+                for byte in digest.iter() {
+                    use std::fmt::Write as _;
+                    let _ = write!(&mut out, "{byte:02x}");
+                }
+                Ok(out)
+            },
+        )?,
     )?;
 
     host.set("crypto", crypto_obj)?;
@@ -2257,7 +2501,7 @@ fn ccusage_runner_available(
                 } else {
                     log::warn!("ccusage runner availability check timed out");
                 }
-                if let Err(error) = kill_ccusage_on_timeout(&mut child) {
+                if let Err(error) = kill_process_group_on_timeout(&mut child) {
                     log::warn!("ccusage runner availability cleanup failed: {}", error);
                 }
                 if let Err(error) = child.wait() {
@@ -2463,7 +2707,7 @@ fn kill_ccusage_process_group(child_id: u32) -> std::io::Result<()> {
     Err(err)
 }
 
-fn kill_ccusage_on_timeout(child: &mut std::process::Child) -> std::io::Result<()> {
+fn kill_process_group_on_timeout(child: &mut std::process::Child) -> std::io::Result<()> {
     #[cfg(unix)]
     {
         kill_ccusage_process_group(child.id())
@@ -2659,7 +2903,7 @@ fn run_ccusage_with_runner_timeout(
             }
             Ok(_) => {
                 if start.elapsed() > timeout {
-                    if let Err(e) = kill_ccusage_on_timeout(&mut child) {
+                    if let Err(e) = kill_process_group_on_timeout(&mut child) {
                         log::warn!(
                             "[plugin:{}] ccusage process group kill failed for {}: {}",
                             plugin_id,
@@ -3423,6 +3667,74 @@ mod tests {
         assert_eq!(value.as_deref(), Some("sk-test-key-12345"));
     }
 
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn batch_env_resolution_does_not_cache_an_unavailable_shell() {
+        let name = format!(
+            "OPENUSAGECN_BATCH_ENV_TEST_{}",
+            uuid::Uuid::new_v4().simple()
+        );
+        let result = resolve_env_values_using_shells(&[&name], &[]);
+        assert!(result.unresolved.contains(&name));
+        assert_eq!(result.values.get(&name), Some(&None));
+        assert!(
+            !terminal_env_cache()
+                .lock()
+                .expect("env cache")
+                .contains_key(&name)
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn batch_env_resolution_requires_shell_output_markers() {
+        let name = format!(
+            "OPENUSAGECN_BATCH_ENV_TEST_{}",
+            uuid::Uuid::new_v4().simple()
+        );
+        assert!(
+            Command::new("/usr/bin/true")
+                .status()
+                .expect("true executable")
+                .success()
+        );
+        let result = resolve_env_values_using_shells(&[&name], &["/usr/bin/true".to_string()]);
+        assert!(result.unresolved.contains(&name));
+        assert_eq!(result.values.get(&name), Some(&None));
+        assert!(
+            !terminal_env_cache()
+                .lock()
+                .expect("env cache")
+                .contains_key(&name)
+        );
+    }
+
+    #[test]
+    fn batch_shell_markers_must_be_full_lines_in_order() {
+        let start = "__OPENUSAGECN_ENV_START_0__";
+        let end = "__OPENUSAGECN_ENV_END_0__";
+        let echoed = format!("+ printf '{start}\\n'\n+ printf '{end}\\n'\n");
+        assert_eq!(extract_batch_shell_value(&echoed, start, end), None);
+        let actual = format!("{echoed}{start}\n secret \n{end}\n");
+        assert_eq!(
+            extract_batch_shell_value(&actual, start, end),
+            Some(Some("secret".to_string()))
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn startup_shell_lookup_has_a_deadline() {
+        let started = Instant::now();
+        let result = read_command_stdout_with_timeout(
+            "/bin/sh",
+            &["-c", "sleep 5"],
+            Duration::from_millis(100),
+        );
+        assert!(result.is_none());
+        assert!(started.elapsed() < Duration::from_secs(3));
+    }
+
     #[test]
     fn http_api_exposes_https_base_url_normalization_to_quickjs() {
         let rt = Runtime::new().expect("runtime");
@@ -3506,6 +3818,25 @@ mod tests {
                 empty,
                 "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
             );
+        });
+    }
+
+    #[test]
+    fn crypto_api_hmac_sha256_supports_utf8_and_derived_hex_keys() {
+        let rt = Runtime::new().expect("runtime");
+        let ctx = Context::full(&rt).expect("context");
+        ctx.with(|ctx| {
+            inject_host_api(&ctx, "doubao", &std::env::temp_dir(), "0.0.0")
+                .expect("inject host api");
+            let utf8: String = ctx
+                .eval(r#"__openusage_ctx.host.crypto.hmacSha256Hex("key", "The quick brown fox jumps over the lazy dog", false)"#)
+                .expect("hmac utf8");
+            assert_eq!(utf8, "f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8");
+            let derived: String = ctx
+                .eval(r#"__openusage_ctx.host.crypto.hmacSha256Hex("6b6579", "The quick brown fox jumps over the lazy dog", true)"#)
+                .expect("hmac hex");
+            assert_eq!(derived, utf8);
+            assert!(ctx.eval::<String, _>(r#"__openusage_ctx.host.crypto.hmacSha256Hex("xyz", "message", true)"#).is_err());
         });
     }
 
@@ -3867,6 +4198,31 @@ mod tests {
 
     #[test]
     #[serial]
+    fn env_api_scopes_new_provider_credentials() {
+        for (plugin, name) in [
+            ("deepseek", "DEEPSEEK_API_KEY"),
+            ("moonshot", "MOONSHOT_API_KEY"),
+            ("moonshot", "MOONSHOT_REGION"),
+            ("ollama", "OLLAMA_CLOUD_COOKIE"),
+            ("doubao", "VOLCENGINE_ACCESS_KEY_ID"),
+            ("doubao", "VOLCENGINE_SECRET_ACCESS_KEY"),
+            ("doubao", "VOLCENGINE_REGION"),
+            ("xai", "XAI_MANAGEMENT_API_KEY"),
+            ("xai", "XAI_TEAM_ID"),
+        ] {
+            assert!(
+                is_env_var_allowed_for_plugin(plugin, name),
+                "{plugin} cannot read {name}"
+            );
+            assert!(
+                !is_env_var_allowed_for_plugin("openrouter", name),
+                "{name} leaked to OpenRouter"
+            );
+        }
+    }
+
+    #[test]
+    #[serial]
     fn env_api_prefers_process_env() {
         let name = "ZAI_API_KEY";
         let _restore = EnvVarGuard::set(name, "zai-process-env-test-value");
@@ -4019,6 +4375,34 @@ mod tests {
         let redacted = redact_url(url);
         assert!(redacted.contains("api_key=sk-1...cdef"));
         assert!(redacted.contains("other=value"));
+    }
+
+    #[test]
+    fn redact_url_hides_xai_team_id_in_path() {
+        assert_eq!(
+            redact_url("https://management-api.x.ai/v1/billing/teams/private-team-123/usage"),
+            "https://management-api.x.ai/v1/billing/teams/[REDACTED]/usage"
+        );
+    }
+
+    #[test]
+    fn ollama_account_response_is_not_logged() {
+        let body = r#"{"limits":{"monthly":{"usage":0.7}},"account":"private-user"}"#;
+        assert_eq!(
+            redact_http_response_body("https://ollama.com/api/usage", body),
+            "[REDACTED OLLAMA ACCOUNT RESPONSE]"
+        );
+        assert_eq!(
+            redact_http_response_body(
+                "https://ollama.com/settings?tab=usage",
+                "<html>private-user@example.com</html>"
+            ),
+            "[REDACTED OLLAMA ACCOUNT RESPONSE]"
+        );
+        assert_eq!(
+            redact_http_response_body("https://example.com/api/usage", body),
+            redact_body(body)
+        );
     }
 
     #[test]

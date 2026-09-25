@@ -12,7 +12,9 @@ import {
   DEFAULT_THEME_MODE,
   DEFAULT_TIME_FORMAT_MODE,
   arePluginSettingsEqual,
+  enableDetectedPlugins,
   getEnabledPluginIds,
+  getNewPluginIds,
   loadAutoUpdateInterval,
   loadDisplayMode,
   loadGlobalShortcut,
@@ -110,6 +112,22 @@ describe("settings", () => {
     const result = normalizePluginSettings({ order: [], disabled: [] }, plugins)
     expect(result.order).toEqual(["claude", "copilot", "devin"])
     expect(result.disabled).toEqual(["copilot", "devin"])
+  })
+
+  it("only checks unseen providers and enables a detected one once", () => {
+    const plugins: PluginMeta[] = [
+      { id: "codex", name: "Codex", iconUrl: "", lines: [] },
+      { id: "deepseek", name: "DeepSeek", iconUrl: "", lines: [] },
+      { id: "ollama", name: "Ollama", iconUrl: "", lines: [] },
+    ]
+    const saved = { order: ["codex"], disabled: ["ollama"] }
+    const candidates = getNewPluginIds(saved, plugins)
+    expect(candidates).toEqual(["deepseek"])
+    const normalized = normalizePluginSettings(saved, plugins)
+    expect(enableDetectedPlugins(normalized, candidates, ["deepseek", "ollama"])).toEqual({
+      order: ["codex", "deepseek", "ollama"], disabled: ["ollama"],
+    })
+    expect(getNewPluginIds(normalized, plugins)).toEqual([])
   })
 
   it("migrates enabled windsurf settings to enabled devin settings", () => {

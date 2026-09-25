@@ -12,8 +12,18 @@ use std::sync::{Mutex, OnceLock};
 const RETIRED_BUNDLED_PLUGIN_IDS: &[&str] = &["windsurf"];
 const PLUGIN_INSTALL_LOCK_FILE: &str = ".plugin-install.lock";
 #[cfg(any(target_os = "windows", test))]
-const WINDOWS_MVP_PLUGIN_IDS: &[&str] =
-    &["codex", "bigmodel-cn", "openai-api", "openrouter", "zai"];
+const WINDOWS_MVP_PLUGIN_IDS: &[&str] = &[
+    "codex",
+    "bigmodel-cn",
+    "openai-api",
+    "openrouter",
+    "zai",
+    "deepseek",
+    "moonshot",
+    "ollama",
+    "doubao",
+    "xai",
+];
 
 pub fn plugins_for_current_platform(plugins: Vec<LoadedPlugin>) -> Vec<LoadedPlugin> {
     #[cfg(target_os = "windows")]
@@ -154,7 +164,18 @@ mod platform_tests {
 
     #[test]
     fn windows_allowlist_is_exact() {
-        for plugin_id in ["codex", "bigmodel-cn", "openai-api", "openrouter", "zai"] {
+        for plugin_id in [
+            "codex",
+            "bigmodel-cn",
+            "openai-api",
+            "openrouter",
+            "zai",
+            "deepseek",
+            "moonshot",
+            "ollama",
+            "doubao",
+            "xai",
+        ] {
             assert!(windows_mvp_supports_plugin(plugin_id));
         }
         for plugin_id in ["claude", "cursor", "custom", "Codex"] {

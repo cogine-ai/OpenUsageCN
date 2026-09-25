@@ -123,7 +123,19 @@ fn bundled_provider_limit_resource_keys_are_stable() {
                 "totalUsage",
             ][..],
         ),
+        ("deepseek", &[][..]),
         ("devin", &["daily", "weekly"][..]),
+        (
+            "doubao",
+            &[
+                "agentMonthly",
+                "agentSession",
+                "agentWeekly",
+                "codingMonthly",
+                "codingSession",
+                "codingWeekly",
+            ][..],
+        ),
         ("factory", &["premium", "standard"][..]),
         ("gemini", &["flash", "flashLite", "pro"][..]),
         ("grok", &["creditsUsed"][..]),
@@ -131,6 +143,8 @@ fn bundled_provider_limit_resource_keys_are_stable() {
         ("kimi", &["session", "weekly"][..]),
         ("kiro", &["bonusCredits", "credits"][..]),
         ("minimax", &["session"][..]),
+        ("moonshot", &[][..]),
+        ("ollama", &["monthly", "session", "weekly"][..]),
         ("openai-api", &["credits"][..]),
         ("opencode-go", &["monthly", "session", "weekly"][..]),
         ("opencode", &["session", "weekly"][..]),
@@ -146,6 +160,7 @@ fn bundled_provider_limit_resource_keys_are_stable() {
                 "subscription",
             ][..],
         ),
+        ("xai", &[][..]),
         ("zai", &["session", "webSearches", "weekly"][..]),
     ]
     .into_iter()
@@ -174,6 +189,7 @@ fn bundled_provider_limit_resource_keys_are_stable() {
         if manifest.id == "mock" {
             continue;
         }
+        validate_manifest_lines(&manifest).expect("bundled plugin lines should be valid");
         let keys = manifest
             .lines
             .iter()

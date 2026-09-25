@@ -4,8 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 const {
   arePluginSettingsEqualMock,
   disableAutostartMock,
+  enableDetectedPluginsMock,
   enableAutostartMock,
   getEnabledPluginIdsMock,
+  getNewPluginIdsMock,
   invokeMock,
   isAutostartEnabledMock,
   isTauriMock,
@@ -30,8 +32,10 @@ const {
   isAutostartEnabledMock: vi.fn(),
   enableAutostartMock: vi.fn(),
   disableAutostartMock: vi.fn(),
+  enableDetectedPluginsMock: vi.fn(),
   arePluginSettingsEqualMock: vi.fn(),
   getEnabledPluginIdsMock: vi.fn(),
+  getNewPluginIdsMock: vi.fn(),
   loadAutoUpdateIntervalMock: vi.fn(),
   loadDisplayModeMock: vi.fn(),
   loadGlobalShortcutMock: vi.fn(),
@@ -76,7 +80,9 @@ vi.mock("@/lib/settings", () => ({
   DEFAULT_START_ON_LOGIN: false,
   DEFAULT_THEME_MODE: "system",
   DEFAULT_TIME_FORMAT_MODE: "auto",
+  enableDetectedPlugins: enableDetectedPluginsMock,
   getEnabledPluginIds: getEnabledPluginIdsMock,
+  getNewPluginIds: getNewPluginIdsMock,
   loadAutoUpdateInterval: loadAutoUpdateIntervalMock,
   loadDisplayMode: loadDisplayModeMock,
   loadGlobalShortcut: loadGlobalShortcutMock,
@@ -146,8 +152,10 @@ describe("useSettingsBootstrap", () => {
     isAutostartEnabledMock.mockReset()
     enableAutostartMock.mockReset()
     disableAutostartMock.mockReset()
+    enableDetectedPluginsMock.mockReset()
     arePluginSettingsEqualMock.mockReset()
     getEnabledPluginIdsMock.mockReset()
+    getNewPluginIdsMock.mockReset()
     loadAutoUpdateIntervalMock.mockReset()
     loadDisplayModeMock.mockReset()
     loadGlobalShortcutMock.mockReset()
@@ -195,6 +203,15 @@ describe("useSettingsBootstrap", () => {
     loadStartOnLoginMock.mockResolvedValue(true)
     migrateLegacyTraySettingsMock.mockResolvedValue(undefined)
     migrateWindsurfToDevinMock.mockImplementation((settings) => settings)
+    getNewPluginIdsMock.mockImplementation((settings, plugins) =>
+      plugins.map((plugin) => plugin.id).filter((id) =>
+        ["deepseek", "moonshot", "ollama", "doubao", "xai"].includes(id) &&
+        !settings.order.includes(id) && !settings.disabled.includes(id)))
+    enableDetectedPluginsMock.mockImplementation((settings, candidates, detected) => ({
+      ...settings,
+      disabled: settings.disabled.filter((id) =>
+        !candidates.includes(id) || !detected.includes(id)),
+    }))
     savePluginSettingsMock.mockResolvedValue(undefined)
     getEnabledPluginIdsMock.mockReturnValue(["codex"])
   })
@@ -301,6 +318,127 @@ describe("useSettingsBootstrap", () => {
       expect(args.setPluginSettings).toHaveBeenCalledWith(migratedSettings)
       expect(args.startBatch).toHaveBeenCalledWith(["devin"])
     })
+  })
+
+  it("enables a newly shipped provider when local credentials are detected", async () => {
+    const args = createArgs()
+    const plugins = [
+      { id: "codex", name: "Codex", iconUrl: "", lines: [] },
+      { id: "deepseek", name: "DeepSeek", iconUrl: "", lines: [] },
+    ]
+    invokeMock.mockResolvedValueOnce(plugins).mockResolvedValueOnce({
+      detectedIds: ["deepseek"], retryIds: [],
+    })
+    normalizePluginSettingsMock.mockReturnValueOnce({
+      order: ["codex", "deepseek"], disabled: ["deepseek"],
+    })
+    arePluginSettingsEqualMock.mockReturnValueOnce(false)
+    getEnabledPluginIdsMock.mockImplementation((settings) =>
+      settings.order.filter((id) => !settings.disabled.includes(id)))
+
+    renderHook(() => useSettingsBootstrap(args))
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("detect_local_provider_credentials", {
+        pluginIds: ["deepseek"],
+      })
+      expect(savePluginSettingsMock).toHaveBeenCalledWith({
+        order: ["codex", "deepseek"], disabled: [],
+      })
+      expect(args.startBatch).toHaveBeenCalledWith(["codex", "deepseek"])
+    })
+  })
+
+  it("keeps the starter set and adds detected providers on a fresh install", async () => {
+    const args = createArgs()
+    loadPluginSettingsMock.mockResolvedValueOnce({ order: [], disabled: [] })
+    invokeMock.mockResolvedValueOnce([
+      { id: "claude", name: "Claude", iconUrl: "", lines: [] },
+      { id: "codex", name: "Codex", iconUrl: "", lines: [] },
+      { id: "deepseek", name: "DeepSeek", iconUrl: "", lines: [] },
+    ]).mockResolvedValueOnce({ detectedIds: ["deepseek"], retryIds: [] })
+    normalizePluginSettingsMock.mockReturnValueOnce({
+      order: ["claude", "codex", "deepseek"], disabled: ["deepseek"],
+    })
+    arePluginSettingsEqualMock.mockReturnValueOnce(false)
+    getEnabledPluginIdsMock.mockImplementation((settings) =>
+      settings.order.filter((id) => !settings.disabled.includes(id)))
+
+    renderHook(() => useSettingsBootstrap(args))
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("detect_local_provider_credentials", {
+        pluginIds: ["deepseek"],
+      })
+      expect(args.startBatch).toHaveBeenCalledWith(["claude", "codex", "deepseek"])
+    })
+  })
+
+  it("never re-enables a provider already seen and switched off", async () => {
+    const args = createArgs()
+    const stored = { order: ["codex", "deepseek"], disabled: ["deepseek"] }
+    loadPluginSettingsMock.mockResolvedValueOnce(stored)
+    normalizePluginSettingsMock.mockReturnValueOnce(stored)
+    invokeMock.mockResolvedValueOnce([
+      { id: "codex", name: "Codex", iconUrl: "", lines: [] },
+      { id: "deepseek", name: "DeepSeek", iconUrl: "", lines: [] },
+    ])
+
+    renderHook(() => useSettingsBootstrap(args))
+
+    await waitFor(() => expect(args.setPluginSettings).toHaveBeenCalledWith(stored))
+    expect(invokeMock).not.toHaveBeenCalledWith("detect_local_provider_credentials", expect.anything())
+  })
+
+  it("saves confirmed providers while leaving a failed shell lookup eligible to retry", async () => {
+    const args = createArgs()
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    invokeMock.mockResolvedValueOnce([
+      { id: "codex", name: "Codex", iconUrl: "", lines: [] },
+      { id: "deepseek", name: "DeepSeek", iconUrl: "", lines: [] },
+      { id: "moonshot", name: "Moonshot", iconUrl: "", lines: [] },
+    ]).mockResolvedValueOnce({ detectedIds: ["deepseek"], retryIds: ["moonshot"] })
+    normalizePluginSettingsMock.mockReturnValueOnce({
+      order: ["codex", "deepseek", "moonshot"], disabled: ["deepseek", "moonshot"],
+    })
+    arePluginSettingsEqualMock.mockReturnValueOnce(false)
+    getEnabledPluginIdsMock.mockImplementation((settings) =>
+      settings.order.filter((id) => !settings.disabled.includes(id)))
+
+    renderHook(() => useSettingsBootstrap(args))
+
+    await waitFor(() => {
+      expect(savePluginSettingsMock).toHaveBeenCalledWith({
+        order: ["codex", "deepseek"], disabled: [],
+      })
+      expect(args.setPluginSettings).toHaveBeenCalledWith({
+        order: ["codex", "deepseek", "moonshot"], disabled: ["moonshot"],
+      })
+      expect(args.startBatch).toHaveBeenCalledWith(["codex", "deepseek"])
+    })
+    expect(errorSpy).toHaveBeenCalledWith(
+      "Could not inspect shell credentials for providers:", ["moonshot"])
+    errorSpy.mockRestore()
+  })
+
+  it("keeps newly shipped providers unseen when credential detection fails", async () => {
+    const args = createArgs()
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    invokeMock.mockResolvedValueOnce([
+      { id: "codex", name: "Codex", iconUrl: "", lines: [] },
+      { id: "deepseek", name: "DeepSeek", iconUrl: "", lines: [] },
+    ]).mockRejectedValueOnce(new Error("IPC unavailable"))
+    normalizePluginSettingsMock.mockReturnValueOnce({
+      order: ["codex", "deepseek"], disabled: ["deepseek"],
+    })
+
+    renderHook(() => useSettingsBootstrap(args))
+
+    await waitFor(() => expect(args.setPluginSettings).toHaveBeenCalled())
+    expect(savePluginSettingsMock).not.toHaveBeenCalled()
+    expect(errorSpy).toHaveBeenCalledWith(
+      "Failed to detect local provider credentials:", expect.any(Error))
+    errorSpy.mockRestore()
   })
 
   it("does not load unsupported Windows-only settings behavior", async () => {

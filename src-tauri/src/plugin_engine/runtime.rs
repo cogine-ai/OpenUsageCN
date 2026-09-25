@@ -862,6 +862,28 @@ mod tests {
     }
 
     #[test]
+    fn new_provider_scripts_evaluate_in_quickjs() {
+        let plugins_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../plugins");
+        for id in ["deepseek", "moonshot", "ollama", "doubao", "xai"] {
+            let script = std::fs::read_to_string(plugins_dir.join(id).join("plugin.js"))
+                .expect("bundled plugin script");
+            let runtime = Runtime::new().expect("QuickJS runtime");
+            let context = Context::full(&runtime).expect("QuickJS context");
+            context.with(|ctx| {
+                ctx.eval::<(), _>(script.as_bytes())
+                    .unwrap_or_else(|error| panic!("{id} could not load in QuickJS: {error}"));
+                let plugin: Object = ctx
+                    .globals()
+                    .get("__openusage_plugin")
+                    .expect("plugin registration");
+                let registered_id: String = plugin.get("id").expect("plugin ID");
+                let _: rquickjs::Function = plugin.get("probe").expect("probe function");
+                assert_eq!(registered_id, id);
+            });
+        }
+    }
+
+    #[test]
     fn run_probe_returns_thrown_string_from_sync_error() {
         let plugin = test_plugin(
             r#"

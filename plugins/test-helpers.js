@@ -108,6 +108,9 @@ export const makeCtx = () => {
           return `${iv.toString("base64")}:${tag.toString("base64")}:${ciphertext.toString("base64")}`
         }),
         sha256Hex: vi.fn((text) => crypto.createHash("sha256").update(String(text)).digest("hex")),
+        hmacSha256Hex: vi.fn((key, message, keyIsHex) =>
+          crypto.createHmac("sha256", keyIsHex ? Buffer.from(key, "hex") : key)
+            .update(String(message)).digest("hex")),
       },
       sqlite: {
         query: vi.fn(() => "[]"),
