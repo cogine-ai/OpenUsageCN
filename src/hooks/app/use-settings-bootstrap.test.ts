@@ -326,7 +326,9 @@ describe("useSettingsBootstrap", () => {
       { id: "codex", name: "Codex", iconUrl: "", lines: [] },
       { id: "deepseek", name: "DeepSeek", iconUrl: "", lines: [] },
     ]
-    invokeMock.mockResolvedValueOnce(plugins).mockResolvedValueOnce(["deepseek"])
+    invokeMock.mockResolvedValueOnce(plugins).mockResolvedValueOnce({
+      detectedIds: ["deepseek"], retryIds: [],
+    })
     normalizePluginSettingsMock.mockReturnValueOnce({
       order: ["codex", "deepseek"], disabled: ["deepseek"],
     })
@@ -354,7 +356,7 @@ describe("useSettingsBootstrap", () => {
       { id: "claude", name: "Claude", iconUrl: "", lines: [] },
       { id: "codex", name: "Codex", iconUrl: "", lines: [] },
       { id: "deepseek", name: "DeepSeek", iconUrl: "", lines: [] },
-    ]).mockResolvedValueOnce(["deepseek"])
+    ]).mockResolvedValueOnce({ detectedIds: ["deepseek"], retryIds: [] })
     normalizePluginSettingsMock.mockReturnValueOnce({
       order: ["claude", "codex", "deepseek"], disabled: ["deepseek"],
     })
@@ -386,6 +388,37 @@ describe("useSettingsBootstrap", () => {
 
     await waitFor(() => expect(args.setPluginSettings).toHaveBeenCalledWith(stored))
     expect(invokeMock).not.toHaveBeenCalledWith("detect_local_provider_credentials", expect.anything())
+  })
+
+  it("saves confirmed providers while leaving a failed shell lookup eligible to retry", async () => {
+    const args = createArgs()
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    invokeMock.mockResolvedValueOnce([
+      { id: "codex", name: "Codex", iconUrl: "", lines: [] },
+      { id: "deepseek", name: "DeepSeek", iconUrl: "", lines: [] },
+      { id: "moonshot", name: "Moonshot", iconUrl: "", lines: [] },
+    ]).mockResolvedValueOnce({ detectedIds: ["deepseek"], retryIds: ["moonshot"] })
+    normalizePluginSettingsMock.mockReturnValueOnce({
+      order: ["codex", "deepseek", "moonshot"], disabled: ["deepseek", "moonshot"],
+    })
+    arePluginSettingsEqualMock.mockReturnValueOnce(false)
+    getEnabledPluginIdsMock.mockImplementation((settings) =>
+      settings.order.filter((id) => !settings.disabled.includes(id)))
+
+    renderHook(() => useSettingsBootstrap(args))
+
+    await waitFor(() => {
+      expect(savePluginSettingsMock).toHaveBeenCalledWith({
+        order: ["codex", "deepseek"], disabled: [],
+      })
+      expect(args.setPluginSettings).toHaveBeenCalledWith({
+        order: ["codex", "deepseek", "moonshot"], disabled: ["moonshot"],
+      })
+      expect(args.startBatch).toHaveBeenCalledWith(["codex", "deepseek"])
+    })
+    expect(errorSpy).toHaveBeenCalledWith(
+      "Could not inspect shell credentials for providers:", ["moonshot"])
+    errorSpy.mockRestore()
   })
 
   it("keeps newly shipped providers unseen when credential detection fails", async () => {

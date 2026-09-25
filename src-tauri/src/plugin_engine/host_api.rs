@@ -191,6 +191,28 @@ fn extract_marked_value(text: &str, start_marker: &str, end_marker: &str) -> Opt
     sanitize_env_value(&after_start[..end])
 }
 
+fn extract_batch_shell_value(
+    text: &str,
+    start_marker: &str,
+    end_marker: &str,
+) -> Option<Option<String>> {
+    let mut lines = text.lines();
+    while let Some(line) = lines.next() {
+        if line.trim() != start_marker {
+            continue;
+        }
+        let mut marked = String::new();
+        for line in &mut lines {
+            if line.trim() == end_marker {
+                return Some(sanitize_env_value(&marked));
+            }
+            marked.push_str(line);
+            marked.push('\n');
+        }
+    }
+    None
+}
+
 fn parse_interactive_shell_env_output(
     text: &str,
     start_marker: &str,
@@ -219,6 +241,58 @@ fn read_command_stdout(program: &str, args: &[&str]) -> Option<String> {
         return None;
     }
     Some(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+fn read_command_stdout_with_timeout(
+    program: &str,
+    args: &[&str],
+    timeout: Duration,
+) -> Option<String> {
+    let mut command = Command::new(program);
+    command
+        .args(args)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null());
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        command.process_group(0);
+    }
+    let mut child = command.spawn().ok()?;
+    let mut stdout = child.stdout.take()?;
+    let reader = std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        let _ = std::io::Read::read_to_end(&mut stdout, &mut bytes);
+        bytes
+    });
+    let started = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) if reader.is_finished() => {
+                let bytes = reader.join().ok()?;
+                return status
+                    .success()
+                    .then(|| String::from_utf8_lossy(&bytes).into_owned());
+            }
+            Ok(_) if started.elapsed() < timeout => {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            status => {
+                if let Err(error) = status {
+                    log::error!("provider startup shell lookup failed: {}", error);
+                } else {
+                    log::error!("provider startup shell lookup timed out");
+                }
+                if let Err(error) = kill_process_group_on_timeout(&mut child) {
+                    log::error!("provider startup shell cleanup failed: {}", error);
+                    let _ = child.kill();
+                }
+                let _ = child.wait();
+                return None;
+            }
+        }
+    }
 }
 
 fn read_env_value_via_command(program: &str, args: &[&str]) -> Option<String> {
@@ -377,16 +451,16 @@ fn resolve_env_value(name: &str) -> Option<String> {
 
 /// Resolve several startup hints with one shell launch per shell, using the same
 /// process, cache, and interactive-shell sources as plugin probes.
-pub(crate) fn resolve_env_values(
-    names: &[&str],
-) -> Result<HashMap<String, Option<String>>, &'static str> {
+pub(crate) struct ResolvedEnvValues {
+    pub values: HashMap<String, Option<String>>,
+    pub unresolved: HashSet<String>,
+}
+
+pub(crate) fn resolve_env_values(names: &[&str]) -> ResolvedEnvValues {
     resolve_env_values_using_shells(names, &interactive_shell_programs())
 }
 
-fn resolve_env_values_using_shells(
-    names: &[&str],
-    programs: &[String],
-) -> Result<HashMap<String, Option<String>>, &'static str> {
+fn resolve_env_values_using_shells(names: &[&str], programs: &[String]) -> ResolvedEnvValues {
     let mut values = HashMap::new();
     let mut pending = Vec::new();
     for &name in names {
@@ -404,11 +478,16 @@ fn resolve_env_values_using_shells(
     }
 
     let uncached = pending.clone();
-    let mut shell_succeeded = false;
+    let mut observed = HashSet::new();
+    let started = Instant::now();
     for program in programs {
         if pending.is_empty() {
             break;
         }
+        let Some(remaining) = Duration::from_secs(5).checked_sub(started.elapsed()) else {
+            log::error!("provider startup shell lookup exceeded its time limit");
+            break;
+        };
         let script = pending
             .iter()
             .enumerate()
@@ -419,40 +498,52 @@ fn resolve_env_values_using_shells(
             })
             .collect::<Vec<_>>()
             .join("; ");
-        let Some(output) = read_command_stdout(program, &["-ilc", &script]) else {
+        let Some(output) = read_command_stdout_with_timeout(program, &["-ilc", &script], remaining)
+        else {
             continue;
         };
-        shell_succeeded = true;
         pending = pending
             .into_iter()
             .enumerate()
             .filter_map(|(index, name)| {
                 let start = format!("__OPENUSAGECN_ENV_START_{index}__");
                 let end = format!("__OPENUSAGECN_ENV_END_{index}__");
-                if let Some(value) = extract_marked_value(&output, &start, &end) {
-                    values.insert(name, Some(value));
-                    None
-                } else {
-                    Some(name)
+                match extract_batch_shell_value(&output, &start, &end) {
+                    Some(Some(value)) => {
+                        observed.insert(name.clone());
+                        values.insert(name, Some(value));
+                        None
+                    }
+                    Some(None) => {
+                        observed.insert(name.clone());
+                        Some(name)
+                    }
+                    None => Some(name),
                 }
             })
             .collect();
     }
 
+    let unresolved = if cfg!(target_os = "windows") {
+        HashSet::new()
+    } else {
+        pending
+            .iter()
+            .filter(|name| !observed.contains(*name))
+            .cloned()
+            .collect()
+    };
     for name in pending {
         values.insert(name, None);
     }
-    if !uncached.is_empty() && !shell_succeeded && !cfg!(target_os = "windows") {
-        return Err("all interactive shell lookups failed");
-    }
-    if shell_succeeded {
-        if let Ok(mut cache) = terminal_env_cache().lock() {
-            for name in uncached {
+    if let Ok(mut cache) = terminal_env_cache().lock() {
+        for name in uncached {
+            if !unresolved.contains(&name) {
                 cache.insert(name.clone(), values.get(&name).cloned().flatten());
             }
         }
     }
-    Ok(values)
+    ResolvedEnvValues { values, unresolved }
 }
 
 /// Redact sensitive value to first4...last4 format (UTF-8 safe)
@@ -2410,7 +2501,7 @@ fn ccusage_runner_available(
                 } else {
                     log::warn!("ccusage runner availability check timed out");
                 }
-                if let Err(error) = kill_ccusage_on_timeout(&mut child) {
+                if let Err(error) = kill_process_group_on_timeout(&mut child) {
                     log::warn!("ccusage runner availability cleanup failed: {}", error);
                 }
                 if let Err(error) = child.wait() {
@@ -2616,7 +2707,7 @@ fn kill_ccusage_process_group(child_id: u32) -> std::io::Result<()> {
     Err(err)
 }
 
-fn kill_ccusage_on_timeout(child: &mut std::process::Child) -> std::io::Result<()> {
+fn kill_process_group_on_timeout(child: &mut std::process::Child) -> std::io::Result<()> {
     #[cfg(unix)]
     {
         kill_ccusage_process_group(child.id())
@@ -2812,7 +2903,7 @@ fn run_ccusage_with_runner_timeout(
             }
             Ok(_) => {
                 if start.elapsed() > timeout {
-                    if let Err(e) = kill_ccusage_on_timeout(&mut child) {
+                    if let Err(e) = kill_process_group_on_timeout(&mut child) {
                         log::warn!(
                             "[plugin:{}] ccusage process group kill failed for {}: {}",
                             plugin_id,
@@ -3584,13 +3675,64 @@ mod tests {
             uuid::Uuid::new_v4().simple()
         );
         let result = resolve_env_values_using_shells(&[&name], &[]);
-        assert_eq!(result.unwrap_err(), "all interactive shell lookups failed");
+        assert!(result.unresolved.contains(&name));
+        assert_eq!(result.values.get(&name), Some(&None));
         assert!(
             !terminal_env_cache()
                 .lock()
                 .expect("env cache")
                 .contains_key(&name)
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn batch_env_resolution_requires_shell_output_markers() {
+        let name = format!(
+            "OPENUSAGECN_BATCH_ENV_TEST_{}",
+            uuid::Uuid::new_v4().simple()
+        );
+        assert!(
+            Command::new("/usr/bin/true")
+                .status()
+                .expect("true executable")
+                .success()
+        );
+        let result = resolve_env_values_using_shells(&[&name], &["/usr/bin/true".to_string()]);
+        assert!(result.unresolved.contains(&name));
+        assert_eq!(result.values.get(&name), Some(&None));
+        assert!(
+            !terminal_env_cache()
+                .lock()
+                .expect("env cache")
+                .contains_key(&name)
+        );
+    }
+
+    #[test]
+    fn batch_shell_markers_must_be_full_lines_in_order() {
+        let start = "__OPENUSAGECN_ENV_START_0__";
+        let end = "__OPENUSAGECN_ENV_END_0__";
+        let echoed = format!("+ printf '{start}\\n'\n+ printf '{end}\\n'\n");
+        assert_eq!(extract_batch_shell_value(&echoed, start, end), None);
+        let actual = format!("{echoed}{start}\n secret \n{end}\n");
+        assert_eq!(
+            extract_batch_shell_value(&actual, start, end),
+            Some(Some("secret".to_string()))
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn startup_shell_lookup_has_a_deadline() {
+        let started = Instant::now();
+        let result = read_command_stdout_with_timeout(
+            "/bin/sh",
+            &["-c", "sleep 5"],
+            Duration::from_millis(100),
+        );
+        assert!(result.is_none());
+        assert!(started.elapsed() < Duration::from_secs(3));
     }
 
     #[test]

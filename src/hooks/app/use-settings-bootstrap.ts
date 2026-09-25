@@ -124,21 +124,32 @@ export function useSettingsBootstrap({
         const candidateIds = getNewPluginIds(migratedSettings, availablePlugins)
         const normalized = normalizePluginSettings(migratedSettings, availablePlugins)
         let detectedIds: string[] = []
+        let retryIds: string[] = []
         let detectionFailed = false
         if (candidateIds.length > 0) {
           try {
-            detectedIds = await invoke<string[]>("detect_local_provider_credentials", {
+            const detection = await invoke<{ detectedIds: string[]; retryIds: string[] }>("detect_local_provider_credentials", {
               pluginIds: candidateIds,
             })
+            detectedIds = detection.detectedIds
+            retryIds = detection.retryIds.filter((id) => candidateIds.includes(id))
+            if (retryIds.length > 0) {
+              console.error("Could not inspect shell credentials for providers:", retryIds)
+            }
           } catch (error) {
             console.error("Failed to detect local provider credentials:", error)
             detectionFailed = true
           }
         }
         const pluginSettings = enableDetectedPlugins(normalized, candidateIds, detectedIds)
-        // A failed detection must leave these IDs unseen so the next launch can retry.
-        if (!detectionFailed && !arePluginSettingsEqual(storedSettings, pluginSettings)) {
-          await savePluginSettings(pluginSettings)
+        // Persist completed checks while leaving unresolved providers unseen for the next launch.
+        const retrySet = new Set(retryIds)
+        const settingsToSave = retrySet.size > 0 ? {
+          order: pluginSettings.order.filter((id) => !retrySet.has(id)),
+          disabled: pluginSettings.disabled.filter((id) => !retrySet.has(id)),
+        } : pluginSettings
+        if (!detectionFailed && !arePluginSettingsEqual(storedSettings, settingsToSave)) {
+          await savePluginSettings(settingsToSave)
         }
 
         let storedInterval = DEFAULT_AUTO_UPDATE_INTERVAL

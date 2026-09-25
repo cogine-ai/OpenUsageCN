@@ -7,31 +7,16 @@ use crate::provider_config;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 
-pub fn detect(plugins: &[LoadedPlugin], candidate_ids: &[String]) -> Result<Vec<String>, String> {
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DetectionResult {
+    pub detected_ids: Vec<String>,
+    pub retry_ids: Vec<String>,
+}
+
+pub fn detect(plugins: &[LoadedPlugin], candidate_ids: &[String]) -> DetectionResult {
     let candidates: HashSet<&str> = candidate_ids.iter().map(String::as_str).collect();
-    let env_names: Vec<&str> = [
-        ("deepseek", &["DEEPSEEK_API_KEY"][..]),
-        ("moonshot", &["MOONSHOT_API_KEY", "MOONSHOT_REGION"][..]),
-        ("ollama", &["OLLAMA_CLOUD_COOKIE"][..]),
-        (
-            "doubao",
-            &[
-                "VOLCENGINE_ACCESS_KEY_ID",
-                "VOLCENGINE_SECRET_ACCESS_KEY",
-                "VOLCENGINE_REGION",
-            ][..],
-        ),
-        ("xai", &["XAI_MANAGEMENT_API_KEY", "XAI_TEAM_ID"][..]),
-    ]
-    .into_iter()
-    .filter(|(id, _)| candidates.contains(id))
-    .flat_map(|(_, names)| names.iter().copied())
-    .collect();
-    let env_values = host_api::resolve_env_values(&env_names).map_err(|error| {
-        log::error!("provider startup detection failed: {error}");
-        "Could not inspect local shell credentials. Restart the app to retry.".to_string()
-    })?;
-    Ok(plugins
+    let candidate_values: Vec<(String, HashMap<String, Value>)> = plugins
         .iter()
         .filter(|plugin| candidates.contains(plugin.manifest.id.as_str()))
         .filter_map(|plugin| {
@@ -40,11 +25,93 @@ pub fn detect(plugins: &[LoadedPlugin], candidate_ids: &[String]) -> Result<Vec<
                 return None;
             }
             let fields = &plugin.manifest.config.as_ref()?.fields;
-            let values = provider_config::resolved_values(id, fields);
-            has_credentials(id, &values, &|name| env_values.get(name).cloned().flatten())
-                .then(|| plugin.manifest.id.clone())
+            Some((
+                plugin.manifest.id.clone(),
+                provider_config::resolved_values(id, fields),
+            ))
         })
-        .collect())
+        .collect();
+    let needs_env: HashSet<String> = candidate_values
+        .iter()
+        .filter(|(id, values)| needs_environment(id, values))
+        .map(|(id, _)| id.clone())
+        .collect();
+    let env_names: Vec<&str> = candidate_values
+        .iter()
+        .filter(|(id, _)| needs_env.contains(id))
+        .flat_map(|(id, _)| provider_env_names(id).iter().copied())
+        .collect();
+    let env = host_api::resolve_env_values(&env_names);
+    if !env.unresolved.is_empty() {
+        log::error!("provider startup detection could not inspect interactive shell credentials");
+    }
+    classify(candidate_values, &env, &needs_env)
+}
+
+fn classify(
+    candidate_values: Vec<(String, HashMap<String, Value>)>,
+    env: &host_api::ResolvedEnvValues,
+    needs_env: &HashSet<String>,
+) -> DetectionResult {
+    let mut result = DetectionResult {
+        detected_ids: Vec::new(),
+        retry_ids: Vec::new(),
+    };
+    for (id, values) in candidate_values {
+        if region_unresolved(&id, &values, env) {
+            result.retry_ids.push(id);
+        } else if has_credentials(&id, &values, &|name| {
+            env.values.get(name).cloned().flatten()
+        }) {
+            result.detected_ids.push(id);
+        } else if needs_env.contains(&id)
+            && provider_env_names(&id)
+                .iter()
+                .any(|name| env.unresolved.contains(*name))
+        {
+            result.retry_ids.push(id);
+        }
+    }
+    result
+}
+
+fn needs_environment(id: &str, values: &HashMap<String, Value>) -> bool {
+    !has_credentials(id, values, &|_| None)
+        || matches!(id, "moonshot")
+            && matches!(configured(values, "region").as_deref(), None | Some("auto"))
+        || matches!(id, "doubao") && configured(values, "region").is_none()
+}
+
+fn region_unresolved(
+    id: &str,
+    values: &HashMap<String, Value>,
+    env: &host_api::ResolvedEnvValues,
+) -> bool {
+    match id {
+        "moonshot" => {
+            matches!(configured(values, "region").as_deref(), None | Some("auto"))
+                && env.unresolved.contains("MOONSHOT_REGION")
+        }
+        "doubao" => {
+            configured(values, "region").is_none() && env.unresolved.contains("VOLCENGINE_REGION")
+        }
+        _ => false,
+    }
+}
+
+fn provider_env_names(id: &str) -> &'static [&'static str] {
+    match id {
+        "deepseek" => &["DEEPSEEK_API_KEY"],
+        "moonshot" => &["MOONSHOT_API_KEY", "MOONSHOT_REGION"],
+        "ollama" => &["OLLAMA_CLOUD_COOKIE"],
+        "doubao" => &[
+            "VOLCENGINE_ACCESS_KEY_ID",
+            "VOLCENGINE_SECRET_ACCESS_KEY",
+            "VOLCENGINE_REGION",
+        ],
+        "xai" => &["XAI_MANAGEMENT_API_KEY", "XAI_TEAM_ID"],
+        _ => &[],
+    }
 }
 
 fn configured(values: &HashMap<String, Value>, field: &str) -> Option<String> {
@@ -227,5 +294,94 @@ mod tests {
             &values(&[("managementKey", "management"), ("teamId", "bad/team")]),
             &env
         ));
+    }
+
+    #[test]
+    fn shell_failure_keeps_local_and_process_credentials_but_retries_unknowns() {
+        let candidates = vec![
+            ("deepseek".to_string(), values(&[("apiKey", "saved-key")])),
+            ("moonshot".to_string(), values(&[])),
+            ("xai".to_string(), values(&[])),
+        ];
+        let env = host_api::ResolvedEnvValues {
+            values: HashMap::from([
+                (
+                    "MOONSHOT_API_KEY".to_string(),
+                    Some("process-key".to_string()),
+                ),
+                (
+                    "MOONSHOT_REGION".to_string(),
+                    Some("international".to_string()),
+                ),
+            ]),
+            unresolved: HashSet::from([
+                "XAI_MANAGEMENT_API_KEY".to_string(),
+                "XAI_TEAM_ID".to_string(),
+            ]),
+        };
+        let needs_env = HashSet::from(["moonshot".to_string(), "xai".to_string()]);
+        let result = classify(candidates, &env, &needs_env);
+        assert_eq!(result.detected_ids, ["deepseek", "moonshot"]);
+        assert_eq!(result.retry_ids, ["xai"]);
+        assert_eq!(
+            serde_json::to_value(&result).expect("serialize detection result"),
+            serde_json::json!({"detectedIds": ["deepseek", "moonshot"], "retryIds": ["xai"]})
+        );
+    }
+
+    #[test]
+    fn waits_for_region_lookup_before_enabling_saved_keys() {
+        let candidates = vec![
+            (
+                "moonshot".to_string(),
+                values(&[("apiKeyIntl", "saved-key"), ("region", "auto")]),
+            ),
+            (
+                "doubao".to_string(),
+                values(&[("accessKeyId", "access"), ("secretAccessKey", "secret")]),
+            ),
+        ];
+        for (id, values) in &candidates {
+            assert!(needs_environment(id, values));
+        }
+        let env = host_api::ResolvedEnvValues {
+            values: HashMap::new(),
+            unresolved: HashSet::from([
+                "MOONSHOT_REGION".to_string(),
+                "VOLCENGINE_REGION".to_string(),
+            ]),
+        };
+        let needs_env = HashSet::from(["moonshot".to_string(), "doubao".to_string()]);
+        let result = classify(candidates, &env, &needs_env);
+        assert!(result.detected_ids.is_empty());
+        assert_eq!(result.retry_ids, ["moonshot", "doubao"]);
+    }
+
+    #[test]
+    fn region_environment_can_invalidate_saved_credentials() {
+        let candidates = vec![
+            (
+                "moonshot".to_string(),
+                values(&[("apiKeyIntl", "saved-key"), ("region", "auto")]),
+            ),
+            (
+                "doubao".to_string(),
+                values(&[("accessKeyId", "access"), ("secretAccessKey", "secret")]),
+            ),
+        ];
+        let env = host_api::ResolvedEnvValues {
+            values: HashMap::from([
+                ("MOONSHOT_REGION".to_string(), Some("china".to_string())),
+                (
+                    "VOLCENGINE_REGION".to_string(),
+                    Some("bad/region".to_string()),
+                ),
+            ]),
+            unresolved: HashSet::new(),
+        };
+        let needs_env = HashSet::from(["moonshot".to_string(), "doubao".to_string()]);
+        let result = classify(candidates, &env, &needs_env);
+        assert!(result.detected_ids.is_empty());
+        assert!(result.retry_ids.is_empty());
     }
 }
