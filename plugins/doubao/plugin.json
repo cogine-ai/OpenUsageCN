@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "doubao",
+  "name": "Doubao",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "brandColor": "#3370FF",
+  "config": {
+    "fields": [
+      { "id": "accessKeyId", "type": "secret", "label": "Volcengine Access Key ID", "help": "留空则使用 VOLCENGINE_ACCESS_KEY_ID 环境变量", "defaultSource": true },
+      { "id": "secretAccessKey", "type": "secret", "label": "Volcengine Secret Access Key", "help": "留空则使用 VOLCENGINE_SECRET_ACCESS_KEY 环境变量", "defaultSource": true },
+      { "id": "region", "type": "text", "label": "Region", "placeholder": "cn-beijing", "help": "默认为 cn-beijing；也可设置 VOLCENGINE_REGION 环境变量", "defaultSource": true }
+    ]
+  },
+  "lines": [
+    { "type": "progress", "label": "Coding Plan 5H", "scope": "overview", "primaryOrder": 1, "limitResource": { "key": "codingSession" } },
+    { "type": "progress", "label": "Coding Plan Weekly", "scope": "overview", "limitResource": { "key": "codingWeekly" } },
+    { "type": "progress", "label": "Coding Plan Monthly", "scope": "detail", "limitResource": { "key": "codingMonthly" } },
+    { "type": "progress", "label": "Agent Plan 5H", "scope": "overview", "primaryOrder": 2, "limitResource": { "key": "agentSession" } },
+    { "type": "progress", "label": "Agent Plan Weekly", "scope": "detail", "limitResource": { "key": "agentWeekly" } },
+    { "type": "progress", "label": "Agent Plan Monthly", "scope": "detail", "limitResource": { "key": "agentMonthly" } }
+  ]
+}

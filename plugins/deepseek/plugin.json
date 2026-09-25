@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "deepseek",
+  "name": "DeepSeek",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "brandColor": "#5786FE",
+  "config": {
+    "fields": [
+      {
+        "id": "apiKey",
+        "type": "secret",
+        "label": "API Key",
+        "placeholder": "sk-...",
+        "help": "留空则使用 DEEPSEEK_API_KEY 环境变量",
+        "defaultSource": true
+      }
+    ]
+  },
+  "lines": [
+    { "type": "badge", "label": "API Access", "scope": "overview" },
+    { "type": "text", "label": "CNY Balance", "scope": "overview" },
+    { "type": "text", "label": "USD Balance", "scope": "overview" },
+    { "type": "text", "label": "CNY Granted", "scope": "detail" },
+    { "type": "text", "label": "CNY Topped Up", "scope": "detail" },
+    { "type": "text", "label": "USD Granted", "scope": "detail" },
+    { "type": "text", "label": "USD Topped Up", "scope": "detail" }
+  ]
+}

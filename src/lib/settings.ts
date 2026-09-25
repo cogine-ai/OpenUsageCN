@@ -112,6 +112,7 @@ export const TIME_FORMAT_OPTIONS: { value: TimeFormatMode; label: string }[] = [
 const store = new LazyStore(SETTINGS_STORE_PATH);
 
 const DEFAULT_ENABLED_PLUGINS = new Set(["claude", "codex", "cursor"]);
+const AUTO_DETECTABLE_PLUGINS = new Set(["deepseek", "moonshot", "ollama", "doubao", "xai"]);
 
 export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
   order: [],
@@ -206,6 +207,32 @@ export function normalizePluginSettings(
     }
   }
   return { order, disabled };
+}
+
+/** Only providers absent from the saved order are eligible for one-time detection. */
+export function getNewPluginIds(
+  settings: PluginSettings,
+  plugins: PluginMeta[]
+): string[] {
+  const known = new Set(settings.order);
+  const manuallyDisabled = new Set(settings.disabled);
+  return plugins
+    .map((plugin) => plugin.id)
+    .filter((id) => AUTO_DETECTABLE_PLUGINS.has(id) && !known.has(id) && !manuallyDisabled.has(id));
+}
+
+export function enableDetectedPlugins(
+  normalized: PluginSettings,
+  candidateIds: string[],
+  detectedIds: string[]
+): PluginSettings {
+  const eligible = new Set(candidateIds);
+  const detected = new Set(detectedIds.filter((id) => eligible.has(id)));
+  if (detected.size === 0) return normalized;
+  return {
+    ...normalized,
+    disabled: normalized.disabled.filter((id) => !detected.has(id)),
+  };
 }
 
 export function arePluginSettingsEqual(

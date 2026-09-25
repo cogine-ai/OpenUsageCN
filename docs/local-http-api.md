@@ -53,7 +53,7 @@ Example:
 
 `providers.cached` and `cache.ready` only count enabled providers that would appear in `GET /v1/usage`. `cache.ready` is `false` on a clean launch until at least one enabled provider has refreshed successfully. That is not a service failure.
 
-The Windows MVP reports five known providers: Codex, BigModel CN, OpenAI API, OpenRouter, and Z.ai.
+The Windows MVP reports ten known providers: Codex, BigModel CN, OpenAI API, OpenRouter, Z.ai, DeepSeek, Moonshot, Ollama Cloud, Doubao, and xAI.
 
 ### `GET /v1/usage`
 
@@ -182,7 +182,7 @@ If a refresh fails for the same selected account, the last successful provider s
 
 These identifiers are the stable keys currently exported by bundled plugins. New keys may be added without changing the schema.
 
-On Windows, only the five Windows MVP providers are present; the rest of this table describes the full macOS catalog.
+On Windows, only the ten Windows MVP providers are present; the rest of this table describes the full macOS catalog.
 
 | Provider | Resource keys |
 |---|---|
@@ -195,7 +195,9 @@ On Windows, only the five Windows MVP providers are present; the rest of this ta
 | `codex` | `session`, `weekly`, `spark`, `sparkWeekly`, `codeReview` |
 | `copilot` | `premiumCredits`, `chat`, `completions` |
 | `cursor` | `credits`, `totalUsage`, `requests`, `autoUsage`, `apiUsage`, `grokBotUsage`, `onDemand` |
+| `deepseek` | None; balance is text in `/v1/usage` |
 | `devin` | `weekly`, `daily` |
+| `doubao` | `codingSession`, `codingWeekly`, `codingMonthly`, `agentSession`, `agentWeekly`, `agentMonthly` |
 | `factory` | `standard`, `premium` |
 | `gemini` | `pro`, `flash`, `flashLite` |
 | `grok` | `creditsUsed` |
@@ -203,12 +205,15 @@ On Windows, only the five Windows MVP providers are present; the rest of this ta
 | `kimi` | `session`, `weekly` |
 | `kiro` | `credits`, `bonusCredits` |
 | `minimax` | `session` |
+| `moonshot` | None; balance is text in `/v1/usage` |
+| `ollama` | `monthly`, `session`, `weekly` when shown on the account settings page |
 | `openai-api` | `credits` |
 | `opencode-go` | `session`, `weekly`, `monthly` |
 | `opencode` | `session`, `weekly` |
 | `openrouter` | `credits`, `keyLimit` |
 | `perplexity` | `apiCredits` |
 | `synthetic` | `fiveHour`, `mana`, `subscription`, `freeToolCalls`, `search` |
+| `xai` | None; billing balance and spend are text in `/v1/usage` |
 | `zai` | `session`, `weekly`, `webSearches` |
 
 ## Filtering and Caching Behavior

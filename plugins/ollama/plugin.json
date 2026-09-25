@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "id": "ollama",
+  "name": "Ollama Cloud",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "brandColor": "#000000",
+  "links": [
+    { "label": "Usage", "url": "https://ollama.com/settings" }
+  ],
+  "config": {
+    "fields": [
+      {
+        "id": "cookieHeader",
+        "type": "secret",
+        "label": "Cookie Header",
+        "placeholder": "__Secure-session=...",
+        "help": "Paste the Cookie header from ollama.com/settings. Leave blank to use OLLAMA_CLOUD_COOKIE.",
+        "defaultSource": true
+      }
+    ]
+  },
+  "lines": [
+    { "type": "progress", "label": "Monthly", "scope": "overview", "primaryOrder": 1, "limitResource": { "key": "monthly" } },
+    { "type": "progress", "label": "Session", "scope": "overview", "primaryOrder": 2, "limitResource": { "key": "session" } },
+    { "type": "progress", "label": "Weekly", "scope": "overview", "period": "weekly", "limitResource": { "key": "weekly" } }
+  ]
+}

@@ -23,7 +23,9 @@ import {
   DEFAULT_START_ON_LOGIN,
   DEFAULT_THEME_MODE,
   DEFAULT_TIME_FORMAT_MODE,
+  enableDetectedPlugins,
   getEnabledPluginIds,
+  getNewPluginIds,
   loadAutoUpdateInterval,
   loadDisplayMode,
   loadGlobalShortcut,
@@ -119,9 +121,24 @@ export function useSettingsBootstrap({
 
         const storedSettings = await loadPluginSettings()
         const migratedSettings = migrateWindsurfToDevin(storedSettings)
+        const candidateIds = getNewPluginIds(migratedSettings, availablePlugins)
         const normalized = normalizePluginSettings(migratedSettings, availablePlugins)
-        if (!arePluginSettingsEqual(storedSettings, normalized)) {
-          await savePluginSettings(normalized)
+        let detectedIds: string[] = []
+        let detectionFailed = false
+        if (candidateIds.length > 0) {
+          try {
+            detectedIds = await invoke<string[]>("detect_local_provider_credentials", {
+              pluginIds: candidateIds,
+            })
+          } catch (error) {
+            console.error("Failed to detect local provider credentials:", error)
+            detectionFailed = true
+          }
+        }
+        const pluginSettings = enableDetectedPlugins(normalized, candidateIds, detectedIds)
+        // A failed detection must leave these IDs unseen so the next launch can retry.
+        if (!detectionFailed && !arePluginSettingsEqual(storedSettings, pluginSettings)) {
+          await savePluginSettings(pluginSettings)
         }
 
         let storedInterval = DEFAULT_AUTO_UPDATE_INTERVAL
@@ -160,13 +177,13 @@ export function useSettingsBootstrap({
         }
 
         if (isMounted) {
-          setPluginSettings(normalized)
+          setPluginSettings(pluginSettings)
           setAutoUpdateInterval(storedInterval)
           setThemeMode(storedThemeMode)
           setDisplayMode(storedDisplayMode)
           setResetTimerDisplayMode(storedResetTimerDisplayMode)
           setTimeFormatMode(storedTimeFormatMode)
-          const enabledIds = getEnabledPluginIds(normalized)
+          const enabledIds = getEnabledPluginIds(pluginSettings)
           setLoadingForPlugins(enabledIds)
           try {
             await startBatch(enabledIds)

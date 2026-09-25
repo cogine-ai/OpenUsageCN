@@ -24,6 +24,7 @@ mod plugin_engine;
 mod probe_batches;
 mod provider_accounts;
 mod provider_config;
+mod provider_detection;
 mod provider_status;
 mod safe_file;
 mod tray;
@@ -825,6 +826,18 @@ fn get_provider_config(
 }
 
 #[tauri::command]
+fn detect_local_provider_credentials(
+    plugin_ids: Vec<String>,
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Vec<String> {
+    let plugins = {
+        let locked = state.lock().expect("plugin state poisoned");
+        locked.plugins.clone()
+    };
+    provider_detection::detect(&plugins, &plugin_ids)
+}
+
+#[tauri::command]
 fn save_provider_config(
     plugin_id: String,
     values: HashMap<String, serde_json::Value>,
@@ -1306,6 +1319,7 @@ pub fn run() {
             start_probe_batch,
             list_plugins,
             get_provider_config,
+            detect_local_provider_credentials,
             save_provider_config,
             delete_provider_config_field,
             get_log_path,

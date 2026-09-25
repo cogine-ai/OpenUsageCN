@@ -38,9 +38,11 @@ On Windows, `appDataDir` is under `%LOCALAPPDATA%\ai.cogine.openusagecn`; non-se
 
 ### Windows MVP Limits
 
-The Windows MVP runs only `codex`, `bigmodel-cn`, `openai-api`, `openrouter`, and `zai`. Codex is enabled by default. Windows launch plugins may use filesystem, environment, provider config, HTTP, crypto, and line-building APIs, but must not depend on the macOS Keychain or `ccusage`. Use `ctx.app.platform === "windows"` when a plugin needs a platform-specific credential path or optional metric.
+The Windows MVP runs `codex`, `bigmodel-cn`, `openai-api`, `openrouter`, `zai`, `deepseek`, `moonshot`, `ollama`, `doubao`, and `xai`. Codex is enabled by default. Windows launch plugins may use filesystem, environment, provider config, HTTP, crypto, and line-building APIs, but must not depend on the macOS Keychain or `ccusage`. Use `ctx.app.platform === "windows"` when a plugin needs a platform-specific credential path or optional metric.
 
 ## Account Capability Declarations
+
+Startup [automatic provider enablement](../provider-enablement.md) is an app-owned, local-only credential check. It is separate from `accountSupport.localDiscovery`, which discovers accounts within an already enabled provider. Currently the startup check supports DeepSeek, Moonshot, Ollama Cloud, Doubao, and xAI.
 
 Account-related features are declared through the optional `accountSupport` object in `plugin.json`, not through methods on `ctx.host`. The declaration only advertises app-owned account experiences and does not expand a plugin's access to credentials, browsers, the filesystem, or the network. See [Manifest Schema](./schema.md#account-support-optional) for the available flags and legacy behavior.
 
@@ -162,9 +164,12 @@ ctx.host.fs.writeText(statePath, JSON.stringify(state, null, 2))
 ```typescript
 host.crypto.decryptAes256Gcm(envelope: string, keyB64: string): string  // Throws on error
 host.crypto.encryptAes256Gcm(plaintext: string, keyB64: string): string // Throws on error
+host.crypto.sha256Hex(text: string): string                    // Lowercase hex digest
+host.crypto.hmacSha256Hex(key: string, message: string, keyIsHex: boolean): string // Lowercase hex digest
 ```
 
 AES-256-GCM helpers for plugins that need to read or write locally encrypted auth/config blobs.
+For signed API requests, `hmacSha256Hex` reads a UTF-8 key when `keyIsHex` is `false` and a hexadecimal key when it is `true`. Use the hexadecimal form for a key returned by a previous HMAC call.
 
 ### Envelope Format
 
