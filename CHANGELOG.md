@@ -4,6 +4,32 @@
 
 暂无。
 
+## v0.6.43
+
+### New Features
+
+- 换用 Cogine 应用、安装包、托盘、侧栏和网页图标；菜单栏在没有配额百分比但有可用余额时显示余额。 ([#238](https://github.com/cogine-ai/OpenUsageCN/pull/238)) by @lc708
+
+### Bug Fixes
+
+- OpenRouter 使用 Key Limit 计算菜单栏百分比，保留零余额显示，并加强 `/key` 响应的日志脱敏。 ([#238](https://github.com/cogine-ai/OpenUsageCN/pull/238)) by @lc708
+
+### Chores
+
+- 更新相关文档、改动前后截图和回归测试。 ([#238](https://github.com/cogine-ai/OpenUsageCN/pull/238)) by @lc708
+
+---
+
+### Changelog
+
+**Full Changelog**: [v0.6.42...v0.6.43](https://github.com/cogine-ai/OpenUsageCN/compare/v0.6.42...v0.6.43)
+
+- [dacd07a](https://github.com/cogine-ai/OpenUsageCN/commit/dacd07ab1d510aa3be9b9c21e63a8695c3776bb6) Add prepared Cogine icon assets for OpenUsageCN by @lc708
+- [8a434cb](https://github.com/cogine-ai/OpenUsageCN/commit/8a434cb5fcd8b4387c70dc820000e1d5927d9b18) feat: apply Cogine branding and show balances in menu bar by @lc708
+- [473b48c](https://github.com/cogine-ai/OpenUsageCN/commit/473b48c0d60228c07f4e96d8c6ba953662662f97) test: document visual change and redact OpenRouter key metadata by @lc708
+- [e674d6d](https://github.com/cogine-ai/OpenUsageCN/commit/e674d6df16ace5e43f1a17e08b5a486f20ef733d) fix: fail closed on unusual OpenRouter key responses by @lc708
+- [38863f5](https://github.com/cogine-ai/OpenUsageCN/commit/38863f52ad0558b9426587e8c17248231dc2c896) Merge pull request #238 by @lc708
+
 ## v0.6.42
 
 ### New Features
