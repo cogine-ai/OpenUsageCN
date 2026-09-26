@@ -820,6 +820,16 @@ fn redact_http_response_body(url: &str, body: &str) -> String {
     redact_body(&body)
 }
 
+fn redact_plugin_http_response_body(plugin_id: &str, url: &str, body: &str) -> String {
+    let path = url.split('?').next().unwrap_or(url);
+    let body = if plugin_id == "openrouter" && path.ends_with("/key") {
+        provider_redaction::openrouter_key_body(body)
+    } else {
+        body.to_string()
+    };
+    redact_http_response_body(url, &body)
+}
+
 fn redact_codex_reset_credit_inventory_sensitive_fields(body: &str) -> String {
     let Ok(mut payload) = serde_json::from_str::<serde_json::Value>(body) else {
         return body.to_string();
@@ -1470,7 +1480,7 @@ fn inject_http<'js>(
                     .map_err(|e| Exception::throw_message(&ctx_inner, &e.to_string()))?;
 
                 // Redact BEFORE truncation to ensure sensitive values are caught while intact
-                let redacted_body = redact_http_response_body(&req.url, &body);
+                let redacted_body = redact_plugin_http_response_body(&pid, &req.url, &body);
                 let body_preview = if redacted_body.len() > 500 {
                     // UTF-8 safe truncation: find valid char boundary at or before 500
                     let truncated: String = redacted_body

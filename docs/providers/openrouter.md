@@ -29,7 +29,7 @@ On Windows, environment fallbacks must be present before the app starts. Set the
 | Weekly Spend  | Weekly key usage, when returned         |
 | Monthly Spend | Monthly key usage, when returned        |
 
-On macOS, the menu bar shows the key-limit percentage when the key has a valid limit. Without one, it shows the account Balance, including `$0.00`. Lifetime Credits do not become a menu-bar percentage. See [Menu Bar Display](../menu-bar.md).
+On macOS, the menu bar shows the key-limit percentage when the key has a valid limit. Without one, it shows the account Balance when `/credits` is available, including `$0.00`; otherwise it shows only the icon. Lifetime Credits do not become a menu-bar percentage. See [Menu Bar Display](../menu-bar.md).
 
 Key Limit uses the key's remaining quota, including any BYOK spending counted by
 OpenRouter. Lifetime spending is not compared with a daily, weekly, or monthly
@@ -51,9 +51,10 @@ GET https://openrouter.ai/api/v1/key
 Authorization: Bearer <api_key>
 ```
 
-If one endpoint is unavailable but the other succeeds, OpenUsageCN still shows the available usage data.
+The [credits endpoint](https://openrouter.ai/docs/api/api-reference/credits/get-remaining-credits) requires a management key. If one endpoint is unavailable but the other succeeds, OpenUsageCN still shows the available usage data.
 
-Diagnostic logs redact the key creator's user ID returned by the
+Diagnostic logs redact the key creator's user ID, key label, organization ID,
+and workspace ID returned by the
 [current-key endpoint](https://openrouter.ai/docs/api/api-reference/api-keys/get-current-api-key).
 Quota counters and reset policies remain available for troubleshooting.
 

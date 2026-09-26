@@ -46,9 +46,28 @@ pub(super) fn amp_body(body: &str) -> String {
     payload.to_string()
 }
 
+pub(super) fn openrouter_key_body(body: &str) -> String {
+    let Ok(mut payload) = serde_json::from_str::<serde_json::Value>(body) else {
+        return "[REDACTED OPENROUTER KEY RESPONSE]".to_string();
+    };
+    if let Some(data) = payload
+        .get_mut("data")
+        .and_then(serde_json::Value::as_object_mut)
+    {
+        for key in ["label", "organization_id", "workspace_id"] {
+            if let Some(value) = data.get_mut(key) {
+                if !value.is_null() {
+                    *value = serde_json::Value::String("[REDACTED]".to_string());
+                }
+            }
+        }
+    }
+    payload.to_string()
+}
+
 #[cfg(test)]
 mod tests {
-    use super::super::{redact_body, redact_http_response_body};
+    use super::super::{redact_body, redact_http_response_body, redact_plugin_http_response_body};
 
     #[test]
     fn cursor_grok_usage_redacts_identity_and_preserves_quota_metadata() {
@@ -143,24 +162,68 @@ mod tests {
     }
 
     #[test]
-    fn openrouter_key_creator_is_redacted_without_losing_quota_diagnostics() {
-        let body = r#"{"data":{"creator_user_id":"creator-private-1234567890","creatorUserId":"creator-private-0987654321","limit":100,"limit_remaining":74.5,"usage":25.5,"byok_usage":3,"include_byok_in_limit":true,"limit_reset":"monthly"}}"#;
-        let redacted = redact_http_response_body("https://openrouter.ai/api/v1/key", body);
-        for identity in ["creator-private-1234567890", "creator-private-0987654321"] {
-            assert!(!redacted.contains(identity), "identity leaked: {redacted}");
-        }
-        let original: serde_json::Value = serde_json::from_str(body).unwrap();
-        let payload: serde_json::Value = serde_json::from_str(&redacted).unwrap();
-        for field in [
-            "limit",
-            "limit_remaining",
-            "usage",
-            "byok_usage",
-            "include_byok_in_limit",
-            "limit_reset",
+    fn openrouter_key_identity_is_redacted_without_losing_quota_diagnostics() {
+        let body = serde_json::json!({"data": {
+            "creator_user_id": "creator-private-1234567890",
+            "creatorUserId": "creator-private-0987654321",
+            "label": "sk-or-v1-au7...890",
+            "organization_id": "org-private-1234567890",
+            "workspace_id": "0df9e665-d932-5740-b2c7-b52af166bc11",
+            "limit": 100,
+            "limit_remaining": 74.5,
+            "usage": 25.5,
+            "byok_usage": 3,
+            "include_byok_in_limit": true,
+            "limit_reset": "monthly"
+        }});
+        for url in [
+            "https://openrouter.ai/api/v1/key",
+            "https://gateway.example/openrouter/v1/key",
         ] {
-            assert_eq!(payload["data"][field], original["data"][field]);
+            let redacted = redact_plugin_http_response_body("openrouter", url, &body.to_string());
+            for identity in [
+                "creator-private-1234567890",
+                "creator-private-0987654321",
+                "sk-or-v1-au7...890",
+                "org-private-1234567890",
+                "0df9e665-d932-5740-b2c7-b52af166bc11",
+            ] {
+                assert!(!redacted.contains(identity), "identity leaked: {redacted}");
+            }
+            let payload: serde_json::Value = serde_json::from_str(&redacted).unwrap();
+            for field in ["label", "organization_id", "workspace_id"] {
+                assert_eq!(payload["data"][field], "[REDACTED]");
+            }
+            for field in [
+                "limit",
+                "limit_remaining",
+                "usage",
+                "byok_usage",
+                "include_byok_in_limit",
+                "limit_reset",
+            ] {
+                assert_eq!(payload["data"][field], body["data"][field]);
+            }
         }
+    }
+
+    #[test]
+    fn openrouter_key_redaction_is_scoped_and_malformed_bodies_fail_closed() {
+        let body = r#"{"data":{"label":"Personal key","organization_id":"private-org","workspace_id":"private-workspace"}}"#;
+        for (plugin_id, url) in [
+            ("other", "https://openrouter.ai/api/v1/key"),
+            ("openrouter", "https://openrouter.ai/api/v1/credits"),
+        ] {
+            assert_eq!(redact_plugin_http_response_body(plugin_id, url, body), body);
+        }
+        assert_eq!(
+            redact_plugin_http_response_body(
+                "openrouter",
+                "https://openrouter.ai/api/v1/key",
+                r#"{"data":{"label":"private-key""#,
+            ),
+            "[REDACTED OPENROUTER KEY RESPONSE]"
+        );
     }
 
     #[test]
