@@ -4,7 +4,6 @@ use serde::Serialize;
 #[serde(rename_all = "camelCase")]
 pub struct PlatformCapabilities {
     pub platform: &'static str,
-    pub local_http_api: bool,
     pub autostart: bool,
     pub cli: bool,
     pub pace_notifications: bool,
@@ -17,7 +16,6 @@ fn capabilities_for_platform(platform: &'static str) -> PlatformCapabilities {
     let macos = platform == "macos";
     PlatformCapabilities {
         platform,
-        local_http_api: true,
         autostart: true,
         cli: macos,
         pace_notifications: macos,
@@ -39,7 +37,6 @@ mod tests {
     #[test]
     fn windows_keeps_api_and_autostart_only() {
         let capabilities = capabilities_for_platform("windows");
-        assert!(capabilities.local_http_api);
         assert!(capabilities.autostart);
         assert!(!capabilities.cli);
         assert!(!capabilities.pace_notifications);
