@@ -6,7 +6,8 @@ import type { DisplayMode, MenubarIconStyle, MenubarMetric, PluginSettings } fro
 import { getEnabledPluginIds } from "@/lib/settings"
 import { getTrayIconSizePx, renderTrayBarsIcon } from "@/lib/tray-bars-icon"
 import { getTrayPrimaryBars, type TrayPrimaryBar } from "@/lib/tray-primary-progress"
-import { formatTrayPercentText, formatTrayTooltip } from "@/lib/tray-tooltip"
+import { getTrayProviderText } from "@/lib/tray-provider-value"
+import { formatTrayTooltip } from "@/lib/tray-tooltip"
 import type { PluginState } from "@/hooks/app/types"
 
 type TrayUpdateReason = "probe" | "settings" | "init"
@@ -27,18 +28,18 @@ export type TraySettingsPreview = {
   bars: TrayPrimaryBar[]
   providerBars: TrayPrimaryBar[]
   providerIconUrl?: string
-  providerPercentText: string
+  providerText: string
 }
 
 const EMPTY_TRAY_SETTINGS_PREVIEW: TraySettingsPreview = {
   bars: [],
   providerBars: [],
-  providerPercentText: "--%",
+  providerText: "",
 }
 
 function isSameTraySettingsPreview(a: TraySettingsPreview, b: TraySettingsPreview): boolean {
   if (a.providerIconUrl !== b.providerIconUrl) return false
-  if (a.providerPercentText !== b.providerPercentText) return false
+  if (a.providerText !== b.providerText) return false
   if (a.bars.length !== b.bars.length) return false
   if (a.providerBars.length !== b.providerBars.length) return false
   for (let i = 0; i < a.bars.length; i += 1) {
@@ -64,7 +65,7 @@ export function useTrayIcon({
   activeView,
 }: UseTrayIconArgs) {
   const trayRef = useRef<TrayIcon | null>(null)
-  const trayGaugeIconPathRef = useRef<string | null>(null)
+  const trayAppIconPathRef = useRef<string | null>(null)
   const trayUpdateTimerRef = useRef<number | null>(null)
   const trayUpdatePendingRef = useRef(false)
   const trayUpdateQueuedRef = useRef(false)
@@ -161,17 +162,17 @@ export function useTrayIcon({
         return Promise.resolve()
       }
 
-      const restoreGaugeIcon = () => {
-        const gaugePath = trayGaugeIconPathRef.current
-        if (gaugePath) {
+      const restoreAppIcon = () => {
+        const appIconPath = trayAppIconPathRef.current
+        if (appIconPath) {
           Promise.all([
-            tray.setIcon(gaugePath),
+            tray.setIcon(appIconPath),
             tray.setIconAsTemplate(true),
             setTrayTitle(""),
             setTrayTooltip("OpenUsageCN"),
           ])
             .catch((e) => {
-              console.error("Failed to restore tray gauge icon:", e)
+              console.error("Failed to restore tray app icon:", e)
             })
             .finally(() => {
               finalizeUpdate()
@@ -184,14 +185,14 @@ export function useTrayIcon({
       const currentSettings = pluginSettingsRef.current
       if (!currentSettings) {
         setTraySettingsPreview(EMPTY_TRAY_SETTINGS_PREVIEW)
-        restoreGaugeIcon()
+        restoreAppIcon()
         return
       }
 
       const enabledPluginIds = getEnabledPluginIds(currentSettings)
       if (enabledPluginIds.length === 0) {
         setTraySettingsPreview(EMPTY_TRAY_SETTINGS_PREVIEW)
-        restoreGaugeIcon()
+        restoreAppIcon()
         return
       }
 
@@ -238,13 +239,19 @@ export function useTrayIcon({
       const providerIconUrl = trayProviderId
         ? pluginsMetaRef.current.find((plugin) => plugin.id === trayProviderId)?.iconUrl
         : undefined
-      const providerPercentText = formatTrayPercentText(providerBars[0]?.fraction)
+      const providerText = trayProviderId
+        ? getTrayProviderText(
+            trayProviderId,
+            providerBars[0]?.fraction,
+            pluginStatesRef.current[trayProviderId]?.data ?? null,
+          )
+        : ""
 
       const nextPreview: TraySettingsPreview = {
         bars: barsForPreview,
         providerBars,
         providerIconUrl,
-        providerPercentText,
+        providerText,
       }
       setTraySettingsPreview((prev) =>
         isSameTraySettingsPreview(prev, nextPreview) ? prev : nextPreview
@@ -258,7 +265,11 @@ export function useTrayIcon({
         displayMode: displayModeRef.current,
         preferWeekly,
       })
-      const tooltip = formatTrayTooltip(tooltipBars, pluginsMetaRef.current, preferWeekly)
+      let tooltip = formatTrayTooltip(tooltipBars, pluginsMetaRef.current, preferWeekly)
+      if (trayProviderId && providerText && providerBars[0]?.fraction === undefined) {
+        const providerName = pluginsMetaRef.current.find((plugin) => plugin.id === trayProviderId)?.name
+        if (providerName) tooltip += `\n${providerName}: ${providerText}`
+      }
       const updateTooltip = () => setTrayTooltip(tooltip)
 
       if (style === "bars") {
@@ -283,7 +294,7 @@ export function useTrayIcon({
       }
 
       if (!trayProviderId) {
-        restoreGaugeIcon()
+        restoreAppIcon()
         return
       }
       lastTrayProviderIdRef.current = trayProviderId
@@ -314,13 +325,13 @@ export function useTrayIcon({
         bars: providerBars,
         sizePx,
         style: "provider",
-        percentText: nativeTrayTitle ? undefined : providerPercentText,
+        percentText: nativeTrayTitle ? undefined : providerText,
         providerIconUrl,
       })
         .then(async (img) => {
           await tray.setIcon(img)
           await tray.setIconAsTemplate(true)
-          await setTrayTitle(providerPercentText)
+          await setTrayTitle(providerText)
           await updateTooltip()
         })
         .catch((e) => {
@@ -346,9 +357,9 @@ export function useTrayIcon({
         trayInitializedRef.current = true
 
         try {
-          trayGaugeIconPathRef.current = await resolveResource("icons/tray-icon.png")
+          trayAppIconPathRef.current = await resolveResource("icons/tray-icon.png")
         } catch (e) {
-          console.error("Failed to resolve tray gauge icon resource:", e)
+          console.error("Failed to resolve tray app icon resource:", e)
         }
 
         if (cancelled) return

@@ -65,7 +65,7 @@ macOS 发布还需要：
 6. 用 Claude OAuth 账号和匹配的浏览器 profile 验证 Team 席位；不匹配或无法验证时必须保持通用 `Team`。
 7. 运行 `bun run build:release` 或 `bun run build:release -- --skip-stapling`。
 8. 运行 `bun run verify:updater-signature`，确认 updater 包能被 `src-tauri/tauri.conf.json` 里的公钥验签。
-9. 打包运行应用后，替换 `README.md` 使用的 `screenshot.png`。
+9. 打包运行应用后，拍摄带新图标的真实界面截图，用它替换 `README.md` 当前的图标预览；不要复用旧 `screenshot.png`。
 
 ### Cookie Helper 许可证门槛
 

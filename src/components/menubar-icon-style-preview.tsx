@@ -77,9 +77,11 @@ export function MenubarIconStylePreview({
           isActive={isActive}
           sizePx={TRAY_PREVIEW_SIZE_PX}
         />
-        <span className={cn("text-[12px] font-semibold tabular-nums leading-none", textClass)}>
-          {traySettingsPreview.providerPercentText}
-        </span>
+        {traySettingsPreview.providerText ? (
+          <span className={cn("text-[12px] font-semibold tabular-nums leading-none", textClass)}>
+            {traySettingsPreview.providerText}
+          </span>
+        ) : null}
       </div>
     )
   }

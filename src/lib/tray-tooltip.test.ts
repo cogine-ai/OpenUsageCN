@@ -22,8 +22,8 @@ describe("tray-tooltip", () => {
     })
 
     it("should handle undefined and NaN", () => {
-      expect(formatTrayPercentText(undefined)).toBe("--%")
-      expect(formatTrayPercentText(NaN)).toBe("--%")
+      expect(formatTrayPercentText(undefined)).toBe("")
+      expect(formatTrayPercentText(NaN)).toBe("")
     })
   })
 
@@ -55,12 +55,12 @@ describe("tray-tooltip", () => {
       expect(tooltip).toBe("OpenUsageCN\nPlugin 1: 45%")
     })
 
-    it("should show --% for missing fractions", () => {
+    it("should omit missing fractions", () => {
       const bars: TrayPrimaryBar[] = [
         { id: "p1", fraction: undefined },
       ]
       const tooltip = formatTrayTooltip(bars, mockMeta)
-      expect(tooltip).toBe("OpenUsageCN\nPlugin 1: --%")
+      expect(tooltip).toBe("OpenUsageCN")
     })
 
     it("omits tags in weekly mode when every line is weekly", () => {

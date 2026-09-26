@@ -2,7 +2,9 @@
 
 在 macOS 菜单栏或 Windows 系统托盘查看 AI 编程工具的用量和额度。
 
-![OpenUsageCN Screenshot](screenshot.png)
+![Cogine 图标在应用、macOS 菜单栏和 Windows 系统托盘中的预览](design/brand/cogine-openusage/preview.png)
+
+图标预览；应用界面截图将在新版本打包运行后更新。
 
 ## 下载
 
@@ -22,6 +24,7 @@ Windows 将 API Key、代理配置、插件数据和缓存放在 `%LOCALAPPDATA%
 OpenUsageCN 常驻菜单栏或系统托盘，用一个轻量面板展示各类 AI 编程工具的订阅、额度和使用进度。你不需要反复打开各个服务的后台，就能快速看到当前用量。
 
 - **集中查看。** 把多个 AI 工具的用量放在同一个托盘面板里。
+- **[菜单栏数值](docs/menu-bar.md)。** macOS 有配额时显示百分比；只有余额时显示金额，无可用数值时只显示图标。
 - **自动刷新。** 按你设置的间隔更新；已知额度重置后，会优先刷新对应服务商。
 - **故障恢复。** 登录、权限、网络和限流问题提供操作建议及重试入口；更新失败时保留上次成功的数据。支持的服务商还会显示状态页提示。
 - **[用量历史](docs/usage-history.md)。** Cursor 显示最近成功读取的用量并导出 CSV；Codex 和 Claude 的本地历史在详情页按需加载，实时额度不等待日志统计。

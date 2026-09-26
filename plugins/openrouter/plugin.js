@@ -90,13 +90,15 @@
   function pushCreditsLine(ctx, lines, credits) {
     const total = readNumber(credits && credits.total_credits)
     const usage = readNumber(credits && credits.total_usage)
-    if (total !== null && total > 0 && usage !== null) {
-      lines.push(ctx.line.progress({
-        label: "Credits",
-        used: usage,
-        limit: total,
-        format: { kind: "dollars" },
-      }))
+    if (total !== null && total >= 0 && usage !== null) {
+      if (total > 0) {
+        lines.push(ctx.line.progress({
+          label: "Credits",
+          used: usage,
+          limit: total,
+          format: { kind: "dollars" },
+        }))
+      }
       lines.push(ctx.line.text({ label: "Balance", value: money(Math.max(0, total - usage)) }))
     }
   }
