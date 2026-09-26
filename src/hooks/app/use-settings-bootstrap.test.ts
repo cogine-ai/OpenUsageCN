@@ -104,7 +104,6 @@ import { useSettingsBootstrap } from "@/hooks/app/use-settings-bootstrap"
 
 const macosCapabilities = {
   platform: "macos",
-  localHttpApi: true,
   autostart: true,
   cli: true,
   paceNotifications: true,
@@ -115,7 +114,6 @@ const macosCapabilities = {
 
 const windowsCapabilities = {
   platform: "windows",
-  localHttpApi: true,
   autostart: true,
   cli: false,
   paceNotifications: false,
