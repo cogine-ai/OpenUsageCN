@@ -5,7 +5,7 @@ import type { TrayPrimaryBar } from "@/lib/tray-primary-progress"
  * Formats a fraction (0.0 - 1.0) into a percentage string (0% - 100%).
  */
 export function formatTrayPercentText(fraction: number | undefined): string {
-  if (typeof fraction !== "number" || !Number.isFinite(fraction)) return "--%"
+  if (typeof fraction !== "number" || !Number.isFinite(fraction)) return ""
   const clampedFraction = Math.max(0, Math.min(1, fraction))
   return `${Math.round(clampedFraction * 100)}%`
 }
@@ -26,7 +26,7 @@ export function formatTrayTooltip(
   const lines = ["OpenUsageCN"]
   if (bars.length === 0) return lines[0]!
 
-  const resolved = bars.filter((bar) => bar.label !== undefined)
+  const resolved = bars.filter((bar) => bar.label !== undefined && formatTrayPercentText(bar.fraction))
   const hasFallback = resolved.some((bar) => !bar.weekly)
   const showTags = weeklyMode && resolved.length > 0 && hasFallback
 
@@ -35,6 +35,7 @@ export function formatTrayTooltip(
     const meta = metaById.get(bar.id)
     if (!meta) continue
     const percent = formatTrayPercentText(bar.fraction)
+    if (!percent) continue
     if (showTags && bar.label) {
       lines.push(`${meta.name}: ${percent} · ${bar.label}`)
     } else {

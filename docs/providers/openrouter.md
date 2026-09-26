@@ -29,6 +29,8 @@ On Windows, environment fallbacks must be present before the app starts. Set the
 | Weekly Spend  | Weekly key usage, when returned         |
 | Monthly Spend | Monthly key usage, when returned        |
 
+On macOS, the menu bar shows the key-limit percentage when the key has a valid limit. Without one, it shows the account Balance, including `$0.00`. Lifetime Credits do not become a menu-bar percentage. See [Menu Bar Display](../menu-bar.md).
+
 Key Limit uses the key's remaining quota, including any BYOK spending counted by
 OpenRouter. Lifetime spending is not compared with a daily, weekly, or monthly
 limit. A key with a daily limit of $10 and $8 remaining therefore shows $2 used,

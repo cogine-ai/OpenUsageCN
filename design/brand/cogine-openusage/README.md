@@ -1,6 +1,6 @@
-# Cogine 图标待替换素材
+# Cogine 图标素材
 
-这套素材尚未启用。`ready/` 内的路径对应 OpenUsageCN 现有图标位置，便于下一次替换时逐项核对。
+这套素材已复制到 OpenUsageCN 的正式图标路径。`ready/` 保留对应文件，方便核对来源和尺寸。
 
 ## 原始素材
 
@@ -10,11 +10,11 @@
 
 原始 SVG 内嵌位图，不是真正的矢量路径；透明标志本身是 PNG。Tauri 生成桌面图标时不支持 SVG 中的深浅色 `@media` 规则，因此桌面输出固定为白底黑标志；浏览器 favicon 保留原有深浅色规则。
 
-## 待启用文件
+## 已启用文件
 
 | 位置 | 用途 |
 | --- | --- |
-| `ready/src-tauri/icons/` | 与现有桌面图标目录逐一同名的 PNG、ICNS、ICO 文件，包含 Windows SquareLogo 系列。 |
+| `ready/src-tauri/icons/` | 与当前桌面构建所用图标逐一同名的 PNG、ICNS、ICO 文件，包含 Windows SquareLogo 系列。 |
 | `ready/src-tauri/icons/tray-icon.png` | 44 × 44 透明底黑色标志，供 macOS 菜单栏作为模板图标使用。 |
 | `ready/src-tauri/icons/tray-icon-windows.png` | 32 × 32 白色圆底黑色标志，供 Windows 系统托盘使用。 |
 | `ready/public/favicon.svg` | 浏览器 favicon。 |
@@ -23,8 +23,10 @@
 
 `preview.png` 是素材在浅色、深色背景上的模拟展示，不是应用运行截图。
 
-## 启用时核对
+`src-tauri/icons/Exported/`、`Icon.icon/`、`android/` 和 `ios/` 是旧素材或移动端素材，当前桌面构建没有引用它们；本次没有改动。
 
-1. 对照 `ready/` 将文件放到同名的正式路径，并让导航栏图标使用新蒙版。
-2. 更新 `README.md` 中展示旧图标的应用截图。当前 `docs/` 没有说明品牌图形的页面，无需修改其中的文字。
+## 核对
+
+1. 正式路径和 `ready/` 中的图标应逐一相同，导航栏使用新蒙版。
+2. `README.md` 目前展示本目录的图标预览。旧 `screenshot.png` 保留作历史界面参考；新版本打包运行后再拍摄真实界面截图。
 3. 在 macOS 菜单栏、Windows 系统托盘、应用窗口和“关于”弹窗确认实际效果；提交视觉改动的 PR 前提供前后截图。

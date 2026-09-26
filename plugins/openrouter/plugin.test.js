@@ -31,6 +31,8 @@ describe("openrouter plugin", () => {
       "Weekly Spend",
       "Monthly Spend",
     ])
+    expect(manifest.lines.find((line) => line.label === "Key Limit").primaryOrder).toBe(1)
+    expect(manifest.lines.find((line) => line.label === "Credits").primaryOrder).toBeUndefined()
   })
 
   it("throws when no API key is configured", async () => {
@@ -153,6 +155,21 @@ describe("openrouter plugin", () => {
     const result = plugin.probe(ctx)
 
     expect(result.lines.find((line) => line.label === "Key Limit").limit).toBe(25)
+    expect(result.lines.find((line) => line.label === "Credits")).toBeUndefined()
+  })
+
+  it("shows a real zero balance without inventing a credits percentage", async () => {
+    const ctx = makeCtx()
+    setEnv(ctx, { OPENROUTER_API_KEY: "openrouter-api-key" })
+    ctx.host.http.request.mockImplementation((opts) => ({
+      status: 200,
+      bodyText: JSON.stringify({ data: opts.url.endsWith("/credits")
+        ? { total_credits: 0, total_usage: 0 }
+        : {} }),
+    }))
+
+    const result = (await loadPlugin()).probe(ctx)
+    expect(result.lines.find((line) => line.label === "Balance").value).toBe("$0.00")
     expect(result.lines.find((line) => line.label === "Credits")).toBeUndefined()
   })
 

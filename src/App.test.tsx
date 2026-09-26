@@ -619,7 +619,8 @@ describe("App", () => {
     await waitFor(() => expect(state.renderTrayBarsIconMock).toHaveBeenCalled())
     const firstCall = state.renderTrayBarsIconMock.mock.calls[0]?.[0]
     expect(firstCall.providerIconUrl).toBe("icon-a")
-    await waitFor(() => expect(state.traySetTitleMock).toHaveBeenCalledWith("--%"))
+    await waitFor(() => expect(state.traySetTitleMock).toHaveBeenCalledWith(""))
+    expect(state.traySetTitleMock).not.toHaveBeenCalledWith("--%")
   })
 
   it("bars style path passed to renderTrayBarsIcon when loadMenubarIconStyle returns bars", async () => {
@@ -714,8 +715,37 @@ describe("App", () => {
     await waitFor(() => expect(state.renderTrayBarsIconMock).toHaveBeenCalled())
 
     const firstCall = state.renderTrayBarsIconMock.mock.calls[0]?.[0]
-    expect(firstCall.percentText).toBe("--%")
+    expect(firstCall.percentText).toBe("")
     expect(state.traySetTitleMock).not.toHaveBeenCalled()
+  })
+
+  it("shows a balance-only provider amount in the macOS menu bar", async () => {
+    state.invokeMock.mockImplementation(async (cmd: string) => {
+      if (cmd === "list_plugins") {
+        return [{
+          id: "deepseek",
+          name: "DeepSeek",
+          iconUrl: "icon-deepseek",
+          primaryCandidates: [],
+          lines: [{ type: "text", label: "CNY Balance", scope: "overview" }],
+        }]
+      }
+      return null
+    })
+    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["deepseek"], disabled: [] })
+
+    render(<App />)
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+    state.probeHandlers?.onResult({
+      providerId: "deepseek",
+      displayName: "DeepSeek",
+      iconUrl: "icon-deepseek",
+      lines: [{ type: "text", label: "CNY Balance", value: "¥21.30" }],
+    })
+
+    await waitFor(() => expect(state.traySetTitleMock).toHaveBeenCalledWith("¥21.30"))
+    expect(state.traySetTitleMock).not.toHaveBeenCalledWith("--%")
+    await waitFor(() => expect(state.traySetTooltipMock).toHaveBeenCalledWith("OpenUsageCN\nDeepSeek: ¥21.30"))
   })
 
   it("uses selected provider on detail view and keeps it on home/settings", async () => {
@@ -2072,7 +2102,7 @@ describe("App", () => {
 
     await waitFor(() => expect(state.traySetIconMock).toHaveBeenCalledWith({}))
     expect(state.traySetIconAsTemplateMock).toHaveBeenCalledWith(true)
-    expect(state.traySetTitleMock).toHaveBeenCalledWith("--%")
+    expect(state.traySetTitleMock).toHaveBeenCalledWith("")
   })
 
   it("clears pending tray timer on unmount", async () => {

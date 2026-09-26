@@ -101,7 +101,7 @@ const defaultProps = {
     bars: [{ id: "a", fraction: 0.7 }],
     providerBars: [{ id: "a", fraction: 0.7 }],
     providerIconUrl: "icon-a",
-    providerPercentText: "70%",
+    providerText: "70%",
   },
   globalShortcut: null,
   onGlobalShortcutChange: vi.fn(),
