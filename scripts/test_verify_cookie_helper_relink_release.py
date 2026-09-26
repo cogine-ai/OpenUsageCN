@@ -229,6 +229,18 @@ class RelinkReleaseVerifierTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "WebKit source differs"):
             verifier.verify(self.directory, TAG, COMMIT)
 
+    def test_rejects_changed_sweet_cookie_code_with_matching_manifest_hash(self):
+        source = self.directory / "sources.tar.gz"
+        with tarfile.open(source, "r:gz") as archive:
+            entries = {member.name: archive.extractfile(member).read()
+                       for member in archive if member.isfile()}
+        entries["kit/OpenUsage/node_modules/@steipete/sweet-cookie/dist/index.js"] = b"different dependency code"
+        write_tar(source, entries)
+        self.manifest["sourceKit"]["sha256"] = sha(source.read_bytes())
+        self.save_manifest()
+        with self.assertRaisesRegex(ValueError, "sweet-cookie source differs"):
+            verifier.verify(self.directory, TAG, COMMIT)
+
     def test_rejects_an_incomplete_packaged_license_even_with_updated_archive_hash(self):
         target = "aarch64-apple-darwin"
         archive = self.directory / verifier.TARGET_ARCHIVES[target]

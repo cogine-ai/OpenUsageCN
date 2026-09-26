@@ -18,6 +18,7 @@ SOURCE_TREE_SHA256 = {
     "Bun": "d18e6c28d6212960549e69b9e0e166e7fa142118fd1dcd3f36cb379afbfed454",
     "WebKit": "d22194c34810d0f3c8cec3aeaed973e6ce7042409e55793d687bec9ef8dfaf23",
     "TinyCC": "9f05af8a32a5fc9b0674dc8edd136e7975eb36a1c8ef2fbb9d53057bce5ac2fd",
+    "OpenUsage/node_modules/@steipete/sweet-cookie": "8b6ebdb0d596332de68a232a44fef10f56ce8688a3c37d5c56af39782e74081a",
 }
 TARGET_ARCHIVES = {
     "aarch64-apple-darwin": "OpenUsageCN_aarch64.app.tar.gz",
