@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export COPYFILE_DISABLE=1
 
 if [[ $# -ne 5 ]]; then
   echo "Usage: $0 BUN_SOURCE WEBKIT_SOURCE TINYCC_SOURCE RELEASE_CHECKOUT OUTPUT_TAR_GZ" >&2
@@ -54,13 +55,32 @@ mkdir -p "$STAGING/kit/Bun/vendor" "$STAGING/kit/WebKit" \
 git -C "$BUN_SOURCE" archive --format=tar -o "$STAGING/bun.tar" HEAD
 tar -xf "$STAGING/bun.tar" -C "$STAGING/kit/Bun"
 trash "$STAGING/bun.tar"
-cp -R "$BUN_SOURCE/.git" "$STAGING/kit/Bun/"
+git -C "$STAGING/kit/Bun" init -q
+git -C "$STAGING/kit/Bun" fetch --quiet --no-tags --depth=1 \
+  "file://$BUN_SOURCE" d530ed993d62be7c7f8f01a3d52627b6845dfd93
+git -C "$STAGING/kit/Bun" update-ref refs/heads/relink FETCH_HEAD
+git -C "$STAGING/kit/Bun" symbolic-ref HEAD refs/heads/relink
+git -C "$STAGING/kit/Bun" reset --mixed -q HEAD
+trash "$STAGING/kit/Bun/.git/FETCH_HEAD" "$STAGING/kit/Bun/.git/ORIG_HEAD" \
+  "$STAGING/kit/Bun/.git/logs" \
+  "$STAGING/kit/Bun/.git/hooks" "$STAGING/kit/Bun/.git/description" \
+  "$STAGING/kit/Bun/.git/info"
 git -C "$STAGING/kit/Bun" apply "$SCRIPT_DIR/bun-use-bundled-vendor.patch"
-# This WebKit checkout uses a partial Git clone. Archiving HEAD would trigger
-# hundreds of thousands of remote blob fetches, so copy its complete checkout
-# and restore the one proof-only change from the pinned commit.
-cp -R "$WEBKIT_SOURCE/." "$STAGING/kit/WebKit/"
-trash "$STAGING/kit/WebKit/.git"
+# This sparse WebKit checkout uses a partial clone. Copy present tracked files
+# only; git archive would fetch omitted blobs and cp -R would include local caches.
+git -C "$WEBKIT_SOURCE" ls-files -z \
+  | python3 -c '
+import os
+import sys
+root = os.fsencode(sys.argv[1])
+for path in sys.stdin.buffer.read().split(b"\0"):
+    if path and os.path.lexists(os.path.join(root, path)):
+        sys.stdout.buffer.write(path + b"\0")
+' "$WEBKIT_SOURCE" > "$STAGING/webkit-files.list"
+tar -C "$WEBKIT_SOURCE" --null -T "$STAGING/webkit-files.list" \
+  -cf "$STAGING/webkit.tar"
+tar -xf "$STAGING/webkit.tar" -C "$STAGING/kit/WebKit"
+trash "$STAGING/webkit-files.list" "$STAGING/webkit.tar"
 git -C "$WEBKIT_SOURCE" show HEAD:Source/JavaScriptCore/runtime/DateConstructor.cpp \
   > "$STAGING/kit/WebKit/Source/JavaScriptCore/runtime/DateConstructor.cpp"
 

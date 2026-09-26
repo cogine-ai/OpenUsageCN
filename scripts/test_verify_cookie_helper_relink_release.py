@@ -42,7 +42,9 @@ class RelinkReleaseVerifierTest(unittest.TestCase):
         kit_entries = {
             "kit/Bun/LICENSE.md": b"Bun license",
             "kit/Bun/CMakeLists.txt": b"Bun build",
-            "kit/Bun/.git/HEAD": b"ref: refs/heads/main\n",
+            "kit/Bun/.git/HEAD": b"ref: refs/heads/relink\n",
+            "kit/Bun/.git/config": b"[core]\n",
+            "kit/Bun/.git/refs/heads/relink": (verifier.BUN_COMMIT + "\n").encode(),
             "kit/Bun/scripts/build.mjs": b"Bun build script",
             "kit/Bun/cmake/scripts/GitClone.cmake": b"use bundled vendor source",
             "kit/Bun/cmake/targets/BuildTinyCC.cmake": b"TinyCC build source",
@@ -166,6 +168,18 @@ class RelinkReleaseVerifierTest(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("Cookie helper relink materials:", result.stderr)
         self.assertNotIn("Traceback", result.stderr)
+
+    def test_rejects_local_metadata_in_source_kit(self):
+        source = self.directory / "sources.tar.gz"
+        with tarfile.open(source, "r:gz") as archive:
+            entries = {member.name: archive.extractfile(member).read()
+                       for member in archive if member.isfile()}
+        entries["kit/WebKit/Source/JavaScriptCore/inspector/scripts/codegen/__pycache__/local.pyc"] = b"cache"
+        write_tar(source, entries)
+        self.manifest["sourceKit"]["sha256"] = sha(source.read_bytes())
+        self.save_manifest()
+        with self.assertRaisesRegex(ValueError, "Source kit contains local metadata"):
+            verifier.verify(self.directory, TAG, COMMIT)
 
     def test_rejects_an_incomplete_packaged_license_even_with_updated_archive_hash(self):
         target = "aarch64-apple-darwin"

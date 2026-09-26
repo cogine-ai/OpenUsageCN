@@ -49,7 +49,14 @@ async function main() {
     : process.arch === "x64"
       ? "x86_64-apple-darwin"
       : null
-  if (process.platform !== "darwin" || targetTriple !== nativeTarget) {
+  const translation = process.platform === "darwin" && process.arch === "x64"
+    ? spawnSync("/usr/sbin/sysctl", ["-n", "sysctl.proc_translated"], { encoding: "utf8" })
+    : null
+  if (translation?.error) {
+    throw translation.error
+  }
+  if (process.platform !== "darwin" || targetTriple !== nativeTarget ||
+      translation?.stdout.trim() === "1") {
     throw new Error(`Cookie helper builds require a native ${targetTriple} macOS runner.`)
   }
   await verifyBuildInputs(repositoryRoot)

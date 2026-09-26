@@ -56,6 +56,15 @@ def archive_member(archive, suffix):
 def verify_source_kit(file):
     with tarfile.open(file, "r:gz") as archive:
         proof_patch_hash = None
+        for member in archive:
+            parts = Path(member.name).parts
+            require(not any(part == "__pycache__" or part == ".DS_Store" or
+                            part.startswith("._") for part in parts) and
+                    not member.name.endswith(".pyc"),
+                    f"Source kit contains local metadata: {member.name}")
+            require(not member.name.startswith("kit/Bun/.git/logs/") and
+                    member.name != "kit/Bun/.git/FETCH_HEAD",
+                    f"Source kit contains local Git history: {member.name}")
         release_files = {
             "README.md": "scripts/relink-kit/README.md",
             "relink.sh": "scripts/relink-kit/relink.sh",
@@ -67,6 +76,8 @@ def verify_source_kit(file):
             "Bun/LICENSE.md",
             "Bun/CMakeLists.txt",
             "Bun/.git/HEAD",
+            "Bun/.git/config",
+            "Bun/.git/refs/heads/relink",
             "Bun/scripts/build.mjs",
             "Bun/cmake/scripts/GitClone.cmake",
             "Bun/cmake/targets/BuildTinyCC.cmake",
@@ -88,6 +99,20 @@ def verify_source_kit(file):
             matches = [member for member in archive if member.isfile() and member.name == f"kit/{suffix}"]
             require(len(matches) == 1, f"Source kit is missing kit/{suffix}")
             member = matches[0]
+            if suffix == "Bun/.git/HEAD":
+                with archive.extractfile(member) as stream:
+                    require(stream.read().strip() == b"ref: refs/heads/relink",
+                            "Source kit Bun HEAD is not the pinned relink branch")
+            if suffix == "Bun/.git/config":
+                with archive.extractfile(member) as stream:
+                    config = stream.read().decode("utf-8")
+                require("[remote" not in config and "credential" not in config and
+                        "file://" not in config and "/Users/" not in config,
+                        "Source kit Bun Git config contains a local or remote credential")
+            if suffix == "Bun/.git/refs/heads/relink":
+                with archive.extractfile(member) as stream:
+                    require(stream.read().strip() == BUN_COMMIT.encode(),
+                            "Source kit Bun checkout has the wrong revision")
             if suffix.endswith("COPYING.LIB"):
                 with archive.extractfile(member) as stream:
                     require(digest(stream) == LGPL_SHA256, "Source kit LGPL copy differs from pinned WebKit")
