@@ -35,12 +35,14 @@ class RelinkReleaseVerifierTest(unittest.TestCase):
         self.directory = Path(self.temp.name)
         self.license = (ROOT / "LICENSES/JavaScriptCore-LGPL-2.0.txt").read_bytes()
         self.tinycc_license = (ROOT / "LICENSES/TinyCC-LGPL-2.1.txt").read_bytes()
-        self.proof_patch = b"modified JSC source patch"
+        self.proof_patch = (ROOT / "scripts/relink-kit/modified-jsc.patch").read_bytes()
         kit = self.directory / "sources.tar.gz"
         kit_entries = {
             "kit/Bun/LICENSE.md": b"Bun license",
             "kit/Bun/CMakeLists.txt": b"Bun build",
+            "kit/Bun/.git/HEAD": b"ref: refs/heads/main\n",
             "kit/Bun/scripts/build.mjs": b"Bun build script",
+            "kit/Bun/cmake/scripts/GitClone.cmake": b"use bundled vendor source",
             "kit/Bun/cmake/targets/BuildTinyCC.cmake": b"TinyCC build source",
             "kit/Bun/vendor/tinycc/libtcc.c": b"TinyCC vendor source",
             "kit/WebKit/mac-release.bash": b"WebKit build script",
@@ -51,10 +53,11 @@ class RelinkReleaseVerifierTest(unittest.TestCase):
             "kit/OpenUsage/node_modules/@steipete/sweet-cookie/package.json": b'{"version":"0.4.1"}',
             "kit/OpenUsage/node_modules/@steipete/sweet-cookie/dist/index.js": b"export {}",
             "kit/OpenUsage/node_modules/@steipete/sweet-cookie/LICENSE": b"MIT",
-            "kit/README.md": b"relink instructions",
-            "kit/relink.sh": b"#!/bin/sh\n",
+            "kit/README.md": (ROOT / "scripts/relink-kit/README.md").read_bytes(),
+            "kit/relink.sh": (ROOT / "scripts/relink-kit/relink.sh").read_bytes(),
             "kit/proof/modified-jsc.patch": self.proof_patch,
-            "kit/proof/probe-date.mjs": b"console.log(Date.now())\n",
+            "kit/proof/bun-use-bundled-vendor.patch": (ROOT / "scripts/relink-kit/bun-use-bundled-vendor.patch").read_bytes(),
+            "kit/proof/probe-date.mjs": (ROOT / "scripts/relink-kit/probe-date.mjs").read_bytes(),
         }
         helper_sources = [Path("package.json"), Path("bun.lock")]
         helper_sources.extend(source.relative_to(ROOT) for source in sorted((ROOT / "tools/cookie-helper").glob("*.mjs")))
@@ -127,6 +130,25 @@ class RelinkReleaseVerifierTest(unittest.TestCase):
         self.manifest["targets"].pop("x86_64-apple-darwin")
         self.save_manifest()
         with self.assertRaisesRegex(ValueError, "exactly both macOS architectures"):
+            verifier.verify(self.directory, TAG, COMMIT)
+
+    def test_rejects_a_substituted_patch_even_when_manifest_and_proofs_match(self):
+        source = self.directory / "sources.tar.gz"
+        with tarfile.open(source, "r:gz") as archive:
+            entries = {member.name: archive.extractfile(member).read()
+                       for member in archive if member.isfile()}
+        replacement = b"different JavaScriptCore test patch\n"
+        entries["kit/proof/modified-jsc.patch"] = replacement
+        write_tar(source, entries)
+        self.manifest["sourceKit"]["sha256"] = sha(source.read_bytes())
+        for entry in self.manifest["targets"].values():
+            proof = self.directory / entry["proof"]["name"]
+            record = json.loads(proof.read_text())
+            record["modifiedJscPatchSha256"] = sha(replacement)
+            proof.write_text(json.dumps(record))
+            entry["proof"]["sha256"] = sha(proof.read_bytes())
+        self.save_manifest()
+        with self.assertRaisesRegex(ValueError, "Source kit proof/modified-jsc.patch does not match this release"):
             verifier.verify(self.directory, TAG, COMMIT)
 
     def test_rejects_an_incomplete_packaged_license_even_with_updated_archive_hash(self):

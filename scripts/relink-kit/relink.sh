@@ -14,10 +14,12 @@ case "$(uname -m)" in
   arm64)
     PACKAGE_JSON_ARCH=arm64
     TARGET=aarch64-apple-darwin
+    BUN_CXX_FLAGS='-Wno-error=dangling-assignment-gsl -Wno-error=character-conversion -Wno-error=dangling-assignment -Wno-error=dangling -D_LIBCPP_VERBOSE_ABORT_NOEXCEPT=noexcept'
     ;;
   x86_64)
     PACKAGE_JSON_ARCH=x64
     TARGET=x86_64-apple-darwin
+    BUN_CXX_FLAGS='-Wno-error=dangling-assignment-gsl -Wno-error=character-conversion -Wno-error=dangling-assignment -Wno-error=dangling -D_LIBCPP_VERBOSE_ABORT_NOEXCEPT=noexcept -DHWY_DISABLED_TARGETS=472'
     ;;
   *)
     echo "Relinking requires macOS arm64 or x86_64." >&2
@@ -72,7 +74,7 @@ export CMAKE_OSX_DEPLOYMENT_TARGET=13.0
     -DENABLE_CANARY=OFF \
     -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 \
     -DREVISION=d530ed993d62be7c7f8f01a3d52627b6845dfd93 \
-    '-DCMAKE_CXX_FLAGS=-Wno-error=dangling-assignment-gsl -Wno-error=character-conversion -Wno-error=dangling-assignment -Wno-error=dangling -D_LIBCPP_VERBOSE_ABORT_NOEXCEPT=noexcept' \
+    "-DCMAKE_CXX_FLAGS=$BUN_CXX_FLAGS" \
     -DLLVM_VERSION=22.1.7 \
     "-DWEBKIT_PATH=$OUTPUT/webkit/bun-webkit" \
     -B "$OUTPUT/bun-build"

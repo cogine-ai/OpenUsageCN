@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 6 ]]; then
-  echo "Usage: $0 BUN_SOURCE WEBKIT_SOURCE TINYCC_SOURCE RELEASE_CHECKOUT OUTPUT_TAR_GZ TEST_PATCH" >&2
+if [[ $# -ne 5 ]]; then
+  echo "Usage: $0 BUN_SOURCE WEBKIT_SOURCE TINYCC_SOURCE RELEASE_CHECKOUT OUTPUT_TAR_GZ" >&2
   exit 1
 fi
 
@@ -31,7 +31,7 @@ if [[ "$(cat "$TINYCC_SOURCE/.ref")" != "29985a3b59898861442fa3b43f663fc1af2591d
   echo "TinyCC source checkout has an unexpected revision." >&2
   exit 1
 fi
-if [[ "$(shasum -a 256 "$6" | cut -d ' ' -f 1)" != \
+if [[ "$(shasum -a 256 "$SCRIPT_DIR/modified-jsc.patch" | cut -d ' ' -f 1)" != \
   "c483d8f7d0fb1eba7eb1e06833ca533e9849dcfea0eb69b1f792b4ce04c26136" ]]; then
   echo "The test patch is not the reviewed JavaScriptCore Date.now() change." >&2
   exit 1
@@ -54,6 +54,8 @@ mkdir -p "$STAGING/kit/Bun/vendor" "$STAGING/kit/WebKit" \
 git -C "$BUN_SOURCE" archive --format=tar -o "$STAGING/bun.tar" HEAD
 tar -xf "$STAGING/bun.tar" -C "$STAGING/kit/Bun"
 trash "$STAGING/bun.tar"
+cp -R "$BUN_SOURCE/.git" "$STAGING/kit/Bun/"
+git -C "$STAGING/kit/Bun" apply "$SCRIPT_DIR/bun-use-bundled-vendor.patch"
 # This WebKit checkout uses a partial Git clone. Archiving HEAD would trigger
 # hundreds of thousands of remote blob fetches, so copy its complete checkout
 # and restore the one proof-only change from the pinned commit.
@@ -63,8 +65,9 @@ git -C "$WEBKIT_SOURCE" show HEAD:Source/JavaScriptCore/runtime/DateConstructor.
   > "$STAGING/kit/WebKit/Source/JavaScriptCore/runtime/DateConstructor.cpp"
 
 # Bun tracks vendor revisions in CMake. Include the exact checked-out sources
-# used by the relink proof. Zig is a platform-specific compiler that Bun fetches
-# for the recipient's architecture when the kit is built.
+# used by the relink proof. The kit's CMake patch keeps these sources in place
+# when building, including after recipients edit them. Zig is a platform-specific
+# compiler that Bun fetches for the recipient's architecture when built.
 for vendor_dir in "$BUN_SOURCE"/vendor/*; do
   case "${vendor_dir##*/}" in
     WebKit|zig) continue ;;
@@ -84,7 +87,8 @@ cp "$SCRIPT_DIR/../../LICENSES/JavaScriptCore-LGPL-2.0.txt" \
   "$STAGING/kit/JavaScriptCore-LGPL-2.0.txt"
 cp "$SCRIPT_DIR/../../LICENSES/TinyCC-LGPL-2.1.txt" \
   "$STAGING/kit/TinyCC-LGPL-2.1.txt"
-cp "$6" "$STAGING/kit/proof/modified-jsc.patch"
+cp "$SCRIPT_DIR/modified-jsc.patch" "$STAGING/kit/proof/modified-jsc.patch"
+cp "$SCRIPT_DIR/bun-use-bundled-vendor.patch" "$STAGING/kit/proof/bun-use-bundled-vendor.patch"
 
 tar -czf "$OUTPUT_TAR_GZ" -C "$STAGING" kit
 echo "Source kit: $OUTPUT_TAR_GZ"

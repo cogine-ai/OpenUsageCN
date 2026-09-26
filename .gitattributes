@@ -1,1 +1,2 @@
-LICENSES/*.txt -whitespace
+LICENSES/*.txt -text -whitespace
+scripts/relink-kit/*.patch -whitespace

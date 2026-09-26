@@ -77,11 +77,11 @@ Cookie helper 是 Bun 1.3.6 的 standalone executable，包含静态链接的 Ja
 2. 接收者重建 helper 所需的完整对象或源代码、构建数据和工具，以及与发布二进制匹配的校验记录。
 3. 两份 LGPL 许可证副本、显著通知，以及与下载程序同处提供的完整重链接材料（WebKit LGPL v2 第 6(c) 款；TinyCC LGPL v2.1 第 6(d) 款）。三年书面提供承诺是两份许可证各自的另一种方式，不是同处下载材料的附加要求。
 
-首次建立材料时，需要分别在 Apple Silicon 和 Intel 上做真实的 LGPL 库修改、Bun 重链接、helper 生成和运行验证。用 `scripts/relink-kit/create-source-kit.sh` 打包源码；源码包采用 `kit/` 根目录，包含 `Bun/`、`WebKit/`、`TinyCC/`、`OpenUsage/`（含该版本 helper 源码、锁文件和 sweet-cookie 0.4.1 包）、`README.md`、`relink.sh` 和 `proof/modified-jsc.patch`。WebKit 在包内保持上游原样，验证用修改只保存在补丁里。同时保存两架构的构建日志和 JSON 验证记录。发布者应核对这些文件足以让接收者重建与当前版本相应的程序。上游 Bun 1.3.6 `LICENSE.md` 的旧命令不能直接作为验证：该 tag 没有 `.gitmodules` 或 `Makefile`，实际构建使用 CMake。
+首次建立材料时，需要针对 Apple Silicon 和 Intel 两种目标架构，实际修改 LGPL 库、重链接 Bun、生成 helper 并运行验证；Intel 目标的运行可在 Intel Mac 或 Rosetta 下验证，记录必须注明构建主机和工具链。用 `scripts/relink-kit/create-source-kit.sh` 打包源码；源码包采用 `kit/` 根目录，包含 `Bun/`（含固定版本的 Git 元数据和依赖源码）、`WebKit/`、`TinyCC/`、`OpenUsage/`（含该版本 helper 源码、锁文件和 sweet-cookie 0.4.1 包）、`README.md`、`relink.sh` 和 `proof/` 下的测试补丁。Bun 构建补丁确保重新链接时使用包内可修改的依赖源码，Zig 编译器按目标架构下载。WebKit 在包内保持上游原样，验证用修改只保存在补丁里。同时保存两架构的构建日志和 JSON 验证记录。发布者应核对这些文件足以让接收者重建与当前版本相应的程序。上游 Bun 1.3.6 `LICENSE.md` 的旧命令不能直接作为验证：该 tag 没有 `.gitmodules` 或 `Makefile`，实际构建使用 CMake。
 
 每个包含 helper 的 GitHub Release 都要在安装包旁上传源码包、双架构验证记录、日志和 `cookie-helper-relink-manifest.json`。清单记录版本、提交、固定源码版本、材料及安装包的 SHA-256，还有安装包内 helper 的 SHA-256。`Publish` 的最后一步会下载草稿 Release 的全部资产，逐项核对清单、两份安装包和许可证副本；缺少材料就不会公开发布。
 
-这项构建验证主要是一次性工作：若 Bun、WebKit、TinyCC、构建选项和经验证的运行时保持不变，可复用已验证的流程及记录。每个新版本仍须更新本版 helper 源码并核对最终安装包及材料。任何相关版本、运行时哈希或构建流程变更，都应重新做双架构重链接验证。许可证负责人须在公开发布前审阅材料。当前尚未完成实际重链接，发布门槛仍未解除。
+这项构建验证主要是一次性工作：若 Bun、WebKit、TinyCC、构建选项和经验证的运行时保持不变，可复用已验证的流程及记录。每个新版本仍须更新本版 helper 源码并核对最终安装包及材料。任何相关版本、运行时哈希或构建流程变更，都应重新做双架构重链接验证。许可证负责人须在公开发布前审阅材料；两架构的材料和最终安装包未通过校验前，发布门槛仍未解除。
 
 Windows 发布还需要：
 

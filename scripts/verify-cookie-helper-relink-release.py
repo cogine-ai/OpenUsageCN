@@ -55,10 +55,19 @@ def archive_member(archive, suffix):
 def verify_source_kit(file):
     with tarfile.open(file, "r:gz") as archive:
         proof_patch_hash = None
+        release_files = {
+            "README.md": "scripts/relink-kit/README.md",
+            "relink.sh": "scripts/relink-kit/relink.sh",
+            "proof/modified-jsc.patch": "scripts/relink-kit/modified-jsc.patch",
+            "proof/bun-use-bundled-vendor.patch": "scripts/relink-kit/bun-use-bundled-vendor.patch",
+            "proof/probe-date.mjs": "scripts/relink-kit/probe-date.mjs",
+        }
         for suffix in (
             "Bun/LICENSE.md",
             "Bun/CMakeLists.txt",
+            "Bun/.git/HEAD",
             "Bun/scripts/build.mjs",
+            "Bun/cmake/scripts/GitClone.cmake",
             "Bun/cmake/targets/BuildTinyCC.cmake",
             "Bun/vendor/tinycc/libtcc.c",
             "WebKit/mac-release.bash",
@@ -72,6 +81,7 @@ def verify_source_kit(file):
             "README.md",
             "relink.sh",
             "proof/modified-jsc.patch",
+            "proof/bun-use-bundled-vendor.patch",
             "proof/probe-date.mjs",
         ):
             matches = [member for member in archive if member.isfile() and member.name == f"kit/{suffix}"]
@@ -87,6 +97,11 @@ def verify_source_kit(file):
             if suffix.endswith("proof/modified-jsc.patch"):
                 with archive.extractfile(member) as stream:
                     proof_patch_hash = digest(stream)
+            if suffix in release_files:
+                with archive.extractfile(member) as stream, \
+                        (REPOSITORY_ROOT / release_files[suffix]).open("rb") as local:
+                    require(digest(stream) == digest(local),
+                            f"Source kit {suffix} does not match this release")
             if suffix.endswith("sweet-cookie/package.json"):
                 with archive.extractfile(member) as stream:
                     dependency = json.load(stream)
