@@ -306,6 +306,11 @@ jobs:
     env:
       RELEASE_TAG: ${{ github.ref_name }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          persist-credentials: false
+
       - name: Verify draft release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -349,6 +354,9 @@ jobs:
 
           UPLOADED_SIGNATURE=$(cat "release-assets/$WINDOWS_INSTALLER_NAME.sig")
           [[ "$WINDOWS_SIGNATURE" == "$UPLOADED_SIGNATURE" ]] || { echo "Windows latest.json signature does not match the uploaded signature."; exit 1; }
+
+      - name: Verify Cookie Helper Relink Materials
+        run: python3 scripts/verify-cookie-helper-relink-release.py release-assets "$RELEASE_TAG" "$(git rev-parse HEAD)"
 
       - name: Publish verified release
         env:

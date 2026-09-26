@@ -4,6 +4,7 @@ import path from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 
 const REVIEWED_BUN_VERSION = "1.3.6"
+const REVIEWED_BUN_REVISION = "1.3.6+d530ed993"
 const REVIEWED_SWEET_COOKIE_VERSION = "0.4.1"
 const REVIEWED_SWEET_COOKIE_INTEGRITY =
   "sha512-6cuWTGeblwzMw4/3uMzBEmgH1B+crCkJJlmTVu4vzbhG2NhAH8sMWv57fQ8JZY0nqW2ldM0/c2JM0UeQQFyJ3g=="
@@ -43,6 +44,14 @@ async function main() {
   }
 
   const configuration = resolveCookieHelperBuild(repositoryRoot, targetTriple)
+  const nativeTarget = process.arch === "arm64"
+    ? "aarch64-apple-darwin"
+    : process.arch === "x64"
+      ? "x86_64-apple-darwin"
+      : null
+  if (process.platform !== "darwin" || targetTriple !== nativeTarget) {
+    throw new Error(`Cookie helper builds require a native ${targetTriple} macOS runner.`)
+  }
   await verifyBuildInputs(repositoryRoot)
   await mkdir(path.dirname(configuration.output), { recursive: true })
   const build = spawnSync(
@@ -77,6 +86,13 @@ async function verifyBuildInputs(repositoryRoot) {
   }
   if (version.status !== 0 || version.stdout.trim() !== REVIEWED_BUN_VERSION) {
     throw new Error(`Cookie helper builds require Bun ${REVIEWED_BUN_VERSION}.`)
+  }
+  const revision = spawnSync("bun", ["--revision"], { encoding: "utf8" })
+  if (revision.error) {
+    throw revision.error
+  }
+  if (revision.status !== 0 || revision.stdout.trim() !== REVIEWED_BUN_REVISION) {
+    throw new Error(`Cookie helper builds require Bun revision ${REVIEWED_BUN_REVISION}.`)
   }
 
   const packageJson = JSON.parse(
