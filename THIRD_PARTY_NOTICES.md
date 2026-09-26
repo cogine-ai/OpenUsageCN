@@ -53,7 +53,22 @@ GNU Library General Public License, version 2:
 
 https://github.com/oven-sh/WebKit/blob/1d0216219a3c52cb85195f48f19ba7d5db747ff7/Source/JavaScriptCore/COPYING.LIB
 
-This notice preserves the component identity and exact source locations. It
+A complete copy of this license is included in the application bundle as
+`LICENSES/JavaScriptCore-LGPL-2.0.txt`.
+
+## TinyCC In Bun 1.3.6
+
+Bun also lists TinyCC as a statically linked LGPL v2.1 library. The source
+revision pinned by Bun 1.3.6 is `29985a3b59898861442fa3b43f663fc1af2591d7`:
+
+https://github.com/oven-sh/tinycc/tree/29985a3b59898861442fa3b43f663fc1af2591d7
+
+A complete copy of TinyCC's LGPL v2.1 license is included in the application
+bundle as `LICENSES/TinyCC-LGPL-2.1.txt`.
+
+This notice preserves component identities and exact source locations. It
 does not itself provide the object/source and relinking materials required for
-distribution of a statically linked executable. See `docs/release.md` before
-publishing a release that contains the cookie helper.
+distribution of a statically linked executable. For each published version,
+the matching source kit, relinking evidence, and manifest must be downloadable
+beside the installers at https://github.com/cogine-ai/OpenUsageCN/releases .
+See `docs/release.md` before publishing a release that contains the cookie helper.

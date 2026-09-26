@@ -1,0 +1,22 @@
+diff --git a/cmake/scripts/GitClone.cmake b/cmake/scripts/GitClone.cmake
+index d1e602c..a06aee6 100644
+--- a/cmake/scripts/GitClone.cmake
++++ b/cmake/scripts/GitClone.cmake
+@@ -22,6 +22,17 @@ if(NOT GIT_NAME)
+   set(GIT_NAME ${GIT_ORIGINAL_NAME})
+ endif()
+ 
++# The OpenUsage relink kit includes the pinned dependency sources. Preserve
++# those sources so a recipient can modify an LGPL component before relinking.
++if(EXISTS "${GIT_PATH}/.ref")
++  file(STRINGS "${GIT_PATH}/.ref" BUNDLED_REF LIMIT_COUNT 1)
++  if(NOT BUNDLED_REF STREQUAL GIT_REF)
++    message(FATAL_ERROR "Bundled ${GIT_NAME} revision differs from ${GIT_REF}")
++  endif()
++  message(STATUS "Using bundled ${GIT_NAME} at ${GIT_REF}")
++  return()
++endif()
++
+ set(GIT_DOWNLOAD_URL https://github.com/${GIT_REPOSITORY}/archive/${GIT_REF}.tar.gz)
+ 
+ message(STATUS "Cloning ${GIT_REPOSITORY} at ${GIT_REF}...")

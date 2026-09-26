@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process"
+import { createHash } from "node:crypto"
 import { constants } from "node:fs"
 import { access, mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises"
 import os from "node:os"
@@ -15,6 +16,8 @@ const TARGETS = {
 }
 const EXPECTED_MINIMUM = "13.0.0"
 const REQUIRED_JIT_ENTITLEMENT = "com.apple.security.cs.allow-jit"
+const JAVASCRIPTCORE_LICENSE_SHA256 = "5094ecb9c9dcd0eadc34f3c11511d9b5535063032bc150164ecd1a5d5a445547"
+const TINYCC_LICENSE_SHA256 = "512d2d21b6b3384ba64781abb0208a1b87740bc31e2df48e2b206ddb7e4d5779"
 const repositoryRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 
 function checkedTarget(targetTriple) {
@@ -268,6 +271,17 @@ export async function verifyPackagedHelper(targetTriple, root = repositoryRoot) 
     const notices = await readFile(noticesPath, "utf8")
     if (!notices.includes("@steipete/sweet-cookie 0.4.1") || !notices.includes("Bun 1.3.6")) {
       throw new Error("Packaged third-party notices are incomplete for the cookie helper.")
+    }
+    for (const [filename, expectedHash] of [
+      ["JavaScriptCore-LGPL-2.0.txt", JAVASCRIPTCORE_LICENSE_SHA256],
+      ["TinyCC-LGPL-2.1.txt", TINYCC_LICENSE_SHA256],
+    ]) {
+      const licensePath = await findFile(appPath, filename)
+      if (!licensePath) throw new Error(`Packaged app is missing ${filename}.`)
+      const licenseHash = createHash("sha256").update(await readFile(licensePath)).digest("hex")
+      if (licenseHash !== expectedHash) {
+        throw new Error(`Packaged ${filename} does not match the pinned source.`)
+      }
     }
     run("/usr/bin/xcrun", ["stapler", "validate", appPath])
     run("/usr/sbin/spctl", ["--assess", "--type", "execute", "--verbose=4", appPath])

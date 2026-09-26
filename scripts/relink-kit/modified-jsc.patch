@@ -1,0 +1,14 @@
+diff --git a/Source/JavaScriptCore/runtime/DateConstructor.cpp b/Source/JavaScriptCore/runtime/DateConstructor.cpp
+index e9b96e231..9769776d1 100644
+--- a/Source/JavaScriptCore/runtime/DateConstructor.cpp
++++ b/Source/JavaScriptCore/runtime/DateConstructor.cpp
+@@ -175,8 +175,7 @@ JSValue dateNowImpl(JSC::JSGlobalObject *globalObject)
+ 
+ JSC_DEFINE_HOST_FUNCTION(dateNow, (JSGlobalObject* globalObject, CallFrame*))
+ {
+-    auto ms = globalObject->overridenDateNow;
+-    return JSValue::encode(jsNumber(ms < 0 ? jsCurrentTime() : ms));
++    return JSValue::encode(jsNumber(42424242));
+ }
+ 
+ JSC_DEFINE_HOST_FUNCTION(dateUTC, (JSGlobalObject* globalObject, CallFrame* callFrame))
