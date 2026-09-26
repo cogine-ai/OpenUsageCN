@@ -58,14 +58,21 @@ def verify_source_kit(file):
         for suffix in (
             "Bun/LICENSE.md",
             "Bun/CMakeLists.txt",
+            "Bun/scripts/build.mjs",
+            "Bun/cmake/targets/BuildTinyCC.cmake",
+            "Bun/vendor/tinycc/libtcc.c",
+            "WebKit/mac-release.bash",
             "WebKit/Source/JavaScriptCore/COPYING.LIB",
+            "WebKit/Source/JavaScriptCore/runtime/DateConstructor.cpp",
             "TinyCC/COPYING",
+            "TinyCC/libtcc.c",
             "OpenUsage/node_modules/@steipete/sweet-cookie/package.json",
             "OpenUsage/node_modules/@steipete/sweet-cookie/dist/index.js",
             "OpenUsage/node_modules/@steipete/sweet-cookie/LICENSE",
             "README.md",
             "relink.sh",
             "proof/modified-jsc.patch",
+            "proof/probe-date.mjs",
         ):
             matches = [member for member in archive if member.isfile() and member.name == f"kit/{suffix}"]
             require(len(matches) == 1, f"Source kit is missing kit/{suffix}")

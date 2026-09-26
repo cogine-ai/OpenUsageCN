@@ -40,14 +40,21 @@ class RelinkReleaseVerifierTest(unittest.TestCase):
         kit_entries = {
             "kit/Bun/LICENSE.md": b"Bun license",
             "kit/Bun/CMakeLists.txt": b"Bun build",
+            "kit/Bun/scripts/build.mjs": b"Bun build script",
+            "kit/Bun/cmake/targets/BuildTinyCC.cmake": b"TinyCC build source",
+            "kit/Bun/vendor/tinycc/libtcc.c": b"TinyCC vendor source",
+            "kit/WebKit/mac-release.bash": b"WebKit build script",
             "kit/WebKit/Source/JavaScriptCore/COPYING.LIB": self.license,
+            "kit/WebKit/Source/JavaScriptCore/runtime/DateConstructor.cpp": b"Date.now source",
             "kit/TinyCC/COPYING": self.tinycc_license,
+            "kit/TinyCC/libtcc.c": b"TinyCC source",
             "kit/OpenUsage/node_modules/@steipete/sweet-cookie/package.json": b'{"version":"0.4.1"}',
             "kit/OpenUsage/node_modules/@steipete/sweet-cookie/dist/index.js": b"export {}",
             "kit/OpenUsage/node_modules/@steipete/sweet-cookie/LICENSE": b"MIT",
             "kit/README.md": b"relink instructions",
             "kit/relink.sh": b"#!/bin/sh\n",
             "kit/proof/modified-jsc.patch": self.proof_patch,
+            "kit/proof/probe-date.mjs": b"console.log(Date.now())\n",
         }
         helper_sources = [Path("package.json"), Path("bun.lock")]
         helper_sources.extend(source.relative_to(ROOT) for source in sorted((ROOT / "tools/cookie-helper").glob("*.mjs")))
@@ -89,7 +96,7 @@ class RelinkReleaseVerifierTest(unittest.TestCase):
                 "modifiedRuntimeProbePassed": True,
                 "modifiedRuntimeProbeOutput": "42424242",
                 "modifiedHelperSmokePassed": True,
-                "toolchain": {"llvm": "19.1.7"},
+                "toolchain": {"llvm": "22.1.7"},
             }))
             log = self.directory / f"log-{target}.txt"
             log.write_text("source build and modified-JSC relink log\n")
