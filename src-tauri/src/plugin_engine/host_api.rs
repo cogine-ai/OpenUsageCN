@@ -821,7 +821,7 @@ fn redact_http_response_body(url: &str, body: &str) -> String {
 }
 
 fn redact_plugin_http_response_body(plugin_id: &str, url: &str, body: &str) -> String {
-    let path = url.split('?').next().unwrap_or(url);
+    let path = url.split(['?', '#']).next().unwrap_or(url);
     let body = if plugin_id == "openrouter" && path.ends_with("/key") {
         provider_redaction::openrouter_key_body(body)
     } else {

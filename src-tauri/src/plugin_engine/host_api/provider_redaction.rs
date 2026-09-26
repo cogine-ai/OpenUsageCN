@@ -50,15 +50,16 @@ pub(super) fn openrouter_key_body(body: &str) -> String {
     let Ok(mut payload) = serde_json::from_str::<serde_json::Value>(body) else {
         return "[REDACTED OPENROUTER KEY RESPONSE]".to_string();
     };
-    if let Some(data) = payload
+    let Some(data) = payload
         .get_mut("data")
         .and_then(serde_json::Value::as_object_mut)
-    {
-        for key in ["label", "organization_id", "workspace_id"] {
-            if let Some(value) = data.get_mut(key) {
-                if !value.is_null() {
-                    *value = serde_json::Value::String("[REDACTED]".to_string());
-                }
+    else {
+        return "[REDACTED OPENROUTER KEY RESPONSE]".to_string();
+    };
+    for key in ["label", "organization_id", "workspace_id"] {
+        if let Some(value) = data.get_mut(key) {
+            if !value.is_null() {
+                *value = serde_json::Value::String("[REDACTED]".to_string());
             }
         }
     }
@@ -178,6 +179,8 @@ mod tests {
         }});
         for url in [
             "https://openrouter.ai/api/v1/key",
+            "https://openrouter.ai/api/v1/key#details",
+            "https://openrouter.ai/api/v1/key?include=usage#details",
             "https://gateway.example/openrouter/v1/key",
         ] {
             let redacted = redact_plugin_http_response_body("openrouter", url, &body.to_string());
@@ -224,6 +227,19 @@ mod tests {
             ),
             "[REDACTED OPENROUTER KEY RESPONSE]"
         );
+        for body in [
+            r#"{"error":"private-key-label"}"#,
+            r#"{"data":"private-key-label"}"#,
+        ] {
+            assert_eq!(
+                redact_plugin_http_response_body(
+                    "openrouter",
+                    "https://openrouter.ai/api/v1/key",
+                    body
+                ),
+                "[REDACTED OPENROUTER KEY RESPONSE]"
+            );
+        }
     }
 
     #[test]
