@@ -110,6 +110,8 @@ cp "$SCRIPT_DIR/../../LICENSES/TinyCC-LGPL-2.1.txt" \
 cp "$SCRIPT_DIR/modified-jsc.patch" "$STAGING/kit/proof/modified-jsc.patch"
 cp "$SCRIPT_DIR/bun-use-bundled-vendor.patch" "$STAGING/kit/proof/bun-use-bundled-vendor.patch"
 
-tar -czf "$OUTPUT_TAR_GZ" -C "$STAGING" kit
+tar -czf "$OUTPUT_TAR_GZ" --no-xattrs --no-mac-metadata \
+  --no-acls --no-fflags --numeric-owner --uid 0 --gid 0 \
+  -C "$STAGING" kit
 echo "Source kit: $OUTPUT_TAR_GZ"
 shasum -a 256 "$OUTPUT_TAR_GZ"

@@ -14,6 +14,11 @@ WEBKIT_COMMIT = "1d0216219a3c52cb85195f48f19ba7d5db747ff7"
 TINYCC_COMMIT = "29985a3b59898861442fa3b43f663fc1af2591d7"
 LGPL_SHA256 = "5094ecb9c9dcd0eadc34f3c11511d9b5535063032bc150164ecd1a5d5a445547"
 TINYCC_LICENSE_SHA256 = "512d2d21b6b3384ba64781abb0208a1b87740bc31e2df48e2b206ddb7e4d5779"
+SOURCE_TREE_SHA256 = {
+    "Bun": "d18e6c28d6212960549e69b9e0e166e7fa142118fd1dcd3f36cb379afbfed454",
+    "WebKit": "d22194c34810d0f3c8cec3aeaed973e6ce7042409e55793d687bec9ef8dfaf23",
+    "TinyCC": "9f05af8a32a5fc9b0674dc8edd136e7975eb36a1c8ef2fbb9d53057bce5ac2fd",
+}
 TARGET_ARCHIVES = {
     "aarch64-apple-darwin": "OpenUsageCN_aarch64.app.tar.gz",
     "x86_64-apple-darwin": "OpenUsageCN_x64.app.tar.gz",
@@ -53,11 +58,42 @@ def archive_member(archive, suffix):
     return matches[0]
 
 
+def source_tree_fingerprints(archive):
+    entries = {tree: [] for tree in SOURCE_TREE_SHA256}
+    for member in archive:
+        for tree in entries:
+            prefix = f"kit/{tree}/"
+            if not member.name.startswith(prefix) or member.isdir():
+                continue
+            if tree == "Bun" and member.name.startswith("kit/Bun/.git/"):
+                continue
+            relative = member.name[len(prefix):]
+            if member.isfile():
+                with archive.extractfile(member) as stream:
+                    entries[tree].append((relative, "F", digest(stream)))
+            elif member.issym():
+                entries[tree].append((relative, "L", member.linkname))
+            else:
+                raise ValueError(f"Source kit contains an unsupported entry: {member.name}")
+            break
+    fingerprints = {}
+    for tree, files in entries.items():
+        sha = hashlib.sha256()
+        for relative, kind, value in sorted(files):
+            sha.update(f"{kind}\0{relative}\0{value}\n".encode("utf-8", "surrogateescape"))
+        fingerprints[tree] = sha.hexdigest()
+    return fingerprints
+
+
 def verify_source_kit(file):
     with tarfile.open(file, "r:gz") as archive:
         proof_patch_hash = None
         for member in archive:
             parts = Path(member.name).parts
+            require(member.uid == 0 and member.gid == 0 and
+                    not member.uname and not member.gname and
+                    not any("xattr" in key.lower() for key in member.pax_headers),
+                    f"Source kit contains local archive metadata: {member.name}")
             require(not any(part == "__pycache__" or part == ".DS_Store" or
                             part.startswith("._") for part in parts) and
                     not member.name.endswith(".pyc"),
@@ -65,6 +101,10 @@ def verify_source_kit(file):
             require(not member.name.startswith("kit/Bun/.git/logs/") and
                     member.name != "kit/Bun/.git/FETCH_HEAD",
                     f"Source kit contains local Git history: {member.name}")
+        fingerprints = source_tree_fingerprints(archive)
+        for tree, expected in SOURCE_TREE_SHA256.items():
+            require(fingerprints[tree] == expected,
+                    f"Source kit {tree} source differs from the reviewed build")
         release_files = {
             "README.md": "scripts/relink-kit/README.md",
             "relink.sh": "scripts/relink-kit/relink.sh",

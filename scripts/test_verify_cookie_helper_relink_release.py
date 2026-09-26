@@ -8,6 +8,7 @@ import tarfile
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 MODULE = ROOT / "scripts/verify-cookie-helper-relink-release.py"
@@ -68,6 +69,11 @@ class RelinkReleaseVerifierTest(unittest.TestCase):
         for relative in helper_sources:
             kit_entries[f"kit/OpenUsage/{relative.as_posix()}"] = (ROOT / relative).read_bytes()
         write_tar(kit, kit_entries)
+        with tarfile.open(kit, "r:gz") as archive:
+            fixture_fingerprints = verifier.source_tree_fingerprints(archive)
+        source_hashes = mock.patch.dict(verifier.SOURCE_TREE_SHA256, fixture_fingerprints)
+        source_hashes.start()
+        self.addCleanup(source_hashes.stop)
         self.manifest = {
             "schemaVersion": 1,
             "tag": TAG,
@@ -179,6 +185,48 @@ class RelinkReleaseVerifierTest(unittest.TestCase):
         self.manifest["sourceKit"]["sha256"] = sha(source.read_bytes())
         self.save_manifest()
         with self.assertRaisesRegex(ValueError, "Source kit contains local metadata"):
+            verifier.verify(self.directory, TAG, COMMIT)
+
+    def test_rejects_local_archive_metadata_in_source_kit(self):
+        source = self.directory / "sources.tar.gz"
+        with tarfile.open(source, "r:gz") as archive:
+            entries = {member.name: archive.extractfile(member).read()
+                       for member in archive if member.isfile()}
+        with tarfile.open(source, "w:gz") as archive:
+            for name, content in entries.items():
+                info = tarfile.TarInfo(name)
+                info.size = len(content)
+                if name == "kit/README.md":
+                    info.uid = 501
+                    info.uname = "local-user"
+                archive.addfile(info, io.BytesIO(content))
+        self.manifest["sourceKit"]["sha256"] = sha(source.read_bytes())
+        self.save_manifest()
+        with self.assertRaisesRegex(ValueError, "Source kit contains local archive metadata"):
+            verifier.verify(self.directory, TAG, COMMIT)
+
+    def test_rejects_changed_tinycc_source_with_matching_manifest_hash(self):
+        source = self.directory / "sources.tar.gz"
+        with tarfile.open(source, "r:gz") as archive:
+            entries = {member.name: archive.extractfile(member).read()
+                       for member in archive if member.isfile()}
+        entries["kit/TinyCC/libtcc.c"] = b"different TinyCC source"
+        write_tar(source, entries)
+        self.manifest["sourceKit"]["sha256"] = sha(source.read_bytes())
+        self.save_manifest()
+        with self.assertRaisesRegex(ValueError, "TinyCC source differs"):
+            verifier.verify(self.directory, TAG, COMMIT)
+
+    def test_rejects_changed_webkit_source_with_matching_manifest_hash(self):
+        source = self.directory / "sources.tar.gz"
+        with tarfile.open(source, "r:gz") as archive:
+            entries = {member.name: archive.extractfile(member).read()
+                       for member in archive if member.isfile()}
+        entries["kit/WebKit/Source/JavaScriptCore/runtime/DateConstructor.cpp"] = b"different WebKit source"
+        write_tar(source, entries)
+        self.manifest["sourceKit"]["sha256"] = sha(source.read_bytes())
+        self.save_manifest()
+        with self.assertRaisesRegex(ValueError, "WebKit source differs"):
             verifier.verify(self.directory, TAG, COMMIT)
 
     def test_rejects_an_incomplete_packaged_license_even_with_updated_archive_hash(self):
