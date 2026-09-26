@@ -7,8 +7,9 @@ The Bun source includes its pinned Git metadata. The included Bun CMake patch
 uses the bundled dependency sources, so editing TinyCC in `Bun/vendor/tinycc/`
 is reflected in the relinked Helper. Zig is downloaded for the target Mac.
 
-Use an arm64 or x86_64 Mac with Homebrew LLVM 22.1.7 (`llvm@22`), CMake, Ninja,
-Python, and Bun 1.3.6 revision `d530ed993`. The Bun and WebKit source revisions
+Use an arm64 or x86_64 Mac with Xcode Command Line Tools, Homebrew LLVM 22.1.7
+(`llvm@22`), CMake, Ninja, Python 3, rustup, and Bun 1.3.6 revision `d530ed993`.
+Rustup installs the nightly toolchain pinned by Bun. The Bun and WebKit source revisions
 are recorded in the release manifest. The script writes each run to a new
 `build/` directory.
 

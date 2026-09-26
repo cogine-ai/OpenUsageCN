@@ -2,6 +2,8 @@ import hashlib
 import importlib.util
 import io
 import json
+import subprocess
+import sys
 import tarfile
 import tempfile
 import unittest
@@ -150,6 +152,20 @@ class RelinkReleaseVerifierTest(unittest.TestCase):
         self.save_manifest()
         with self.assertRaisesRegex(ValueError, "Source kit proof/modified-jsc.patch does not match this release"):
             verifier.verify(self.directory, TAG, COMMIT)
+
+    def test_reports_a_truncated_source_kit_without_a_traceback(self):
+        source = self.directory / "sources.tar.gz"
+        contents = source.read_bytes()
+        source.write_bytes(contents[:len(contents) // 2])
+        self.manifest["sourceKit"]["sha256"] = sha(source.read_bytes())
+        self.save_manifest()
+        result = subprocess.run(
+            [sys.executable, str(MODULE), str(self.directory), TAG, COMMIT],
+            capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Cookie helper relink materials:", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
 
     def test_rejects_an_incomplete_packaged_license_even_with_updated_archive_hash(self):
         target = "aarch64-apple-darwin"

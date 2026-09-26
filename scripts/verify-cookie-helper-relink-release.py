@@ -6,6 +6,7 @@ import json
 import re
 import sys
 import tarfile
+import zlib
 from pathlib import Path
 
 BUN_COMMIT = "d530ed993d62be7c7f8f01a3d52627b6845dfd93"
@@ -210,6 +211,7 @@ if __name__ == "__main__":
         require(len(sys.argv) == 4, "Usage: verify-cookie-helper-relink-release.py ASSET_DIR TAG COMMIT")
         verify(Path(sys.argv[1]), sys.argv[2], sys.argv[3])
         print("Verified both macOS cookie helper packages and their relink materials.")
-    except (OSError, ValueError, KeyError, tarfile.TarError, json.JSONDecodeError) as error:
+    except (OSError, ValueError, KeyError, EOFError, zlib.error,
+            tarfile.TarError, json.JSONDecodeError) as error:
         print(f"Cookie helper relink materials: {error}", file=sys.stderr)
         sys.exit(1)
