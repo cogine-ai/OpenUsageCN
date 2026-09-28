@@ -26,7 +26,6 @@ import {
   loadStartOnLogin,
   loadTimeFormatMode,
   migrateLegacyTraySettings,
-  migrateWindsurfToDevin,
   loadThemeMode,
   normalizePluginSettings,
   saveAutoUpdateInterval,
@@ -128,54 +127,6 @@ describe("settings", () => {
       order: ["codex", "deepseek", "ollama"], disabled: ["ollama"],
     })
     expect(getNewPluginIds(normalized, plugins)).toEqual([])
-  })
-
-  it("migrates enabled windsurf settings to enabled devin settings", () => {
-    const result = migrateWindsurfToDevin({
-      order: ["claude", "windsurf", "codex"],
-      disabled: [],
-    })
-
-    expect(result).toEqual({
-      order: ["claude", "devin", "codex"],
-      disabled: [],
-    })
-  })
-
-  it("keeps devin enabled when enabled windsurf conflicts with a stale disabled devin entry", () => {
-    const result = migrateWindsurfToDevin({
-      order: ["claude", "windsurf", "codex"],
-      disabled: ["devin"],
-    })
-
-    expect(result).toEqual({
-      order: ["claude", "devin", "codex"],
-      disabled: [],
-    })
-  })
-
-  it("migrates disabled windsurf settings to disabled devin settings", () => {
-    const result = migrateWindsurfToDevin({
-      order: ["windsurf", "claude"],
-      disabled: ["windsurf"],
-    })
-
-    expect(result).toEqual({
-      order: ["devin", "claude"],
-      disabled: ["devin"],
-    })
-  })
-
-  it("does not disable an existing devin entry when removing old windsurf settings", () => {
-    const result = migrateWindsurfToDevin({
-      order: ["windsurf", "devin", "claude"],
-      disabled: ["windsurf"],
-    })
-
-    expect(result).toEqual({
-      order: ["devin", "claude"],
-      disabled: [],
-    })
   })
 
   it("compares settings equality", () => {

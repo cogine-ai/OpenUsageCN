@@ -23,7 +23,6 @@ const {
   loadThemeModeMock,
   loadTimeFormatModeMock,
   migrateLegacyTraySettingsMock,
-  migrateWindsurfToDevinMock,
   normalizePluginSettingsMock,
   savePluginSettingsMock,
 } = vi.hoisted(() => ({
@@ -48,7 +47,6 @@ const {
   loadThemeModeMock: vi.fn(),
   loadTimeFormatModeMock: vi.fn(),
   migrateLegacyTraySettingsMock: vi.fn(),
-  migrateWindsurfToDevinMock: vi.fn(),
   normalizePluginSettingsMock: vi.fn(),
   savePluginSettingsMock: vi.fn(),
 }))
@@ -95,7 +93,6 @@ vi.mock("@/lib/settings", () => ({
   loadThemeMode: loadThemeModeMock,
   loadTimeFormatMode: loadTimeFormatModeMock,
   migrateLegacyTraySettings: migrateLegacyTraySettingsMock,
-  migrateWindsurfToDevin: migrateWindsurfToDevinMock,
   normalizePluginSettings: normalizePluginSettingsMock,
   savePluginSettings: savePluginSettingsMock,
 }))
@@ -104,8 +101,6 @@ import { useSettingsBootstrap } from "@/hooks/app/use-settings-bootstrap"
 
 const macosCapabilities = {
   platform: "macos",
-  localHttpApi: true,
-  autostart: true,
   cli: true,
   paceNotifications: true,
   globalShortcuts: true,
@@ -115,8 +110,6 @@ const macosCapabilities = {
 
 const windowsCapabilities = {
   platform: "windows",
-  localHttpApi: true,
-  autostart: true,
   cli: false,
   paceNotifications: false,
   globalShortcuts: false,
@@ -168,7 +161,6 @@ describe("useSettingsBootstrap", () => {
     loadThemeModeMock.mockReset()
     loadTimeFormatModeMock.mockReset()
     migrateLegacyTraySettingsMock.mockReset()
-    migrateWindsurfToDevinMock.mockReset()
     normalizePluginSettingsMock.mockReset()
     savePluginSettingsMock.mockReset()
 
@@ -202,7 +194,6 @@ describe("useSettingsBootstrap", () => {
     })
     loadStartOnLoginMock.mockResolvedValue(true)
     migrateLegacyTraySettingsMock.mockResolvedValue(undefined)
-    migrateWindsurfToDevinMock.mockImplementation((settings) => settings)
     getNewPluginIdsMock.mockImplementation((settings, plugins) =>
       plugins.map((plugin) => plugin.id).filter((id) =>
         ["deepseek", "moonshot", "ollama", "doubao", "xai"].includes(id) &&
@@ -285,15 +276,15 @@ describe("useSettingsBootstrap", () => {
     errorSpy.mockRestore()
   })
 
-  it("migrates windsurf settings before normalizing and saves the first-launch result", async () => {
+  it("normalizes stored settings and saves the first-launch result", async () => {
     const args = createArgs()
-    const storedSettings = { order: ["windsurf"], disabled: [] }
-    const migratedSettings = { order: ["devin"], disabled: [] }
+    const storedSettings = { order: ["codex"], disabled: [] }
+    const normalizedSettings = { order: ["codex"], disabled: ["codex"] }
     const availablePlugins = [
       {
-        id: "devin",
-        name: "Devin",
-        iconUrl: "/devin.svg",
+        id: "codex",
+        name: "Codex",
+        iconUrl: "/codex.svg",
         brandColor: "#000000",
         lines: [],
         primaryCandidates: [],
@@ -302,21 +293,20 @@ describe("useSettingsBootstrap", () => {
 
     invokeMock.mockResolvedValueOnce(availablePlugins)
     loadPluginSettingsMock.mockResolvedValueOnce(storedSettings)
-    migrateWindsurfToDevinMock.mockReturnValueOnce(migratedSettings)
-    normalizePluginSettingsMock.mockReturnValueOnce(migratedSettings)
+    normalizePluginSettingsMock.mockReturnValueOnce(normalizedSettings)
     arePluginSettingsEqualMock.mockReturnValueOnce(false)
-    getEnabledPluginIdsMock.mockReturnValueOnce(["devin"])
+    getEnabledPluginIdsMock.mockReturnValueOnce([])
 
     renderHook(() => useSettingsBootstrap(args))
 
     await waitFor(() => {
       expect(normalizePluginSettingsMock).toHaveBeenCalledWith(
-        migratedSettings,
+        storedSettings,
         availablePlugins
       )
-      expect(savePluginSettingsMock).toHaveBeenCalledWith(migratedSettings)
-      expect(args.setPluginSettings).toHaveBeenCalledWith(migratedSettings)
-      expect(args.startBatch).toHaveBeenCalledWith(["devin"])
+      expect(savePluginSettingsMock).toHaveBeenCalledWith(normalizedSettings)
+      expect(args.setPluginSettings).toHaveBeenCalledWith(normalizedSettings)
+      expect(args.startBatch).toHaveBeenCalledWith([])
     })
   })
 
