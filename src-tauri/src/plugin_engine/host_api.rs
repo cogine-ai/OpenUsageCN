@@ -3719,6 +3719,24 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn batch_env_resolution_treats_observed_empty_shell_values_as_resolved() {
+        let name = format!(
+            "OPENUSAGECN_BATCH_ENV_TEST_{}",
+            uuid::Uuid::new_v4().simple()
+        );
+        let result = resolve_env_values_using_shells(&[&name], &["/bin/sh".to_string()]);
+        assert!(!result.unresolved.contains(&name));
+        assert_eq!(result.values.get(&name), Some(&None));
+        assert!(
+            terminal_env_cache()
+                .lock()
+                .expect("env cache")
+                .contains_key(&name)
+        );
+    }
+
     #[test]
     fn batch_shell_markers_must_be_full_lines_in_order() {
         let start = "__OPENUSAGECN_ENV_START_0__";

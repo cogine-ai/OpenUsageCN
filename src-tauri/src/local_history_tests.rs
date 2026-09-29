@@ -119,6 +119,23 @@ fn local_history_redacts_account_scoped_adapter_and_plugin_errors() {
 }
 
 #[test]
+fn local_history_rejects_quota_style_rows_before_returning_them_to_the_ui() {
+    let plugin = plugin(
+        "codex",
+        r#"globalThis.__openusage_plugin = {
+        probeHistory: () => ({
+            lines: [{ type: "progress", label: "Session", used: 10, limit: 100, format: { kind: "percent" } }]
+        })
+    };"#,
+    );
+    let output = runtime::run_local_history(&plugin, &std::env::temp_dir(), "0.0.0", None);
+    let error = local_history_snapshot("codex".to_string(), None, Ok(output))
+        .err()
+        .expect("history should reject quota rows");
+    assert_eq!(error, "本地用量返回了不支持的数据，请更新插件后重试。");
+}
+
+#[test]
 fn local_history_timeout_keeps_its_friendly_error() {
     let error = local_history_snapshot(
         "codex".to_string(),
