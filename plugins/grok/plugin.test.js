@@ -138,12 +138,74 @@ describe("grok plugin", () => {
     const billingCall = ctx.host.http.request.mock.calls.find((call) => call[0].url === BILLING_URL)[0]
     expect(billingCall.headers.Authorization).toBe("Bearer new-token")
 
-    const authWrites = ctx.host.fs.writeText.mock.calls.filter((call) => call[0] === AUTH_PATH)
+    const authWrites = ctx.host.fs.writeTextIfUnchanged.mock.calls.filter((call) => call[0] === AUTH_PATH)
+    expect(authWrites.length).toBeGreaterThan(0)
     const saved = JSON.parse(authWrites[authWrites.length - 1][1])
     const entry = saved["https://auth.x.ai::client"]
     expect(entry.key).toBe("new-token")
     expect(entry.refresh_token).toBe("new-refresh")
     expect(entry.expires_at).toBe("2026-02-02T01:00:00.000Z")
+  })
+
+  it("preserves a newer auth.json when it changes mid-refresh", async () => {
+    const ctx = makeCtx()
+    const staleAuth = {
+      "https://auth.x.ai::client": {
+        key: "expired-token",
+        refresh_token: "stale-refresh",
+        email: "user@example.com",
+        expires_at: "2026-01-01T00:00:00Z",
+      },
+    }
+    const newerAuth = {
+      "https://auth.x.ai::client": {
+        key: "newer-token",
+        refresh_token: "newer-refresh",
+        email: "user@example.com",
+        expires_at: "2026-06-01T00:00:00Z",
+      },
+    }
+    ctx.host.fs.writeText(AUTH_PATH, JSON.stringify(staleAuth))
+    ctx.host.fs.writeText.mockClear()
+    ctx.host.fs.writeTextIfUnchanged.mockClear()
+
+    ctx.host.http.request.mockImplementation((req) => {
+      if (req.url === REFRESH_URL) {
+        ctx.host.fs.writeText(AUTH_PATH, JSON.stringify(newerAuth, null, 2))
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            access_token: "openusage-rotated-access",
+            refresh_token: "openusage-rotated-refresh",
+            expires_in: 3600,
+          }),
+        }
+      }
+      if (req.url === BILLING_URL) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify(billingData()),
+        }
+      }
+      if (req.url === SETTINGS_URL) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({ subscription_tier_display: "SuperGrok Heavy" }),
+        }
+      }
+      return { status: 404, bodyText: "" }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBe("SuperGrok Heavy")
+    expect(ctx.host.fs.readText(AUTH_PATH)).toBe(JSON.stringify(newerAuth, null, 2))
+    expect(ctx.host.fs.readText(AUTH_PATH)).not.toContain("openusage-rotated-refresh")
+    expect(ctx.host.fs.writeTextIfUnchanged).toHaveBeenCalled()
+    expect(ctx.host.log.warn).toHaveBeenCalledWith(
+      expect.stringContaining("Grok auth file changed mid-refresh"),
+    )
   })
 
   it("refreshes and retries once when billing returns an auth error", async () => {

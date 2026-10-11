@@ -85,6 +85,74 @@ describe("kimi plugin", () => {
     expect(persisted.refresh_token).toBe("new-refresh")
   })
 
+  it("preserves a newer credentials file when it changes mid-refresh", async () => {
+    const ctx = makeCtx()
+    const staleCreds = JSON.stringify({
+      access_token: "old-token",
+      refresh_token: "stale-refresh",
+      expires_at: 1,
+    })
+    const newerCreds = JSON.stringify({
+      access_token: "newer-access",
+      refresh_token: "newer-refresh",
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+    })
+    ctx.host.fs.writeText(CRED_PATH, staleCreds)
+    ctx.host.fs.writeText.mockClear()
+    ctx.host.fs.writeTextIfUnchanged.mockClear()
+
+    ctx.host.http.request.mockImplementation((opts) => {
+      const url = String(opts.url)
+      if (url.includes("/api/oauth/token")) {
+        ctx.host.fs.writeText(CRED_PATH, newerCreds)
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            access_token: "openusage-rotated-access",
+            refresh_token: "openusage-rotated-refresh",
+            expires_in: 3600,
+          }),
+        }
+      }
+
+      return {
+        status: 200,
+        bodyText: JSON.stringify({
+          usage: {
+            limit: "100",
+            remaining: "74",
+            resetTime: "2099-02-11T17:32:50.757941Z",
+          },
+          limits: [
+            {
+              window: { duration: 300, timeUnit: "TIME_UNIT_MINUTE" },
+              detail: {
+                limit: "100",
+                remaining: "85",
+                resetTime: "2099-02-07T12:32:50.757941Z",
+              },
+            },
+          ],
+          user: {
+            membership: {
+              level: "LEVEL_INTERMEDIATE",
+            },
+          },
+        }),
+      }
+    })
+
+    const plugin = await loadPlugin()
+    plugin.probe(ctx)
+
+    expect(ctx.host.fs.readText(CRED_PATH)).toBe(newerCreds)
+    expect(ctx.host.fs.readText(CRED_PATH)).not.toContain("openusage-rotated-refresh")
+    expect(ctx.host.fs.writeTextIfUnchanged).toHaveBeenCalled()
+    expect(ctx.host.log.warn).toHaveBeenCalledWith(
+      expect.stringContaining("credentials file changed mid-refresh"),
+    )
+  })
+
   it("retries usage once on 401 by refreshing token", async () => {
     const ctx = makeCtx()
     const nowSec = Math.floor(Date.now() / 1000)
