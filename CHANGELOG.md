@@ -4,6 +4,23 @@
 
 暂无。
 
+## v0.6.44
+
+### Bug Fixes
+
+- 简化连接配置、浏览器账号添加、额度阅读、错误恢复和快捷键录制；连接检查与服务商启用独立，额度保留原单条横条。 ([#245](https://github.com/cogine-ai/OpenUsageCN/pull/245)) by @lc708
+- 保存凭据后等待本次真实检查结果；环境读取失败仍可编辑已保存配置，未知地区需明确选择，其他连接方式的未保存输入不会丢失。 ([#245](https://github.com/cogine-ai/OpenUsageCN/pull/245)) by @lc708
+- 展示已验证的账号身份，处理候选过期与重复使用；固定账号失效后仍可恢复跟随本机，检查失败保留上次用量和成功时间。 ([#245](https://github.com/cogine-ai/OpenUsageCN/pull/245)) by @lc708
+- 修复快捷键录制、保存、回滚和注销失败的状态判断，并补齐服务商日志中标识与凭据的遮盖。 ([#245](https://github.com/cogine-ai/OpenUsageCN/pull/245)) by @lc708
+
+---
+
+### Changelog
+
+**Full Changelog**: [v0.6.43...v0.6.44](https://github.com/cogine-ai/OpenUsageCN/compare/v0.6.43...v0.6.44)
+
+- [a2c16c6](https://github.com/cogine-ai/OpenUsageCN/commit/a2c16c6e23534bbff99285090a611ee6a87757b8) 简化连接、账号、额度、错误恢复和快捷键交互 (#245) by @lc708
+
 ## v0.6.43
 
 ### New Features
