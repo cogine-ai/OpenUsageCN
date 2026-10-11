@@ -109,7 +109,7 @@ impl BrowserSessionError {
         }
     }
 
-    /// Reports that no isolated cookie candidate authenticated, without exposing candidate contents.
+    /// Reports that no candidate verified the required account identity, without exposing its contents.
     pub(super) fn authentication_rejected() -> Self {
         Self {
             code: BrowserSessionErrorCode::AuthenticationRejected,

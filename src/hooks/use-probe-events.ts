@@ -271,7 +271,7 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
     }
   }, [])
 
-  /** Await one manual connection check, rejecting interruption, start failure, or a queue timeout. */
+  /** Await one manual connection check, rejecting interruption, start failure, or an overall timeout. */
   const verifyPlugin = useCallback((pluginId: string) => new Promise<PluginOutput>((resolve, reject) => {
     // A native probe has a 30-second limit. Allow time for the four-worker queue.
     const timer = setTimeout(() => {
