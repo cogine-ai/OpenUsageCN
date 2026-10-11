@@ -25,6 +25,18 @@ struct ProviderConfigFile {
 #[serde(rename_all = "camelCase")]
 pub struct ProviderConfigView {
     pub values: HashMap<String, ProviderConfigViewValue>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    pub environment: HashMap<String, ProviderConfigEnvironment>,
+    pub stored_fields: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderConfigEnvironment {
+    pub name: String,
+    pub configured: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -263,7 +275,16 @@ pub fn view_for_plugin(plugin_id: &str, fields: &[PluginConfigField]) -> Provide
         };
         values.insert(field.id.clone(), view);
     }
-    ProviderConfigView { values }
+    let stored_fields = fields
+        .iter()
+        .filter(|field| stored.contains_key(&field.id))
+        .map(|field| field.id.clone())
+        .collect();
+    ProviderConfigView {
+        values,
+        environment: HashMap::new(),
+        stored_fields,
+    }
 }
 
 pub fn save_plugin_values(

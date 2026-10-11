@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import type { PluginOutput } from "@/lib/plugin-types"
 import type { PluginState } from "@/hooks/app/types"
 import type { ProbeResultContext } from "@/hooks/use-probe-events"
+import { probeFailure } from "@/lib/probe-failure"
 
 type UseProbeStateArgs = {
   onProbeResult?: () => void
@@ -27,15 +28,6 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
     },
     []
   )
-
-  const getErrorMessage = useCallback((output: PluginOutput) => {
-    if (output.lines.length !== 1) return null
-    const line = output.lines[0]
-    if (line.type === "badge" && line.label === "Error") {
-      return line.text || "无法更新数据，请重试。"
-    }
-    return null
-  }, [])
 
   const setLoadingForPlugins = useCallback((ids: string[]) => {
     updatePluginStates((prev) => {
@@ -94,7 +86,7 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
 
   const handleProbeResult = useCallback(
     (output: PluginOutput, { manual }: ProbeResultContext) => {
-      const errorMessage = getErrorMessage(output)
+      const errorMessage = probeFailure(output)
 
       const now = Date.now()
       updatePluginStates((prev) => {
@@ -102,7 +94,7 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
         return {
           ...prev,
           [output.providerId]: {
-            data: errorMessage ? (existing?.data ?? null) : output,
+            data: errorMessage ? (existing?.data ?? (output.providerId === "claude" && output.lines.some((line) => line.type === "progress") ? output : null)) : output,
             loading: false,
             error: errorMessage,
             lastErrorAt: errorMessage ? now : null,
@@ -116,7 +108,7 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
 
       onProbeResult?.()
     },
-    [getErrorMessage, onProbeResult, updatePluginStates]
+    [onProbeResult, updatePluginStates]
   )
 
   return {

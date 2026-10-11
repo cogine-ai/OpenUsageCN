@@ -1,240 +1,84 @@
-import { cleanup, render, screen } from "@testing-library/react"
+import { cleanup, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-const providerConfigMocks = vi.hoisted(() => ({
-  getProviderConfig: vi.fn(),
-  saveProviderConfig: vi.fn(),
-  deleteProviderConfigField: vi.fn(),
-}))
-
+const providerConfigMocks = vi.hoisted(() => ({ getProviderConfig: vi.fn() }))
 vi.mock("@dnd-kit/sortable", () => ({
-  useSortable: () => ({
-    attributes: {},
-    listeners: {},
-    setNodeRef: vi.fn(),
-    transform: null,
-    transition: undefined,
-    isDragging: false,
-  }),
+  useSortable: () => ({ attributes: {}, listeners: {}, setNodeRef: vi.fn(), transform: null, transition: undefined, isDragging: false }),
 }))
-
-vi.mock("@dnd-kit/utilities", () => ({
-  CSS: { Transform: { toString: () => "" } },
-}))
-
-vi.mock("@/lib/provider-config", () => ({
-  getProviderConfig: providerConfigMocks.getProviderConfig,
-  saveProviderConfig: providerConfigMocks.saveProviderConfig,
-  deleteProviderConfigField: providerConfigMocks.deleteProviderConfigField,
-}))
+vi.mock("@dnd-kit/utilities", () => ({ CSS: { Transform: { toString: () => "" } } }))
+vi.mock("@/lib/provider-config", () => ({ getProviderConfig: providerConfigMocks.getProviderConfig }))
 
 import { SortablePluginItem, type SettingsPluginConfig } from "@/components/settings-plugin-item"
+import { useAppUiStore } from "@/stores/app-ui-store"
 
 const secretConfig: NonNullable<SettingsPluginConfig["config"]> = {
-  fields: [
-    {
-      id: "apiKey",
-      type: "secret",
-      label: "API Key",
-      placeholder: "key.secret",
-      help: "留空则使用 BIGMODEL_API_KEY 或 ZHIPUAI_API_KEY 环境变量",
-      options: [],
-      defaultSource: true,
-    },
-  ],
+  fields: [{ id: "apiKey", type: "secret", label: "API Key", placeholder: "key.secret", help: "留空则使用环境变量", options: [], defaultSource: true }],
 }
-
-function renderItem(
-  plugin: SettingsPluginConfig,
-  props?: Partial<Parameters<typeof SortablePluginItem>[0]>
-) {
-  return render(
-    <SortablePluginItem
-      plugin={plugin}
-      onToggle={vi.fn()}
-      onProviderConfigSaved={vi.fn()}
-      {...props}
-    />
-  )
+function renderItem(plugin: SettingsPluginConfig, onToggle = vi.fn()) {
+  return render(<SortablePluginItem plugin={plugin} onToggle={onToggle} />)
 }
-
 beforeEach(() => {
-  providerConfigMocks.getProviderConfig.mockReset()
-  providerConfigMocks.getProviderConfig.mockResolvedValue({ values: {} })
-  providerConfigMocks.saveProviderConfig.mockReset()
-  providerConfigMocks.saveProviderConfig.mockResolvedValue(undefined)
-  providerConfigMocks.deleteProviderConfigField.mockReset()
-  providerConfigMocks.deleteProviderConfigField.mockResolvedValue(undefined)
+  providerConfigMocks.getProviderConfig.mockReset().mockResolvedValue({ values: {} })
+  useAppUiStore.getState().resetState()
 })
-
-afterEach(() => {
-  cleanup()
-})
+afterEach(cleanup)
 
 describe("SortablePluginItem", () => {
-  it("does not toggle providers when clicking a title without config fields", async () => {
+  it("opens local connection without toggling a provider that has no config or accounts", async () => {
     const onToggle = vi.fn()
-    renderItem(
-      { id: "beta", name: "Beta", enabled: false },
-      { onToggle }
-    )
-
-    await userEvent.click(screen.getByText("Beta"))
+    renderItem({ id: "codex", name: "Codex", enabled: false }, onToggle)
+    await userEvent.click(screen.getByRole("button", { name: "连接 Codex" }))
+    expect(useAppUiStore.getState().connection).toEqual({ providerId: "codex", kind: "local" })
     expect(onToggle).not.toHaveBeenCalled()
+    expect(providerConfigMocks.getProviderConfig).not.toHaveBeenCalled()
   })
 
-  it("collapses provider config fields until the title is expanded", async () => {
-    renderItem({
-      id: "bigmodel-cn",
-      name: "BigModel CN",
-      enabled: true,
-      config: secretConfig,
-    })
-
-    expect(await screen.findByText("使用默认")).toBeInTheDocument()
-    expect(providerConfigMocks.getProviderConfig).toHaveBeenCalledTimes(1)
+  it("routes config to the full-width connection page without embedding fields", async () => {
+    renderItem({ id: "bigmodel-cn", name: "BigModel CN", enabled: true, config: secretConfig })
+    expect(await screen.findByText("连接")).toBeInTheDocument()
+    expect(providerConfigMocks.getProviderConfig).toHaveBeenCalledWith("bigmodel-cn")
+    await userEvent.click(screen.getByRole("button", { name: "连接 BigModel CN" }))
+    expect(useAppUiStore.getState().connection).toEqual({ providerId: "bigmodel-cn", kind: "config" })
     expect(screen.queryByLabelText("API Key")).not.toBeInTheDocument()
-
-    await userEvent.click(screen.getByRole("button", { name: "展开 BigModel CN 配置" }))
-    expect(await screen.findByLabelText("API Key")).toBeInTheDocument()
     expect(providerConfigMocks.getProviderConfig).toHaveBeenCalledTimes(1)
-    expect(screen.queryByText("使用默认")).not.toBeInTheDocument()
-
-    await userEvent.click(screen.getByRole("button", { name: "收起 BigModel CN 配置" }))
-    expect(screen.queryByLabelText("API Key")).not.toBeInTheDocument()
-    expect(await screen.findByText("使用默认")).toBeInTheDocument()
   })
 
-  it("expands provider config titles without toggling the provider", async () => {
+  it("routes account-capable providers to account management", async () => {
+    renderItem({ id: "cursor", name: "Cursor", enabled: true, accountSupport: { localDiscovery: true, browserBinding: true, modelHistory: true } })
+    await userEvent.click(screen.getByRole("button", { name: "连接 Cursor" }))
+    expect(useAppUiStore.getState().connection).toEqual({ providerId: "cursor", kind: "accounts" })
+  })
+
+  it("keeps enabling independent from opening a connection", async () => {
     const onToggle = vi.fn()
-    renderItem(
-      {
-        id: "bigmodel-cn",
-        name: "BigModel CN",
-        enabled: true,
-        config: secretConfig,
-      },
-      { onToggle }
-    )
-
-    await userEvent.click(screen.getByRole("button", { name: "展开 BigModel CN 配置" }))
+    renderItem({ id: "bigmodel-cn", name: "BigModel CN", enabled: true, config: secretConfig }, onToggle)
+    await userEvent.click(screen.getByRole("button", { name: "连接 BigModel CN" }))
     expect(onToggle).not.toHaveBeenCalled()
     await userEvent.click(screen.getByRole("checkbox", { name: "停用 BigModel CN" }))
     expect(onToggle).toHaveBeenCalledWith("bigmodel-cn")
   })
 
-  it("shows compact config status by provider config state", async () => {
+  it("shows only saved or actually detected credentials without inferring detection from a manifest default", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
-    providerConfigMocks.getProviderConfig.mockImplementation((pluginId: string) => {
-      if (pluginId === "stored") {
-        return Promise.resolve({
-          values: {
-            apiKey: { type: "secret", configured: true, hint: "...abcd" },
-          },
-        })
-      }
-      if (pluginId === "failed") {
-        return Promise.reject(new Error("ipc unavailable"))
-      }
-      return Promise.resolve({ values: {} })
+    providerConfigMocks.getProviderConfig.mockImplementation((id: string) => {
+      if (id === "saved") return Promise.resolve({ values: { apiKey: { type: "secret", configured: true } } })
+      if (id === "stored") return Promise.resolve({ values: { mode: { type: "select", value: "key" } }, storedFields: ["mode"] })
+      if (id === "detected") return Promise.resolve({ values: {}, environment: { apiKey: { name: "TEST_API_KEY", configured: true } } })
+      if (id === "failed") return Promise.reject(new Error("ipc unavailable"))
+      return Promise.resolve({ values: {}, environment: { apiKey: { name: "TEST_API_KEY", configured: false } } })
     })
-
-    render(
-      <div>
-        <SortablePluginItem
-          plugin={{
-            id: "stored",
-            name: "Stored",
-            enabled: true,
-            config: {
-              fields: [
-                {
-                  id: "apiKey",
-                  type: "secret",
-                  label: "API Key",
-                  placeholder: "key.secret",
-                  help: "留空则使用 STORED_API_KEY 环境变量",
-                  options: [],
-                },
-              ],
-            },
-          }}
-          onToggle={vi.fn()}
-          onProviderConfigSaved={vi.fn()}
-        />
-        <SortablePluginItem
-          plugin={{
-            id: "default",
-            name: "Default",
-            enabled: true,
-            config: {
-              fields: [
-                {
-                  id: "apiKey",
-                  type: "secret",
-                  label: "API Key",
-                  placeholder: "key.secret",
-                  help: "留空则使用 DEFAULT_API_KEY 环境变量",
-                  options: [],
-                  defaultSource: true,
-                },
-              ],
-            },
-          }}
-          onToggle={vi.fn()}
-          onProviderConfigSaved={vi.fn()}
-        />
-        <SortablePluginItem
-          plugin={{
-            id: "empty",
-            name: "Empty",
-            enabled: true,
-            config: {
-              fields: [
-                {
-                  id: "apiKey",
-                  type: "secret",
-                  label: "API Key",
-                  placeholder: "key.secret",
-                  help: "必须填写 API Key",
-                  options: [],
-                },
-              ],
-            },
-          }}
-          onToggle={vi.fn()}
-          onProviderConfigSaved={vi.fn()}
-        />
-        <SortablePluginItem
-          plugin={{
-            id: "failed",
-            name: "Failed",
-            enabled: true,
-            config: {
-              fields: [
-                {
-                  id: "apiKey",
-                  type: "secret",
-                  label: "API Key",
-                  placeholder: "key.secret",
-                  help: "留空则使用 FAILED_API_KEY 环境变量",
-                  options: [],
-                  defaultSource: true,
-                },
-              ],
-            },
-          }}
-          onToggle={vi.fn()}
-          onProviderConfigSaved={vi.fn()}
-        />
-      </div>
-    )
-
-    expect(await screen.findByText("已配置")).toBeInTheDocument()
-    expect(await screen.findByText("使用默认")).toBeInTheDocument()
-    expect(await screen.findByText("未配置")).toBeInTheDocument()
-    expect(await screen.findByText("配置未知")).toBeInTheDocument()
+    for (const id of ["saved", "stored", "detected", "default", "failed"]) {
+      renderItem({ id, name: id, enabled: true, config: secretConfig })
+    }
+    expect(await within(screen.getByRole("button", { name: "连接 saved" })).findByText("已保存")).toBeVisible()
+    expect(await within(screen.getByRole("button", { name: "连接 stored" })).findByText("已保存")).toBeVisible()
+    expect(await within(screen.getByRole("button", { name: "连接 detected" })).findByText("已发现凭据")).toBeVisible()
+    expect(within(screen.getByRole("button", { name: "连接 default" })).getByText("连接")).toBeVisible()
+    expect(await within(screen.getByRole("button", { name: "连接 failed" })).findByText("无法读取")).toBeVisible()
+    expect(screen.queryByText("连接成功")).not.toBeInTheDocument()
+    expect(screen.queryByText("使用默认")).not.toBeInTheDocument()
+    expect(consoleError).toHaveBeenCalled()
     consoleError.mockRestore()
   })
 })

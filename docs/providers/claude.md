@@ -74,7 +74,7 @@ with the packaged `@steipete/sweet-cookie` helper and checks
 `GET https://claude.ai/api/account`.
 
 The exact seat is used only when the browser email and organization both match the OAuth profile.
-Email matching ignores surrounding ASCII whitespace and letter case; the organization UUID must
+Email matching ignores surrounding whitespace and ASCII letter case; the organization UUID must
 match exactly. Missing, mismatched, or unknown evidence keeps the label at `Team`. A Claude browser
 session cannot create a separate browser-only account.
 
@@ -170,3 +170,11 @@ Content-Type: application/json
   "expires_in": 3600                       // seconds
 }
 ```
+
+## Checking A Browser Connection
+
+Browser connection starts with an explicit browser and profile choice. It can enrich an existing local Claude OAuth account only after matching the verified email and organization. It cannot create an independent browser-only Claude account. Without a usable local CLI connection, connect Claude Code first.
+
+Not Logged In, Session Expired, Token Expired and Keychain refresh errors open the local Claude Code login steps directly. Browser connection cannot repair these local login failures.
+
+Candidate display identity comes from the verified OAuth identity and stays in memory. A candidate lasts ten minutes and is consumed when adding starts. Failed or expired candidates require another check of the same source. Email and name are redacted from logs and are not added to the persisted registry.

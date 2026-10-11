@@ -221,6 +221,7 @@ impl BrowserSessionBroker {
             .candidates
             .sort_by_key(|candidate| host_priority(provider, &candidate.host));
 
+        let mut identity_unavailable = false;
         for candidate in response.candidates {
             if cancellation.is_cancelled() {
                 return ProfileDiscoveryResult::failed(
@@ -278,9 +279,11 @@ impl BrowserSessionBroker {
                         );
                     return ProfileDiscoveryResult::verified(profile_key, summary);
                 }
-                Ok(
-                    ValidationOutcome::RejectedAuthentication | ValidationOutcome::MissingIdentity,
-                ) => {
+                Ok(ValidationOutcome::MissingIdentity) => {
+                    identity_unavailable = true;
+                    continue;
+                }
+                Ok(ValidationOutcome::RejectedAuthentication) => {
                     continue;
                 }
                 Err(error) => {
@@ -293,7 +296,11 @@ impl BrowserSessionBroker {
         }
         ProfileDiscoveryResult::failed(
             profile_key,
-            super::BrowserSessionError::authentication_rejected(),
+            if identity_unavailable {
+                super::BrowserSessionError::identity_unavailable()
+            } else {
+                super::BrowserSessionError::authentication_rejected()
+            },
         )
     }
 }

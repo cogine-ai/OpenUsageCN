@@ -66,9 +66,156 @@ pub(super) fn openrouter_key_body(body: &str) -> String {
     payload.to_string()
 }
 
+pub(super) fn gemini_assist_body(body: &str) -> String {
+    let Ok(mut payload) = serde_json::from_str::<serde_json::Value>(body) else {
+        return "[REDACTED GEMINI ASSIST RESPONSE]".to_string();
+    };
+    let Some(root) = payload.as_object_mut() else {
+        return "[REDACTED GEMINI ASSIST RESPONSE]".to_string();
+    };
+    if let Some(project) = root.get_mut("cloudaicompanionProject") {
+        *project = serde_json::Value::String("[REDACTED]".to_string());
+    }
+    payload.to_string()
+}
+
+pub(super) fn doubao_error_body(body: &str) -> String {
+    let Ok(mut payload) = serde_json::from_str::<serde_json::Value>(body) else {
+        return "[REDACTED DOUBAO GATEWAY RESPONSE]".to_string();
+    };
+    if let Some(message) = payload
+        .get_mut("ResponseMetadata")
+        .and_then(|metadata| metadata.get_mut("Error"))
+        .and_then(|error| error.get_mut("Message"))
+    {
+        *message = serde_json::Value::String("[REDACTED]".to_string());
+    }
+    payload.to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::{redact_body, redact_http_response_body, redact_plugin_http_response_body};
+
+    #[test]
+    fn provider_identity_log_hides_opencode_server_response() {
+        for body in [
+            r#";id:"wrk_private18459275",name:"Private Workspace""#,
+            r#"{"data":[{"id":"wrk_private18459275","name":"Private Workspace"}]}"#,
+        ] {
+            for url in [
+                "https://opencode.ai/_server?id=def39973159c7f0483d8793a822b8dbb10d067e12c65455fcb4608459ba0234f",
+                "https://opencode.ai/_server",
+            ] {
+                let redacted = redact_plugin_http_response_body("opencode", url, body);
+                assert!(!redacted.contains("wrk_private18459275"));
+                assert!(!redacted.contains("Private Workspace"));
+                assert_eq!(redacted, "[REDACTED OPENCODE SERVER RESPONSE]");
+            }
+        }
+    }
+
+    #[test]
+    fn provider_identity_log_hides_gemini_project_shapes_and_keeps_tier() {
+        let project = "private-gemini-project-18459275";
+        for identity in [
+            serde_json::json!(project),
+            serde_json::json!({"id": project}),
+            serde_json::json!({"projectId": project}),
+        ] {
+            let body = serde_json::json!({
+                "cloudaicompanionProject": identity,
+                "currentTier": {"id": "standard-tier"},
+            });
+            let redacted = redact_plugin_http_response_body(
+                "gemini",
+                "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist",
+                &body.to_string(),
+            );
+            assert!(!redacted.contains(project));
+            let payload: serde_json::Value = serde_json::from_str(&redacted).unwrap();
+            assert_eq!(payload["cloudaicompanionProject"], "[REDACTED]");
+            assert_eq!(payload["currentTier"], body["currentTier"]);
+        }
+    }
+
+    #[test]
+    fn provider_identity_log_rules_are_scoped_and_invalid_gemini_json_is_hidden() {
+        let body = r#"{"id":"wrk_private18459275","cloudaicompanionProject":"private-project-18459275","usagePercent":17}"#;
+        for (plugin_id, url) in [
+            ("other", "https://opencode.ai/_server"),
+            ("opencode", "https://opencode.ai/usage"),
+            (
+                "gemini",
+                "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota",
+            ),
+            (
+                "other",
+                "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist",
+            ),
+        ] {
+            assert_eq!(redact_plugin_http_response_body(plugin_id, url, body), body);
+        }
+        for body in ["invalid-private-project-response", "[]"] {
+            assert_eq!(
+                redact_plugin_http_response_body(
+                    "gemini",
+                    "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist?probe=1#details",
+                    body,
+                ),
+                "[REDACTED GEMINI ASSIST RESPONSE]"
+            );
+        }
+    }
+
+    #[test]
+    fn provider_identity_log_hides_doubao_gateway_error_message_and_keeps_code() {
+        // Volcengine's public InvalidAccessKey error contract echoes the supplied AK.
+        let access_key = "AKLTopaque18459275";
+        let body = serde_json::json!({
+            "ResponseMetadata": {
+                "RequestId": "public-request-9275",
+                "Error": {"Code": "InvalidAccessKey", "CodeN": 100009,
+                    "Message": format!("The accesskey [{access_key}] included in the request is invalid.")},
+            },
+            "Result": {"usagePercent": 17},
+        });
+        for action in ["GetCodingPlanUsage", "GetAFPUsage"] {
+            let url = format!("https://open.volcengineapi.com/?Action={action}&Version=2024-01-01");
+            let redacted = redact_plugin_http_response_body("doubao", &url, &body.to_string());
+            assert!(
+                !redacted.contains(access_key),
+                "Access Key leaked: {redacted}"
+            );
+            let payload: serde_json::Value = serde_json::from_str(&redacted).unwrap();
+            assert_eq!(
+                payload["ResponseMetadata"]["Error"]["Message"],
+                "[REDACTED]"
+            );
+            assert_eq!(
+                payload["ResponseMetadata"]["Error"]["Code"],
+                "InvalidAccessKey"
+            );
+            assert_eq!(payload["ResponseMetadata"]["Error"]["CodeN"], 100009);
+            assert_eq!(
+                payload["ResponseMetadata"]["RequestId"],
+                "public-request-9275"
+            );
+            assert_eq!(payload["Result"], body["Result"]);
+        }
+        for (plugin_id, url) in [
+            (
+                "other",
+                "https://open.volcengineapi.com/?Action=GetAFPUsage",
+            ),
+            ("doubao", "https://example.com/"),
+        ] {
+            assert_eq!(
+                redact_plugin_http_response_body(plugin_id, url, &body.to_string()),
+                body.to_string()
+            );
+        }
+    }
 
     #[test]
     fn cursor_grok_usage_redacts_identity_and_preserves_quota_metadata() {

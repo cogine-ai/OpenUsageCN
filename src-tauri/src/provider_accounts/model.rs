@@ -101,6 +101,8 @@ pub(crate) enum OperationStatus {
 pub(crate) struct AccountSummary {
     pub account_id: AccountId,
     pub label: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub identity: Option<crate::browser_sessions::AccountIdentityDisplay>,
     pub connection_kinds: Vec<ConnectionKind>,
     pub selected: bool,
     pub stale: bool,

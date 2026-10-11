@@ -13,6 +13,8 @@
         "type": "select",
         "label": "Region",
         "default": "auto",
+        "autoValue": "auto",
+        "environmentVariables": ["MOONSHOT_REGION"],
         "options": [
           { "value": "auto", "label": "Auto (Environment Or International)" },
           { "value": "international", "label": "International" },
@@ -22,17 +24,23 @@
       {
         "id": "apiKeyIntl",
         "type": "secret",
+        "required": true,
         "label": "International API Key",
         "placeholder": "sk-...",
         "help": "留空则使用 MOONSHOT_API_KEY；MOONSHOT_REGION 留空或为 international",
+        "visibleWhen": { "field": "region", "values": ["international"] },
+        "environmentVariables": ["MOONSHOT_API_KEY"],
         "defaultSource": true
       },
       {
         "id": "apiKeyCn",
         "type": "secret",
+        "required": true,
         "label": "China Mainland API Key",
         "placeholder": "sk-...",
         "help": "留空则使用 MOONSHOT_API_KEY；需设置 MOONSHOT_REGION=china",
+        "visibleWhen": { "field": "region", "values": ["china"] },
+        "environmentVariables": ["MOONSHOT_API_KEY"],
         "defaultSource": true
       }
     ]

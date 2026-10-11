@@ -80,6 +80,7 @@ pub(super) fn view_from_state(
             AccountSummary {
                 account_id: account.account_id.clone(),
                 label: account.label.clone(),
+                identity: None,
                 connection_kinds,
                 selected: provider.active_account_id.as_ref() == Some(&account.account_id),
                 stale: !account

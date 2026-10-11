@@ -8,9 +8,9 @@
   "brandColor": "#3370FF",
   "config": {
     "fields": [
-      { "id": "accessKeyId", "type": "secret", "label": "Volcengine Access Key ID", "help": "留空则使用 VOLCENGINE_ACCESS_KEY_ID 环境变量", "defaultSource": true },
-      { "id": "secretAccessKey", "type": "secret", "label": "Volcengine Secret Access Key", "help": "留空则使用 VOLCENGINE_SECRET_ACCESS_KEY 环境变量", "defaultSource": true },
-      { "id": "region", "type": "text", "label": "Region", "placeholder": "cn-beijing", "help": "默认为 cn-beijing；也可设置 VOLCENGINE_REGION 环境变量", "defaultSource": true }
+      { "id": "accessKeyId", "type": "secret", "label": "Volcengine Access Key ID", "help": "留空则使用 VOLCENGINE_ACCESS_KEY_ID 环境变量", "environmentVariables": ["VOLCENGINE_ACCESS_KEY_ID"], "defaultSource": true },
+      { "id": "secretAccessKey", "type": "secret", "label": "Volcengine Secret Access Key", "help": "留空则使用 VOLCENGINE_SECRET_ACCESS_KEY 环境变量", "environmentVariables": ["VOLCENGINE_SECRET_ACCESS_KEY"], "defaultSource": true },
+      { "id": "region", "type": "text", "label": "Region", "placeholder": "cn-beijing", "help": "默认为 cn-beijing；也可设置 VOLCENGINE_REGION 环境变量", "environmentVariables": ["VOLCENGINE_REGION"], "defaultSource": true }
     ]
   },
   "lines": [

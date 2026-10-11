@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react"
+import { cleanup, render, screen, waitFor } from "@testing-library/react"
 import type { ReactNode } from "react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -9,6 +9,12 @@ const providerConfigMocks = vi.hoisted(() => ({
   getProviderConfig: vi.fn(),
   saveProviderConfig: vi.fn(),
   deleteProviderConfigField: vi.fn(),
+}))
+const toolMocks = vi.hoisted(() => ({ invoke: vi.fn(), health: vi.fn() }))
+vi.mock("@tauri-apps/api/core", () => ({ invoke: toolMocks.invoke, isTauri: () => true }))
+vi.mock("@/lib/local-http-api", async () => ({
+  ...await vi.importActual<typeof import("@/lib/local-http-api")>("@/lib/local-http-api"),
+  fetchLocalHttpApiHealth: toolMocks.health,
 }))
 
 vi.mock("@dnd-kit/core", () => ({
@@ -54,6 +60,7 @@ vi.mock("@/lib/provider-config", () => ({
 }))
 
 import { SettingsPage } from "@/pages/settings"
+import { useAppUiStore } from "@/stores/app-ui-store"
 
 const macosCapabilities = {
   platform: "macos",
@@ -116,6 +123,15 @@ const defaultProps = {
 }
 
 beforeEach(() => {
+  toolMocks.invoke.mockReset().mockImplementation((command: string) => {
+    if (command === "get_global_shortcut_status") return Promise.resolve({ shortcut: null, active: false, error: null })
+    if (command === "get_notification_permission" || command === "request_notification_permission") return Promise.resolve("granted")
+    if (command === "get_local_http_api_status") return Promise.resolve({ state: "running", bind: "127.0.0.1:6736", startedAt: "2026-10-11T06:00:00Z" })
+    if (command === "get_cli_install_status") return Promise.resolve({ available: true, state: "notInstalled", destination: "/usr/local/bin/openusage", message: null })
+    throw new Error(`Unexpected command: ${command}`)
+  })
+  toolMocks.health.mockReset().mockResolvedValue({ status: "ok", providers: { known: 1, enabled: 1, cached: 1 }, cache: { ready: true, lastSuccessfulFetchAt: null } })
+  useAppUiStore.getState().resetState()
   providerConfigMocks.getProviderConfig.mockReset()
   providerConfigMocks.getProviderConfig.mockResolvedValue({ values: {} })
   providerConfigMocks.saveProviderConfig.mockReset()
@@ -129,7 +145,7 @@ afterEach(() => {
 })
 
 describe("SettingsPage", () => {
-  it("hides unsupported Windows settings while retaining core settings", () => {
+  it("hides unsupported Windows settings while retaining core settings", async () => {
     render(
       <SettingsPage
         {...defaultProps}
@@ -142,12 +158,47 @@ describe("SettingsPage", () => {
     expect(screen.queryByText("全局快捷键")).not.toBeInTheDocument()
     expect(screen.queryByText("命令行")).not.toBeInTheDocument()
     expect(screen.queryByText(/Cmd|Opt/)).not.toBeInTheDocument()
-    expect(screen.getByText("本地 API")).toBeInTheDocument()
+    expect(screen.queryByText("本地 API")).not.toBeInTheDocument()
+    expect(toolMocks.invoke).not.toHaveBeenCalledWith("get_local_http_api_status")
+    await userEvent.click(screen.getByRole("button", { name: "工具接入" }))
+    expect(await screen.findByText("运行中")).toBeVisible()
+    expect(screen.getByRole("heading", { name: "本地 API" })).toBeVisible()
+    expect(screen.getByText("http://127.0.0.1:6736")).toBeVisible()
+    expect(screen.queryByRole("button", { name: "安装命令" })).not.toBeInTheDocument()
     expect(screen.getByRole("heading", { name: "登录时启动" })).toBeInTheDocument()
     expect(screen.getByText("自动刷新")).toBeInTheDocument()
     expect(screen.getByText("用量显示")).toBeInTheDocument()
     expect(screen.getByText("应用主题")).toBeInTheDocument()
-    expect(screen.getByText("插件")).toBeInTheDocument()
+    expect(screen.getAllByRole("heading")[0]).toHaveTextContent("服务商")
+  })
+
+  it("mounts supported Mac tool settings only while expanded", async () => {
+    render(<SettingsPage {...defaultProps} />)
+    const toggle = screen.getByRole("button", { name: "工具接入" })
+    const panel = document.getElementById(toggle.getAttribute("aria-controls")!)
+    expect(toggle).toHaveAttribute("aria-expanded", "false")
+    expect(panel).toBeEmptyDOMElement()
+    expect(toolMocks.invoke).not.toHaveBeenCalledWith("get_local_http_api_status")
+    expect(toolMocks.invoke).not.toHaveBeenCalledWith("get_cli_install_status")
+    await userEvent.click(toggle)
+    expect(toggle).toHaveAttribute("aria-expanded", "true")
+    expect(screen.getByRole("heading", { name: "本地 API" })).toBeVisible()
+    expect(screen.getByRole("heading", { name: "命令行" })).toBeVisible()
+    await waitFor(() => expect(screen.getByRole("button", { name: "安装命令" })).toBeEnabled())
+    expect(toolMocks.invoke).toHaveBeenCalledWith("get_local_http_api_status")
+    expect(toolMocks.invoke).toHaveBeenCalledWith("get_cli_install_status")
+    await userEvent.click(toggle)
+    expect(toggle).toHaveAttribute("aria-expanded", "false")
+    expect(panel).toBeEmptyDOMElement()
+    expect(screen.queryByRole("heading", { name: "本地 API" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "安装命令" })).not.toBeInTheDocument()
+  })
+
+  it.each([null, { ...windowsCapabilities, localHttpApi: false }])("omits tool access when no tool capability is supported", (platformCapabilities) => {
+    render(<SettingsPage {...defaultProps} platformCapabilities={platformCapabilities} />)
+    expect(screen.queryByRole("button", { name: "工具接入" })).not.toBeInTheDocument()
+    expect(toolMocks.invoke).not.toHaveBeenCalledWith("get_local_http_api_status")
+    expect(toolMocks.invoke).not.toHaveBeenCalledWith("get_cli_install_status")
   })
 
   it("toggles plugins", async () => {
@@ -161,8 +212,7 @@ describe("SettingsPage", () => {
         onToggle={onToggle}
       />
     )
-    const checkboxes = screen.getAllByRole("checkbox")
-    await userEvent.click(checkboxes[checkboxes.length - 1])
+    await userEvent.click(screen.getByRole("checkbox", { name: "启用 Beta" }))
     expect(onToggle).toHaveBeenCalledWith("b")
   })
 
@@ -229,7 +279,7 @@ describe("SettingsPage", () => {
     })
   })
 
-  it("renders provider config fields after expanding configurable providers", async () => {
+  it("opens a configurable provider's independent connection page from the first settings group", async () => {
     render(
       <SettingsPage
         {...defaultProps}
@@ -255,9 +305,11 @@ describe("SettingsPage", () => {
       />
     )
 
-    await userEvent.click(screen.getByRole("button", { name: "展开 BigModel CN 配置" }))
-    expect(await screen.findByLabelText("API Key")).toBeInTheDocument()
-    expect(screen.getByText("留空则使用 BIGMODEL_API_KEY 或 ZHIPUAI_API_KEY 环境变量")).toBeInTheDocument()
+    expect(screen.getAllByRole("heading")[0]).toHaveTextContent("服务商")
+    await userEvent.click(screen.getByRole("button", { name: "连接 BigModel CN" }))
+    expect(useAppUiStore.getState().connection).toEqual({ providerId: "bigmodel-cn", kind: "config" })
+    expect(screen.queryByLabelText("API Key")).not.toBeInTheDocument()
+    expect(screen.queryByText("留空则使用 BIGMODEL_API_KEY 或 ZHIPUAI_API_KEY 环境变量")).not.toBeInTheDocument()
   })
 
   it("renders app theme section with theme options", () => {
@@ -313,6 +365,8 @@ describe("SettingsPage", () => {
   it("renders reset timers section heading", () => {
     render(<SettingsPage {...defaultProps} />)
     expect(screen.getByText("重置时间")).toBeInTheDocument()
+    expect(screen.queryByText("倒计时或具体时间")).not.toBeInTheDocument()
+    expect(screen.getByRole("radio", { name: /5 小时 12 分钟/ })).toBeInTheDocument()
   })
 
   it("renders time format section heading", () => {

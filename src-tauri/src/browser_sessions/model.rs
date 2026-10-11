@@ -1,6 +1,15 @@
 use super::{Browser, BrowserSessionError, CookieProvider};
 use serde::Serialize;
 
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct AccountIdentityDisplay {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) enum ProfileDiscoveryStatus {
@@ -18,6 +27,8 @@ pub(crate) struct BrowserCandidateSummary {
     pub profile_key: String,
     pub host: String,
     pub expires_at_ms: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub identity: Option<AccountIdentityDisplay>,
 }
 
 #[derive(Debug, Serialize)]
@@ -33,6 +44,7 @@ pub(crate) struct ProfileDiscoveryResult {
 
 impl ProfileDiscoveryResult {
     pub(super) fn failed(profile_key: &str, error: BrowserSessionError) -> Self {
+        log::warn!("Browser account check failed: code={:?}", error.code);
         Self {
             profile_key: profile_key.to_string(),
             status: ProfileDiscoveryStatus::Failed,
@@ -84,6 +96,8 @@ pub(crate) struct SessionBindingSummary {
     pub profile_key: String,
     pub host: String,
     pub expires_at_ms: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub identity: Option<AccountIdentityDisplay>,
 }
 
 pub(crate) struct AttachedSessionClaim {

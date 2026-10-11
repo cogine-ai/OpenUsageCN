@@ -225,7 +225,7 @@ host.config.get(name: string): string | boolean | null
 host.config.all(): Record<string, string | boolean>
 ```
 
-Reads values saved from the plugin's Settings fields. A plugin declares those fields in `plugin.json` under `config.fields`.
+Reads values saved from the plugin's connection fields. A plugin declares those fields in `plugin.json` under `config.fields`.
 
 ### Behavior
 
@@ -235,6 +235,10 @@ Reads values saved from the plugin's Settings fields. A plugin declares those fi
 - Missing `toggle` values return `false`
 - Missing `select` values return the field default, or the first option
 - Plugins without config still get `host.config`; `get()` returns `null` and `all()` returns `{}`
+
+The configuration view separates saved field IDs from confirmed environment sources. Secret sources expose presence and the variable name only. Public region sources may expose a valid declared option; an unsupported environment region does not select a valid region. This metadata does not change `host.config` or the plugin's credential priority. Saved values for hidden fields are retained. A connection-page check uses a fresh probe batch and is independent of the provider enable switch.
+
+`required` defaults to `false` and applies only to `secret` and `text` fields. The form checks visible required fields against new input, saved values, or confirmed environment sources before submitting. It does not change the values returned by `host.config`.
 
 ### Example
 

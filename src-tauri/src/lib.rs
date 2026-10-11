@@ -6,6 +6,7 @@ pub mod cli;
 mod cli_installer;
 mod config;
 mod cursor_history;
+mod global_shortcut;
 mod local_history;
 mod local_http_api;
 mod log_path;
@@ -24,6 +25,7 @@ mod plugin_engine;
 mod probe_batches;
 mod provider_accounts;
 mod provider_config;
+mod provider_config_sources;
 mod provider_detection;
 mod provider_status;
 mod safe_file;
@@ -35,8 +37,6 @@ mod windows_autostart;
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
-#[cfg(target_os = "macos")]
-use std::sync::OnceLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -46,11 +46,6 @@ use tauri_plugin_aptabase::EventTracker;
 use tauri_plugin_log::{Target, TargetKind};
 use uuid::Uuid;
 
-#[cfg(target_os = "macos")]
-use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
-
-#[cfg(target_os = "macos")]
-const GLOBAL_SHORTCUT_STORE_KEY: &str = "globalShortcut";
 const DAILY_ACTIVE_TRACKED_DAY_KEY: &str = "analytics.daily_active_day";
 const DAILY_ACTIVE_EVENT_NAME: &str = "app_started";
 const MAX_CONCURRENT_PROBES: usize = 4;
@@ -269,24 +264,6 @@ fn spawn_daily_active_rollover_tracker(app_handle: tauri::AppHandle) {
     });
 }
 
-#[cfg(target_os = "macos")]
-fn managed_shortcut_slot() -> &'static Mutex<Option<String>> {
-    static SLOT: OnceLock<Mutex<Option<String>>> = OnceLock::new();
-    SLOT.get_or_init(|| Mutex::new(None))
-}
-
-/// Shared shortcut handler that toggles the panel when the shortcut is pressed.
-#[cfg(target_os = "macos")]
-fn handle_global_shortcut(
-    app: &tauri::AppHandle,
-    event: tauri_plugin_global_shortcut::ShortcutEvent,
-) {
-    if event.state == ShortcutState::Pressed {
-        log::debug!("Global shortcut triggered");
-        panel::toggle_panel(app);
-    }
-}
-
 pub struct AppState {
     pub plugins: Vec<plugin_engine::manifest::LoadedPlugin>,
     pub app_data_dir: PathBuf,
@@ -355,6 +332,10 @@ pub struct ConfigFieldDto {
     pub options: Vec<ConfigOptionDto>,
     pub default: Option<serde_json::Value>,
     pub default_source: bool,
+    pub required: bool,
+    pub visible_when: Option<plugin_engine::manifest::PluginConfigVisibility>,
+    pub environment_variables: Vec<String>,
+    pub auto_value: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -811,18 +792,29 @@ fn plugin_config_dto(config: &plugin_engine::manifest::PluginConfig) -> PluginCo
                     .collect(),
                 default: field.default.clone(),
                 default_source: field.default_source,
+                required: field.required,
+                visible_when: field.visible_when.clone(),
+                environment_variables: field.environment_variables.clone(),
+                auto_value: field.auto_value.clone(),
             })
             .collect(),
     }
 }
 
 #[tauri::command]
-fn get_provider_config(
+async fn get_provider_config(
     plugin_id: String,
     state: tauri::State<'_, Mutex<AppState>>,
 ) -> Result<provider_config::ProviderConfigView, String> {
     let fields = plugin_config_fields(state, &plugin_id)?;
-    Ok(provider_config::view_for_plugin(&plugin_id, &fields))
+    tauri::async_runtime::spawn_blocking(move || {
+        provider_config_sources::view_for_plugin(&plugin_id, &fields)
+    })
+    .await
+    .map_err(|error| {
+        log::error!("Provider configuration source task failed: {error}");
+        "无法读取连接配置，请重试。".to_string()
+    })?
 }
 
 #[tauri::command]
@@ -886,13 +878,16 @@ fn perform_provider_account_operation(
     accounts: tauri::State<'_, Arc<provider_accounts::ProviderAccounts>>,
 ) -> provider_accounts::ProviderOperationReceipt {
     let removed_account_id = match &operation {
-        provider_accounts::ProviderOperation::RemoveAccount { account_id } => Some(account_id.clone()),
+        provider_accounts::ProviderOperation::RemoveAccount { account_id } => {
+            Some(account_id.clone())
+        }
         _ => None,
     };
     let receipt = accounts.perform(&provider_id, operation);
     // Cache cleanup can fail after the removal is already committed. Publish the
     // changed account selection even while the receipt asks the user to retry cleanup.
-    let committed_removal = removed_account_id.as_deref()
+    let committed_removal = removed_account_id
+        .as_deref()
         .is_some_and(|account_id| accounts.removal_committed(&provider_id, account_id));
     if receipt.status != provider_accounts::OperationStatus::Failed || committed_removal {
         if let Err(error) = sync_active_account_projection(&accounts, &provider_id) {
@@ -1130,74 +1125,6 @@ fn cursor_history_error(error: cursor_history::HistoryError) -> CursorHistoryErr
     }
 }
 
-/// Update the global shortcut registration.
-/// Pass `null` to disable the shortcut, or a shortcut string like "CommandOrControl+Shift+U".
-#[cfg(target_os = "macos")]
-#[tauri::command]
-fn update_global_shortcut(
-    app_handle: tauri::AppHandle,
-    shortcut: Option<String>,
-) -> Result<(), String> {
-    let global_shortcut = app_handle.global_shortcut();
-    let normalized_shortcut = shortcut.and_then(|value| {
-        let trimmed = value.trim().to_string();
-        if trimmed.is_empty() {
-            None
-        } else {
-            Some(trimmed)
-        }
-    });
-    let mut managed_shortcut = managed_shortcut_slot()
-        .lock()
-        .map_err(|e| format!("failed to lock managed shortcut state: {}", e))?;
-
-    if *managed_shortcut == normalized_shortcut {
-        log::debug!("Global shortcut unchanged");
-        return Ok(());
-    }
-
-    let previous_shortcut = managed_shortcut.clone();
-    if let Some(existing) = previous_shortcut.as_deref() {
-        match global_shortcut.unregister(existing) {
-            Ok(()) => {
-                // Keep in-memory state aligned with actual registration state.
-                *managed_shortcut = None;
-            }
-            Err(e) => {
-                log::warn!(
-                    "Failed to unregister existing shortcut '{}': {}",
-                    existing,
-                    e
-                );
-            }
-        }
-    }
-
-    if let Some(shortcut) = normalized_shortcut {
-        log::info!("Registering global shortcut: {}", shortcut);
-        global_shortcut
-            .on_shortcut(shortcut.as_str(), |app, _shortcut, event| {
-                handle_global_shortcut(app, event);
-            })
-            .map_err(|e| format!("Failed to register shortcut '{}': {}", shortcut, e))?;
-        *managed_shortcut = Some(shortcut);
-    } else {
-        log::info!("Global shortcut disabled");
-        *managed_shortcut = None;
-    }
-
-    Ok(())
-}
-
-#[cfg(not(target_os = "macos"))]
-#[tauri::command]
-fn update_global_shortcut(
-    _app_handle: tauri::AppHandle,
-    _shortcut: Option<String>,
-) -> Result<(), String> {
-    Err("Global shortcuts are not supported on this platform.".to_string())
-}
-
 #[tauri::command]
 fn list_plugins(state: tauri::State<'_, Mutex<AppState>>) -> Vec<PluginMeta> {
     let plugins = {
@@ -1342,7 +1269,9 @@ pub fn run() {
             notifications::request_notification_permission,
             notifications::post_pace_notification,
             notifications::open_notification_settings,
-            update_global_shortcut
+            global_shortcut::update_global_shortcut,
+            global_shortcut::get_global_shortcut_status,
+            global_shortcut::set_global_shortcut_recording
         ])
         .setup(|app| {
             #[cfg(target_os = "macos")]
@@ -1452,37 +1381,8 @@ pub fn run() {
             app.handle()
                 .plugin(tauri_plugin_updater::Builder::new().build())?;
 
-            // Register global shortcut from stored settings
             #[cfg(target_os = "macos")]
-            {
-                use tauri_plugin_store::StoreExt;
-
-                if let Ok(store) = app.handle().store("settings.json") {
-                    if let Some(shortcut_value) = store.get(GLOBAL_SHORTCUT_STORE_KEY) {
-                        if let Some(shortcut) = shortcut_value.as_str() {
-                            let shortcut = shortcut.trim();
-                            if !shortcut.is_empty() {
-                                let handle = app.handle().clone();
-                                log::info!("Registering initial global shortcut: {}", shortcut);
-                                if let Err(e) = handle.global_shortcut().on_shortcut(
-                                    shortcut,
-                                    |app, _shortcut, event| {
-                                        handle_global_shortcut(app, event);
-                                    },
-                                ) {
-                                    log::warn!("Failed to register initial global shortcut: {}", e);
-                                } else if let Ok(mut managed_shortcut) =
-                                    managed_shortcut_slot().lock()
-                                {
-                                    *managed_shortcut = Some(shortcut.to_string());
-                                } else {
-                                    log::warn!("Failed to store managed shortcut in memory");
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            global_shortcut::initialize(app.handle());
 
             Ok(())
         })
@@ -1586,6 +1486,10 @@ mod tests {
                 }],
                 default: Some(json!("cn")),
                 default_source: true,
+                required: false,
+                visible_when: None,
+                environment_variables: Vec::new(),
+                auto_value: None,
             }],
         });
 
@@ -1598,6 +1502,21 @@ mod tests {
         assert_eq!(dto.fields[0].options[0].value, "cn");
         assert_eq!(dto.fields[0].default, Some(json!("cn")));
         assert!(dto.fields[0].default_source);
+        assert!(!dto.fields[0].required);
+    }
+
+    #[test]
+    fn plugin_config_dto_preserves_required_credentials() {
+        let config: PluginConfig = serde_json::from_value(json!({
+            "fields": [{ "id": "apiKey", "type": "secret", "label": "API Key", "required": true }]
+        }))
+        .unwrap();
+        let dto = plugin_config_dto(&config);
+        assert!(dto.fields[0].required);
+        assert_eq!(
+            serde_json::to_value(dto).unwrap()["fields"][0]["required"],
+            true
+        );
     }
 
     #[test]

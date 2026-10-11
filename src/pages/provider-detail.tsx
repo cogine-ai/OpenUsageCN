@@ -1,3 +1,4 @@
+import { useAppUiStore } from "@/stores/app-ui-store"
 import { ProviderAccountControls } from "@/components/provider-account-controls"
 import { ProviderCard } from "@/components/provider-card"
 import { LocalUsageHistory } from "@/components/local-usage-history"
@@ -23,6 +24,7 @@ export function ProviderDetailPage({
   timeFormatMode = "auto",
   onResetTimerDisplayModeToggle,
 }: ProviderDetailPageProps) {
+  const openConnection = useAppUiStore((state) => state.openConnection)
   if (!plugin) {
     return (
       <div className="text-center text-muted-foreground py-8">
@@ -34,6 +36,8 @@ export function ProviderDetailPage({
   return (
     <>
       <ProviderCard
+        capabilities={plugin.meta}
+        onRecovery={(recovery) => openConnection(plugin.meta.id, recovery.action === "accounts" ? "accounts" : recovery.action === "config" ? "config" : "local", recovery.focusField)}
         providerId={plugin.meta.id}
         name={plugin.meta.name}
         plan={plugin.data?.plan}
@@ -68,6 +72,8 @@ export function ProviderDetailPage({
           providerId={plugin.meta.id}
           browserBinding={plugin.meta.accountSupport.browserBinding}
           modelHistory={plugin.meta.accountSupport.modelHistory}
+          onOpenConnections={() => openConnection(plugin.meta.id, "accounts")}
+          onOpenLocalLogin={() => openConnection(plugin.meta.id, "local")}
           onAccountChangeRefresh={onAccountChangeRefresh}
         />
       ) : null}

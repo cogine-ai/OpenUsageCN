@@ -1,9 +1,8 @@
 import { useCallback } from "react"
-import { invoke } from "@tauri-apps/api/core"
+import { applyGlobalShortcut } from "@/lib/global-shortcut"
 import {
   getEnabledPluginIds,
   saveAutoUpdateInterval,
-  saveGlobalShortcut,
   savePaceNotificationSettings,
   saveStartOnLogin,
   type AutoUpdateIntervalMinutes,
@@ -50,14 +49,14 @@ export function useSettingsSystemActions({
     })
   }, [pluginSettings, setAutoUpdateInterval, setAutoUpdateNextAt])
 
-  const handleGlobalShortcutChange = useCallback((value: GlobalShortcut) => {
-    setGlobalShortcut(value)
-    void saveGlobalShortcut(value).catch((error) => {
-      console.error("Failed to save global shortcut:", error)
-    })
-    invoke("update_global_shortcut", { shortcut: value }).catch((error) => {
+  const handleGlobalShortcutChange = useCallback(async (value: GlobalShortcut) => {
+    try {
+      const status = await applyGlobalShortcut(value)
+      setGlobalShortcut(status.shortcut)
+    } catch (error) {
       console.error("Failed to update global shortcut:", error)
-    })
+      throw error
+    }
   }, [setGlobalShortcut])
 
   const handleStartOnLoginChange = useCallback((value: boolean) => {

@@ -23,12 +23,14 @@ impl ProviderAccounts {
             .active_account_id
             .as_deref()
             .and_then(|account_id| self.current_enrichment_warning(provider_id, account_id));
-        Ok(view_from_state(
+        let mut view = view_from_state(
             provider_id,
             provider,
             self.current_persistence_warning(),
             enrichment_warning,
-        ))
+        );
+        self.add_browser_identity(&mut view, provider)?;
+        Ok(view)
     }
 
     pub(crate) fn perform(

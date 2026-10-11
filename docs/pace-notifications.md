@@ -15,3 +15,7 @@ All alerts are off by default. Enable only the alerts you want in Settings. The 
 The first reading after launch establishes a baseline and does not notify. A continuing bad state is not repeated. Recovery or a real quota reset allows a later worsening to notify again. Disabled providers do not send alerts.
 
 If macOS permission is denied, use the Settings button to open System Settings. A failed delivery is logged and retried on a later evaluation instead of being marked as sent.
+
+The quota readout reports current usage. Predictions are estimates from the active reset window, not additional measured quota. Close To Limit keeps the existing projected 80% to 100% band; Running Out requires more than 100%. Exactly 10% remaining does not trigger Almost Out. The initial 5% of a cycle suppresses pace predictions except for zero use or already exhausted quota. Refreshing, failed or cached rate-limited data does not produce a current prediction. No alert defaults, baseline rules or permission behavior changed.
+
+The cycle marker tracks the elapsed share of the current reset window, or its remaining share when showing remaining quota. The pace difference compares current usage with that cycle progress; it is not a prediction of the final overage. Estimated depletion is explicitly labeled as an estimate.

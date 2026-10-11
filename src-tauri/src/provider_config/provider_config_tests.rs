@@ -15,6 +15,10 @@ fn field(id: &str, field_type: PluginConfigFieldType) -> PluginConfigField {
         options: Vec::new(),
         default: None,
         default_source: false,
+        required: false,
+        visible_when: None,
+        environment_variables: Vec::new(),
+        auto_value: None,
     }
 }
 
@@ -37,6 +41,10 @@ fn select_field(default: Option<&str>) -> PluginConfigField {
         ],
         default: default.map(|value| Value::String(value.to_string())),
         default_source: false,
+        required: false,
+        visible_when: None,
+        environment_variables: Vec::new(),
+        auto_value: None,
     }
 }
 
@@ -425,6 +433,8 @@ fn view_for_plugin_masks_short_secrets_without_hint_suffix() {
 
     let view = view_for_plugin("bigmodel-cn", &fields);
     replace_store_for_test(default_file());
+    assert_eq!(view.stored_fields, vec!["apiKey"]);
+    assert!(view.environment.is_empty());
 
     match view.values.get("apiKey") {
         Some(ProviderConfigViewValue::Secret { configured, hint }) => {
@@ -433,6 +443,39 @@ fn view_for_plugin_masks_short_secrets_without_hint_suffix() {
         }
         other => panic!("expected secret view, got {other:?}"),
     }
+}
+
+#[test]
+#[serial]
+fn view_distinguishes_saved_choices_from_manifest_defaults() {
+    replace_store_for_test(ProviderConfigFile {
+        version: CONFIG_VERSION,
+        providers: HashMap::from([(
+            "moonshot".to_string(),
+            HashMap::from([
+                (
+                    "apiKey".to_string(),
+                    Value::String("stored-secret-981273".into()),
+                ),
+                ("unknown".to_string(), Value::String("not-exposed".into())),
+            ]),
+        )]),
+    });
+    let fields = vec![
+        field("apiKey", PluginConfigFieldType::Secret),
+        select_field(Some("global")),
+    ];
+    let view = view_for_plugin("moonshot", &fields);
+    replace_store_for_test(default_file());
+    assert_eq!(view.stored_fields, vec!["apiKey"]);
+    assert!(
+        matches!(view.values.get("region"), Some(ProviderConfigViewValue::Select { value }) if value == "global")
+    );
+    let payload = serde_json::to_value(&view).unwrap();
+    assert_eq!(payload["storedFields"], serde_json::json!(["apiKey"]));
+    assert!(payload.get("environment").is_none());
+    assert!(!payload.to_string().contains("stored-secret-981273"));
+    assert!(!payload.to_string().contains("not-exposed"));
 }
 
 #[test]

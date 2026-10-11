@@ -1,9 +1,10 @@
 use super::ProviderAccounts;
 use super::identity;
 use super::model::{
-    AccountSelection, ConnectionKind, OperationStatus, SourceOutcome, SourceStatus,
+    AccountSelection, ConnectionKind, OperationStatus, ProviderAccountView, SourceOutcome,
+    SourceStatus,
 };
-use super::state::{AccountRecord, ConnectionRecord};
+use super::state::{AccountRecord, ConnectionRecord, ProviderState};
 use crate::browser_sessions::{Browser, BrowserSessionBroker, CookieProvider};
 use std::sync::Arc;
 
@@ -38,6 +39,40 @@ impl Drop for ClaimedBrowserSession {
 }
 
 impl ProviderAccounts {
+    pub(super) fn add_browser_identity(
+        &self,
+        view: &mut ProviderAccountView,
+        provider: &ProviderState,
+    ) -> Result<(), String> {
+        if let Some(broker) = self
+            .browser_broker
+            .lock()
+            .map_err(|_| "browser account access is unavailable".to_string())?
+            .as_ref()
+        {
+            for summary in &mut view.accounts {
+                summary.identity = provider
+                    .accounts
+                    .iter()
+                    .find(|account| account.account_id == summary.account_id)
+                    .and_then(|account| {
+                        account
+                            .connections
+                            .iter()
+                            .filter(|connection| connection.attached && connection.available)
+                            .filter_map(|connection| connection.session_ref.as_deref())
+                            .find_map(|session_ref| {
+                                broker
+                                    .session_binding(session_ref)
+                                    .ok()
+                                    .and_then(|binding| binding.identity)
+                            })
+                    });
+            }
+        }
+        Ok(())
+    }
+
     pub(super) fn attach_browser_candidate(
         &self,
         provider_id: &str,

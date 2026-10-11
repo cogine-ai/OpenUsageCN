@@ -1,3 +1,4 @@
+import { useAppUiStore } from "@/stores/app-ui-store"
 import { ProviderCard } from "@/components/provider-card"
 import type { MetricLine, ManifestLine, PluginDisplayState } from "@/lib/plugin-types"
 import type { DisplayMode, ResetTimerDisplayMode, TimeFormatMode } from "@/lib/settings"
@@ -33,6 +34,7 @@ export function OverviewPage({
   timeFormatMode = "auto",
   onResetTimerDisplayModeToggle,
 }: OverviewPageProps) {
+  const openConnection = useAppUiStore((state) => state.openConnection)
   if (plugins.length === 0) {
     return (
       <div className="text-center text-muted-foreground py-8">
@@ -46,6 +48,8 @@ export function OverviewPage({
       {plugins.map((plugin, index) => (
         <ProviderCard
           key={plugin.meta.id}
+          capabilities={plugin.meta}
+          onRecovery={(recovery) => openConnection(plugin.meta.id, recovery.action === "accounts" ? "accounts" : recovery.action === "config" ? "config" : "local", recovery.focusField)}
           providerId={plugin.meta.id}
           name={plugin.meta.name}
           plan={plugin.data?.plan}

@@ -94,3 +94,42 @@ describe("getPluginRecovery", () => {
     expect(diagnostic).not.toContain("token-secret")
   })
 })
+
+
+describe("Provider Capability Recovery", () => {
+  const accountSupport = { localDiscovery: true, browserBinding: true, modelHistory: true }
+  it.each([
+    "Not logged in. Run `claude` to authenticate.",
+    "Session expired. Run `claude` to log in again.",
+    "Token expired. Run `claude` to log in again.",
+    "Claude Keychain credentials must be refreshed by Claude Code. Run `claude` and try again.",
+  ])("directs Claude local-login failures straight to local recovery with account support: %s", (message) => {
+    const recovery = getPluginRecovery(message, "claude", { accountSupport })
+    expect(recovery.kind).toBe("login")
+    expect(recovery.action).toBe("local")
+    expect(recovery.actionLabel).toBe("连接本机账号")
+    expect(recovery.diagnostic).toBe(message)
+  })
+  it.each(["Session expired.", "Not logged in."])("keeps Cursor account recovery for %s", (message) => {
+    const recovery = getPluginRecovery(message, "cursor", { accountSupport })
+    expect(recovery.action).toBe("accounts")
+    expect(recovery.actionLabel).toBe("重新连接")
+  })
+  const fields = [{id:"region",type:"select"}, {id:"apiKeyIntl",type:"secret",visibleWhen:{field:"region",values:["international"]}}, {id:"apiKeyCn",type:"secret",visibleWhen:{field:"region",values:["china"]}}]
+  it("keeps ambiguous regional key errors on the current selected region", () => {
+    const recovery = getPluginRecovery("Moonshot API key was rejected. Check the key and region.", "moonshot", {config:{fields}})
+    expect(recovery.action).toBe("config")
+    expect(recovery.focusField).toBeUndefined()
+  })
+  it.each([
+    ["No Moonshot API key for this region. Add it in Settings.","moonshot","config"],
+    ["Alibaba Token Plan login expired. Copy a fresh console Cookie header.","alibaba-token-plan","config"],
+    ["No Volcengine AK/SK found. Add both keys in Doubao Settings.","doubao","config"],
+    ["Gemini OAuth credentials not found.","gemini","local"],
+    ["Not logged in. Run gh auth login first.","copilot","local"],
+    ["Token expired.","kiro","local"],
+  ])("maps real provider errors to a usable action: %s", (message,id,action) => {
+    const config = action === "config" ? { fields:[{id:"apiKey",type:"secret"}] } : undefined
+    expect(getPluginRecovery(message,id,{config}).action).toBe(action)
+  })
+})

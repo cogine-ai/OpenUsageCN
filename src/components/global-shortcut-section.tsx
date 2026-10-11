@@ -1,301 +1,192 @@
 import { useEffect, useRef, useState } from "react"
-import { X } from "lucide-react"
+import { isTauri } from "@tauri-apps/api/core"
+import { Keyboard, LoaderCircle, Pencil, TriangleAlert, X } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { getGlobalShortcutStatus, recordedShortcut, setGlobalShortcutRecording, shortcutKeycaps, type GlobalShortcutStatus } from "@/lib/global-shortcut"
 import type { GlobalShortcut } from "@/lib/settings"
-
-// Convert internal shortcut format to display format
-// e.g., "CommandOrControl+Shift+U" -> "Cmd + Shift + U"
-function formatShortcutForDisplay(shortcut: string): string {
-  return shortcut
-    .replace(/CommandOrControl/g, "Cmd")
-    .replace(/Command/g, "Cmd")
-    .replace(/Control/g, "Ctrl")
-    .replace(/Option/g, "Opt")
-    .replace(/Alt/g, "Opt")
-    .replace(/\+/g, " + ")
-}
-
-// Modifier codes (using event.code for reliable detection)
-const MODIFIER_CODES = new Set([
-  "MetaLeft", "MetaRight",
-  "ControlLeft", "ControlRight",
-  "AltLeft", "AltRight",
-  "ShiftLeft", "ShiftRight",
-])
-
-// Normalize modifier code to base name
-function normalizeModifierCode(code: string): string {
-  if (code.startsWith("Meta")) return "Meta"
-  if (code.startsWith("Control")) return "Control"
-  if (code.startsWith("Alt")) return "Alt"
-  if (code.startsWith("Shift")) return "Shift"
-  return code
-}
-
-// Convert event.code to a display-friendly key name
-function codeToDisplayKey(code: string): string {
-  // Handle letter keys (KeyA -> A)
-  if (code.startsWith("Key")) return code.slice(3)
-  // Handle digit keys (Digit1 -> 1)
-  if (code.startsWith("Digit")) return code.slice(5)
-  // Handle numpad (Numpad1 -> Num1)
-  if (code.startsWith("Numpad")) return "Num" + code.slice(6)
-  // Handle special keys
-  const specialKeys: Record<string, string> = {
-    Space: "Space",
-    Enter: "Enter",
-    Backspace: "Backspace",
-    Tab: "Tab",
-    ArrowUp: "Up",
-    ArrowDown: "Down",
-    ArrowLeft: "Left",
-    ArrowRight: "Right",
-    Escape: "Esc",
-    Delete: "Del",
-    Insert: "Ins",
-    Home: "Home",
-    End: "End",
-    PageUp: "PgUp",
-    PageDown: "PgDn",
-    BracketLeft: "[",
-    BracketRight: "]",
-    Backslash: "\\",
-    Semicolon: ";",
-    Quote: "'",
-    Comma: ",",
-    Period: ".",
-    Slash: "/",
-    Backquote: "`",
-    Minus: "-",
-    Equal: "=",
-  }
-  return specialKeys[code] || code
-}
-
-// Convert event.code to Tauri shortcut key format
-function codeToTauriKey(code: string): string {
-  if (code.startsWith("Key")) return code.slice(3)
-  if (code.startsWith("Digit")) return code.slice(5)
-  const specialKeys: Record<string, string> = {
-    Space: "Space",
-    Enter: "Return",
-    Backspace: "Backspace",
-    Tab: "Tab",
-    ArrowUp: "Up",
-    ArrowDown: "Down",
-    ArrowLeft: "Left",
-    ArrowRight: "Right",
-    Delete: "Delete",
-    Insert: "Insert",
-    Home: "Home",
-    End: "End",
-    PageUp: "PageUp",
-    PageDown: "PageDown",
-  }
-  return specialKeys[code] || code
-}
-
-// Build shortcut array from currently pressed keys (modifiers + main key)
-function buildShortcutFromCodes(codes: Set<string>): { display: string; tauri: string | null } {
-  const modifiers: string[] = []
-  const displayMods: string[] = []
-  let mainCode: string | null = null
-
-  for (const code of codes) {
-    if (MODIFIER_CODES.has(code)) {
-      const normalized = normalizeModifierCode(code)
-      if (normalized === "Meta" || normalized === "Control") {
-        if (!modifiers.includes("CommandOrControl")) {
-          modifiers.push("CommandOrControl")
-          displayMods.push("Cmd")
-        }
-      } else if (normalized === "Alt") {
-        if (!modifiers.includes("Alt")) {
-          modifiers.push("Alt")
-          displayMods.push("Opt")
-        }
-      } else if (normalized === "Shift") {
-        if (!modifiers.includes("Shift")) {
-          modifiers.push("Shift")
-          displayMods.push("Shift")
-        }
-      }
-    } else {
-      // Non-modifier key - use the last one pressed
-      mainCode = code
-    }
-  }
-
-  // Build display string
-  const displayParts = [...displayMods]
-  if (mainCode) {
-    displayParts.push(codeToDisplayKey(mainCode))
-  }
-  const display = displayParts.join(" + ")
-
-  // Build Tauri shortcut (only valid if we have at least one modifier AND a main key)
-  let tauri: string | null = null
-  if (modifiers.length > 0 && mainCode) {
-    tauri = [...modifiers, codeToTauriKey(mainCode)].join("+")
-  }
-
-  return { display, tauri }
-}
 
 interface GlobalShortcutSectionProps {
   globalShortcut: GlobalShortcut
-  onGlobalShortcutChange: (value: GlobalShortcut) => void
+  onGlobalShortcutChange: (value: GlobalShortcut) => Promise<void> | void
 }
 
-export function GlobalShortcutSection({
-  globalShortcut,
-  onGlobalShortcutChange,
-}: GlobalShortcutSectionProps) {
-  const [isRecording, setIsRecording] = useState(false)
-  // Track pressed keys using event.code (physical key location)
-  const pressedCodesRef = useRef<Set<string>>(new Set())
-  const [pendingShortcut, setPendingShortcut] = useState<string | null>(null)
-  const [pendingDisplay, setPendingDisplay] = useState<string>("")
-  // Ref for the recording input to focus it properly
+function Keycaps({ keys }: { keys: string[] }) {
+  return <span className="flex items-center gap-1">{keys.map((key, index) => <kbd key={`${key}-${index}`} className="min-w-7 rounded border border-border bg-background px-1.5 py-1 text-center font-sans text-sm shadow-[0_1px_0_var(--border)]">{key}</kbd>)}</span>
+}
+
+export function GlobalShortcutSection({ globalShortcut, onGlobalShortcutChange }: GlobalShortcutSectionProps) {
+  const [recording, setRecording] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [keys, setKeys] = useState<string[]>([])
+  const [error, setError] = useState<string | null>(null)
+  const [status, setStatus] = useState<GlobalShortcutStatus | null>(null)
+  const pressed = useRef(new Set<string>())
+  const candidate = useRef<GlobalShortcut>(null)
+  const invalidChord = useRef(false)
+  const commandSeen = useRef(false)
   const recordingRef = useRef<HTMLDivElement>(null)
+  const mounted = useRef(true)
+  const statusVersion = useRef(0)
+  const recordingActive = useRef(false)
 
-  // Focus the recording element after it mounts
   useEffect(() => {
-    if (isRecording && recordingRef.current) {
-      // Small delay to ensure DOM is ready
-      const timer = setTimeout(() => {
-        recordingRef.current?.focus()
-      }, 10)
-      return () => clearTimeout(timer)
+    mounted.current = true
+    let cancelled = false
+    const version = statusVersion.current
+    if (isTauri()) {
+      getGlobalShortcutStatus().then((value) => {
+        if (!cancelled && version === statusVersion.current) setStatus(value)
+      }).catch((cause) => {
+        console.error("Failed to read global shortcut status:", cause)
+        if (!cancelled && version === statusVersion.current) setError("无法读取快捷键状态。")
+      })
     }
-  }, [isRecording])
+    return () => {
+      cancelled = true
+      mounted.current = false
+      commandSeen.current = false
+      if (recordingActive.current) {
+        recordingActive.current = false
+        void setGlobalShortcutRecording(false).catch((cause) => console.error("Failed to restore shortcut after recorder closed:", cause))
+      }
+    }
+  }, [])
 
-  const startRecording = () => {
-    setIsRecording(true)
-    pressedCodesRef.current = new Set()
-    setPendingShortcut(null)
-    setPendingDisplay("")
-  }
+  useEffect(() => { if (recording) recordingRef.current?.focus() }, [recording])
 
   const stopRecording = () => {
-    setIsRecording(false)
-    pressedCodesRef.current = new Set()
-    setPendingShortcut(null)
-    setPendingDisplay("")
+    if (recordingActive.current) {
+      recordingActive.current = false
+      void setGlobalShortcutRecording(false).catch((cause) => {
+        console.error("Failed to restore global shortcut after recording:", cause)
+        if (mounted.current) setError("无法恢复快捷键，请重新设置。")
+      })
+    }
+    pressed.current.clear()
+    candidate.current = null
+    invalidChord.current = false
+    commandSeen.current = false
+    setKeys([])
+    setRecording(false)
+    setError(null)
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-
-    // Escape cancels recording and clears the shortcut (disabled state)
-    if (e.code === "Escape") {
-      onGlobalShortcutChange(null)
-      stopRecording()
-      return
-    }
-
-    // Add this key code to the set
-    pressedCodesRef.current.add(e.code)
-
-    // Build shortcut from all currently pressed keys
-    const { display, tauri } = buildShortcutFromCodes(pressedCodesRef.current)
-    setPendingDisplay(display)
-    if (tauri) {
-      setPendingShortcut(tauri)
-    }
-  }
-
-  const handleKeyUp = (e: React.KeyboardEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-
-    // Remove this key code from the ref
-    pressedCodesRef.current.delete(e.code)
-
-    // When all keys are released and we have a valid shortcut, save it
-    if (pressedCodesRef.current.size === 0 && pendingShortcut) {
-      onGlobalShortcutChange(pendingShortcut)
-      stopRecording()
+  const startRecording = async () => {
+    setError(null)
+    try {
+      if (isTauri()) await setGlobalShortcutRecording(true)
+      if (!mounted.current) {
+        if (isTauri()) await setGlobalShortcutRecording(false)
+        return
+      }
+      recordingActive.current = isTauri()
+      pressed.current.clear()
+      candidate.current = null
+      invalidChord.current = false
+      commandSeen.current = false
+      setKeys([])
+      setRecording(true)
+    } catch (cause) {
+      console.error("Failed to begin shortcut recording:", cause)
+      if (mounted.current) setError("无法开始录制快捷键，请重试。")
     }
   }
 
-  const handleClear = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    onGlobalShortcutChange(null)
-  }
-
-  const handleBlur = () => {
-    // If user clicks away during recording, cancel without saving
+  const apply = async (value: GlobalShortcut) => {
+    statusVersion.current += 1
+    setBusy(true)
+    setError(null)
     stopRecording()
-  }
-
-  // Display value logic
-  const getDisplayValue = (): string => {
-    if (isRecording) {
-      if (pendingDisplay) return pendingDisplay
-      return "请按快捷键..."
+    try {
+      await onGlobalShortcutChange(value)
+      if (mounted.current) setStatus({ shortcut: value, active: value !== null, error: null })
+    } catch (cause) {
+      console.error("Failed to apply recorded shortcut:", cause)
+      if (mounted.current) setError(typeof cause === "string" ? cause : "无法应用快捷键，请重试。")
+      if (isTauri()) {
+        try {
+          const actual = await getGlobalShortcutStatus()
+          if (mounted.current) setStatus(actual)
+        } catch (statusError) {
+          console.error("Failed to verify global shortcut after update failure:", statusError)
+          if (mounted.current) setStatus(null)
+        }
+      }
+    } finally {
+      if (mounted.current) setBusy(false)
     }
-    return globalShortcut ? formatShortcutForDisplay(globalShortcut) : "点击设置"
   }
 
-  const hasShortcut = globalShortcut !== null
+  const syncModifiers = (event: React.KeyboardEvent) => {
+    // OS combinations can report modifiers only as flags on the main key event.
+    for (const [prefix, active] of [["Meta", event.metaKey], ["Control", event.ctrlKey], ["Alt", event.altKey], ["Shift", event.shiftKey]] as const) {
+      const codes = [...pressed.current].filter((code) => code.startsWith(prefix))
+      if (active && codes.length === 0) pressed.current.add(`${prefix}Left`)
+      else if (!active) for (const code of codes) pressed.current.delete(code)
+    }
+  }
+
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    if (event.code === "Escape") { stopRecording(); return }
+    if (event.repeat) return
+    pressed.current.add(event.code)
+    syncModifiers(event)
+    if (event.metaKey || event.code.startsWith("Meta")) commandSeen.current = true
+    const next = recordedShortcut(pressed.current)
+    setKeys(next.keys)
+    if (next.invalid) {
+      invalidChord.current = true
+      candidate.current = null
+    } else if (!invalidChord.current && next.shortcut) candidate.current = next.shortcut
+  }
+
+  const handleKeyUp = (event: React.KeyboardEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    pressed.current.delete(event.code)
+    syncModifiers(event)
+    // macOS WebKit can omit the main keyup while Command is held.
+    if (commandSeen.current && /^(Meta|Control|Alt|Shift)/.test(event.code) &&
+      !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) pressed.current.clear()
+    if (pressed.current.size !== 0) return
+    if (candidate.current && !invalidChord.current) void apply(candidate.current)
+    else {
+      setKeys([])
+      candidate.current = null
+      invalidChord.current = false
+      commandSeen.current = false
+      setError("请按一个修饰键和一个字母或功能键。")
+    }
+  }
+
+  const savedShortcut = status ? status.shortcut : globalShortcut
+  const inactive = Boolean(savedShortcut && status && !status.active)
+  const problem = error ?? status?.error
 
   return (
     <section>
-      <h3 className="text-sm font-semibold mb-0">全局快捷键</h3>
-      <p className="text-sm text-muted-foreground mb-2">
-        随时打开面板
-      </p>
-      <div className="space-y-2">
-        {isRecording ? (
-          <div
-            ref={recordingRef}
-            tabIndex={0}
-            role="textbox"
-            aria-label="按下要设置的快捷键"
-            onKeyDown={handleKeyDown}
-            onKeyUp={handleKeyUp}
-            onBlur={handleBlur}
-            className={cn(
-              "w-full h-8 px-3 text-sm rounded-md border-2 border-primary bg-muted/50",
-              "flex items-center outline-none",
-              !pendingDisplay && "text-muted-foreground"
-            )}
-          >
-            {getDisplayValue()}
+      <h3 className="mb-2 text-sm font-semibold">全局快捷键</h3>
+      <div className={cn("flex min-h-12 items-center gap-2 rounded-lg bg-muted/50 p-2", recording && "ring-2 ring-primary")}>
+        <Keyboard className="size-4 shrink-0 text-muted-foreground" />
+        {recording ? (
+          <div ref={recordingRef} role="textbox" aria-label="按下要设置的快捷键" tabIndex={0} onKeyDown={handleKeyDown} onKeyUp={handleKeyUp} onBlur={stopRecording} className="flex min-h-8 min-w-0 flex-1 items-center outline-none">
+            {keys.length > 0 ? <Keycaps keys={keys} /> : <span className="text-sm text-muted-foreground">按下组合键</span>}
           </div>
         ) : (
-          <div
-            className={cn(
-              "w-full h-8 px-3 text-sm rounded-md border bg-muted/50",
-              "flex items-center text-left hover:bg-muted transition-colors cursor-pointer",
-              !hasShortcut && "text-muted-foreground"
-            )}
-            onClick={startRecording}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") startRecording() }}
-            role="button"
-            tabIndex={0}
-          >
-            <span>{getDisplayValue()}</span>
-            {hasShortcut ? (
-              <button
-                type="button"
-                onClick={handleClear}
-                className="ml-auto p-0.5 rounded hover:bg-background/50 text-muted-foreground hover:text-foreground transition-colors"
-                aria-label="清除快捷键"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            ) : (
-              <span className="ml-auto text-xs text-muted-foreground">点击设置</span>
-            )}
-          </div>
+          <Button type="button" variant="ghost" className="h-auto min-h-8 min-w-0 flex-1 justify-start px-1" disabled={busy} onClick={() => void startRecording()} aria-label={savedShortcut ? `编辑快捷键 ${savedShortcut}` : "设置快捷键"}>
+            {savedShortcut ? <Keycaps keys={shortcutKeycaps(savedShortcut)} /> : "设置快捷键"}
+          </Button>
         )}
+        {busy ? <LoaderCircle className="size-4 animate-spin" aria-label="正在应用快捷键" /> : inactive ? <span className="flex shrink-0 items-center gap-1 text-xs text-amber-600"><TriangleAlert className="size-3.5" />未生效</span> : null}
+        {recording ? <Button type="button" variant="ghost" size="icon-sm" aria-label="取消录制" onClick={stopRecording}><X className="size-4" /></Button> : savedShortcut ? <>
+          <Button type="button" variant="ghost" size="icon-sm" aria-label="录制新快捷键" disabled={busy} onClick={() => void startRecording()}><Pencil className="size-3.5" /></Button>
+          <Button type="button" variant="ghost" size="icon-sm" aria-label="清除快捷键" disabled={busy} onClick={() => void apply(null)}><X className="size-4" /></Button>
+        </> : null}
       </div>
-      <p className="mt-2 text-xs text-muted-foreground">
-        录制时按 Escape 可清除。
-      </p>
+      {problem ? <p role="alert" className="mt-1.5 text-xs text-destructive">{problem}</p> : null}
     </section>
   )
 }

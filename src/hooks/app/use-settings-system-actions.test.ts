@@ -62,7 +62,7 @@ describe("useSettingsSystemActions", () => {
     saveGlobalShortcutMock.mockResolvedValue(undefined)
     savePaceNotificationSettingsMock.mockResolvedValue(undefined)
     saveStartOnLoginMock.mockResolvedValue(undefined)
-    invokeMock.mockResolvedValue(undefined)
+    invokeMock.mockResolvedValue({ shortcut: null, active: false, error: null })
     isTauriMock.mockReturnValue(true)
   })
 
@@ -115,7 +115,7 @@ describe("useSettingsSystemActions", () => {
     expect(setAutoUpdateNextAt).toHaveBeenCalledWith(null)
   })
 
-  it("updates shortcut and start-on-login settings", () => {
+  it("updates shortcut only after the atomic command succeeds", async () => {
     const setGlobalShortcut = vi.fn()
     const setStartOnLogin = vi.fn()
     const applyStartOnLogin = vi.fn().mockResolvedValue(undefined)
@@ -132,15 +132,16 @@ describe("useSettingsSystemActions", () => {
       })
     )
 
-    act(() => {
-      result.current.handleGlobalShortcutChange("CommandOrControl+Shift+O")
+    invokeMock.mockResolvedValueOnce({ shortcut: "Command+Shift+O", active: true, error: null })
+    await act(async () => {
+      await result.current.handleGlobalShortcutChange("Command+Shift+O")
       result.current.handleStartOnLoginChange(true)
     })
 
-    expect(setGlobalShortcut).toHaveBeenCalledWith("CommandOrControl+Shift+O")
-    expect(saveGlobalShortcutMock).toHaveBeenCalledWith("CommandOrControl+Shift+O")
+    expect(setGlobalShortcut).toHaveBeenCalledWith("Command+Shift+O")
+    expect(saveGlobalShortcutMock).not.toHaveBeenCalled()
     expect(invokeMock).toHaveBeenCalledWith("update_global_shortcut", {
-      shortcut: "CommandOrControl+Shift+O",
+      shortcut: "Command+Shift+O",
     })
 
     expect(setStartOnLogin).toHaveBeenCalledWith(true)
@@ -150,14 +151,12 @@ describe("useSettingsSystemActions", () => {
 
   it("logs persistence/update failures", async () => {
     const autoError = new Error("auto save failed")
-    const shortcutSaveError = new Error("shortcut save failed")
     const shortcutInvokeError = new Error("shortcut invoke failed")
     const startOnLoginSaveError = new Error("start on login save failed")
     const startOnLoginApplyError = new Error("start on login apply failed")
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
 
     saveAutoUpdateIntervalMock.mockRejectedValueOnce(autoError)
-    saveGlobalShortcutMock.mockRejectedValueOnce(shortcutSaveError)
     invokeMock.mockRejectedValueOnce(shortcutInvokeError)
     saveStartOnLoginMock.mockRejectedValueOnce(startOnLoginSaveError)
     const applyStartOnLogin = vi.fn().mockRejectedValueOnce(startOnLoginApplyError)
@@ -176,18 +175,33 @@ describe("useSettingsSystemActions", () => {
 
     act(() => {
       result.current.handleAutoUpdateIntervalChange(5)
-      result.current.handleGlobalShortcutChange(null)
       result.current.handleStartOnLoginChange(false)
     })
 
+    await expect(result.current.handleGlobalShortcutChange(null)).rejects.toThrow(shortcutInvokeError)
     await waitFor(() => {
       expect(errorSpy).toHaveBeenCalledWith("Failed to save auto-update interval:", autoError)
-      expect(errorSpy).toHaveBeenCalledWith("Failed to save global shortcut:", shortcutSaveError)
       expect(errorSpy).toHaveBeenCalledWith("Failed to update global shortcut:", shortcutInvokeError)
       expect(errorSpy).toHaveBeenCalledWith("Failed to save start on login:", startOnLoginSaveError)
       expect(errorSpy).toHaveBeenCalledWith("Failed to update start on login:", startOnLoginApplyError)
     })
 
+    errorSpy.mockRestore()
+  })
+
+
+  it("keeps the previous displayed shortcut when registration or persistence fails", async () => {
+    const setGlobalShortcut = vi.fn()
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    const { result } = renderHook(() => useSettingsSystemActions({
+      pluginSettings: null, setAutoUpdateInterval: vi.fn(), setAutoUpdateNextAt: vi.fn(),
+      setGlobalShortcut, setStartOnLogin: vi.fn(), applyStartOnLogin: vi.fn(), ...notificationArgs(),
+    }))
+    for (const failure of ["此组合无法使用", "无法保存快捷键"]) {
+      invokeMock.mockRejectedValueOnce(failure)
+      await expect(result.current.handleGlobalShortcutChange("Command+K")).rejects.toBe(failure)
+      expect(setGlobalShortcut).not.toHaveBeenCalled()
+    }
     errorSpy.mockRestore()
   })
 

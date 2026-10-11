@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -22,6 +22,17 @@ describe("PaceNotificationSettingsSection", () => {
     invokeMock.mockImplementation((command: string) =>
       Promise.resolve(command === "request_notification_permission" ? "granted" : "default")
     )
+  })
+
+  it("separates the actual remaining-quota alert from the two independent predictions", () => {
+    render(<PaceNotificationSettingsSection value={{ almostOut: false, closeToLimit: false, runningOut: false }} onChange={vi.fn()} />)
+    const current = screen.getByRole("group", { name: "当前额度" })
+    const predicted = screen.getByRole("group", { name: "使用预测" })
+    expect(within(current).getAllByRole("checkbox")).toHaveLength(1)
+    expect(within(predicted).getAllByRole("checkbox")).toHaveLength(2)
+    expect(screen.getByRole("img", { name: "额度剩余不足 10%" })).toBeVisible()
+    expect(screen.getByRole("img", { name: "预计用尽早于重置" })).toBeVisible()
+    for (const checkbox of screen.getAllByRole("checkbox")) expect(checkbox).not.toBeChecked()
   })
 
   it("requests permission on first enable and reflects the result", async () => {

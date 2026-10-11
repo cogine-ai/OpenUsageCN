@@ -40,4 +40,11 @@
 - 平台入口要准确：macOS 使用“菜单栏”，Windows 使用“系统托盘”；泛指两者时使用“托盘入口”或直接说“OpenUsageCN 图标”。
 - Windows MVP 不显示暂不支持的入口，包括 CLI、额度通知、全局快捷键、动态托盘图标和托盘标题设置。
 - 错误提示应说明用户看到的问题，例如“无法开始刷新”，同时继续在日志里记录详细英文错误。
-- 设置页服务商配置状态用“已配置 / 使用默认 / 未配置 / 配置未知”，只描述 OpenUsageCN 当前能判断的配置状态。
+- 设置页用“已保存 / 已发现凭据 / 连接 / 无法读取”描述当前能判断的配置状态；只有本次检查通过才能显示“连接成功”。
+- 设置页的“工具接入”默认收起，展开后才读取本机支持的本地 API 和命令行工具状态。
+- “已用 / 剩余”描述当前额度读数，“预计…后用尽”描述预测；超出进度的差额比较当前用量与周期进度，不是预计最终超额。
+
+## Connection And Shortcut Behavior
+
+- 保存并检查 distinguishes saved settings from a verified connection. 已保存 and 已发现凭据 do not mean a connection is valid.
+- Esc, leaving the shortcut recorder, or canceling keeps the previous shortcut. 清除 is a separate action. The recorder normally waits for every recorded key to release. For Command combinations, releasing the last modifier also finishes recording because macOS can omit the main key's release event. Multiple main keys are still rejected. The displayed value changes after native registration and persistence succeed. A saved shortcut that failed to register is shown as 未生效.

@@ -163,15 +163,20 @@ Field properties:
 | `type`        | string | Yes      | One of `secret`, `text`, `select`, `toggle`. |
 | `label`       | string | Yes      | Label shown in Settings. |
 | `placeholder` | string | No       | Placeholder shown in text-like inputs. |
-| `help`        | string | No       | Short help text shown below the field. |
+| `help`        | string | No       | Optional help text available on demand. |
 | `options`     | array  | Select only | Select options: `{ "value": "...", "label": "..." }`. |
 | `default`     | any    | No       | Default value used when no saved value exists. |
-| `defaultSource` | boolean | No    | Set `true` when leaving the field empty can still use a plugin-managed fallback such as environment variables or default files. |
+| `defaultSource` | boolean | No    | Declares a possible plugin-managed fallback; it is not evidence that credentials were detected. |
+| `required` | boolean | No | Defaults to `false`; only for `secret` and `text` fields. A visible required field needs a new value, saved value, or confirmed environment source before the form can submit. |
+| `visibleWhen` | object | No | `{ "field": "source", "values": ["api-key"] }`; edit this field only for those values of a select field. Hidden saved values remain intact. |
+| `environmentVariables` | string[] | No | Declared sources from the provider's existing environment whitelist. The configuration view reports actual presence, never a secret value. |
+| `autoValue` | string | No | A select option that delegates selection to the plugin. It must be a declared option. |
 
 Validation rules:
 
 - Field ids must be unique within a plugin.
 - Select fields must have non-empty options and unique option values.
+- Conditional fields must reference an existing select and valid option values without dependency cycles. Environment names must pass the provider whitelist. Only public region variables may decorate a select value.
 - If a saved select value is no longer valid after a plugin update, OpenUsageCN falls back to the field default or the first option.
 
 If `providers.json` is damaged and cannot be read or parsed, OpenUsageCN keeps the last readable backup when one exists. If neither `providers.json` nor `providers.json.bak` can be recovered, saves are blocked until you rename or remove the damaged files so other providers' keys are not silently overwritten. Secret fields such as API keys are stored as plaintext in that local file, protected only by best-effort private file permissions (`0600` on macOS/Linux). Bundled plugins are copied into the app data plugin directory on startup and may overwrite plugin files, so user-provided config must not be stored inside `plugins/<id>/`.

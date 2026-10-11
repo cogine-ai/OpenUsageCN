@@ -42,7 +42,10 @@ impl ProviderIdentityTransport for MutableIdentityTransport {
         _cancellation: &CancellationToken,
     ) -> Result<ValidationOutcome, ProviderTransportError> {
         Ok(ValidationOutcome::Verified(
-            VerifiedIdentity::new(self.0.lock().unwrap().clone()).expect("identity"),
+            VerifiedIdentity::new(self.0.lock().unwrap().clone())
+                .expect("identity")
+                .with_display(Some("browser@example.com".to_string()), None)
+                .expect("verified display"),
         ))
     }
 }
@@ -131,6 +134,15 @@ fn attaching_a_new_cursor_browser_account_pins_it_without_serializing_secrets() 
     let view_json = serde_json::to_string(&receipt.view).unwrap();
     let registry_json = std::fs::read_to_string(directory.join("provider-accounts.json"))
         .expect("registry persisted");
+    assert_eq!(
+        account
+            .identity
+            .as_ref()
+            .and_then(|identity| identity.email.as_deref()),
+        Some("browser@example.com")
+    );
+    assert!(view_json.contains("browser@example.com"));
+    assert!(!registry_json.contains("browser@example.com"));
     for secret in [
         "browser-secret",
         "browser-subject",
@@ -189,14 +201,23 @@ fn failed_cursor_attachment_releases_the_claimed_browser_session() {
     std::fs::remove_dir_all(&directory).unwrap();
     std::fs::write(&directory, "blocks provider account directory").unwrap();
 
+    // Bypass perform's registry pre-read to fail only after the candidate is claimed.
+    assert!(
+        accounts
+            .attach_browser_candidate("cursor", &candidate_id)
+            .is_err()
+    );
+    assert_eq!(broker.retained_session_count(), 0);
+    assert!(broker.claim_candidate(&candidate_id).is_err());
+    std::fs::remove_file(&directory).unwrap();
     let receipt = accounts.perform(
         "cursor",
-        ProviderOperation::AttachBrowserCandidate { candidate_id },
+        ProviderOperation::AttachBrowserCandidate {
+            candidate_id: self::candidate_id(&broker),
+        },
     );
-
-    assert_eq!(receipt.status, OperationStatus::Failed);
-    assert_eq!(broker.retained_session_count(), 0);
-    std::fs::remove_file(directory).unwrap();
+    assert_eq!(receipt.status, OperationStatus::Succeeded);
+    assert_eq!(receipt.view.accounts.len(), 1);
 }
 
 #[test]
@@ -232,6 +253,7 @@ fn detaching_a_browser_connection_keeps_the_pinned_account_as_stale_history() {
     assert_eq!(detached.view.accounts.len(), 1);
     assert!(detached.view.accounts[0].stale);
     assert!(detached.view.accounts[0].connections.is_empty());
+    assert!(detached.view.accounts[0].identity.is_none());
 }
 
 #[test]

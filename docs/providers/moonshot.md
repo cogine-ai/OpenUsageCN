@@ -35,3 +35,7 @@ Authorization: Bearer <regional_api_key>
 Only the endpoint for the selected region is requested. A missing or rejected key, failed request, or malformed response produces a visible error. Diagnostic logs contain the HTTP status or invalid field name, without response content.
 
 Moonshot's [China Mainland balance documentation](https://platform.kimi.com/docs/api/balance) and [International balance documentation](https://platform.kimi.ai/docs/api/balance) describe these endpoints, fields, and currencies.
+
+## Connection Check
+
+The connection page edits only the key for the selected region and keeps the other region's saved key. Auto remains in Advanced Settings. It uses the confirmed environment region, or International when unset; saving a China key does not change Auto to China. An invalid environment region requires an explicit region choice. The shared environment key is reported only for its matching region. Save And Check waits for a new result. Saving alone does not confirm access, and an explicit check does not turn on a disabled provider. A rejected regional key keeps the current region when opening its recovery page.

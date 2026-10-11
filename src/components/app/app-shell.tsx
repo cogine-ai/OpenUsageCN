@@ -41,12 +41,14 @@ export function AppShell({
 }: AppShellProps) {
   const {
     activeView,
+    connection,
     setActiveView,
     showAbout,
     setShowAbout,
   } = useAppUiStore(
     useShallow((state) => ({
       activeView: state.activeView,
+      connection: state.connection,
       setActiveView: state.setActiveView,
       showAbout: state.showAbout,
       setShowAbout: state.setShowAbout,
@@ -74,7 +76,7 @@ export function AppShell({
     <div
       ref={containerRef}
       tabIndex={-1}
-      className="flex flex-col items-center p-6 pt-1.5 bg-transparent outline-none"
+      className={`flex flex-col items-center py-6 pt-1.5 bg-transparent outline-none ${connection ? "px-2" : "px-6"}`}
     >
       <div className="tray-arrow" />
       <div
@@ -82,15 +84,15 @@ export function AppShell({
         style={maxPanelHeightPx ? { maxHeight: `${maxPanelHeightPx - ARROW_OVERHEAD_PX}px` } : undefined}
       >
         <div className="flex flex-1 min-h-0 flex-row">
-          <SideNav
+          {!connection && <SideNav
             activeView={activeView}
             onViewChange={setActiveView}
             plugins={navPlugins}
             onPluginContextAction={onPluginContextAction}
             isPluginRefreshAvailable={isPluginRefreshAvailable}
             onReorder={onNavReorder}
-          />
-          <div className="flex-1 flex flex-col px-3 pt-2 pb-1.5 min-w-0 bg-card dark:bg-muted/50">
+          />}
+          <div className={`flex-1 flex flex-col pt-2 pb-1.5 min-w-0 bg-card dark:bg-muted/50 ${connection ? "px-2" : "px-3"}`}>
             <div className="relative flex-1 min-h-0">
               <div ref={scrollRef} className="h-full overflow-y-auto scrollbar-none">
                 <AppContent
@@ -105,7 +107,7 @@ export function AppShell({
                 className={`pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-card dark:from-muted/50 to-transparent transition-opacity duration-200 ${canScrollDown ? "opacity-100" : "opacity-0"}`}
               />
             </div>
-            <PanelFooter
+            {!connection && <PanelFooter
               version={appVersion}
               autoUpdateNextAt={autoUpdateNextAt}
               updateStatus={updateStatus}
@@ -115,7 +117,7 @@ export function AppShell({
               showAbout={showAbout}
               onShowAbout={() => setShowAbout(true)}
               onCloseAbout={() => setShowAbout(false)}
-            />
+            />}
           </div>
         </div>
       </div>

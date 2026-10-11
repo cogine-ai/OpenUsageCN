@@ -388,13 +388,20 @@ describe("App", () => {
       setTooltip: state.traySetTooltipMock.mockResolvedValue(undefined),
     })
     state.resolveResourceMock.mockResolvedValue("/resource/icons/tray-icon.png")
-    state.invokeMock.mockImplementation(async (cmd: string) => {
+    state.invokeMock.mockImplementation(async (cmd: string, args?: { shortcut?: string | null }) => {
       if (cmd === "list_plugins") {
         return [
           { id: "a", name: "Alpha", iconUrl: "icon-a", primaryProgressLabel: null, lines: [{ type: "text", label: "Now", scope: "overview" }] },
           { id: "b", name: "Beta", iconUrl: "icon-b", primaryProgressLabel: null, lines: [] },
         ]
       }
+      if (cmd === "get_global_shortcut_status") {
+        return { shortcut: null, active: false, error: null }
+      }
+      if (cmd === "update_global_shortcut") {
+        return { shortcut: args?.shortcut ?? null, active: Boolean(args?.shortcut), error: null }
+      }
+      if (cmd === "set_global_shortcut_recording") return undefined
       return null
     })
     state.loadPluginSettingsMock.mockResolvedValue({ order: ["a"], disabled: [] })
@@ -405,6 +412,22 @@ describe("App", () => {
     vi.useRealTimers()
     delete (HTMLElement.prototype as unknown as Record<string, unknown>).scrollHeight
   })
+
+  const mockShortcutBackend = (shortcut: string | null) => {
+    state.isTauriMock.mockReturnValue(true)
+    state.loadGlobalShortcutMock.mockResolvedValue(shortcut)
+    const previous = state.invokeMock.getMockImplementation()!
+    let current = { shortcut, active: Boolean(shortcut), error: null }
+    state.invokeMock.mockImplementation(async (cmd: string, args?: { shortcut?: string | null }) => {
+      if (cmd === "get_global_shortcut_status") return current
+      if (cmd === "update_global_shortcut") {
+        current = { shortcut: args?.shortcut ?? null, active: Boolean(args?.shortcut), error: null }
+        return current
+      }
+      if (cmd === "set_global_shortcut_recording") return undefined
+      return previous(cmd, args)
+    })
+  }
 
   const triggerPluginContextAction = async (
     pluginName: string,
@@ -484,7 +507,10 @@ describe("App", () => {
     expect(screen.queryByText("菜单栏图标")).not.toBeInTheDocument()
     expect(screen.queryByText("全局快捷键")).not.toBeInTheDocument()
     expect(screen.queryByText("命令行")).not.toBeInTheDocument()
+    expect(screen.queryByText("本地 API")).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "工具接入" }))
     expect(screen.getByText("本地 API")).toBeInTheDocument()
+    expect(screen.queryByText("命令行")).not.toBeInTheDocument()
     expect(screen.getByRole("heading", { name: "登录时启动" })).toBeInTheDocument()
   })
 
@@ -1033,9 +1059,9 @@ describe("App", () => {
     await userEvent.click(settingsButtons[0])
     // Re-query before each click: the Checkbox remounts on each toggle because
     // its key includes plugin.enabled, so the reference goes stale after click 1.
-    await userEvent.click((await screen.findAllByRole("checkbox")).at(-1)!)
+    await userEvent.click(await screen.findByRole("checkbox", { name: "启用 Beta" }))
     expect(state.savePluginSettingsMock).toHaveBeenCalledTimes(1)
-    await userEvent.click((await screen.findAllByRole("checkbox")).at(-1)!)
+    await userEvent.click(await screen.findByRole("checkbox", { name: "停用 Beta" }))
     expect(state.savePluginSettingsMock).toHaveBeenCalledTimes(2)
   })
 
@@ -1415,7 +1441,7 @@ describe("App", () => {
     const settingsButtons = await screen.findAllByRole("button", { name: "设置" })
     await userEvent.click(settingsButtons[0])
     const checkboxes = await screen.findAllByRole("checkbox")
-    const targetCheckbox = checkboxes[checkboxes.length - 1]
+    const targetCheckbox = await screen.findByRole("checkbox", { name: "启用 Beta" })
     await userEvent.click(targetCheckbox)
     await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
     expect(errorSpy).toHaveBeenCalled()
@@ -1428,7 +1454,7 @@ describe("App", () => {
     const settingsButtons = await screen.findAllByRole("button", { name: "设置" })
     await userEvent.click(settingsButtons[0])
     const checkboxes = await screen.findAllByRole("checkbox")
-    const targetCheckbox = checkboxes[checkboxes.length - 1]
+    const targetCheckbox = await screen.findByRole("checkbox", { name: "启用 Beta" })
     await userEvent.click(targetCheckbox)
     await waitFor(() => expect(state.startBatchMock).toHaveBeenCalledWith(["b"]))
   })
@@ -1581,7 +1607,7 @@ describe("App", () => {
 
     // Toggle then reorder quickly (within debounce window) to force timer replacement.
     const checkboxes = await screen.findAllByRole("checkbox")
-    const pluginCheckbox = checkboxes[checkboxes.length - 1]
+    const pluginCheckbox = screen.getByRole("checkbox", { name: "停用 Beta" })
     await userEvent.click(pluginCheckbox)
     dndState.latestOnDragEnd?.({ active: { id: "a" }, over: { id: "b" } })
 
@@ -1927,27 +1953,25 @@ describe("App", () => {
   })
 
   it("clears global shortcut via clear button and invokes update_global_shortcut with null", async () => {
-    // Start with shortcut enabled
-    state.loadGlobalShortcutMock.mockResolvedValueOnce("CommandOrControl+Shift+U")
+    mockShortcutBackend("Command+Shift+U")
 
     render(<App />)
     const settingsButtons = await screen.findAllByRole("button", { name: "设置" })
     await userEvent.click(settingsButtons[0])
 
-    // The shortcut should be displayed
-    await screen.findByText(/Cmd \+ Shift \+ U/i)
+    await screen.findByRole("button", { name: "编辑快捷键 Command+Shift+U" })
 
     // Find and click the clear button (X icon)
     const clearButton = await screen.findByRole("button", { name: /清除快捷键/ })
     await userEvent.click(clearButton)
 
-    // Clearing should save null and invoke update_global_shortcut with null
-    await waitFor(() => expect(state.saveGlobalShortcutMock).toHaveBeenCalledWith(null))
     await waitFor(() =>
       expect(state.invokeMock).toHaveBeenCalledWith("update_global_shortcut", {
         shortcut: null,
       })
     )
+    await screen.findByRole("button", { name: "设置快捷键" })
+    expect(state.saveGlobalShortcutMock).not.toHaveBeenCalled()
   })
 
   it("loads global shortcut from settings on startup", async () => {
@@ -1957,8 +1981,10 @@ describe("App", () => {
     const settingsButtons = await screen.findAllByRole("button", { name: "设置" })
     await userEvent.click(settingsButtons[0])
 
-    // The shortcut should be displayed (formatted version)
-    await screen.findByText(/Cmd \+ Shift \+ O/i)
+    const shortcut = await screen.findByRole("button", { name: "编辑快捷键 CommandOrControl+Shift+O" })
+    expect(shortcut).toHaveTextContent("⌘")
+    expect(shortcut).toHaveTextContent("⇧")
+    expect(shortcut).toHaveTextContent("O")
   })
 
   it("shows placeholder when no shortcut is set", async () => {
@@ -1968,9 +1994,8 @@ describe("App", () => {
     const settingsButtons = await screen.findAllByRole("button", { name: "设置" })
     await userEvent.click(settingsButtons[0])
 
-    // Should show the placeholder text (appears twice: as main text and as hint)
-    const placeholders = await screen.findAllByText(/点击设置/)
-    expect(placeholders.length).toBeGreaterThan(0)
+    expect(await screen.findByRole("button", { name: "设置快捷键" })).toBeInTheDocument()
+    expect(screen.queryByText(/点击设置/)).not.toBeInTheDocument()
   })
 
   it("logs error when loading global shortcut fails", async () => {
@@ -1985,41 +2010,41 @@ describe("App", () => {
     errorSpy.mockRestore()
   })
 
-  it("logs error when saving global shortcut fails", async () => {
+  it("keeps the previous shortcut and shows the native persistence error", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-    // Start with a shortcut so we can clear it
-    state.loadGlobalShortcutMock.mockResolvedValueOnce("CommandOrControl+Shift+U")
-    state.saveGlobalShortcutMock.mockRejectedValueOnce(new Error("save shortcut failed"))
+    mockShortcutBackend("Command+Shift+U")
+    const previous = state.invokeMock.getMockImplementation()!
+    state.invokeMock.mockImplementation(async (cmd: string, args?: unknown) => {
+      if (cmd === "update_global_shortcut") throw "无法保存快捷键，请重试。"
+      return previous(cmd, args)
+    })
 
     render(<App />)
     const settingsButtons = await screen.findAllByRole("button", { name: "设置" })
     await userEvent.click(settingsButtons[0])
 
-    // Clear the shortcut to trigger save
     const clearButton = await screen.findByRole("button", { name: /清除快捷键/ })
     await userEvent.click(clearButton)
 
     await waitFor(() =>
-      expect(errorSpy).toHaveBeenCalledWith("Failed to save global shortcut:", expect.any(Error))
+      expect(errorSpy).toHaveBeenCalledWith("Failed to update global shortcut:", "无法保存快捷键，请重试。")
     )
+    expect(await screen.findByRole("alert")).toHaveTextContent("无法保存快捷键，请重试。")
+    expect(screen.getByRole("button", { name: "编辑快捷键 Command+Shift+U" })).toBeInTheDocument()
+    expect(state.saveGlobalShortcutMock).not.toHaveBeenCalled()
 
     errorSpy.mockRestore()
   })
 
   it("logs error when update_global_shortcut invoke fails", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-    // Start with a shortcut so we can clear it
-    state.loadGlobalShortcutMock.mockResolvedValueOnce("CommandOrControl+Shift+U")
-    state.invokeMock.mockImplementation(async (cmd: string) => {
-      if (cmd === "list_plugins") {
-        return [
-          { id: "a", name: "Alpha", iconUrl: "icon-a", primaryProgressLabel: null, lines: [] },
-        ]
-      }
+    mockShortcutBackend("Command+Shift+U")
+    const previous = state.invokeMock.getMockImplementation()!
+    state.invokeMock.mockImplementation(async (cmd: string, args?: unknown) => {
       if (cmd === "update_global_shortcut") {
         throw new Error("shortcut registration failed")
       }
-      return null
+      return previous(cmd, args)
     })
 
     render(<App />)
@@ -2035,6 +2060,21 @@ describe("App", () => {
     )
 
     errorSpy.mockRestore()
+  })
+
+  it("cancels shortcut recording with Escape without hiding the panel or changing the binding", async () => {
+    mockShortcutBackend("Command+Shift+U")
+    render(<App />)
+    const settingsButtons = await screen.findAllByRole("button", { name: "设置" })
+    await userEvent.click(settingsButtons[0])
+    await userEvent.click(await screen.findByRole("button", { name: "录制新快捷键" }))
+    const recorder = await screen.findByRole("textbox", { name: "按下要设置的快捷键" })
+    fireEvent.keyDown(recorder, { key: "Escape", code: "Escape" })
+    await screen.findByRole("button", { name: "编辑快捷键 Command+Shift+U" })
+    await waitFor(() => expect(state.invokeMock).toHaveBeenCalledWith("set_global_shortcut_recording", { recording: false }))
+    expect(state.invokeMock.mock.calls.some(([cmd]) => cmd === "hide_panel")).toBe(false)
+    expect(state.invokeMock.mock.calls.some(([cmd]) => cmd === "update_global_shortcut")).toBe(false)
+    expect(state.saveGlobalShortcutMock).not.toHaveBeenCalled()
   })
 
   it("queues a follow-up tray update when render is in-flight", async () => {

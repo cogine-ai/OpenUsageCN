@@ -12,7 +12,8 @@ import { useSettingsTheme } from "@/hooks/app/use-settings-theme"
 import { useTrayIcon } from "@/hooks/app/use-tray-icon"
 import { usePaceNotifications } from "@/hooks/app/use-pace-notifications"
 import { usePlatformCapabilities } from "@/hooks/app/use-platform-capabilities"
-import { getProbeBatchStartFailedPluginIds } from "@/hooks/use-probe-events"
+import { probeFailure } from "@/lib/probe-failure"
+import { ProbeVerificationCancelled } from "@/hooks/use-probe-events"
 import { REFRESH_COOLDOWN_MS, savePluginSettings } from "@/lib/settings"
 import { type PluginContextAction } from "@/components/side-nav"
 import { useAppPluginStore } from "@/stores/app-plugin-store"
@@ -99,6 +100,7 @@ function App() {
     setLoadingForPlugins,
     setErrorForPlugins,
     startBatch,
+    verifyPlugin,
     autoUpdateNextAt,
     setAutoUpdateNextAt,
     handleRetryPlugin,
@@ -193,9 +195,7 @@ function App() {
   })
 
   const pluginSettingsRef = useRef(pluginSettings)
-  useEffect(() => {
-    pluginSettingsRef.current = pluginSettings
-  }, [pluginSettings])
+  useEffect(() => { pluginSettingsRef.current = pluginSettings }, [pluginSettings])
 
   const {
     handleReorder,
@@ -209,21 +209,20 @@ function App() {
     scheduleTrayIconUpdate,
   })
 
-  const handleProviderConfigSaved = useCallback(
-    (pluginId: string) => {
-      const currentSettings = pluginSettingsRef.current
-      if (currentSettings?.disabled.includes(pluginId)) return
-      setLoadingForPlugins([pluginId])
-      startBatch([pluginId]).catch((error) => {
-        console.error("Failed to refresh plugin after config save:", error)
-        const failedPluginIds = getProbeBatchStartFailedPluginIds(error, [pluginId])
-        if (failedPluginIds.length > 0) {
-          setErrorForPlugins(failedPluginIds, "无法开始刷新")
-        }
-      })
-    },
-    [setErrorForPlugins, setLoadingForPlugins, startBatch]
-  )
+  const handleProviderConfigSaved = useCallback(async (pluginId: string) => {
+    setLoadingForPlugins([pluginId])
+    try {
+      const output = await verifyPlugin(pluginId)
+      const error = probeFailure(output)
+      if (error) throw new Error(error)
+    } catch (error) {
+      console.error("Failed to verify provider connection:", error)
+      if (!(error instanceof ProbeVerificationCancelled)) {
+        setErrorForPlugins([pluginId], error instanceof Error ? error.message : "无法检查连接")
+      }
+      throw error
+    }
+  }, [verifyPlugin, setLoadingForPlugins, setErrorForPlugins])
 
   const settingsPlugins = useSettingsPluginList({
     pluginSettings,
@@ -264,7 +263,7 @@ function App() {
         setActiveView("home")
       }
     },
-    [activeView, handleRetryPlugin, scheduleTrayIconUpdate, setActiveView, setPluginSettings]
+    [activeView, handleRetryPlugin, pluginSettings, scheduleTrayIconUpdate, setActiveView, setPluginSettings]
   )
 
   const isPluginRefreshAvailable = useCallback(

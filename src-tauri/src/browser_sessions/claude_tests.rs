@@ -12,6 +12,23 @@ fn oauth_identity() -> VerifiedClaudeOAuthIdentity {
         .expect("verified OAuth identity")
 }
 
+#[test]
+fn oauth_display_identity_rejects_empty_or_oversized_email_at_the_boundary() {
+    for email in [
+        " \u{00a0} ".to_string(),
+        format!("{}@example.com", "x".repeat(254)),
+    ] {
+        assert!(VerifiedClaudeOAuthIdentity::new(email, OAUTH_ORG.to_string()).is_none());
+    }
+    assert!(
+        VerifiedClaudeOAuthIdentity::new(
+            "\u{00a0}Person@Example.COM\u{00a0}".to_string(),
+            OAUTH_ORG.to_string()
+        )
+        .is_some()
+    );
+}
+
 fn membership(org: &str, seat: Option<&str>) -> ClaudeMembershipEvidence {
     ClaudeMembershipEvidence::new(
         Some(org.to_string()),
@@ -269,11 +286,18 @@ fn discovery_attaches_only_a_double_matched_account_and_rotates_in_memory() {
     assert_eq!(discovery.profile.status, ProfileDiscoveryStatus::Verified);
     assert_eq!(discovery.enrichment.plan, ClaudeTeamPlan::TeamStandard);
     let serialized = serde_json::to_string(&discovery).expect("safe discovery receipt");
-    for secret in ["person@example.com", OAUTH_ORG, "sk-ant", "/Users/alice"] {
+    for secret in [OAUTH_ORG, "sk-ant", "/Users/alice"] {
         assert!(!serialized.contains(secret));
     }
 
     let candidate = discovery.profile.candidate.expect("verified candidate");
+    assert_eq!(
+        candidate
+            .identity
+            .as_ref()
+            .and_then(|identity| identity.email.as_deref()),
+        Some("person@example.com")
+    );
     let session = broker
         .attach_candidate(&candidate.candidate_id)
         .expect("attach candidate");

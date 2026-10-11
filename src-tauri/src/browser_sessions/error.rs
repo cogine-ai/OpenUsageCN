@@ -16,6 +16,7 @@ pub(crate) enum BrowserSessionErrorCode {
     Cancelled,
     ProviderValidationFailed,
     AuthenticationRejected,
+    IdentityUnavailable,
     CandidateNotFound,
     CandidateExpired,
     SessionNotFound,
@@ -105,6 +106,13 @@ impl BrowserSessionError {
         Self {
             code: BrowserSessionErrorCode::AuthenticationRejected,
             message: "No signed-in account could be verified in this profile.",
+        }
+    }
+
+    pub(super) fn identity_unavailable() -> Self {
+        Self {
+            code: BrowserSessionErrorCode::IdentityUnavailable,
+            message: "The browser account identity could not be confirmed.",
         }
     }
 

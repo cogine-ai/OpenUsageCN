@@ -58,9 +58,9 @@ describe("ProviderAccountControls", () => {
     render(<ProviderAccountControls providerId="cursor" />)
 
     expect(screen.getByText("正在读取账号…")).toBeInTheDocument()
-    expect(await screen.findByRole("radio", { name: /自动跟随/i })).toBeInTheDocument()
-    expect(screen.getByRole("radio", { name: /自动跟随/i })).toBeChecked()
-    expect(screen.getByRole("radio", { name: /Work/i })).not.toBeChecked()
+    expect(await screen.findByRole("switch", { name: "跟随本机" })).toBeInTheDocument()
+    expect(screen.getByRole("switch", { name: "跟随本机" })).toBeChecked()
+    expect(screen.getByRole("radio", { name: /Work/i })).toBeChecked()
     expect(screen.getByText("Desktop · CLI")).toBeInTheDocument()
     expect(screen.getByText("数据可能已过期")).toBeInTheDocument()
   })
@@ -99,7 +99,7 @@ describe("ProviderAccountControls", () => {
     await user.click(account)
 
     expect(account).toBeChecked()
-    expect(screen.getByRole("radio", { name: /自动跟随/i })).not.toBeChecked()
+    expect(screen.getByRole("switch", { name: "跟随本机" })).not.toBeChecked()
   })
 
   it("keeps a partial refresh result visible", async () => {
@@ -351,14 +351,14 @@ describe("ProviderAccountControls", () => {
         />
       )
 
-      expect(await screen.findByRole("radio", { name: /自动跟随/i })).toBeInTheDocument()
+      expect(await screen.findByRole("switch", { name: "跟随本机" })).toBeInTheDocument()
       expect(
         screen.queryByRole("button", { name: "添加账号" })
       ).not.toBeInTheDocument()
     }
   )
 
-  it("offers exact browser-profile attachment for Claude", async () => {
+  it("requires a local OAuth connection before offering a Claude browser connection", async () => {
     tauri.invoke.mockResolvedValue({
       providerId: "claude",
       selection: { mode: "auto" },
@@ -369,7 +369,7 @@ describe("ProviderAccountControls", () => {
     render(<ProviderAccountControls providerId="claude" browserBinding />)
 
     expect(
-      await screen.findByRole("button", { name: "添加账号" })
+      await screen.findByRole("button", { name: "连接本机账号" })
     ).toBeInTheDocument()
   })
 
@@ -418,7 +418,7 @@ describe("ProviderAccountControls", () => {
 
       render(<ProviderAccountControls providerId={providerId} modelHistory />)
 
-      expect(await screen.findByRole("radio", { name: /自动跟随/i })).toBeInTheDocument()
+      expect(await screen.findByRole("switch", { name: "跟随本机" })).toBeInTheDocument()
       expect(screen.queryByRole("heading", { name: "Model Usage" })).not.toBeInTheDocument()
       expect(tauri.invoke).not.toHaveBeenCalledWith(
         "get_cursor_history_snapshot",
@@ -426,4 +426,38 @@ describe("ProviderAccountControls", () => {
       )
     }
   )
+
+  it("opens the routed connection page without exposing a nested editor", async () => {
+    tauri.invoke.mockResolvedValue({ providerId: "cursor", selection: { mode: "auto" }, activeAccountId: null, accounts: [] })
+    const onOpenConnections = vi.fn()
+    testingRender(<ProviderAccountControls providerId="cursor" onOpenConnections={onOpenConnections} />)
+    await userEvent.setup().click(screen.getByRole("button", { name: "账号" }))
+    expect(onOpenConnections).toHaveBeenCalledOnce()
+    expect(screen.queryByRole("switch", { name: "跟随本机" })).not.toBeInTheDocument()
+  })
+
+  it("shows the actual account and verified identity while following the local default", async () => {
+    tauri.invoke.mockResolvedValue({ providerId: "cursor", selection: { mode: "auto" }, activeAccountId: "work", accounts: [
+      { accountId: "work", label: "Work", identity: { email: "verified@example.com" }, connectionKinds: ["chrome"], connections: [], selected: true, stale: false },
+      { accountId: "other", label: "Other", connectionKinds: ["desktop"], connections: [], selected: false, stale: false },
+    ] })
+    testingRender(<ProviderAccountControls standalone providerId="cursor" />)
+    expect(await screen.findByRole("switch", { name: "跟随本机" })).toBeChecked()
+    expect(screen.getByRole("radio", { name: /verified@example.com/ })).toBeChecked()
+    expect(screen.getByRole("radio", { name: /Other/ })).not.toBeChecked()
+    expect(screen.getByText("verified@example.com")).toBeInTheDocument()
+    expect(screen.getByLabelText("当前账号")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "账号" })).not.toBeInTheDocument()
+  })
+
+  it("routes missing Claude CLI login to the trusted local login action", async () => {
+    tauri.invoke.mockResolvedValue({ providerId: "claude", selection: { mode: "auto" }, activeAccountId: null, accounts: [] })
+    const onOpenLocalLogin = vi.fn()
+    testingRender(<ProviderAccountControls standalone providerId="claude" browserBinding onOpenLocalLogin={onOpenLocalLogin} />)
+    await userEvent.setup().click(await screen.findByRole("button", { name: "连接本机账号" }))
+    expect(onOpenLocalLogin).toHaveBeenCalledOnce()
+    expect(screen.queryByRole("button", { name: "连接浏览器" })).not.toBeInTheDocument()
+    expect(tauri.invoke).not.toHaveBeenCalledWith("discover_browser_accounts", expect.anything())
+  })
+
 })

@@ -61,6 +61,10 @@ export type PluginConfigField = {
   options: PluginConfigOption[]
   default?: unknown
   defaultSource?: boolean
+  visibleWhen?: { field: string; values: string[] }
+  environmentVariables?: string[]
+  autoValue?: string
+  required?: boolean
 }
 
 export type PluginConfig = {
@@ -97,6 +101,7 @@ export type ProviderAccountConnection = {
 export type ProviderAccountSummary = {
   accountId: string
   label: string
+  identity?: { email?: string; name?: string }
   connectionKinds: ProviderAccountConnectionKind[]
   connections: ProviderAccountConnection[]
   selected: boolean

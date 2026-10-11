@@ -30,7 +30,7 @@ export function useProbe({
 
   const handleBatchComplete = useCallback(() => {}, [])
 
-  const { startBatch } = useProbeEvents({
+  const { startBatch, verifyPlugin } = useProbeEvents({
     onResult: handleProbeResult,
     onBatchComplete: handleBatchComplete,
   })
@@ -70,6 +70,7 @@ export function useProbe({
   })
 
   return {
+    verifyPlugin,
     pluginStates,
     setLoadingForPlugins,
     setErrorForPlugins,

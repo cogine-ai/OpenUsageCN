@@ -25,6 +25,7 @@ export type BrowserAccountCandidate = {
   profileKey: string
   host: string
   expiresAtMs: number
+  identity?: { email?: string; name?: string }
 }
 
 export type BrowserProfileDiscovery = {

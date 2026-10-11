@@ -45,6 +45,7 @@ struct CandidateEntry {
     store_id: SecretValue,
     cookie_header: SecretValue,
     identity: SecretValue,
+    display: Option<super::model::AccountIdentityDisplay>,
     expires_monotonic: Duration,
     expires_at_ms: u64,
 }
@@ -57,6 +58,7 @@ struct SessionEntry {
     store_id: SecretValue,
     cookie_header: SecretValue,
     identity: SecretValue,
+    display: Option<super::model::AccountIdentityDisplay>,
     credential_generation: u64,
     expires_monotonic: Duration,
     expires_at_ms: u64,
@@ -78,6 +80,7 @@ impl BrokerRoster {
         let candidate_id = Uuid::new_v4().to_string();
         let expires_monotonic = now.monotonic.saturating_add(CANDIDATE_TTL);
         let expires_at_ms = now.unix_ms.saturating_add(10 * 60 * 1_000);
+        let display = input.identity.display();
         let summary = BrowserCandidateSummary {
             candidate_id: candidate_id.clone(),
             provider: input.provider,
@@ -85,6 +88,7 @@ impl BrokerRoster {
             profile_key: input.profile_key.clone(),
             host: input.host.clone(),
             expires_at_ms,
+            identity: display.clone(),
         };
         self.candidates.insert(
             candidate_id,
@@ -96,6 +100,7 @@ impl BrokerRoster {
                 store_id: SecretValue::new(input.store_id),
                 cookie_header: SecretValue::new(input.cookie_header),
                 identity: SecretValue::new(input.identity.into_inner()),
+                display,
                 expires_monotonic,
                 expires_at_ms,
             },
@@ -136,6 +141,7 @@ impl BrokerRoster {
                 store_id: candidate.store_id,
                 cookie_header: candidate.cookie_header,
                 identity: candidate.identity,
+                display: candidate.display,
                 credential_generation: 0,
                 expires_monotonic: candidate.expires_monotonic,
                 expires_at_ms: candidate.expires_at_ms,
@@ -165,6 +171,7 @@ impl BrokerRoster {
             profile_key: session.profile_key.clone(),
             host: session.host.clone(),
             expires_at_ms: session.expires_at_ms,
+            identity: session.display.clone(),
         })
     }
 

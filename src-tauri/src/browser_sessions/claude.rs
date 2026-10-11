@@ -33,7 +33,10 @@ impl VerifiedClaudeOAuthIdentity {
     }
 
     fn binding_identity(&self) -> VerifiedIdentity {
-        VerifiedIdentity::new(self.binding_token()).expect("Claude binding digest is valid")
+        VerifiedIdentity::new(self.binding_token())
+            .expect("Claude binding digest is valid")
+            .with_display(Some(self.email.expose().to_string()), None)
+            .expect("verified Claude email is present")
     }
 
     pub(crate) fn opaque_identity(&self) -> String {
@@ -437,10 +440,8 @@ fn zero_string(value: &mut String) {
 }
 
 fn normalize_email(value: &str) -> Option<String> {
-    let normalized = value
-        .trim_matches(|character: char| character.is_ascii_whitespace())
-        .to_ascii_lowercase();
-    valid_secret_field(&normalized).then_some(normalized)
+    let normalized = value.trim().to_ascii_lowercase();
+    (normalized.len() <= 254 && valid_secret_field(&normalized)).then_some(normalized)
 }
 
 fn exact_organization_uuid(value: &str) -> Option<String> {
