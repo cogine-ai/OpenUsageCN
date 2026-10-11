@@ -16,12 +16,15 @@ vi.mock("@tauri-apps/api/event", () => ({
 }))
 
 import { ProviderDetailPage } from "@/pages/provider-detail"
+import { ProviderConnectionPage } from "@/pages/provider-connection"
+import { useAppUiStore } from "@/stores/app-ui-store"
 
 describe("ProviderDetailPage", () => {
   beforeEach(() => {
     tauri.invoke.mockReset()
     tauri.listen.mockReset()
     tauri.listen.mockResolvedValue(vi.fn())
+    useAppUiStore.getState().resetState()
   })
 
   it("shows not found when plugin missing", () => {
@@ -90,7 +93,7 @@ describe("ProviderDetailPage", () => {
     expect(screen.getByRole("button", { name: /status/i })).toBeInTheDocument()
   })
 
-  it("shows account controls and active-account model history for Cursor detail", async () => {
+  it("opens account management while retaining active-account model history on Cursor detail", async () => {
     tauri.invoke.mockImplementation((command: string) => {
       if (command === "get_provider_account_view") {
         return Promise.resolve({
@@ -136,7 +139,8 @@ describe("ProviderDetailPage", () => {
       await screen.findByRole("heading", { name: "账号" })
     ).toBeInTheDocument()
     await userEvent.click(screen.getByRole("button", { name: "账号" }))
-    expect(screen.getByRole("button", { name: "添加账号" })).toBeInTheDocument()
+    expect(useAppUiStore.getState().connection).toEqual({ providerId: "cursor", kind: "accounts" })
+    expect(screen.queryByRole("button", { name: "添加账号" })).not.toBeInTheDocument()
     expect(await screen.findByRole("heading", { name: "Model Usage" })).toBeInTheDocument()
   })
 
@@ -164,9 +168,9 @@ describe("ProviderDetailPage", () => {
         },
       ],
     }
-    tauri.invoke
-      .mockResolvedValueOnce(initialView)
-      .mockResolvedValueOnce({
+    tauri.invoke.mockImplementation((command: string) => {
+      if (command === "get_provider_account_view") return Promise.resolve(initialView)
+      if (command === "perform_provider_account_operation") return Promise.resolve({
         operationId: "operation-select",
         status: "succeeded",
         sourceOutcomes: [],
@@ -176,11 +180,13 @@ describe("ProviderDetailPage", () => {
           activeAccountId: "account-2",
         },
       })
+      throw new Error(`Unexpected command: ${command}`)
+    })
     const onRetry = vi.fn()
     const onAccountChangeRefresh = vi.fn()
     const user = userEvent.setup()
 
-    render(
+    const detail = render(
       <ProviderDetailPage
         displayMode="used"
         resetTimerDisplayMode="relative"
@@ -208,6 +214,12 @@ describe("ProviderDetailPage", () => {
     )
 
     await user.click(screen.getByRole("button", { name: "账号" }))
+    expect(useAppUiStore.getState().connection).toEqual({ providerId: "cursor", kind: "accounts" })
+    detail.unmount()
+    render(<ProviderConnectionPage
+      plugin={{ id: "cursor", name: "Cursor", enabled: true, accountSupport: { localDiscovery: true, browserBinding: false, modelHistory: false } }}
+      onCheck={vi.fn()} onAccountChangeRefresh={onAccountChangeRefresh}
+    />)
     await user.click(await screen.findByRole("radio", { name: /Personal/i }))
 
     await waitFor(() => expect(onAccountChangeRefresh).toHaveBeenCalledTimes(1))

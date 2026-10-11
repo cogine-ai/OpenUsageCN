@@ -14,6 +14,7 @@
         "label": "Gemini Config Dir",
         "placeholder": "~/.gemini",
         "help": "可选。留空则使用 GEMINI_CONFIG_DIR 或 ~/.gemini",
+        "environmentVariables": ["GEMINI_CONFIG_DIR"],
         "defaultSource": true
       }
     ]

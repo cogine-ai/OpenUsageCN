@@ -62,7 +62,8 @@ const WHITELISTED_ENV_VARS: [&str; 42] = [
 ];
 const MIN_BLOCKING_TIMEOUT: Duration = Duration::from_millis(1);
 
-fn is_env_var_allowed_for_plugin(plugin_id: &str, name: &str) -> bool {
+/// Requires an environment name to belong to both the global and provider-specific allowlists.
+pub(crate) fn is_env_var_allowed_for_plugin(plugin_id: &str, name: &str) -> bool {
     if !WHITELISTED_ENV_VARS.contains(&name) {
         return false;
     }
@@ -118,6 +119,11 @@ fn is_env_var_allowed_for_plugin(plugin_id: &str, name: &str) -> bool {
         "xai" => matches!(name, "XAI_MANAGEMENT_API_KEY" | "XAI_TEAM_ID"),
         _ => false,
     }
+}
+
+/// Only fixed region selectors may be returned to configuration UI as values.
+pub(crate) fn is_public_config_env(name: &str) -> bool {
+    matches!(name, "MOONSHOT_REGION" | "VOLCENGINE_REGION")
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -371,6 +377,10 @@ fn terminal_env_cache() -> &'static Mutex<HashMap<String, Option<String>>> {
     CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+#[cfg(test)]
+#[path = "host_api/env_cache_tests.rs"]
+mod env_cache_tests;
+
 fn shell_from_env() -> Option<String> {
     let shell = std::env::var("SHELL").ok()?;
     let trimmed = shell.trim();
@@ -592,6 +602,7 @@ fn redact_url(url: &str) -> String {
     } else {
         url.to_string()
     };
+    let is_opencode_server = url.split(['?', '#']).next() == Some("https://opencode.ai/_server");
     let sensitive_params = [
         "key",
         "api_key",
@@ -609,6 +620,7 @@ fn redact_url(url: &str) -> String {
         "userid",
         "account_id",
         "accountid",
+        "project_ids",
         "profilearn",
         "profile_arn",
         "profilekey",
@@ -644,7 +656,10 @@ fn redact_url(url: &str) -> String {
                     let (name, value) = param.split_at(eq_pos);
                     let value = &value[1..]; // skip '='
                     let name_lower = name.to_lowercase();
-                    if sensitive_params.iter().any(|s| name_lower.contains(s)) && !value.is_empty()
+                    if is_opencode_server && name_lower == "args" && !value.is_empty() {
+                        format!("{}=[REDACTED]", name)
+                    } else if sensitive_params.iter().any(|s| name_lower.contains(s))
+                        && !value.is_empty()
                     {
                         format!("{}={}", name, redact_value(value))
                     } else {
@@ -820,10 +835,21 @@ fn redact_http_response_body(url: &str, body: &str) -> String {
     redact_body(&body)
 }
 
+/// Produces an endpoint-scoped log copy with provider identities hidden; plugin responses stay raw.
 fn redact_plugin_http_response_body(plugin_id: &str, url: &str, body: &str) -> String {
     let path = url.split(['?', '#']).next().unwrap_or(url);
+    if plugin_id == "opencode" && path == "https://opencode.ai/_server" {
+        // Server-function bodies mix serialized JavaScript with private workspace data.
+        return "[REDACTED OPENCODE SERVER RESPONSE]".to_string();
+    }
     let body = if plugin_id == "openrouter" && path.ends_with("/key") {
         provider_redaction::openrouter_key_body(body)
+    } else if plugin_id == "gemini"
+        && path == "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
+    {
+        provider_redaction::gemini_assist_body(body)
+    } else if plugin_id == "doubao" && path == "https://open.volcengineapi.com/" {
+        provider_redaction::doubao_error_body(body)
     } else {
         body.to_string()
     };
@@ -879,6 +905,13 @@ pub(crate) fn redact_log_message(msg: &str) -> String {
             }
         }
     }
+    let request_url_re = regex_lite::Regex::new(r#"for url \((https?://\S+)\)"#)
+        .expect("valid reqwest error URL redaction regex");
+    result = request_url_re
+        .replace_all(&result, |caps: &regex_lite::Captures| {
+            format!("for url ({})", redact_url(&caps[1]))
+        })
+        .to_string();
     if let Ok(jwt_re) = regex_lite::Regex::new(r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+")
     {
         result = jwt_re
@@ -4388,6 +4421,67 @@ mod tests {
     }
 
     #[test]
+    fn openai_get_request_logs_mask_project_ids_and_preserve_usage_filters() {
+        let project_id = "proj_private-usage-filter-18459275";
+        for path in ["costs", "usage/completions"] {
+            let url = format!(
+                "https://api.openai.com/v1/organization/{path}?start_time=1780000000&end_time=1780604800&bucket_width=1d&limit=31&project_ids={project_id}&group_by=line_item"
+            );
+            let request_log = format!("[plugin:openai-api] HTTP GET {}", redact_url(&url));
+            assert!(
+                !request_log.contains(project_id),
+                "project ID leaked: {request_log}"
+            );
+            assert!(request_log.contains("project_ids=proj...9275"));
+            assert!(request_log.contains(&format!("/organization/{path}?")));
+            for filter in [
+                "start_time=1780000000",
+                "end_time=1780604800",
+                "bucket_width=1d",
+                "limit=31",
+                "group_by=line_item",
+            ] {
+                assert!(
+                    request_log.contains(filter),
+                    "usage filter was hidden: {request_log}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn opencode_get_request_logs_hide_workspace_args_and_preserve_server_id() {
+        let server_id = "7abeebee372f304e050aaaf92be863f4a86490e382f8c79db68fd94040d691b4";
+        let workspace_id = "wrk_private18459275";
+        let encoded_args = format!("%5B%22{workspace_id}%22%5D");
+        let url =
+            format!("https://opencode.ai/_server?id={server_id}&args={encoded_args}&format=json");
+        let redacted = redact_url(&url);
+        let request_log = format!("[plugin:opencode] HTTP GET {redacted}");
+        assert!(
+            !request_log.contains(workspace_id),
+            "workspace ID leaked: {request_log}"
+        );
+        assert!(!request_log.contains(&encoded_args));
+        assert_eq!(
+            redacted,
+            format!("https://opencode.ai/_server?id={server_id}&args=[REDACTED]&format=json")
+        );
+    }
+
+    #[test]
+    fn opencode_args_redaction_is_scoped_to_its_server_endpoint() {
+        for url in [
+            "https://example.com/_server?id=public-server&args=%5B%22public%22%5D",
+            "https://opencode.ai/usage?id=public-server&args=%5B%22public%22%5D",
+            "https://opencode.ai/_server?id=public-server&other_args=public",
+            "https://opencode.ai/_server?id=public-server&args=",
+        ] {
+            assert_eq!(redact_url(url), url);
+        }
+    }
+
+    #[test]
     fn redact_url_hides_xai_team_id_in_path() {
         assert_eq!(
             redact_url("https://management-api.x.ai/v1/billing/teams/private-team-123/usage"),
@@ -4785,6 +4879,49 @@ mod tests {
             redacted
         );
         assert!(redacted.contains("id.p...0615"));
+    }
+
+    #[test]
+    fn provider_identity_log_redacts_real_reqwest_error_urls() {
+        let client = reqwest::Client::new();
+        for (plugin_id, url, identity, expected_url) in [
+            (
+                "opencode",
+                "https://opencode.ai/_server?id=public-server&args=%5B%22wrk_error18459275%22%5D&format=json",
+                "wrk_error18459275",
+                "https://opencode.ai/_server?id=public-server&args=[REDACTED]&format=json",
+            ),
+            (
+                "openai-api",
+                "https://api.openai.com/v1/organization/costs?project_ids=proj_error18459275&limit=31",
+                "proj_error18459275",
+                "https://api.openai.com/v1/organization/costs?project_ids=proj...9275&limit=31",
+            ),
+            (
+                "xai",
+                "https://management-api.x.ai/v1/billing/teams/team_error18459275/usage?limit=31",
+                "team_error18459275",
+                "https://management-api.x.ai/v1/billing/teams/[REDACTED]/usage?limit=31",
+            ),
+        ] {
+            let error = client
+                .get("not-a-url")
+                .build()
+                .unwrap_err()
+                .with_url(reqwest::Url::parse(url).unwrap());
+            let message = format!("[plugin:{plugin_id}] request exception: {error}");
+            assert!(message.contains(identity));
+            let redacted = redact_log_message(&message);
+            assert!(!redacted.contains(identity), "identity leaked: {redacted}");
+            assert_eq!(
+                redacted,
+                format!(
+                    "[plugin:{plugin_id}] request exception: builder error for url ({expected_url})"
+                )
+            );
+        }
+        let unrelated = "request exception: error sending request for url (https://example.com/usage?limit=31&args=public)";
+        assert_eq!(redact_log_message(unrelated), unrelated);
     }
 
     #[test]

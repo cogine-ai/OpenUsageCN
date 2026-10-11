@@ -29,7 +29,10 @@ impl ProviderIdentityTransport for VerifiedTransport {
         _cancellation: &CancellationToken,
     ) -> Result<ValidationOutcome, ProviderTransportError> {
         Ok(ValidationOutcome::Verified(
-            VerifiedIdentity::new("auth0|secret-subject".to_string()).expect("identity"),
+            VerifiedIdentity::new("auth0|secret-subject".to_string())
+                .expect("identity")
+                .with_display(Some("verified@example.com".to_string()), None)
+                .expect("verified display"),
         ))
     }
 }
@@ -102,6 +105,14 @@ fn attach_moves_the_exact_secret_binding_behind_a_random_session_ref() {
     assert_eq!(binding.browser, Browser::Chrome);
     assert_eq!(binding.profile_key, "Default");
     assert_eq!(binding.host, "cursor.com");
+    assert_eq!(binding.identity, first.identity);
+    assert_eq!(
+        binding
+            .identity
+            .as_ref()
+            .and_then(|identity| identity.email.as_deref()),
+        Some("verified@example.com")
+    );
 
     let serialized = format!(
         "{} {}",
@@ -155,6 +166,14 @@ fn candidates_and_session_refs_expire_after_ten_minutes() {
             .unwrap_err()
             .code,
         BrowserSessionErrorCode::CandidateExpired
+    );
+    assert_eq!(
+        broker
+            .attach_candidate(&expiring_candidate.candidate_id)
+            .unwrap_err()
+            .code,
+        BrowserSessionErrorCode::CandidateNotFound,
+        "an expired claim consumes the candidate"
     );
 
     let session_candidate = discover(&broker);

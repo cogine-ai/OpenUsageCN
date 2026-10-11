@@ -41,3 +41,7 @@ The request body includes `ProductCode=sfm_tokenplanteams_dp_cn`, matching the B
 | 401/403         | "Alibaba Token Plan login expired. Copy a fresh console Cookie header." |
 | HTTP error      | "Usage request failed (HTTP {status}). Try again later."        |
 | Invalid payload | "Alibaba Token Plan response missing quota data."               |
+
+## Connection Check
+
+The connection page reports whether the declared Cookie environment source is actually present. It does not read browser cookies. Save And Check waits for a fresh provider result; a saved Cookie is not proof of a valid login. An expired login opens this same Cookie configuration.

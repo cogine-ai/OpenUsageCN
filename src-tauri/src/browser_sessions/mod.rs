@@ -29,7 +29,8 @@ pub(crate) use error::BrowserSessionError;
 #[cfg(test)]
 pub(crate) use error::BrowserSessionErrorCode;
 pub(crate) use model::{
-    AllProfilesDiscovery, AttachedSessionClaim, BrokerSessionCredential, SessionBindingSummary,
+    AccountIdentityDisplay, AllProfilesDiscovery, AttachedSessionClaim, BrokerSessionCredential,
+    SessionBindingSummary,
 };
 #[cfg(test)]
 pub(crate) use model::{BrowserCandidateSummary, ProfileDiscoveryStatus, SessionRefHandle};

@@ -13,6 +13,7 @@
         "type": "select",
         "label": "Source",
         "default": "auto",
+        "autoValue": "auto",
         "options": [
           { "value": "auto", "label": "Auto" },
           { "value": "api-key", "label": "API Key" },
@@ -33,17 +34,23 @@
       {
         "id": "apiKey",
         "type": "secret",
+        "required": true,
         "label": "API Key",
         "placeholder": "sk-...",
         "help": "留空则使用 ALIBABA_CODING_PLAN_API_KEY、ALIBABA_QWEN_API_KEY 或 DASHSCOPE_API_KEY",
+        "visibleWhen": { "field": "source", "values": ["api-key"] },
+        "environmentVariables": ["ALIBABA_CODING_PLAN_API_KEY", "ALIBABA_QWEN_API_KEY", "DASHSCOPE_API_KEY"],
         "defaultSource": true
       },
       {
         "id": "cookieHeader",
         "type": "secret",
+        "required": true,
         "label": "Cookie Header",
         "placeholder": "login_aliyunid_ticket=...; sec_token=...",
         "help": "手工 Cookie 模式使用。留空则使用 ALIBABA_CODING_PLAN_COOKIE",
+        "visibleWhen": { "field": "source", "values": ["manual-cookie"] },
+        "environmentVariables": ["ALIBABA_CODING_PLAN_COOKIE"],
         "defaultSource": true
       }
     ]

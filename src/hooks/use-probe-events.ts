@@ -23,6 +23,8 @@ type ProbeBatchMeta = {
   previous: ProbeBatchMeta | undefined
   failed: boolean
   resultReceived: boolean
+  onResult?: (output: PluginOutput) => void
+  onInterrupted?: (error: Error) => void
 }
 
 export type ProbeResultContext = {
@@ -32,6 +34,8 @@ export type ProbeResultContext = {
 export type StartBatchOptions = {
   manual?: boolean
   invalidatePreviousOnFailure?: boolean
+  onResult?: (output: PluginOutput) => void
+  onInterrupted?: (error: Error) => void
 }
 
 export type StartBatch = (
@@ -39,10 +43,13 @@ export type StartBatch = (
   options?: StartBatchOptions
 ) => Promise<string[]>
 
+export class ProbeVerificationCancelled extends Error {}
+
 export class ProbeBatchStartError extends Error {
   readonly cause: unknown
   readonly pluginIds: string[]
 
+  /** Retain the native failure and only the providers whose current check could not start. */
   constructor(cause: unknown, pluginIds: string[]) {
     super(cause instanceof Error ? cause.message : String(cause))
     this.name = "ProbeBatchStartError"
@@ -51,6 +58,7 @@ export class ProbeBatchStartError extends Error {
   }
 }
 
+/** Limit error state updates to affected providers when the start failure carries ownership details. */
 export function getProbeBatchStartFailedPluginIds(
   error: unknown,
   fallback: string[]
@@ -63,6 +71,7 @@ type UseProbeEventsOptions = {
   onBatchComplete: () => void
 }
 
+/** Deliver only each provider's latest check and cancel verification when its ownership changes. */
 export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOptions) {
   const activeBatchIds = useRef<Set<string>>(new Set())
   const latestBatchByProvider = useRef<Map<string, ProbeBatchMeta>>(new Map())
@@ -72,15 +81,20 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
   const unlisteners = useRef<UnlistenFn[]>([])
   const listenersReadyRef = useRef<Promise<void> | null>(null)
   const listenersReadyResolveRef = useRef<(() => void) | null>(null)
+  const listenersReadyRejectRef = useRef<((error: unknown) => void) | null>(null)
 
   useEffect(() => {
     let cancelled = false
 
     // Create the promise that will resolve when listeners are ready
-    listenersReadyRef.current = new Promise<void>((resolve) => {
+    listenersReadyRef.current = new Promise<void>((resolve, reject) => {
+      listenersReadyRejectRef.current = reject
       listenersReadyResolveRef.current = resolve
     })
 
+    // Keep setup failures observable even if no probe has yet awaited readiness.
+    void listenersReadyRef.current.catch(() => {})
+    /** Install result and completion listeners before allowing a native batch to start. */
     const setup = async () => {
       const resultUnlisten = await listen<ProbeResult>("probe:result", (event) => {
         const latestBatch = latestBatchByProvider.current.get(
@@ -99,6 +113,7 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
           eventBatch === latestBatch
         ) {
           onResult(event.payload.output, { manual: latestBatch.manual })
+          latestBatch.onResult?.(event.payload.output)
         }
       })
 
@@ -107,10 +122,16 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
         return
       }
 
+      unlisteners.current.push(resultUnlisten)
       const completeUnlisten = await listen<ProbeBatchComplete>(
         "probe:batch-complete",
         (event) => {
           if (activeBatchIds.current.delete(event.payload.batchId)) {
+            for (const batch of latestBatchByProvider.current.values()) {
+              if (batch.batchId === event.payload.batchId && !batch.resultReceived) {
+                batch.onInterrupted?.(new Error("检查未返回结果，请重新检查。"))
+              }
+            }
             onBatchComplete()
           }
         }
@@ -122,23 +143,33 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
         return
       }
 
-      unlisteners.current.push(resultUnlisten, completeUnlisten)
+      unlisteners.current.push(completeUnlisten)
 
       // Signal that listeners are ready
       listenersReadyResolveRef.current?.()
     }
 
-    void setup()
+    void setup().catch((error) => {
+      console.error("Failed to initialize probe event listeners:", error)
+      unlisteners.current.forEach((unlisten) => unlisten())
+      unlisteners.current = []
+      listenersReadyRejectRef.current?.(error)
+    })
 
     return () => {
       cancelled = true
+      for (const batch of latestBatchByProvider.current.values()) {
+        batch.onInterrupted?.(new ProbeVerificationCancelled("连接检查已取消。"))
+      }
       unlisteners.current.forEach((unlisten) => unlisten())
       unlisteners.current = []
       listenersReadyRef.current = null
       listenersReadyResolveRef.current = null
+      listenersReadyRejectRef.current = null
     }
   }, [onBatchComplete, onResult])
 
+  /** Claim ownership immediately, then serialize native starts for overlapping providers. */
   const startBatch = useCallback(async (
     pluginIds: string[],
     options: StartBatchOptions = {}
@@ -151,12 +182,15 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
     activeBatchIds.current.add(batchId)
     const batchMetaByProvider = new Map<string, ProbeBatchMeta>()
     for (const pluginId of new Set(pluginIds)) {
+      latestBatchByProvider.current.get(pluginId)?.onInterrupted?.(new ProbeVerificationCancelled("已开始新的检查，请等待新结果。"))
       const batchMeta: ProbeBatchMeta = {
         batchId,
         manual: options.manual === true,
         previous: latestBatchByProvider.current.get(pluginId),
         failed: false,
         resultReceived: false,
+        onResult: options.onResult,
+        onInterrupted: options.onInterrupted,
       }
       batchMetaByProvider.set(pluginId, batchMeta)
       latestBatchByProvider.current.set(pluginId, batchMeta)
@@ -188,6 +222,9 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
         batchId,
         pluginIds,
       })
+      if (options.onInterrupted && pluginIds.some((id) => !result.pluginIds.includes(id))) {
+        options.onInterrupted(new Error("服务商不可用，无法检查连接。"))
+      }
       for (const batchMeta of batchMetaByProvider.values()) {
         batchMeta.previous = undefined
       }
@@ -234,5 +271,19 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
     }
   }, [])
 
-  return { startBatch }
+  /** Await one manual connection check, rejecting interruption, start failure, or an overall timeout. */
+  const verifyPlugin = useCallback((pluginId: string) => new Promise<PluginOutput>((resolve, reject) => {
+    // A native probe has a 30-second limit. Allow time for the four-worker queue.
+    const timer = setTimeout(() => {
+      console.error("Provider connection check timed out:", pluginId)
+      reject(new Error("连接检查超时，请重试。"))
+    }, 120_000)
+    /** Release the verification timer before returning the current provider's result. */
+    const finish = (output: PluginOutput) => { clearTimeout(timer); resolve(output) }
+    /** Release the verification timer before propagating cancellation or native failure. */
+    const interrupt = (error: Error) => { clearTimeout(timer); reject(error) }
+    void startBatch([pluginId], { manual: true, onResult: finish, onInterrupted: interrupt }).catch(interrupt)
+  }), [startBatch])
+
+  return { startBatch, verifyPlugin }
 }

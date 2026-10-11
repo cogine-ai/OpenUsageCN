@@ -17,6 +17,7 @@
         "label": "Cookie Header",
         "placeholder": "__Secure-session=...",
         "help": "Paste the Cookie header from ollama.com/settings. Leave blank to use OLLAMA_CLOUD_COOKIE.",
+        "environmentVariables": ["OLLAMA_CLOUD_COOKIE"],
         "defaultSource": true
       }
     ]

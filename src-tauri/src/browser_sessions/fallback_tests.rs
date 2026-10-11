@@ -178,7 +178,7 @@ fn cursor_stops_the_profile_on_every_nonfallback_transport_failure() {
 }
 
 #[test]
-fn cursor_reports_failure_after_every_isolated_candidate_is_rejected() {
+fn cursor_reports_missing_identity_after_every_isolated_candidate_is_unusable() {
     let transport = Arc::new(ScriptedTransport::new([
         ScriptedOutcome::Rejected,
         ScriptedOutcome::MissingIdentity,
@@ -193,6 +193,28 @@ fn cursor_reports_failure_after_every_isolated_candidate_is_rejected() {
         &CancellationToken::new(),
     );
 
+    assert_eq!(result.status, ProfileDiscoveryStatus::Failed);
+    assert_eq!(
+        result.error.expect("typed error").code,
+        BrowserSessionErrorCode::IdentityUnavailable
+    );
+    assert_eq!(transport.calls.lock().expect("calls lock").len(), 4);
+}
+
+#[test]
+fn cursor_reports_authentication_rejection_when_no_candidate_authenticates() {
+    let transport = Arc::new(ScriptedTransport::new([
+        ScriptedOutcome::Rejected,
+        ScriptedOutcome::Rejected,
+        ScriptedOutcome::Rejected,
+        ScriptedOutcome::Rejected,
+    ]));
+    let result = broker(transport.clone()).discover_specific(
+        Browser::Arc,
+        "Profile 2",
+        CookieProvider::Cursor,
+        &CancellationToken::new(),
+    );
     assert_eq!(result.status, ProfileDiscoveryStatus::Failed);
     assert_eq!(
         result.error.expect("typed error").code,

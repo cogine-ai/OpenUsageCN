@@ -16,6 +16,7 @@ pub(crate) enum BrowserSessionErrorCode {
     Cancelled,
     ProviderValidationFailed,
     AuthenticationRejected,
+    IdentityUnavailable,
     CandidateNotFound,
     CandidateExpired,
     SessionNotFound,
@@ -33,6 +34,7 @@ pub(crate) struct BrowserSessionError {
 }
 
 impl BrowserSessionError {
+    /// Rejects ambiguous profile selection before any profile's cookies can be read.
     pub(super) fn invalid_profile_key() -> Self {
         Self {
             code: BrowserSessionErrorCode::InvalidProfileKey,
@@ -40,6 +42,7 @@ impl BrowserSessionError {
         }
     }
 
+    /// Reports helper failure without exposing subprocess output or local paths.
     pub(super) fn helper_failed() -> Self {
         Self {
             code: BrowserSessionErrorCode::HelperFailed,
@@ -47,6 +50,7 @@ impl BrowserSessionError {
         }
     }
 
+    /// Preserves bounded subprocess failure categories while discarding raw process details.
     pub(super) fn from_process(error: ProcessRunError) -> Self {
         match error {
             ProcessRunError::TimedOut => Self {
@@ -61,6 +65,7 @@ impl BrowserSessionError {
         }
     }
 
+    /// Marks a helper protocol violation without returning its potentially sensitive payload.
     pub(super) fn invalid_response() -> Self {
         Self {
             code: BrowserSessionErrorCode::InvalidResponse,
@@ -68,6 +73,7 @@ impl BrowserSessionError {
         }
     }
 
+    /// Keeps expected discovery/read failures distinct and treats impossible helper codes as invalid.
     pub(super) fn from_helper(code: HelperErrorCode) -> Self {
         match code {
             HelperErrorCode::ProfileDiscoveryFailed => Self {
@@ -87,6 +93,7 @@ impl BrowserSessionError {
         }
     }
 
+    /// Gives cancellation its own receipt instead of presenting it as authentication failure.
     pub(super) fn cancelled() -> Self {
         Self {
             code: BrowserSessionErrorCode::Cancelled,
@@ -94,6 +101,7 @@ impl BrowserSessionError {
         }
     }
 
+    /// Reports unsuccessful verification without claiming that credentials were rejected.
     pub(crate) fn provider_validation_failed() -> Self {
         Self {
             code: BrowserSessionErrorCode::ProviderValidationFailed,
@@ -101,6 +109,7 @@ impl BrowserSessionError {
         }
     }
 
+    /// Reports that no candidate verified the required account identity, without exposing its contents.
     pub(super) fn authentication_rejected() -> Self {
         Self {
             code: BrowserSessionErrorCode::AuthenticationRejected,
@@ -108,6 +117,15 @@ impl BrowserSessionError {
         }
     }
 
+    /// Distinguishes unusable account identity evidence from rejected authentication for recovery.
+    pub(super) fn identity_unavailable() -> Self {
+        Self {
+            code: BrowserSessionErrorCode::IdentityUnavailable,
+            message: "The browser account identity could not be confirmed.",
+        }
+    }
+
+    /// Treats consumed and missing candidates alike so attachment cannot retry an old claim.
     pub(super) fn candidate_not_found() -> Self {
         Self {
             code: BrowserSessionErrorCode::CandidateNotFound,
@@ -115,6 +133,7 @@ impl BrowserSessionError {
         }
     }
 
+    /// Requires a new profile check after the candidate's bounded lifetime ends.
     pub(super) fn candidate_expired() -> Self {
         Self {
             code: BrowserSessionErrorCode::CandidateExpired,
@@ -122,6 +141,7 @@ impl BrowserSessionError {
         }
     }
 
+    /// Reports unavailable session state without revealing whether it expired or was released.
     pub(super) fn session_not_found() -> Self {
         Self {
             code: BrowserSessionErrorCode::SessionNotFound,
@@ -129,6 +149,7 @@ impl BrowserSessionError {
         }
     }
 
+    /// Separates the shared profile-scan deadline from an individual request timeout.
     pub(super) fn overall_timed_out() -> Self {
         Self {
             code: BrowserSessionErrorCode::OverallTimedOut,
@@ -136,6 +157,7 @@ impl BrowserSessionError {
         }
     }
 
+    /// Rejects providers outside the broker's supported browser-account contract.
     pub(crate) fn unsupported_provider() -> Self {
         Self {
             code: BrowserSessionErrorCode::UnsupportedProvider,
@@ -143,6 +165,7 @@ impl BrowserSessionError {
         }
     }
 
+    /// Returns a safe boundary error when an account request cannot be interpreted.
     pub(crate) fn invalid_request() -> Self {
         Self {
             code: BrowserSessionErrorCode::InvalidRequest,
@@ -150,6 +173,7 @@ impl BrowserSessionError {
         }
     }
 
+    /// Makes unexpected worker termination visible as a retryable failure receipt.
     pub(crate) fn worker_failed() -> Self {
         Self {
             code: BrowserSessionErrorCode::WorkerFailed,
@@ -157,6 +181,7 @@ impl BrowserSessionError {
         }
     }
 
+    /// Preserves cancellation and timeout while hiding network, status, and response details.
     pub(super) fn from_transport(error: ProviderTransportError) -> Self {
         match error {
             ProviderTransportError::Cancelled => Self::cancelled(),
@@ -174,6 +199,7 @@ impl BrowserSessionError {
 }
 
 impl std::fmt::Display for BrowserSessionError {
+    /// Formats only the fixed user-facing message, never underlying credential-bearing details.
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str(self.message)
     }

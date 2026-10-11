@@ -1,12 +1,16 @@
 type RecoveryKind = "credentials" | "login" | "permission" | "network" | "rate_limit" | "invalid_response" | "unknown"
 
-type PluginRecovery = {
+export type PluginRecovery = {
+  action?: "config" | "accounts" | "local" | "retry"
+  actionLabel?: string
+  focusField?: string
   kind: RecoveryKind
   title: string
   advice: string
   diagnostic: string
 }
 
+/** Hide credential-bearing parts before exposing diagnostic details in the interface. */
 function safeDiagnostic(message: string): string {
   return message
     .replace(/https?:\/\/[^\s<>"`]+/gi, (value) => {
@@ -26,6 +30,7 @@ function safeDiagnostic(message: string): string {
     .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[已隐藏]")
 }
 
+/** Use known provider login steps; arbitrary error text cannot supply an executable command. */
 function loginAdvice(providerId?: string): string {
   switch (providerId) {
     case "claude": return "请打开 Claude Code 完成登录，然后重试。"
@@ -37,9 +42,23 @@ function loginAdvice(providerId?: string): string {
   }
 }
 
-export function getPluginRecovery(message: string, providerId?: string): PluginRecovery {
+/** Match actionable failures to supported recovery routes while preserving sanitized diagnostics. */
+export function getPluginRecovery(message: string, providerId?: string, capabilities?: { config?: { fields: { id: string; type: string; visibleWhen?: {field:string;values:string[]} }[] }; accountSupport?: unknown }): PluginRecovery {
   const diagnostic = safeDiagnostic(message)
-  const recovery = (kind: RecoveryKind, title: string, advice: string): PluginRecovery => ({ kind, title, advice, diagnostic })
+  /** Choose an available recovery entry, keeping Claude local credential failures on local login. */
+  const recovery = (kind: RecoveryKind, title: string, advice: string): PluginRecovery => {
+    const localReadFailure = /credentials could not be read|(?:file|keychain|local).*permission|EACCES/i.test(message)
+    const claudeLocalLogin = providerId === "claude" && /not logged in|(?:session|token) expired|Claude Keychain credentials must be refreshed by Claude Code/i.test(message)
+    const secrets = capabilities?.config?.fields.filter((field) => field.type === "secret") ?? []
+    const keys = secrets.filter((field) => /key/i.test(field.id))
+    const alternatives = keys.length > 1 && keys.every((field) => field.visibleWhen?.field === keys[0].visibleWhen?.field && field.visibleWhen)
+    const credentialField = /team id/i.test(message) ? capabilities?.config?.fields.find((field) => field.id === "teamId") : /cookie/i.test(message) ? secrets.find((field) => /cookie/i.test(field.id)) : alternatives ? undefined : keys[0] ?? secrets[0]
+    const action = localReadFailure || claudeLocalLogin || kind === "permission" ? "local" : ["credentials", "login"].includes(kind)
+      ? secrets.length ? "config" : capabilities?.accountSupport ? "accounts" : ["claude", "codex", "kimi", "factory", "opencode-go", "copilot", "grok", "gemini", "kiro", "amp", "antigravity", "perplexity"].includes(providerId ?? "") ? "local" : "retry"
+      : "retry"
+    return { kind, title, advice, diagnostic, action, focusField: credentialField?.id,
+      actionLabel: action === "config" ? kind === "login" ? "更新凭据" : "连接账号" : action === "accounts" ? "重新连接" : action === "local" ? localReadFailure ? "检查读取权限" : kind === "permission" ? "检查账号权限" : "连接本机账号" : "重试" }
+  }
 
   if (providerId === "codex" && message.includes("Windows requires Codex file storage:") && message.includes("cli_auth_credentials_store")) {
     return recovery("login", "需要文件登录凭据", '请在 Codex 的 `config.toml` 中设置 `cli_auth_credentials_store = "file"`，再运行 `codex login`，然后重试。')
@@ -50,7 +69,7 @@ export function getPluginRecovery(message: string, providerId?: string): PluginR
   if (/credentials could not be read/i.test(message)) {
     return recovery("credentials", "无法读取登录凭据", "请检查服务商的本地登录文件和读取权限，然后重试。")
   }
-  if (/no .*(?:api key|cookie|credentials?) found|missing (?:api key|credentials?)/i.test(message)) {
+  if (/no .*(?:api key|cookie|credentials?)(?: found| for |[.!])|(?:api key|credentials?) (?:not found|missing)|cookie missing|needs.*cookie header|no .*AK\/SK found|missing (?:api key|credentials?)|missing or invalid .*team id/i.test(message)) {
     const advice = /cookie/i.test(message)
       ? "请在服务商设置中补充 Cookie，然后重试。"
       : /api key/i.test(message)
@@ -61,8 +80,8 @@ export function getPluginRecovery(message: string, providerId?: string): PluginR
   if (/not logged in|OpenCode Go not detected\. Log in with OpenCode Go first/i.test(message)) {
     return recovery("login", "尚未登录", loginAdvice(providerId))
   }
-  if (/(?:session|token) expired|key was rejected|api key invalid|credentials are invalid|invalid (?:auth file|credentials?)|\bHTTP\s*401\b|\bunauthorized\b/i.test(message)) {
-    return recovery("login", /(?:session|token) expired/i.test(message) ? "登录已过期" : "登录凭据失效", loginAdvice(providerId))
+  if (/(?:session|token|login) expired|key was rejected|api key invalid|credentials are invalid|invalid (?:auth file|credentials?)|\bHTTP\s*401\b|\bunauthorized\b/i.test(message)) {
+    return recovery("login", /(?:session|token) expired/i.test(message) ? "登录已过期" : "登录凭据失效", capabilities?.config?.fields.some((field) => field.type === "secret") ? "请更新当前连接凭据。" : loginAdvice(providerId))
   }
   if (/no .*subscription on this key/i.test(message)) {
     return recovery("permission", "账号订阅不可用", "请在服务商应用检查当前账号和订阅，再重试。")
@@ -70,7 +89,7 @@ export function getPluginRecovery(message: string, providerId?: string): PluginR
   if (/\bHTTP\s*403\b|permission denied|access (?:was )?denied|\bforbidden\b/i.test(message)) {
     return recovery("permission", "访问被拒绝", "请检查账号权限和凭据读取权限，然后重试。")
   }
-  if (/\bHTTP\s*429\b|too many requests|is limiting requests|rate limit(?:ed| exceeded)/i.test(message)) {
+  if (/\bHTTP\s*429\b|too many requests|is limiting requests|rate limit(?:ed| exceeded)|限制请求/i.test(message)) {
     return recovery("rate_limit", "请求过于频繁", "请稍后再重试，避免连续刷新。")
   }
   if (/check your connection|unable to connect|request timed out|network (?:error|request failed)|connection refused|fetch failed|\b(?:ECONNREFUSED|ENOTFOUND|ETIMEDOUT)\b/i.test(message)) {

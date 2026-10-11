@@ -12,16 +12,19 @@ const CANDIDATE_TTL: Duration = Duration::from_secs(10 * 60);
 pub(super) struct SecretValue(String);
 
 impl SecretValue {
+    /// Takes ownership of a secret whose occupied buffer will be overwritten on drop.
     pub(super) fn new(value: String) -> Self {
         Self(value)
     }
 
+    /// Borrows the secret for internal use without creating another owned copy.
     pub(super) fn expose(&self) -> &str {
         &self.0
     }
 }
 
 impl Drop for SecretValue {
+    /// Overwrites the owned secret before its allocation is released.
     fn drop(&mut self) {
         unsafe { self.0.as_bytes_mut().fill(0) };
     }
@@ -45,6 +48,7 @@ struct CandidateEntry {
     store_id: SecretValue,
     cookie_header: SecretValue,
     identity: SecretValue,
+    display: Option<super::model::AccountIdentityDisplay>,
     expires_monotonic: Duration,
     expires_at_ms: u64,
 }
@@ -57,6 +61,7 @@ struct SessionEntry {
     store_id: SecretValue,
     cookie_header: SecretValue,
     identity: SecretValue,
+    display: Option<super::model::AccountIdentityDisplay>,
     credential_generation: u64,
     expires_monotonic: Duration,
     expires_at_ms: u64,
@@ -69,6 +74,7 @@ pub(super) struct BrokerRoster {
 }
 
 impl BrokerRoster {
+    /// Retains verified credentials for ten minutes and returns only source and display metadata.
     pub(super) fn insert_candidate(
         &mut self,
         now: ClockReading,
@@ -78,6 +84,7 @@ impl BrokerRoster {
         let candidate_id = Uuid::new_v4().to_string();
         let expires_monotonic = now.monotonic.saturating_add(CANDIDATE_TTL);
         let expires_at_ms = now.unix_ms.saturating_add(10 * 60 * 1_000);
+        let display = input.identity.display();
         let summary = BrowserCandidateSummary {
             candidate_id: candidate_id.clone(),
             provider: input.provider,
@@ -85,6 +92,7 @@ impl BrokerRoster {
             profile_key: input.profile_key.clone(),
             host: input.host.clone(),
             expires_at_ms,
+            identity: display.clone(),
         };
         self.candidates.insert(
             candidate_id,
@@ -96,6 +104,7 @@ impl BrokerRoster {
                 store_id: SecretValue::new(input.store_id),
                 cookie_header: SecretValue::new(input.cookie_header),
                 identity: SecretValue::new(input.identity.into_inner()),
+                display,
                 expires_monotonic,
                 expires_at_ms,
             },
@@ -103,6 +112,7 @@ impl BrokerRoster {
         summary
     }
 
+    /// Consumes the candidate even on expiry and transfers a live claim without extending its TTL.
     pub(super) fn attach(
         &mut self,
         now: ClockReading,
@@ -136,6 +146,7 @@ impl BrokerRoster {
                 store_id: candidate.store_id,
                 cookie_header: candidate.cookie_header,
                 identity: candidate.identity,
+                display: candidate.display,
                 credential_generation: 0,
                 expires_monotonic: candidate.expires_monotonic,
                 expires_at_ms: candidate.expires_at_ms,
@@ -144,6 +155,7 @@ impl BrokerRoster {
         Ok(claim)
     }
 
+    /// Prunes expired entries before returning session metadata that omits credentials.
     pub(super) fn binding(
         &mut self,
         now: ClockReading,
@@ -165,9 +177,11 @@ impl BrokerRoster {
             profile_key: session.profile_key.clone(),
             host: session.host.clone(),
             expires_at_ms: session.expires_at_ms,
+            identity: session.display.clone(),
         })
     }
 
+    /// Prunes expired entries and copies credentials with their current rotation generation.
     pub(super) fn credential(
         &mut self,
         now: ClockReading,
@@ -185,6 +199,7 @@ impl BrokerRoster {
         ))
     }
 
+    /// Accepts rotation only for the expected provider, generation, and cookie; mismatch returns None.
     pub(super) fn commit_cookie_refresh(
         &mut self,
         now: ClockReading,
@@ -214,6 +229,7 @@ impl BrokerRoster {
         Ok(Some(session.credential_generation))
     }
 
+    /// Removes a session and drops its secrets; a missing reference returns false.
     pub(super) fn release(&mut self, session_ref: &str) -> bool {
         self.sessions.remove(session_ref).is_some()
     }
@@ -223,6 +239,7 @@ impl BrokerRoster {
         self.sessions.len()
     }
 
+    /// Expires candidates and sessions by monotonic time, dropping all retained secrets.
     fn prune(&mut self, now: Duration) {
         self.candidates
             .retain(|_, candidate| now < candidate.expires_monotonic);

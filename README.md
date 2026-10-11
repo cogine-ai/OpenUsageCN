@@ -46,10 +46,10 @@ Windows MVP 启用和展示 **Codex、BigModel CN、OpenAI API、OpenRouter、Z.
 - [**Amp**](docs/providers/amp.md)：免费额度、付费 Other/Orb 额度、奖励额度、credits
 - [**Antigravity**](docs/providers/antigravity.md)：全部模型用量
 - [**BigModel CN**](docs/providers/bigmodel-cn.md)：token/credit 计划的 session、weekly、web searches、设置页 API Key
-- [**Claude**](docs/providers/claude.md)：session、weekly、extra usage、按需加载本地 token 用量（ccusage）、可验证的 Team 席位
+- [**Claude**](docs/providers/claude.md)：session、weekly、extra usage、按需加载本地 token 用量（ccusage）、可验证的 Team 席位、本机账号的浏览器连接补充
 - [**Codex**](docs/providers/codex.md)：5 小时、每周、代码审查、点数、手动重置及最近到期时间
 - [**Copilot**](docs/providers/copilot.md)：premium、chat、completions
-- [**Cursor**](docs/providers/cursor.md)：credits、总用量、Desktop/CLI/Chrome/Arc 多账号、Cursor Models / Other Models 月额度、Grok Bot 周额度、按模型用量和 CSV 导出
+- [**Cursor**](docs/providers/cursor.md)：credits、总用量、Desktop/CLI/Chrome/Arc 多账号与身份确认、Cursor Models / Other Models 月额度、Grok Bot 周额度、按模型用量和 CSV 导出
 - [**DeepSeek**](docs/providers/deepseek.md)：按人民币或美元显示 API 余额、赠额和充值额
 - [**Doubao**](docs/providers/doubao.md)：火山引擎 Ark Coding Plan 与 Agent Plan 配额
 - [**Factory / Droid**](docs/providers/factory.md)：standard、premium tokens
@@ -113,3 +113,7 @@ bun tauri build
 维护自用发布版本时，参考 [发布与更新](docs/release.md)。
 
 </details>
+
+### 连接检查
+
+在设置中点击服务商，可以配置或恢复连接。`保存并检查` 会读取本次真实结果，保存凭据不等于连接成功。已停用的服务商也可主动检查，不会因此开启自动刷新。浏览器账号由用户选择来源后检查。快捷键录制支持 Esc 取消，清除是独立操作。

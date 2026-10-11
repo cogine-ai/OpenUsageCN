@@ -1,5 +1,5 @@
 import { useId, useState } from "react"
-import { AlertTriangle, ChevronDown, Pencil, RefreshCw, Unlink } from "lucide-react"
+import { AlertTriangle, Check, ChevronDown, ChevronRight, Pencil, Plus, RefreshCw, Unlink } from "lucide-react"
 
 import { RemoveAccountButton } from "@/components/remove-account-button"
 import { BrowserAccountManager } from "@/components/browser-account-manager"
@@ -28,8 +28,12 @@ type ProviderAccountControlsProps = {
   browserBinding?: boolean
   modelHistory?: boolean
   onAccountChangeRefresh?: () => void
+  standalone?: boolean
+  onOpenConnections?: () => void
+  onOpenLocalLogin?: () => void
 }
 
+/** Checks whether a successful account operation changed the active selection. */
 function activeAccountChanged(
   previousAccountId: string | null,
   receipt: ProviderAccountOperationReceipt | null
@@ -41,13 +45,18 @@ function activeAccountChanged(
   )
 }
 
+/** Manages account identities and connection sources using backend operation receipts. */
 export function ProviderAccountControls({
   providerId,
   browserBinding = false,
   modelHistory = false,
   onAccountChangeRefresh,
+  standalone = false,
+  onOpenConnections,
+  onOpenLocalLogin,
 }: ProviderAccountControlsProps) {
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(standalone)
+  const [browserFlow, setBrowserFlow] = useState(false)
   const panelId = useId()
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null)
   const [draftLabel, setDraftLabel] = useState("")
@@ -75,11 +84,12 @@ export function ProviderAccountControls({
       ).join(" / ")
     : activeAccount?.connectionKinds.map((kind) => CONNECTION_LABELS[kind]).join(" · ")
   const summary = activeAccount
-    ? [view?.selection.mode === "auto" ? "自动" : null, activeAccount.label, activeSources || "未连接"]
+    ? [view?.selection.mode === "auto" ? "跟随本机" : null, activeAccount.identity?.email || activeAccount.identity?.name || activeAccount.label, activeSources || "未连接"]
         .filter(Boolean).join(" · ")
     : "未连接账号"
   const activeUnavailable = activeAccount && activeAccount.connections.length > 0 &&
     !activeAccount.connections.some((connection) => connection.available)
+  /** Refreshes changed account usage and retains a retry for incomplete source cleanup. */
   const removeAndRefresh = async (account: { accountId: string; label: string }) => {
     const previousAccountId = view?.activeAccountId ?? null
     const nextReceipt = await removeAccount(account.accountId)
@@ -104,10 +114,23 @@ export function ProviderAccountControls({
     (connection) => connection.kind === "cli" && connection.available
   )
 
+  if (browserFlow && (providerId === "cursor" || providerId === "claude")) {
+    return <BrowserAccountManager standalone busy={busy} providerId={providerId}
+      onClose={() => setBrowserFlow(false)} onAttach={async (candidateId) => {
+        const previousAccountId = view?.activeAccountId ?? null
+        const nextReceipt = await attachBrowserCandidate(candidateId)
+        if (activeAccountChanged(previousAccountId, nextReceipt) ||
+          (providerId === "claude" && nextReceipt && nextReceipt.status !== "failed")) {
+          onAccountChangeRefresh?.()
+        }
+        return nextReceipt
+      }} />
+  }
+
   return (
     <>
-      <section className="mt-4 space-y-3 rounded-lg border border-border bg-background p-3">
-        <h3 aria-label="账号">
+      <section className={standalone ? "space-y-4" : "mt-4 space-y-3 rounded-lg border border-border bg-background p-3"}>
+        {!standalone ? <h3 aria-label="账号">
           <button
             type="button"
             aria-expanded={expanded}
@@ -115,15 +138,15 @@ export function ProviderAccountControls({
             aria-describedby={`${panelId}-summary`}
             aria-label="账号"
             className="flex w-full items-center gap-2 rounded-sm text-left focus-visible:outline-2 focus-visible:outline-ring"
-            onClick={() => setExpanded((value) => !value)}
+            onClick={() => onOpenConnections ? onOpenConnections() : setExpanded((value) => !value)}
           >
             <span className="shrink-0 text-sm font-semibold">账号</span>
             <span id={`${panelId}-summary`} className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={summary}>
               {summary}
             </span>
-            <ChevronDown className={`size-4 shrink-0 ${expanded ? "rotate-180" : ""}`} />
+            {onOpenConnections ? <ChevronRight className="size-4 shrink-0" /> : <ChevronDown className={`size-4 shrink-0 ${expanded ? "rotate-180" : ""}`} />}
           </button>
-        </h3>
+        </h3> : null}
         {!expanded && activeAccount?.stale ? <p className="text-xs text-muted-foreground">数据可能已过期</p> : null}
         {!expanded && activeUnavailable ? <p className="text-xs text-destructive">连接不可用</p> : null}
         <div id={panelId} hidden={!expanded} className="space-y-3">
@@ -158,28 +181,34 @@ export function ProviderAccountControls({
           {!loading && error ? <p className="text-sm text-destructive">{error}</p> : null}
           {!loading && view ? (
             <div className="space-y-2">
-              <label className="flex cursor-pointer items-center gap-2 rounded-md border border-border p-2 text-sm">
-                <input
-                  type="radio"
-                  name={`${providerId}-account-selection`}
-                  checked={view.selection.mode === "auto"}
-                  disabled={busy}
-                  onChange={() => {
+              <div className="mb-3 flex items-center justify-between rounded-lg bg-muted/50 p-3 text-sm">
+                <span className="font-medium">跟随本机</span>
+                <button type="button" role="switch" aria-label="跟随本机"
+                  aria-checked={view.selection.mode === "auto"} disabled={busy || (view.selection.mode === "auto" && !view.activeAccountId)}
+                  onClick={() => {
                     const previousAccountId = view.activeAccountId
-                    void followDefault().then((nextReceipt) => {
-                      if (activeAccountChanged(previousAccountId, nextReceipt)) {
-                        onAccountChangeRefresh?.()
-                      }
+                    const operation = view.selection.mode === "auto" && previousAccountId
+                      ? selectAccount(previousAccountId) : followDefault()
+                    void operation.then((nextReceipt) => {
+                      if (activeAccountChanged(previousAccountId, nextReceipt)) onAccountChangeRefresh?.()
                     })
-                  }}
-                />
-                <span>
-                  <span className="block font-medium">自动跟随</span>
-                  <span className="block text-xs text-muted-foreground">跟随本机默认连接</span>
-                </span>
-              </label>
+                  }} className={`relative h-5 w-9 rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50 ${view.selection.mode === "auto" ? "bg-primary" : "bg-muted-foreground/30"}`}>
+                  <span className={`absolute top-0.5 size-4 rounded-full bg-background transition-transform ${view.selection.mode === "auto" ? "left-0.5 translate-x-4" : "left-0.5"}`} />
+                </button>
+              </div>
 
-              {view.accounts.map((account) => {
+              <div role="radiogroup" aria-label="账号选择" className="space-y-2" onKeyDown={(event) => {
+                if (!["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"].includes(event.key)) return
+                const options = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button[role="radio"]:not(:disabled)'))
+                const index = options.indexOf(event.target as HTMLButtonElement)
+                if (index < 0 || options.length === 0) return
+                event.preventDefault()
+                const direction = event.key === "ArrowDown" || event.key === "ArrowRight" ? 1 : -1
+                const next = options[(index + direction + options.length) % options.length]
+                next.focus()
+                next.click()
+              }}>
+              {view.accounts.map((account, index) => {
                 const inputId = `${providerId}-account-${account.accountId}`
                 const editing = editingAccountId === account.accountId
                 const browserConnections = account.connections.filter(
@@ -191,19 +220,19 @@ export function ProviderAccountControls({
                 return (
                   <div
                     key={account.accountId}
-                    className="space-y-2 rounded-md border border-border p-2 text-sm"
+                    className={`space-y-2 rounded-lg border p-3 text-sm ${account.accountId === view.activeAccountId ? "border-primary bg-primary/5" : "border-border"}`}
                   >
                     <div className="flex flex-wrap items-center gap-2">
-                      <input
+                      <button
                         id={inputId}
-                        type="radio"
-                        name={`${providerId}-account-selection`}
-                        checked={
-                          view.selection.mode === "pinned" &&
-                          view.selection.accountId === account.accountId
-                        }
+                        type="button"
+                        role="radio"
+                        tabIndex={account.accountId === view.activeAccountId || (!view.activeAccountId && index === 0) ? 0 : -1}
+                        aria-label={`${account.label} ${account.identity?.email || account.identity?.name || ""}`}
+                        aria-checked={account.accountId === view.activeAccountId}
+                        className="flex min-w-0 flex-1 items-center gap-2 text-left focus-visible:outline-2 focus-visible:outline-ring"
                         disabled={busy}
-                        onChange={() => {
+                        onClick={() => {
                           const previousAccountId = view.activeAccountId
                           void selectAccount(account.accountId).then((nextReceipt) => {
                             if (activeAccountChanged(previousAccountId, nextReceipt)) {
@@ -211,15 +240,18 @@ export function ProviderAccountControls({
                             }
                           })
                         }}
-                      />
-                      <label htmlFor={inputId} className="min-w-0 flex-1 cursor-pointer">
-                        <span className="block truncate font-medium">{account.label}</span>
+                      >
+                        <span className="min-w-0 flex-1">
+                        <span className="block break-all font-medium">{account.identity?.email || account.identity?.name || account.label}</span>
+                        {account.identity && <span className="block text-xs text-muted-foreground">{account.label}</span>}
                         {localConnectionLabels.length > 0 ? (
                           <span className="block text-xs text-muted-foreground">
                             {localConnectionLabels.join(" · ")}
                           </span>
                         ) : null}
-                      </label>
+                        </span>
+                        {account.accountId === view.activeAccountId && <Check aria-label="当前账号" className="size-4 shrink-0" />}
+                      </button>
                       {account.stale ? (
                         <span className="text-xs text-muted-foreground">数据可能已过期</span>
                       ) : null}
@@ -344,6 +376,7 @@ export function ProviderAccountControls({
                   </div>
                 )
               })}
+              </div>
               <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => {
                 const previousAccountId = view.activeAccountId
                 void reconnectLocal().then((nextReceipt) => {
@@ -351,23 +384,9 @@ export function ProviderAccountControls({
                 })
               }}>重新添加本机账号</Button>
               {(providerId === "cursor" || providerId === "claude") && browserBinding ? (
-                <BrowserAccountManager
-                  busy={busy}
-                  providerId={providerId}
-                  onAttach={async (candidateId) => {
-                    const previousAccountId = view.activeAccountId
-                    const nextReceipt = await attachBrowserCandidate(candidateId)
-                    if (
-                      activeAccountChanged(previousAccountId, nextReceipt) ||
-                      (providerId === "claude" &&
-                        nextReceipt !== null &&
-                        nextReceipt.status !== "failed")
-                    ) {
-                      onAccountChangeRefresh?.()
-                    }
-                    return nextReceipt
-                  }}
-                />
+                providerId === "claude" && !activeAccount?.connections.some((connection) => connection.kind === "cli" && connection.available)
+                  ? <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => onOpenLocalLogin ? onOpenLocalLogin() : void reconnectLocal()}>连接本机账号</Button>
+                  : <Button type="button" className="h-10 w-full" disabled={busy} onClick={() => setBrowserFlow(true)}><Plus className="size-4" />{providerId === "claude" ? "连接浏览器" : "添加账号"}</Button>
               ) : null}
             </div>
           ) : null}
@@ -433,7 +452,7 @@ export function ProviderAccountControls({
           </Alert>
         ) : null}
       </section>
-      {providerId === "cursor" && modelHistory && view?.activeAccountId ? (
+      {!standalone && providerId === "cursor" && modelHistory && view?.activeAccountId ? (
         <CursorModelUsage
           key={`${providerId}:${view.activeAccountId}`}
           providerId={providerId}
@@ -441,7 +460,7 @@ export function ProviderAccountControls({
           demandRevision={accountRevision}
         />
       ) : null}
-      {!loading && localHistoryAccount && localHistoryConnection ? (
+      {!standalone && !loading && localHistoryAccount && localHistoryConnection ? (
         <LocalUsageHistory
           key={`${providerId}:${localHistoryAccount.accountId}:${localHistoryConnection.connectionId}`}
           providerId={providerId}

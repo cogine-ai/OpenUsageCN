@@ -59,6 +59,8 @@ The account selector supports two modes:
   account wins when the Desktop account appears to be Free.
 - Selecting an account pins it until **Auto** is chosen again.
 
+If the pinned account is no longer active, **跟随本机** remains available to return to the local default. Turning it off requires an active account to pin.
+
 Only the selected account is published to the overview, tray, notifications, CLI, and Local HTTP
 API. Switching to an account without a snapshot shows loading instead of relabeling another
 account's data.
@@ -358,3 +360,11 @@ If cache cleanup fails after removal, the account section provides a retry actio
 A browser connection can also be detached individually, keeping its account and cache.
 Account refresh and CSV export use icon buttons with hover descriptions. Model rows expand to
 show input, output and cache counts; see [Usage History](../usage-history.md).
+
+## Checking A Browser Connection
+
+Opening account management does not scan browser credentials. Choose Chrome or Arc and a profile to check that exact source. The verified email or name comes from Cursor's fixed authentication endpoint; the profile name identifies the source only. Cursor also offers an explicit check of all profiles in the chosen browser. A candidate lasts ten minutes and is consumed as soon as adding begins. If adding fails or it expires, check the same source again before retrying.
+
+A browser profile can be added only when the response confirms a usable email or name as well as its subject. A subject-only response shows **无法确认账号身份**; the profile name is not used as an account identity.
+
+Display identity stays in memory and is removed when its session expires or is detached. Email and name are not added to the persisted account registry. They are registered for log redaction.

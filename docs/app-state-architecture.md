@@ -76,3 +76,12 @@
 - Avoid effect-based mirroring of derived values into a separate store.
 - Keep derivations pure and colocated with domain hooks.
 - Never mirror an account-scoped snapshot into provider state until the coordinator has rechecked account ownership and selection.
+
+## Connection Checks And Shortcut Changes
+
+- An explicit provider connection check waits for its own result and accepts only the current provider batch. Starting a newer check cancels the previous verification. Missing results, failed starts and a two-minute timeout do not count as connected. Late valid probe results can still update quota state after a verification timeout.
+- Save And Check and credential removal start a check after successful persistence, even if the connection page closes. An explicit check may run for a disabled provider and never changes its enable switch.
+- Claude's cached rate-limited output remains old data. It does not advance the last successful update time or become a new connection success.
+- A shortcut change registers and saves the candidate before replacing the existing binding. The existing binding still responds during saving. Recording pauses its panel action without removing registration.
+- Failed changes keep the previous binding when it can be restored. A failed system unregister requires an app restart before more changes: candidate cleanup failure leaves the untouched previous binding active, while failure to unregister the previous binding marks it inactive. Startup format errors keep the saved value visible as inactive. All failures are logged and displayed.
+- Shortcut recording reads modifier state from each keyboard event. It normally finishes after the recorded keys release; a Command combination also finishes when its last modifier releases, covering macOS events that omit the main key release. Multiple main keys remain invalid.

@@ -2,6 +2,7 @@ import { useShallow } from "zustand/react/shallow"
 import { OverviewPage } from "@/pages/overview"
 import { ProviderDetailPage } from "@/pages/provider-detail"
 import { SettingsPage } from "@/pages/settings"
+import { ProviderConnectionPage } from "@/pages/provider-connection"
 import type { DisplayPluginState } from "@/hooks/app/use-app-plugin-views"
 import type { SettingsPluginState } from "@/hooks/app/use-settings-plugin-list"
 import type { TraySettingsPreview } from "@/hooks/app/use-tray-icon"
@@ -32,7 +33,7 @@ export type AppContentActionProps = {
   onAccountChangeRefreshPlugin: (id: string) => void
   onReorder: (orderedIds: string[]) => void
   onToggle: (id: string) => void
-  onProviderConfigSaved: (id: string) => void
+  onProviderConfigSaved: (id: string) => Promise<void>
   onAutoUpdateIntervalChange: (value: AutoUpdateIntervalMinutes) => void
   onThemeModeChange: (mode: ThemeMode) => void
   onDisplayModeChange: (mode: DisplayMode) => void
@@ -42,13 +43,14 @@ export type AppContentActionProps = {
   onMenubarIconStyleChange: (value: MenubarIconStyle) => void
   onMenubarMetricChange: (value: MenubarMetric) => void
   traySettingsPreview: TraySettingsPreview
-  onGlobalShortcutChange: (value: GlobalShortcut) => void
+  onGlobalShortcutChange: (value: GlobalShortcut) => Promise<void>
   onStartOnLoginChange: (value: boolean) => void
   onPaceNotificationsChange: (value: PaceNotificationSettings) => Promise<void>
 }
 
 export type AppContentProps = AppContentDerivedProps & AppContentActionProps
 
+/** Routes the active page and passes provider operations separately from display preferences. */
 export function AppContent({
   platformCapabilities,
   displayPlugins,
@@ -72,9 +74,10 @@ export function AppContent({
   onStartOnLoginChange,
   onPaceNotificationsChange,
 }: AppContentProps) {
-  const { activeView } = useAppUiStore(
+  const { activeView, connection } = useAppUiStore(
     useShallow((state) => ({
       activeView: state.activeView,
+      connection: state.connection,
     }))
   )
 
@@ -103,6 +106,10 @@ export function AppContent({
       paceNotifications: state.paceNotifications,
     }))
   )
+
+  if (connection) {
+    return <ProviderConnectionPage plugin={settingsPlugins.find((plugin) => plugin.id === connection.providerId) ?? null} error={displayPlugins.find((plugin) => plugin.meta.id === connection.providerId)?.error} onCheck={onProviderConfigSaved} onAccountChangeRefresh={onAccountChangeRefreshPlugin} />
+  }
 
   if (activeView === "home") {
     return (
@@ -150,9 +157,11 @@ export function AppContent({
     )
   }
 
+  /** Retries the selected provider without changing its account selection. */
   const handleRetry = selectedPlugin
     ? () => onRetryPlugin(selectedPlugin.meta.id)
     : /* v8 ignore next */ undefined
+  /** Reloads usage for the selected provider after its account changes. */
   const handleAccountChangeRefresh = selectedPlugin
     ? () => onAccountChangeRefreshPlugin(selectedPlugin.meta.id)
     : /* v8 ignore next */ undefined

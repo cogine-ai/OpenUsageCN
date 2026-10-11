@@ -3,6 +3,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core"
 import { Bell, TriangleAlert } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { PaceNotificationPreview } from "@/components/pace-notification-preview"
 import type { PaceNotificationSettings } from "@/lib/settings"
 
 type PermissionState = "default" | "granted" | "denied" | "unavailable"
@@ -15,13 +16,13 @@ type PaceNotificationSettingsProps = {
 const rows: Array<{
   key: keyof PaceNotificationSettings
   label: string
-  description: string
 }> = [
-  { key: "almostOut", label: "即将用尽", description: "额度剩余不足 10%" },
-  { key: "closeToLimit", label: "接近上限", description: "预计在重置前接近上限" },
-  { key: "runningOut", label: "预计提前用尽", description: "预计在重置前耗尽" },
+  { key: "almostOut", label: "即将用尽" },
+  { key: "closeToLimit", label: "接近上限" },
+  { key: "runningOut", label: "预计提前用尽" },
 ]
 
+/** Edits quota alert preferences independently from native notification permission. */
 export function PaceNotificationSettingsSection({
   value,
   onChange,
@@ -29,6 +30,7 @@ export function PaceNotificationSettingsSection({
   const [permission, setPermission] = useState<PermissionState>("unavailable")
   const [error, setError] = useState<string | null>(null)
 
+  /** Refreshes native permission state when the app regains focus. */
   const refreshPermission = useCallback(async () => {
     if (!isTauri()) return
     try {
@@ -47,6 +49,7 @@ export function PaceNotificationSettingsSection({
     return () => window.removeEventListener("focus", refreshPermission)
   }, [refreshPermission])
 
+  /** Requests native notification permission and exposes a recoverable failure. */
   const requestPermission = async () => {
     try {
       setError(null)
@@ -57,6 +60,7 @@ export function PaceNotificationSettingsSection({
     }
   }
 
+  /** Persists the selected alert and requests permission on the first enable. */
   const handleToggle = async (key: keyof PaceNotificationSettings, checked: boolean) => {
     const next = { ...value, [key]: checked }
     const isFirstEnable = !Object.values(value).some(Boolean) && Object.values(next).some(Boolean)
@@ -70,6 +74,7 @@ export function PaceNotificationSettingsSection({
     }
   }
 
+  /** Opens the operating system's notification controls for permission changes. */
   const openSystemSettings = async () => {
     try {
       setError(null)
@@ -93,22 +98,23 @@ export function PaceNotificationSettingsSection({
               <TriangleAlert className="size-4 text-amber-500" aria-label="系统通知权限未开启" />
             ) : null}
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">额度节奏恶化时发送系统通知</p>
         </div>
       </div>
-      <div className="space-y-2 rounded-lg bg-muted/50 p-2">
-        {rows.map((row) => (
-          <label key={row.key} className="flex items-start gap-2 text-sm select-none">
-            <Checkbox
-              aria-label={row.label}
-              checked={value[row.key]}
-              onCheckedChange={(checked) => void handleToggle(row.key, checked === true)}
-            />
-            <span className="min-w-0">
-              <span className="block text-foreground">{row.label}</span>
-              <span className="block text-xs text-muted-foreground">{row.description}</span>
-            </span>
-          </label>
+      <div className="space-y-3 rounded-lg bg-muted/50 p-2">
+        {(["当前额度", "使用预测"] as const).map((group) => (
+          <fieldset key={group} className="min-w-0 space-y-1.5">
+            <legend className="mb-1 text-[10px] font-medium text-muted-foreground">{group}</legend>
+            {rows.filter((row) => group === "当前额度" ? row.key === "almostOut" : row.key !== "almostOut").map((row) => (
+              <label key={row.key} className="flex min-w-0 cursor-pointer items-center gap-2 rounded-md bg-background p-2 text-sm select-none hover:bg-accent/50">
+                <Checkbox aria-label={row.label} checked={value[row.key]}
+                  onCheckedChange={(checked) => void handleToggle(row.key, checked === true)} />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-xs text-foreground">{row.label}</span>
+                  <PaceNotificationPreview kind={row.key} />
+                </span>
+              </label>
+            ))}
+          </fieldset>
         ))}
       </div>
       {anyEnabled && permission === "default" ? (

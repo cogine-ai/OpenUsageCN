@@ -75,6 +75,21 @@ pub struct PluginConfigField {
     pub default: Option<serde_json::Value>,
     #[serde(default)]
     pub default_source: bool,
+    #[serde(default)]
+    pub required: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub visible_when: Option<PluginConfigVisibility>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub environment_variables: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto_value: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginConfigVisibility {
+    pub field: String,
+    pub values: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -289,6 +304,7 @@ fn is_valid_limit_resource_key(key: &str) -> bool {
         && chars.all(|character| character.is_ascii_alphanumeric())
 }
 
+/// Validates field identities, select options, requirements, visibility, and allowed sources.
 fn validate_plugin_config(manifest: &PluginManifest) -> Result<(), Box<dyn std::error::Error>> {
     let Some(config) = manifest.config.as_ref() else {
         return Ok(());
@@ -344,6 +360,7 @@ fn validate_plugin_config(manifest: &PluginManifest) -> Result<(), Box<dyn std::
             }
         }
     }
+    validate_config_sources(&manifest.id, &config.fields)?;
     Ok(())
 }
 
@@ -417,3 +434,7 @@ mod account_support_tests;
 #[cfg(test)]
 #[path = "manifest_limits_tests.rs"]
 mod limit_tests;
+
+#[path = "manifest_config_sources.rs"]
+mod config_sources;
+use config_sources::validate_config_sources;

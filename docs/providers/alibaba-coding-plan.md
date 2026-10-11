@@ -52,3 +52,7 @@ Manual Cookie mode requests the console RPC endpoint for the selected region. It
 | 401/403         | "Alibaba Coding Plan API key invalid. Check your API key."        |
 | HTTP error      | "Usage request failed (HTTP {status}). Try again later."          |
 | Invalid payload | "Alibaba Coding Plan response missing quota data."                |
+
+## Connection Check
+
+Choose a connection method in Settings, open Alibaba Coding Plan, then use Save And Check. Only that method's credential is edited; switching methods keeps the other saved credential. Auto is available in Advanced Settings and keeps the existing API-key-first priority. Environment sources are reported only when actually found, without exposing their value. Saving alone does not confirm access. The check waits for the current probe result, including when this provider is disabled; it does not enable the provider.

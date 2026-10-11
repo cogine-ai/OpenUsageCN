@@ -7,6 +7,8 @@ export type SettingsPluginState = {
   name: string
   enabled: boolean
   config?: PluginMeta["config"]
+  accountSupport?: PluginMeta["accountSupport"]
+  links?: PluginMeta["links"]
 }
 
 type UseSettingsPluginListArgs = {
@@ -14,6 +16,7 @@ type UseSettingsPluginListArgs = {
   pluginsMeta: PluginMeta[]
 }
 
+/** Keep saved provider order while exposing only installed plugins and their declared connection capabilities. */
 export function useSettingsPluginList({ pluginSettings, pluginsMeta }: UseSettingsPluginListArgs) {
   return useMemo<SettingsPluginState[]>(() => {
     if (!pluginSettings) return []
@@ -29,6 +32,8 @@ export function useSettingsPluginList({ pluginSettings, pluginsMeta }: UseSettin
           enabled: !pluginSettings.disabled.includes(id),
         }
         if (meta.config) plugin.config = meta.config
+        if (meta.accountSupport) plugin.accountSupport = meta.accountSupport
+        if (meta.links) plugin.links = meta.links
         return plugin
       })
       .filter((plugin): plugin is SettingsPluginState => Boolean(plugin))

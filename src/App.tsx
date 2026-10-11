@@ -12,7 +12,8 @@ import { useSettingsTheme } from "@/hooks/app/use-settings-theme"
 import { useTrayIcon } from "@/hooks/app/use-tray-icon"
 import { usePaceNotifications } from "@/hooks/app/use-pace-notifications"
 import { usePlatformCapabilities } from "@/hooks/app/use-platform-capabilities"
-import { getProbeBatchStartFailedPluginIds } from "@/hooks/use-probe-events"
+import { probeFailure } from "@/lib/probe-failure"
+import { ProbeVerificationCancelled } from "@/hooks/use-probe-events"
 import { REFRESH_COOLDOWN_MS, savePluginSettings } from "@/lib/settings"
 import { type PluginContextAction } from "@/components/side-nav"
 import { useAppPluginStore } from "@/stores/app-plugin-store"
@@ -22,6 +23,7 @@ import { useAppUiStore } from "@/stores/app-ui-store"
 const TRAY_PROBE_DEBOUNCE_MS = 500
 const TRAY_SETTINGS_DEBOUNCE_MS = 2000
 
+/** Connect the desktop shell to provider checks, preferences, and native platform capabilities. */
 function App() {
   const platformCapabilities = usePlatformCapabilities()
 
@@ -90,6 +92,7 @@ function App() {
   )
 
   const scheduleProbeTrayUpdateRef = useRef<() => void>(() => {})
+  /** Schedule the current tray updater after a provider result without recreating event listeners. */
   const handleProbeResult = useCallback(() => {
     scheduleProbeTrayUpdateRef.current()
   }, [])
@@ -99,6 +102,7 @@ function App() {
     setLoadingForPlugins,
     setErrorForPlugins,
     startBatch,
+    verifyPlugin,
     autoUpdateNextAt,
     setAutoUpdateNextAt,
     handleRetryPlugin,
@@ -193,9 +197,7 @@ function App() {
   })
 
   const pluginSettingsRef = useRef(pluginSettings)
-  useEffect(() => {
-    pluginSettingsRef.current = pluginSettings
-  }, [pluginSettings])
+  useEffect(() => { pluginSettingsRef.current = pluginSettings }, [pluginSettings])
 
   const {
     handleReorder,
@@ -209,21 +211,21 @@ function App() {
     scheduleTrayIconUpdate,
   })
 
-  const handleProviderConfigSaved = useCallback(
-    (pluginId: string) => {
-      const currentSettings = pluginSettingsRef.current
-      if (currentSettings?.disabled.includes(pluginId)) return
-      setLoadingForPlugins([pluginId])
-      startBatch([pluginId]).catch((error) => {
-        console.error("Failed to refresh plugin after config save:", error)
-        const failedPluginIds = getProbeBatchStartFailedPluginIds(error, [pluginId])
-        if (failedPluginIds.length > 0) {
-          setErrorForPlugins(failedPluginIds, "无法开始刷新")
-        }
-      })
-    },
-    [setErrorForPlugins, setLoadingForPlugins, startBatch]
-  )
+  /** Verify saved credentials explicitly and report failure without treating cancellation as a provider error. */
+  const handleProviderConfigSaved = useCallback(async (pluginId: string) => {
+    setLoadingForPlugins([pluginId])
+    try {
+      const output = await verifyPlugin(pluginId)
+      const error = probeFailure(output)
+      if (error) throw new Error(error)
+    } catch (error) {
+      console.error("Failed to verify provider connection:", error)
+      if (!(error instanceof ProbeVerificationCancelled)) {
+        setErrorForPlugins([pluginId], error instanceof Error ? error.message : "无法检查连接")
+      }
+      throw error
+    }
+  }, [verifyPlugin, setLoadingForPlugins, setErrorForPlugins])
 
   const settingsPlugins = useSettingsPluginList({
     pluginSettings,
@@ -238,6 +240,7 @@ function App() {
     pluginStates,
   })
 
+  /** Retry a provider or pause it, persisting the change and leaving a paused provider's detail view. */
   const handlePluginContextAction = useCallback(
     (pluginId: string, action: PluginContextAction) => {
       if (action === "reload") {
@@ -264,9 +267,10 @@ function App() {
         setActiveView("home")
       }
     },
-    [activeView, handleRetryPlugin, scheduleTrayIconUpdate, setActiveView, setPluginSettings]
+    [activeView, handleRetryPlugin, pluginSettings, scheduleTrayIconUpdate, setActiveView, setPluginSettings]
   )
 
+  /** Permit immediate error recovery while preventing duplicate checks and rapid successful refreshes. */
   const isPluginRefreshAvailable = useCallback(
     (pluginId: string) => {
       const pluginState = pluginStates[pluginId]

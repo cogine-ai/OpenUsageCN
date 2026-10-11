@@ -1,3 +1,5 @@
+import { useId, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -49,7 +51,7 @@ interface SettingsPageProps {
   plugins: SettingsPluginConfig[];
   onReorder: (orderedIds: string[]) => void;
   onToggle: (id: string) => void;
-  onProviderConfigSaved: (id: string) => void;
+  onProviderConfigSaved: (id: string) => Promise<void>;
   autoUpdateInterval: AutoUpdateIntervalMinutes;
   onAutoUpdateIntervalChange: (value: AutoUpdateIntervalMinutes) => void;
   themeMode: ThemeMode;
@@ -66,19 +68,19 @@ interface SettingsPageProps {
   onMenubarMetricChange: (value: MenubarMetric) => void;
   traySettingsPreview: TraySettingsPreview;
   globalShortcut: GlobalShortcut;
-  onGlobalShortcutChange: (value: GlobalShortcut) => void;
+  onGlobalShortcutChange: (value: GlobalShortcut) => Promise<void>;
   startOnLogin: boolean;
   onStartOnLoginChange: (value: boolean) => void;
   paceNotifications: PaceNotificationSettings;
   onPaceNotificationsChange: (value: PaceNotificationSettings) => Promise<void>;
 }
 
+/** Edits provider visibility and app preferences while keeping connection setup separate. */
 export function SettingsPage({
   platformCapabilities,
   plugins,
   onReorder,
   onToggle,
-  onProviderConfigSaved,
   autoUpdateInterval,
   onAutoUpdateIntervalChange,
   themeMode,
@@ -101,6 +103,8 @@ export function SettingsPage({
   paceNotifications,
   onPaceNotificationsChange,
 }: SettingsPageProps) {
+  const toolsPanelId = useId();
+  const [toolsExpanded, setToolsExpanded] = useState(false);
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -108,6 +112,7 @@ export function SettingsPage({
     })
   );
 
+  /** Persists provider order only after a valid drop changes the selected position. */
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
 
@@ -122,6 +127,29 @@ export function SettingsPage({
 
   return (
     <div className="py-3 space-y-4">
+      <section>
+        <h3 className="text-sm font-semibold mb-0">服务商</h3>
+        <div className="bg-muted/50 rounded-lg p-1 space-y-1">
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={plugins.map((p) => p.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              {plugins.map((plugin) => (
+                <SortablePluginItem
+                  key={plugin.id}
+                  plugin={plugin}
+                  onToggle={onToggle}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
+        </div>
+      </section>
       <section>
         <h3 className="text-sm font-semibold mb-2">自动刷新</h3>
         <div className="bg-muted/50 rounded-lg p-1">
@@ -177,10 +205,7 @@ export function SettingsPage({
         </div>
       </section>
       <section>
-        <h3 className="text-sm font-semibold mb-0">重置时间</h3>
-        <p className="text-sm text-muted-foreground mb-2">
-          倒计时或具体时间
-        </p>
+        <h3 className="text-sm font-semibold mb-2">重置时间</h3>
         <div className="bg-muted/50 rounded-lg p-1">
           <div className="flex gap-1" role="radiogroup" aria-label="重置时间显示">
             {RESET_TIMER_DISPLAY_OPTIONS.map((option) => {
@@ -331,8 +356,24 @@ export function SettingsPage({
           onGlobalShortcutChange={onGlobalShortcutChange}
         />
       ) : null}
-      {platformCapabilities?.localHttpApi ? <LocalHttpApiSection /> : null}
-      {platformCapabilities?.cli ? <CliSection /> : null}
+      {platformCapabilities?.localHttpApi || platformCapabilities?.cli ? (
+        <section>
+          <h3>
+            <Button type="button" variant="ghost" className="w-full justify-between px-0 text-sm font-semibold"
+              aria-expanded={toolsExpanded} aria-controls={toolsPanelId}
+              onClick={() => setToolsExpanded((expanded) => !expanded)}>
+              工具接入
+              <ChevronDown className={cn("size-4 transition-transform", toolsExpanded && "rotate-180")} />
+            </Button>
+          </h3>
+          <div id={toolsPanelId} hidden={!toolsExpanded} className="space-y-4 pt-2">
+            {toolsExpanded ? <>
+              {platformCapabilities?.localHttpApi ? <LocalHttpApiSection /> : null}
+              {platformCapabilities?.cli ? <CliSection /> : null}
+            </> : null}
+          </div>
+        </section>
+      ) : null}
       {platformCapabilities?.autostart ? (
         <section>
           <h3 className="text-sm font-semibold mb-0">登录时启动</h3>
@@ -350,33 +391,7 @@ export function SettingsPage({
           </label>
         </section>
       ) : null}
-      <section>
-        <h3 className="text-sm font-semibold mb-0">插件</h3>
-        <p className="text-sm text-muted-foreground mb-2">
-          选择要显示的服务商
-        </p>
-        <div className="bg-muted/50 rounded-lg p-1 space-y-1">
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext
-              items={plugins.map((p) => p.id)}
-              strategy={verticalListSortingStrategy}
-            >
-              {plugins.map((plugin) => (
-                <SortablePluginItem
-                  key={plugin.id}
-                  plugin={plugin}
-                  onToggle={onToggle}
-                  onProviderConfigSaved={onProviderConfigSaved}
-                />
-              ))}
-            </SortableContext>
-          </DndContext>
-        </div>
-      </section>
+
     </div>
   );
 }

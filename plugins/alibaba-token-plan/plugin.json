@@ -11,9 +11,11 @@
       {
         "id": "cookieHeader",
         "type": "secret",
+        "required": true,
         "label": "Cookie Header",
         "placeholder": "login_aliyunid_ticket=...; sec_token=...",
         "help": "从百炼控制台手动复制 Cookie。留空则使用 ALIBABA_TOKEN_PLAN_COOKIE",
+        "environmentVariables": ["ALIBABA_TOKEN_PLAN_COOKIE"],
         "defaultSource": true
       }
     ]

@@ -2,11 +2,13 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import type { PluginOutput } from "@/lib/plugin-types"
 import type { PluginState } from "@/hooks/app/types"
 import type { ProbeResultContext } from "@/hooks/use-probe-events"
+import { probeFailure } from "@/lib/probe-failure"
 
 type UseProbeStateArgs = {
   onProbeResult?: () => void
 }
 
+/** Track current checks while retaining the last successful quota and its actual freshness. */
 export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
   const [pluginStates, setPluginStates] = useState<Record<string, PluginState>>({})
 
@@ -15,6 +17,7 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
     pluginStatesRef.current = pluginStates
   }, [pluginStates])
 
+  /** Update the shared ref synchronously so queued events observe the same state as the next render. */
   const updatePluginStates = useCallback(
     (
       updater: (
@@ -28,15 +31,7 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
     []
   )
 
-  const getErrorMessage = useCallback((output: PluginOutput) => {
-    if (output.lines.length !== 1) return null
-    const line = output.lines[0]
-    if (line.type === "badge" && line.label === "Error") {
-      return line.text || "无法更新数据，请重试。"
-    }
-    return null
-  }, [])
-
+  /** Mark refreshes pending without discarding the existing quota or its success timestamp. */
   const setLoadingForPlugins = useCallback((ids: string[]) => {
     updatePluginStates((prev) => {
       const next = { ...prev }
@@ -55,6 +50,7 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
     })
   }, [updatePluginStates])
 
+  /** Clear the previous account's quota before a replacement account is checked. */
   const setAccountTransitionForPlugins = useCallback((ids: string[]) => {
     updatePluginStates((prev) => {
       const next = { ...prev }
@@ -73,6 +69,7 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
     })
   }, [updatePluginStates])
 
+  /** Record a failed check while preserving previously retrieved data and successful refresh times. */
   const setErrorForPlugins = useCallback((ids: string[], error: string) => {
     const now = Date.now()
     updatePluginStates((prev) => {
@@ -92,9 +89,10 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
     })
   }, [updatePluginStates])
 
+  /** Distinguish real success from errors and cached Claude rate-limit data when recording freshness. */
   const handleProbeResult = useCallback(
     (output: PluginOutput, { manual }: ProbeResultContext) => {
-      const errorMessage = getErrorMessage(output)
+      const errorMessage = probeFailure(output)
 
       const now = Date.now()
       updatePluginStates((prev) => {
@@ -102,7 +100,7 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
         return {
           ...prev,
           [output.providerId]: {
-            data: errorMessage ? (existing?.data ?? null) : output,
+            data: errorMessage ? (existing?.data ?? (output.providerId === "claude" && output.lines.some((line) => line.type === "progress") ? output : null)) : output,
             loading: false,
             error: errorMessage,
             lastErrorAt: errorMessage ? now : null,
@@ -116,7 +114,7 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
 
       onProbeResult?.()
     },
-    [getErrorMessage, onProbeResult, updatePluginStates]
+    [onProbeResult, updatePluginStates]
   )
 
   return {

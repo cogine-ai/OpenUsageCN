@@ -62,6 +62,40 @@ describe("ProviderAccountControls quota refresh", () => {
     tauri.listen.mockResolvedValue(vi.fn())
   })
 
+  it.each(["cursor", "claude"])("returns %s to the local default after its pinned account becomes inactive", async (providerId) => {
+    const initialView = {
+      ...baseView(), providerId, activeAccountId: null,
+      accounts: [account("account-2", "Personal", false)],
+    }
+    const autoView = {
+      ...baseView(), providerId, selection: { mode: "auto" as const }, activeAccountId: "account-2",
+      accounts: [account("account-2", "Personal", true)],
+    }
+    tauri.invoke.mockResolvedValueOnce(initialView).mockResolvedValueOnce(receipt(autoView))
+    const onAccountChangeRefresh = vi.fn()
+    testingRender(<ProviderAccountControls standalone providerId={providerId} onAccountChangeRefresh={onAccountChangeRefresh} />)
+    const followLocal = await screen.findByRole("switch", { name: "跟随本机" })
+    expect(followLocal).toBeEnabled()
+    expect(followLocal).not.toBeChecked()
+    await userEvent.setup().click(followLocal)
+    expect(tauri.invoke).toHaveBeenCalledWith("perform_provider_account_operation", {
+      providerId, operation: { kind: "followDefaultConnection" },
+    })
+    await waitFor(() => expect(followLocal).toBeChecked())
+    expect(screen.getByRole("radio", { name: /Personal/i })).toBeChecked()
+    expect(onAccountChangeRefresh).toHaveBeenCalledOnce()
+  })
+
+  it("cannot pin an empty local default", async () => {
+    tauri.invoke.mockResolvedValue({ ...baseView(), selection: { mode: "auto" }, activeAccountId: null, accounts: [] })
+    testingRender(<ProviderAccountControls standalone providerId="cursor" />)
+    const followLocal = await screen.findByRole("switch", { name: "跟随本机" })
+    expect(followLocal).toBeChecked()
+    expect(followLocal).toBeDisabled()
+    await userEvent.setup().click(followLocal)
+    expect(tauri.invoke).not.toHaveBeenCalledWith("perform_provider_account_operation", expect.anything())
+  })
+
   it("refreshes quota after selecting an account and returning to Auto", async () => {
     const initialView = baseView()
     const selectedView = {
@@ -90,7 +124,7 @@ describe("ProviderAccountControls quota refresh", () => {
     await user.click(await screen.findByRole("radio", { name: /Personal/i }))
     await waitFor(() => expect(onAccountChangeRefresh).toHaveBeenCalledTimes(1))
 
-    await user.click(screen.getByRole("radio", { name: /自动跟随/i }))
+    await user.click(screen.getByRole("switch", { name: "跟随本机" }))
     await waitFor(() => expect(onAccountChangeRefresh).toHaveBeenCalledTimes(2))
   })
 
@@ -234,7 +268,8 @@ describe("ProviderAccountControls quota refresh", () => {
                 browser: "Chrome",
                 profileKey: "Default",
                 host: "cursor.com",
-                expiresAtMs: 1_787_500_000_000,
+                expiresAtMs: Date.now() + 60_000,
+                identity: { email: "work@example.com" },
               },
             },
           ],
@@ -259,12 +294,8 @@ describe("ProviderAccountControls quota refresh", () => {
 
     await user.click(await screen.findByRole("button", { name: "添加账号" }))
     await user.click(screen.getByRole("button", { name: "Chrome" }))
-    await user.selectOptions(
-      await screen.findByRole("combobox", { name: "Browser Profile" }),
-      "Default"
-    )
-    await user.click(screen.getByRole("button", { name: "Scan Profile" }))
-    await user.click(await screen.findByRole("button", { name: "Attach Main" }))
+    await user.click(await screen.findByRole("button", { name: "Main" }))
+    await user.click(await screen.findByRole("button", { name: "添加所选账号" }))
 
     await waitFor(() => expect(onAccountChangeRefresh).toHaveBeenCalledTimes(1))
   })
@@ -277,6 +308,7 @@ describe("ProviderAccountControls quota refresh", () => {
         {
           ...account("account-1", "Claude Team", true),
           connectionKinds: ["cli" as const],
+          connections: [{ connectionId: "claude-cli", kind: "cli" as const, available: true }],
         },
       ],
     }
@@ -298,6 +330,7 @@ describe("ProviderAccountControls quota refresh", () => {
       ],
     }
     tauri.invoke.mockImplementation((command: string) => {
+      if (command === "get_platform_capabilities") return Promise.resolve({ platform: "macos" })
       if (command === "get_provider_account_view") return Promise.resolve(initialView)
       if (command === "list_browser_profiles") {
         return Promise.resolve({
@@ -318,7 +351,8 @@ describe("ProviderAccountControls quota refresh", () => {
                 browser: "Chrome",
                 profileKey: "Default",
                 host: "claude.ai",
-                expiresAtMs: 1_787_500_000_000,
+                expiresAtMs: Date.now() + 60_000,
+                identity: { email: "work@example.com" },
               },
             },
           ],
@@ -341,14 +375,10 @@ describe("ProviderAccountControls quota refresh", () => {
       />
     )
 
-    await user.click(await screen.findByRole("button", { name: "添加账号" }))
+    await user.click(await screen.findByRole("button", { name: "连接浏览器" }))
     await user.click(screen.getByRole("button", { name: "Chrome" }))
-    await user.selectOptions(
-      await screen.findByRole("combobox", { name: "Browser Profile" }),
-      "Default"
-    )
-    await user.click(screen.getByRole("button", { name: "Scan Profile" }))
-    await user.click(await screen.findByRole("button", { name: "Attach Main" }))
+    await user.click(await screen.findByRole("button", { name: "Main" }))
+    await user.click(await screen.findByRole("button", { name: "连接所选浏览器" }))
 
     await waitFor(() => expect(onAccountChangeRefresh).toHaveBeenCalledTimes(1))
   })

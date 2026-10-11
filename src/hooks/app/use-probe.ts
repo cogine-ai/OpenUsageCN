@@ -14,6 +14,7 @@ type UseProbeArgs = {
   onProbeResult?: () => void
 }
 
+/** Combine scheduled refreshes, account transitions, and explicit connection verification. */
 export function useProbe({
   pluginSettings,
   autoUpdateInterval,
@@ -28,13 +29,15 @@ export function useProbe({
     handleProbeResult,
   } = useProbeState({ onProbeResult })
 
+  /** Keep completion registration stable; individual results own provider state updates. */
   const handleBatchComplete = useCallback(() => {}, [])
 
-  const { startBatch } = useProbeEvents({
+  const { startBatch, verifyPlugin } = useProbeEvents({
     onResult: handleProbeResult,
     onBatchComplete: handleBatchComplete,
   })
 
+  /** Read the latest pending state so scheduled checks do not duplicate an in-flight refresh. */
   const isPluginLoading = useCallback(
     (id: string) => Boolean(pluginStatesRef.current[id]?.loading),
     [pluginStatesRef]
@@ -70,6 +73,7 @@ export function useProbe({
   })
 
   return {
+    verifyPlugin,
     pluginStates,
     setLoadingForPlugins,
     setErrorForPlugins,

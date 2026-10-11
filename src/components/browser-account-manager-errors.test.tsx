@@ -30,9 +30,9 @@ describe("BrowserAccountManager errors", () => {
     await user.click(screen.getByRole("button", { name: "Chrome" }))
 
     expect(
-      await screen.findByRole("heading", { name: "Browser Profiles Unavailable" })
+      await screen.findByRole("alert")
     ).toBeInTheDocument()
-    expect(screen.getByText("Browser profiles could not be listed.")).toBeInTheDocument()
+    expect(screen.getByText("无法读取浏览器配置文件")).toBeInTheDocument()
     expect(errorSpy).toHaveBeenCalledWith(
       "Failed to list browser profiles",
       "profileDiscoveryFailed"
@@ -60,18 +60,14 @@ describe("BrowserAccountManager errors", () => {
 
     await user.click(screen.getByRole("button", { name: "添加账号" }))
     await user.click(screen.getByRole("button", { name: "Chrome" }))
-    await user.selectOptions(
-      await screen.findByRole("combobox", { name: "Browser Profile" }),
-      "Default"
-    )
-    await user.click(screen.getByRole("button", { name: "Scan Profile" }))
+    await user.click(await screen.findByRole("button", { name: "Main" }))
 
     expect(
-      await screen.findByRole("heading", { name: "Browser Discovery Error" })
+      await screen.findByRole("alert")
     ).toBeInTheDocument()
-    expect(screen.getByText("Browser profile discovery timed out.")).toBeInTheDocument()
+    expect(screen.getByText("部分来源检查超时")).toBeInTheDocument()
     expect(errorSpy).toHaveBeenCalledWith(
-      "Failed to discover browser accounts",
+      "Failed to discover browser account",
       "overallTimedOut"
     )
   })

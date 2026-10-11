@@ -11,6 +11,7 @@ use super::state::{
 };
 
 impl ProviderAccounts {
+    /// Reads account state and live display identity without discovering or changing credentials.
     pub(crate) fn view(&self, provider_id: &str) -> Result<ProviderAccountView, String> {
         let providers = self
             .providers
@@ -23,14 +24,17 @@ impl ProviderAccounts {
             .active_account_id
             .as_deref()
             .and_then(|account_id| self.current_enrichment_warning(provider_id, account_id));
-        Ok(view_from_state(
+        let mut view = view_from_state(
             provider_id,
             provider,
             self.current_persistence_warning(),
             enrichment_warning,
-        ))
+        );
+        self.add_browser_identity(&mut view, provider)?;
+        Ok(view)
     }
 
+    /// Serializes a provider's operations and returns a safe receipt even when mutation fails.
     pub(crate) fn perform(
         &self,
         provider_id: &str,
@@ -142,11 +146,13 @@ impl ProviderAccounts {
         }
     }
 
+    /// Keeps receipts serializable when state cannot be read, preserving any storage warning.
     fn fallback_view(&self, provider_id: &str) -> ProviderAccountView {
         self.view(provider_id)
             .unwrap_or_else(|_| empty_view(provider_id, self.current_persistence_warning()))
     }
 
+    /// Reconciles local identities, honoring prior removals unless explicit reconnection was requested.
     fn refresh_active(
         &self,
         provider_id: &str,
@@ -262,6 +268,7 @@ impl ProviderAccounts {
         Ok((status, report.source_outcomes))
     }
 
+    /// Pins an existing account without rediscovery and publishes the persisted selection.
     fn select_active(&self, provider_id: &str, account_id: &str) -> Result<(), String> {
         let mut provider = self
             .providers
@@ -287,6 +294,7 @@ impl ProviderAccounts {
         self.replace_provider_state(provider_id, persisted)
     }
 
+    /// Restores automatic selection only when a discovered default account exists.
     fn follow_default(&self, provider_id: &str) -> Result<(), String> {
         let mut provider = self
             .providers
@@ -309,6 +317,7 @@ impl ProviderAccounts {
         self.replace_provider_state(provider_id, persisted)
     }
 
+    /// Persists a trimmed visible label and increments its revision without changing identity.
     fn rename_account(
         &self,
         provider_id: &str,
@@ -341,6 +350,7 @@ impl ProviderAccounts {
         self.replace_provider_state(provider_id, persisted)
     }
 
+    /// Returns the storage-merged state; without a registry store, returns the supplied runtime state.
     pub(super) fn persist_provider(
         &self,
         provider_id: &str,
@@ -352,6 +362,7 @@ impl ProviderAccounts {
         }
     }
 
+    /// Persists unavailable connections after a discovery report yields no usable observations.
     fn mark_source_outcomes(
         &self,
         provider_id: &str,
@@ -371,6 +382,7 @@ impl ProviderAccounts {
         self.replace_provider_state(provider_id, persisted)
     }
 
+    /// Publishes the accepted provider snapshot to runtime state after persistence succeeds.
     pub(super) fn replace_provider_state(
         &self,
         provider_id: &str,
@@ -383,6 +395,7 @@ impl ProviderAccounts {
         Ok(())
     }
 
+    /// Reuses the installation key and creates one only when no account registry already exists.
     pub(super) fn resolve_installation_key(&self) -> Result<[u8; 32], String> {
         if let Some(key) = *self
             .installation_key
@@ -436,6 +449,7 @@ impl ProviderAccounts {
     }
 }
 
+/// Maps key-storage failures to fixed reasons without exposing operating-system error details.
 fn installation_key_error(error: InstallationKeyError) -> String {
     match error {
         InstallationKeyError::Missing => "provider account installation key is missing",
@@ -452,6 +466,7 @@ fn installation_key_error(error: InstallationKeyError) -> String {
     .to_string()
 }
 
+/// Supplies a readable provider name, including a generic name for an empty identifier.
 fn provider_display_name(provider_id: &str) -> String {
     let mut characters = provider_id.chars();
     match characters.next() {
@@ -460,6 +475,7 @@ fn provider_display_name(provider_id: &str) -> String {
     }
 }
 
+/// Logs provider and correlation identifiers without account identity or credential contents.
 fn log_operation_failure(provider_id: &str, operation_id: &str) {
     log::warn!(
         "provider account operation failed: provider={}, operation_id={}",
@@ -468,6 +484,7 @@ fn log_operation_failure(provider_id: &str, operation_id: &str) {
     );
 }
 
+/// Produces a fixed recovery message while distinguishing refresh from other account failures.
 fn operation_error(provider_id: &str, is_refresh: bool) -> ProviderOperationError {
     ProviderOperationError {
         code: if is_refresh {

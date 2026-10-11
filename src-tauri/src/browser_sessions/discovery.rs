@@ -10,6 +10,7 @@ const ALL_PROFILES_TIMEOUT: Duration = Duration::from_secs(60);
 const ALL_PROFILES_CONCURRENCY: usize = 6;
 
 impl BrowserSessionBroker {
+    /// Checks one exact profile and retains only a provider-verified candidate for later attachment.
     pub(crate) fn discover_specific(
         &self,
         browser: Browser,
@@ -29,6 +30,7 @@ impl BrowserSessionBroker {
             .map(super::AttachedSessionClaim::into_handle)
     }
 
+    /// Consumes a candidate once; expired or previously claimed candidates require another check.
     pub(crate) fn claim_candidate(
         &self,
         candidate_id: &str,
@@ -39,6 +41,7 @@ impl BrowserSessionBroker {
             .attach(self.clock.now(), candidate_id)
     }
 
+    /// Copies live session credentials into a zeroing owner for internal provider requests.
     pub(crate) fn session_credential(
         &self,
         session_ref: &str,
@@ -49,6 +52,7 @@ impl BrowserSessionBroker {
             .credential(self.clock.now(), session_ref)
     }
 
+    /// Returns live source and display metadata without exposing cookies or the opaque identity.
     pub(crate) fn session_binding(
         &self,
         session_ref: &str,
@@ -59,6 +63,7 @@ impl BrowserSessionBroker {
             .binding(self.clock.now(), session_ref)
     }
 
+    /// Drops retained session secrets and reports whether that session still existed.
     pub(crate) fn release_session(&self, session_ref: &str) -> bool {
         self.roster
             .lock()
@@ -74,6 +79,7 @@ impl BrowserSessionBroker {
             .retained_session_count()
     }
 
+    /// Checks profiles under one shared deadline, preserving profile order and individual failures.
     pub(crate) fn discover_all(
         &self,
         browser: Browser,
@@ -172,6 +178,7 @@ impl BrowserSessionBroker {
         })
     }
 
+    /// Tries isolated candidates within the deadline; transport failures stop fallback immediately.
     pub(super) fn discover_specific_until(
         &self,
         browser: Browser,
@@ -221,6 +228,7 @@ impl BrowserSessionBroker {
             .candidates
             .sort_by_key(|candidate| host_priority(provider, &candidate.host));
 
+        let mut identity_unavailable = false;
         for candidate in response.candidates {
             if cancellation.is_cancelled() {
                 return ProfileDiscoveryResult::failed(
@@ -278,9 +286,11 @@ impl BrowserSessionBroker {
                         );
                     return ProfileDiscoveryResult::verified(profile_key, summary);
                 }
-                Ok(
-                    ValidationOutcome::RejectedAuthentication | ValidationOutcome::MissingIdentity,
-                ) => {
+                Ok(ValidationOutcome::MissingIdentity) => {
+                    identity_unavailable = true;
+                    continue;
+                }
+                Ok(ValidationOutcome::RejectedAuthentication) => {
                     continue;
                 }
                 Err(error) => {
@@ -293,15 +303,21 @@ impl BrowserSessionBroker {
         }
         ProfileDiscoveryResult::failed(
             profile_key,
-            super::BrowserSessionError::authentication_rejected(),
+            if identity_unavailable {
+                super::BrowserSessionError::identity_unavailable()
+            } else {
+                super::BrowserSessionError::authentication_rejected()
+            },
         )
     }
 }
 
+/// Distinguishes an absent overall deadline from an exhausted one.
 fn remaining(now: Duration, deadline: Option<Duration>) -> Option<Duration> {
     deadline.map(|deadline| deadline.saturating_sub(now))
 }
 
+/// Prefers Cursor's current host before legacy hosts without combining their cookie candidates.
 fn host_priority(provider: CookieProvider, host: &str) -> usize {
     match provider {
         CookieProvider::Cursor => match host {

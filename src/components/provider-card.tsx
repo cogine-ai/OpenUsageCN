@@ -1,13 +1,12 @@
 import { Fragment, useMemo } from "react"
-import { ExternalLink, Hourglass, RefreshCw } from "lucide-react"
+import { ExternalLink, Hourglass, RefreshCw, Wrench } from "lucide-react"
 import { openUrl } from "@tauri-apps/plugin-opener"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Progress } from "@/components/ui/progress"
 import { Separator } from "@/components/ui/separator"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { SkeletonLines } from "@/components/skeleton-lines"
-import { UsageSparkline } from "@/components/usage-sparkline"
+import { MetricLineRenderer } from "@/components/provider-metric"
 import { PluginError } from "@/components/plugin-error"
 import { ProviderStatusNotice } from "@/components/provider-status-notice"
 import { useNowTicker } from "@/hooks/use-now-ticker"
@@ -15,12 +14,13 @@ import { useProviderStatus } from "@/hooks/use-provider-status"
 import { REFRESH_COOLDOWN_MS, type DisplayMode, type ResetTimerDisplayMode, type TimeFormatMode } from "@/lib/settings"
 import type { ManifestLine, MetricLine, PluginLink, PluginStatusPage } from "@/lib/plugin-types"
 import { groupLinesByType } from "@/lib/group-lines-by-type"
-import { clamp01, formatCountNumber, formatFixedPrecisionNumber } from "@/lib/utils"
-import { calculateDeficit, calculatePaceStatus, type PaceStatus } from "@/lib/pace-status"
-import { buildPaceDetailText, formatDeficitText, formatRunsOutText, getPaceStatusText } from "@/lib/pace-tooltip"
-import { formatResetAbsoluteLabel, formatResetRelativeLabel, formatResetTooltipText } from "@/lib/reset-tooltip"
+
+import type { PluginMeta } from "@/lib/plugin-types"
+import { getPluginRecovery, type PluginRecovery } from "@/lib/plugin-recovery"
 
 interface ProviderCardProps {
+  capabilities?: Pick<PluginMeta, "config" | "accountSupport">
+  onRecovery?: (recovery: PluginRecovery) => void
   providerId?: string
   name: string
   plan?: string
@@ -41,51 +41,7 @@ interface ProviderCardProps {
   onResetTimerDisplayModeToggle?: () => void
 }
 
-const PACE_VISUALS: Record<PaceStatus, { dotClass: string }> = {
-  ahead: { dotClass: "bg-green-500" },
-  "on-track": { dotClass: "bg-yellow-500" },
-  behind: { dotClass: "bg-red-500" },
-}
-
-/** Colored dot indicator showing pace status */
-function PaceIndicator({
-  status,
-  detailText,
-  isLimitReached,
-}: {
-  status: PaceStatus
-  detailText?: string | null
-  isLimitReached?: boolean
-}) {
-  const colorClass = PACE_VISUALS[status].dotClass
-
-  const statusText = getPaceStatusText(status)
-
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={(props) => (
-          <span
-            {...props}
-            className={`inline-block w-2 h-2 rounded-full ${colorClass}`}
-            aria-label={isLimitReached ? "已达上限" : statusText}
-          />
-        )}
-      />
-      <TooltipContent side="top" className="text-xs text-center">
-        {isLimitReached ? (
-          "已达上限"
-        ) : (
-          <>
-            <div>{statusText}</div>
-            {detailText && <div className="text-[10px] opacity-60">{detailText}</div>}
-          </>
-        )}
-      </TooltipContent>
-    </Tooltip>
-  )
-}
-
+/** Formats the age of a retained provider snapshot for its freshness notice. */
 function formatRelativeTime(diffMs: number): string {
   const seconds = Math.floor(Math.max(0, diffMs) / 1000)
   if (seconds < 60) return "刚刚"
@@ -97,7 +53,10 @@ function formatRelativeTime(diffMs: number): string {
   return `${days} 天前`
 }
 
+/** Renders provider usage while retaining earlier data during refreshes and connection failures. */
 export function ProviderCard({
+  capabilities,
+  onRecovery,
   providerId,
   name,
   plan,
@@ -117,6 +76,8 @@ export function ProviderCard({
   timeFormatMode = "auto",
   onResetTimerDisplayModeToggle,
 }: ProviderCardProps) {
+  const recovery = error ? getPluginRecovery(error, providerId, capabilities) : null
+  const needsRepair = recovery && recovery.action !== "retry" && onRecovery
   const providerStatus = useProviderStatus(providerId ?? "", providerId ? statusPage : undefined)
   const cooldownRemainingMs = useMemo(() => {
     if (error || !lastManualRefreshAt) return 0
@@ -174,7 +135,7 @@ export function ProviderCard({
     [links]
   )
 
-  // Format remaining cooldown time as "Xm Ys"
+  /** Describes when the manual refresh cooldown ends. */
   const formatRemainingTime = () => {
     if (!lastManualRefreshAt) return ""
     const remainingMs = REFRESH_COOLDOWN_MS - (now - lastManualRefreshAt)
@@ -236,15 +197,16 @@ export function ProviderCard({
                         {...props}
                         variant="ghost"
                         size="icon-xs"
-                        aria-label="刷新"
+                        aria-label={needsRepair ? recovery.actionLabel : "刷新"}
                         onClick={(e) => {
                           e.currentTarget.blur()
-                          onRetry()
+                          if (needsRepair) onRecovery(recovery)
+                          else onRetry()
                         }}
                         className="text-muted-foreground hover:text-foreground"
                         style={{ transform: "translateZ(0)", backfaceVisibility: "hidden" }}
                       >
-                        <RefreshCw className="h-3 w-3" />
+                        {needsRepair ? <Wrench className="size-3" /> : <RefreshCw className="size-3" />}
                       </Button>
                     )}
                   />
@@ -286,7 +248,7 @@ export function ProviderCard({
           </div>
         )}
         {error && (
-          <PluginError message={error} providerId={providerId} onRetry={onRetry} retrying={loading} hasStaleData={hasStaleData} />
+          <PluginError message={error} providerId={providerId} capabilities={capabilities} onRecovery={onRecovery} onRetry={onRetry} retrying={loading} hasStaleData={hasStaleData} lastUpdatedAt={lastUpdatedAt} />
         )}
 
         {statusPage && (
@@ -312,6 +274,8 @@ export function ProviderCard({
                       onResetTimerDisplayModeToggle={onResetTimerDisplayModeToggle}
                       now={now}
                       refreshing={isRefreshingWithData}
+                      stale={Boolean(error)}
+                      lastUpdatedAt={lastUpdatedAt}
                     />
                   ))}
                 </div>
@@ -327,6 +291,8 @@ export function ProviderCard({
                       onResetTimerDisplayModeToggle={onResetTimerDisplayModeToggle}
                       now={now}
                       refreshing={isRefreshingWithData}
+                      stale={Boolean(error)}
+                      lastUpdatedAt={lastUpdatedAt}
                     />
                   ))}
                 </Fragment>
@@ -339,245 +305,4 @@ export function ProviderCard({
       {showSeparator && <Separator />}
     </div>
   )
-}
-
-function MetricLineRenderer({
-  line,
-  displayMode,
-  resetTimerDisplayMode,
-  timeFormatMode,
-  onResetTimerDisplayModeToggle,
-  now,
-  refreshing,
-}: {
-  line: MetricLine
-  displayMode: DisplayMode
-  resetTimerDisplayMode: ResetTimerDisplayMode
-  timeFormatMode: TimeFormatMode
-  onResetTimerDisplayModeToggle?: () => void
-  now: number
-  refreshing?: boolean
-}) {
-  if (line.type === "text") {
-    return (
-      <div>
-        <div className="flex justify-between items-center h-[18px] gap-2">
-          <span className="text-xs text-muted-foreground min-w-0 flex-1 truncate" title={line.label}>
-            {line.label}
-          </span>
-          <span
-            className="text-xs text-muted-foreground min-w-0 truncate max-w-[70%] text-right"
-            style={line.color ? { color: line.color } : undefined}
-            title={line.value}
-          >
-            {line.value}
-          </span>
-        </div>
-        {line.subtitle && (
-          <div
-            className="text-[10px] text-muted-foreground text-right -mt-0.5"
-            style={line.color ? { color: line.color } : undefined}
-          >
-            {line.subtitle}
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  if (line.type === "badge") {
-    return (
-      <div>
-        <div className="flex justify-between items-center h-[22px]">
-          <span className="text-sm text-muted-foreground flex-shrink-0">{line.label}</span>
-          <Badge
-            variant="outline"
-            className="truncate min-w-0 max-w-[60%]"
-            style={
-              line.color
-                ? { color: line.color, borderColor: line.color }
-                : undefined
-            }
-            title={line.text}
-          >
-            {line.text}
-          </Badge>
-        </div>
-        {line.subtitle && (
-          <div className="text-xs text-muted-foreground text-right -mt-0.5">{line.subtitle}</div>
-        )}
-      </div>
-    )
-  }
-
-  if (line.type === "barChart") {
-    return (
-      <UsageSparkline label={line.label} points={line.points} note={line.note} color={line.color} />
-    )
-  }
-
-  if (line.type === "progress") {
-    const resetsAtMs = line.resetsAt ? Date.parse(line.resetsAt) : Number.NaN
-    const periodDurationMs = line.periodDurationMs
-    const hasPaceContext = Number.isFinite(resetsAtMs) && Number.isFinite(periodDurationMs)
-    const hasTimeMarkerContext = hasPaceContext && periodDurationMs! > 0
-    const shownAmount =
-      displayMode === "used"
-        ? line.used
-        : Math.max(0, line.limit - line.used)
-    const percent = Math.round(clamp01(shownAmount / line.limit) * 10000) / 100
-    const primaryText =
-      displayMode === "left"
-        ? line.format.kind === "percent"
-          ? `剩余 ${Math.round(shownAmount)}%`
-          : line.format.kind === "dollars"
-            ? `剩余 $${formatFixedPrecisionNumber(shownAmount)}`
-            : `剩余 ${formatCountNumber(shownAmount)} ${line.format.suffix}`
-        : line.format.kind === "percent"
-          ? `${Math.round(shownAmount)}%`
-          : line.format.kind === "dollars"
-            ? `$${formatFixedPrecisionNumber(shownAmount)}`
-            : `${formatCountNumber(shownAmount)} ${line.format.suffix}`
-
-    const resetLabel = line.resetsAt
-      ? resetTimerDisplayMode === "absolute"
-        ? formatResetAbsoluteLabel(now, line.resetsAt, timeFormatMode)
-        : formatResetRelativeLabel(now, line.resetsAt)
-      : null
-    const resetTooltipText = line.resetsAt
-      ? formatResetTooltipText({
-          nowMs: now,
-          resetsAtIso: line.resetsAt,
-          visibleMode: resetTimerDisplayMode,
-          timeFormatMode,
-        })
-      : null
-
-    const secondaryText =
-      resetLabel ??
-      (line.format.kind === "percent"
-        ? `${line.limit}% 上限`
-        : line.format.kind === "dollars"
-          ? `$${formatFixedPrecisionNumber(line.limit)} 上限`
-          : `${formatCountNumber(line.limit)} ${line.format.suffix} 上限`)
-
-    // Calculate pace status if we have reset time and period duration
-    const paceResult = hasPaceContext
-      ? calculatePaceStatus(line.used, line.limit, resetsAtMs, periodDurationMs!, now)
-      : null
-    const paceStatus = paceResult?.status ?? null
-    const paceMarkerValue = hasTimeMarkerContext && paceStatus && paceStatus !== "on-track"
-      ? (() => {
-          const periodStartMs = resetsAtMs - periodDurationMs!
-          const elapsedFraction = clamp01((now - periodStartMs) / periodDurationMs!)
-          const elapsedPercent = elapsedFraction * 100
-          return displayMode === "used" ? elapsedPercent : 100 - elapsedPercent
-        })()
-      : undefined
-    const isLimitReached = line.used >= line.limit
-    const paceDetailText =
-      hasPaceContext && !isLimitReached
-        ? buildPaceDetailText({
-            paceResult,
-            used: line.used,
-            limit: line.limit,
-            periodDurationMs: periodDurationMs!,
-            resetsAtMs,
-            nowMs: now,
-            displayMode,
-          })
-        : null
-
-    const deficit = hasPaceContext && !isLimitReached
-      ? calculateDeficit(line.used, line.limit, resetsAtMs, periodDurationMs!, now)
-      : null
-    const deficitText = deficit !== null
-      ? formatDeficitText(deficit, line.format, displayMode)
-      : null
-    const runsOutText = hasPaceContext && !isLimitReached
-      ? formatRunsOutText({
-          paceResult,
-          used: line.used,
-          limit: line.limit,
-          periodDurationMs: periodDurationMs!,
-          resetsAtMs,
-          nowMs: now,
-        })
-      : null
-
-    return (
-      <div>
-        <div className="text-sm font-medium mb-1.5 flex items-center gap-1.5">
-          {line.label}
-          {paceStatus && (
-            <PaceIndicator status={paceStatus} detailText={paceDetailText} isLimitReached={isLimitReached} />
-          )}
-        </div>
-        <Progress
-          value={percent}
-          indicatorColor={line.color}
-          markerValue={paceMarkerValue}
-          refreshing={refreshing}
-        />
-        <div className="flex justify-between items-center mt-1.5">
-          <span className="text-xs text-muted-foreground tabular-nums">
-            {primaryText}
-          </span>
-          {secondaryText && (
-            resetTooltipText ? (
-              <Tooltip>
-                <TooltipTrigger
-                  render={(props) =>
-                    resetLabel && onResetTimerDisplayModeToggle ? (
-                      <button
-                        {...props}
-                        type="button"
-                        onClick={onResetTimerDisplayModeToggle}
-                        className="text-xs text-muted-foreground tabular-nums hover:text-foreground transition-colors"
-                      >
-                        {secondaryText}
-                      </button>
-                    ) : (
-                      <span {...props} className="text-xs text-muted-foreground tabular-nums">
-                        {secondaryText}
-                      </span>
-                    )
-                  }
-                />
-                <TooltipContent side="top">{resetTooltipText}</TooltipContent>
-              </Tooltip>
-            ) : resetLabel && onResetTimerDisplayModeToggle ? (
-              <button
-                type="button"
-                onClick={onResetTimerDisplayModeToggle}
-                className="text-xs text-muted-foreground tabular-nums hover:text-foreground transition-colors"
-              >
-                {secondaryText}
-              </button>
-            ) : (
-              <span className="text-xs text-muted-foreground">
-                {secondaryText}
-              </span>
-            )
-          )}
-        </div>
-        {(deficitText || runsOutText) && (
-          <div className="flex justify-between items-center mt-0.5">
-            {deficitText && (
-              <span className="text-xs text-muted-foreground tabular-nums">
-                {deficitText}
-              </span>
-            )}
-            {runsOutText && (
-              <span className="text-xs text-muted-foreground tabular-nums ml-auto">
-                {runsOutText}
-              </span>
-            )}
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  return null
 }

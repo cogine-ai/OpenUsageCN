@@ -19,7 +19,7 @@ function plugin(lines: MetricLine[]): PluginDisplayState {
 }
 const pools = [progress("Total usage", 49), progress("Cursor Models", 21), progress("Other Models", 64), progress("Grok Bot", 87, weeklyReset)]
 function row(label: string) {
-  return within(screen.getByText(label).parentElement!)
+  return within(screen.getByText(label).parentElement!.parentElement!)
 }
 
 describe("Cursor Pool Presentation", () => {
@@ -30,9 +30,9 @@ describe("Cursor Pool Presentation", () => {
     vi.setSystemTime(new Date("2026-09-16T00:00:00Z"))
     render(<OverviewPage plugins={[plugin(pools)]} displayMode={displayMode} resetTimerDisplayMode="relative" />)
     expect(screen.queryByText("Total usage")).not.toBeInTheDocument()
-    expect(row("Cursor Models").getByText(displayMode === "used" ? "21%" : "剩余 79%")).toBeInTheDocument()
-    expect(row("Other Models").getByText(displayMode === "used" ? "64%" : "剩余 36%")).toBeInTheDocument()
-    expect(row("Grok Bot").getByText(displayMode === "used" ? "87%" : "剩余 13%")).toBeInTheDocument()
+    expect(row("Cursor Models").getByText(displayMode === "used" ? "已用 21%" : "剩余 79%")).toBeInTheDocument()
+    expect(row("Other Models").getByText(displayMode === "used" ? "已用 64%" : "剩余 36%")).toBeInTheDocument()
+    expect(row("Grok Bot").getByText(displayMode === "used" ? "已用 87%" : "剩余 13%")).toBeInTheDocument()
     expect(row("Cursor Models").getByText(/15 天后重置/)).toBeInTheDocument()
     expect(row("Other Models").getByText(/15 天后重置/)).toBeInTheDocument()
     expect(row("Grok Bot").getByText(/3 天后重置/)).toBeInTheDocument()
@@ -40,7 +40,7 @@ describe("Cursor Pool Presentation", () => {
 
   it("retains monthly Total alongside the pools in detail without changing input labels", () => {
     render(<ProviderDetailPage plugin={plugin(pools)} displayMode="used" resetTimerDisplayMode="relative" />)
-    expect(row("Monthly Total").getByText("49%")).toBeInTheDocument()
+    expect(row("Monthly Total").getByText("已用 49%")).toBeInTheDocument()
     for (const label of ["Cursor Models", "Other Models", "Grok Bot"]) expect(screen.getByText(label)).toBeInTheDocument()
     expect(pools[0].label).toBe("Total usage")
     expect(manifest.lines.find((line) => line.label === "Total usage")?.primaryOrder).toBe(2)
@@ -48,7 +48,7 @@ describe("Cursor Pool Presentation", () => {
 
   it.each(["Total usage", "Credits", "Requests"])("retains legacy or team %s when monthly pools are absent", (label) => {
     render(<OverviewPage plugins={[plugin([progress(label, 42)])]} displayMode="used" resetTimerDisplayMode="relative" />)
-    expect(row(label).getByText("42%")).toBeInTheDocument()
+    expect(row(label).getByText("已用 42%")).toBeInTheDocument()
   })
 
   it("does not let an independent Grok Bot pool hide a team Total", () => {
@@ -66,7 +66,7 @@ describe("Cursor Pool Presentation", () => {
   it("retains a team's dollar budget even when both percentage pools are available", () => {
     const total: MetricLine = { type: "progress", label: "Total usage", used: 25, limit: 100, format: { kind: "dollars" } }
     render(<OverviewPage plugins={[plugin([total, ...pools.slice(1)])]} displayMode="used" resetTimerDisplayMode="relative" />)
-    expect(row("Total usage").getByText("$25")).toBeInTheDocument()
+    expect(row("Total usage").getByText("已用 $25")).toBeInTheDocument()
     expect(row("Total usage").getByText("$100 上限")).toBeInTheDocument()
     for (const label of ["Cursor Models", "Other Models", "Grok Bot"]) expect(screen.getByText(label)).toBeInTheDocument()
   })
