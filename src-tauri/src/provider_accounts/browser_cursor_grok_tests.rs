@@ -98,6 +98,12 @@ fn browser_grok_hides_explicit_ineligible_and_rejects_unknown_or_invalid_data() 
         assert!(decode(json!({"usagePercent":percent,"includedLimitZero":false})).is_err());
     }
     assert!(decode(json!({"usagePercent":20})).is_err());
+    for payload in [json!([]), json!(25), json!(null)] {
+        assert_eq!(
+            decode_grok_usage(&serde_json::to_vec(&payload).unwrap(), now()),
+            Err("invalid usage metadata")
+        );
+    }
 }
 
 #[test]
