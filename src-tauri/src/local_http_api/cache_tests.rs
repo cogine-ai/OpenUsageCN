@@ -455,3 +455,56 @@ fn snapshot_with_progress_line_round_trips() {
     assert_eq!(deserialized.provider_id, "claude");
     assert_eq!(deserialized.lines.len(), 1);
 }
+
+#[test]
+#[serial]
+fn stale_probe_batch_does_not_update_cache_or_record_errors() {
+    use crate::probe_batches::LatestProbeBatches;
+
+    let dir = temp_dir("probe-supersession");
+    std::fs::create_dir_all(&dir).unwrap();
+
+    init(&dir, vec!["codex".to_string()], "test".to_string());
+    cache_successful_output(&make_output("codex", "Initial"), time::OffsetDateTime::now_utc());
+
+    let batches = LatestProbeBatches::default();
+    batches.begin_batch("batch-a", &["codex".to_string()]);
+    batches.begin_batch("batch-b", &["codex".to_string()]);
+
+    let stale_output = make_output("codex", "Stale Batch A");
+    let fresh_output = make_output("codex", "Fresh Batch B");
+
+    let stale_committed = batches.commit_if_latest("batch-a", "codex", || {
+        cache_successful_output(&stale_output, time::OffsetDateTime::now_utc());
+    });
+    assert!(stale_committed.is_none());
+    assert_eq!(
+        snapshot_for_provider("codex")
+            .expect("seeded snapshot")
+            .display_name,
+        "Initial"
+    );
+
+    let fresh_committed = batches.commit_if_latest("batch-b", "codex", || {
+        cache_successful_output(&fresh_output, time::OffsetDateTime::now_utc());
+    });
+    assert!(fresh_committed.is_some());
+    assert_eq!(
+        snapshot_for_provider("codex")
+            .expect("fresh snapshot")
+            .display_name,
+        "Fresh Batch B"
+    );
+
+    batches.begin_batch("batch-c", &["codex".to_string()]);
+    let stale_error = batches.commit_if_latest("batch-a", "codex", || {
+        record_probe_error("codex", "stale error");
+    });
+    assert!(stale_error.is_none());
+    {
+        let state = cache_state().lock().unwrap();
+        assert!(!state.errors.contains_key("codex"));
+    }
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
