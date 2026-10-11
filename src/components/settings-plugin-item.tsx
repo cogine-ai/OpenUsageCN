@@ -63,7 +63,7 @@ export function SortablePluginItem({ plugin, onToggle }: {
   }, [hasConfig, plugin.id])
   const saved = (view?.storedFields?.length ?? 0) > 0 || Object.values(view?.values ?? {}).some((value) => value.type === "secret" && value.configured)
   const detected = plugin.config?.fields.some((field) => field.type === "secret" && view?.environment?.[field.id]?.configured)
-  const label = failed ? "无法读取" : saved ? "已保存" : detected ? "已发现凭据" : "连接"
+  const label = failed ? "无法读取" : saved ? "已保存" : detected ? "已发现凭据" : view?.environmentError ? "环境来源未确认" : "连接"
   return <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className={cn("rounded-md border border-transparent bg-card", isDragging && "border-border opacity-50")}>
     <div className="flex min-h-10 items-center gap-3 px-3 py-2">
       <DragHandle attributes={attributes} listeners={listeners} />

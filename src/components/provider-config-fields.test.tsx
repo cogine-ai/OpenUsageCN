@@ -360,4 +360,25 @@ describe("ProviderConfigFields", () => {
     expect(providerConfigMocks.saveProviderConfig).toHaveBeenCalledWith("provider", {source:"api-key",apiKey:""})
   })
 
+  it("retains unsaved input for another method after saving the selected method", async () => {
+    const source: PluginConfigField = { id: "source", type: "select", label: "Source", options: [{ value: "api-key", label: "API Key" }, { value: "manual-cookie", label: "Cookie" }], default: "api-key" }
+    const api: PluginConfigField = { ...secretField, visibleWhen: { field: "source", values: ["api-key"] } }
+    const cookie: PluginConfigField = { id: "cookie", type: "secret", label: "Cookie", options: [], visibleWhen: { field: "source", values: ["manual-cookie"] } }
+    render(<ProviderConfigFields pluginId="provider" fields={[source, api, cookie]} onSaved={vi.fn().mockResolvedValue(undefined)} />)
+
+    await screen.findByLabelText("API Key")
+    await userEvent.click(screen.getByRole("radio", { name: "Cookie" }))
+    await userEvent.type(screen.getByLabelText("Cookie"), "unsaved-cookie")
+    await userEvent.click(screen.getByRole("radio", { name: "API Key" }))
+    await userEvent.type(screen.getByLabelText("API Key"), "selected-key")
+    await userEvent.click(screen.getByRole("button", { name: "保存并检查" }))
+
+    expect(await screen.findByText("连接成功")).toBeVisible()
+    expect(providerConfigMocks.saveProviderConfig).toHaveBeenCalledExactlyOnceWith("provider", { source: "api-key", apiKey: "selected-key" })
+    expect(screen.getByLabelText("API Key")).toHaveValue("")
+    await userEvent.click(screen.getByRole("radio", { name: "Cookie" }))
+    expect(screen.getByLabelText("Cookie")).toHaveValue("unsaved-cookie")
+    expect(screen.queryByText("连接成功")).toBeNull()
+  })
+
 })

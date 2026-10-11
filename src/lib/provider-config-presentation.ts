@@ -15,6 +15,7 @@ export function effectiveSelections(fields: PluginConfigField[], draft: Record<s
     if (value !== field.autoValue) return [field.id, value]
     const env = view?.environment?.[field.id]?.value
     if (env && field.options.some((option) => option.value === env && option.value !== field.autoValue)) return [field.id, env]
+    if (field.environmentVariables?.some((name) => view?.environmentUnresolved?.includes(name))) return [field.id, ""]
     if (field.environmentVariables?.length && view?.environment?.[field.id]?.configured) return [field.id, ""]
     const credential = field.environmentVariables?.length ? undefined : fields.find((candidate) => {
       if (candidate.visibleWhen?.field !== field.id) return false

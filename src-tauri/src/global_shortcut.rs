@@ -1,5 +1,8 @@
 use serde::Serialize;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{
+    Arc, Mutex, OnceLock,
+    atomic::{AtomicBool, Ordering},
+};
 
 #[derive(Clone, Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -14,7 +17,21 @@ struct ShortcutState {
     saved: Option<String>,
     active: Option<String>,
     error: Option<String>,
-    recording: bool,
+    recording: Arc<AtomicBool>,
+    active_callback: Option<ShortcutCallback>,
+    restart_required: bool,
+}
+
+#[derive(Clone)]
+struct ShortcutCallback {
+    active: Arc<AtomicBool>,
+    recording: Arc<AtomicBool>,
+}
+
+impl ShortcutCallback {
+    fn enabled(&self) -> bool {
+        self.active.load(Ordering::Acquire) && !self.recording.load(Ordering::Acquire)
+    }
 }
 
 impl ShortcutState {
@@ -25,6 +42,25 @@ impl ShortcutState {
             error: self.error.clone(),
         }
     }
+
+    fn candidate_callback(&self) -> ShortcutCallback {
+        ShortcutCallback {
+            active: Arc::new(AtomicBool::new(false)),
+            recording: self.recording.clone(),
+        }
+    }
+
+    fn recovery_error(&mut self, unregister_failed: bool) -> String {
+        self.restart_required |= unregister_failed;
+        let message = if self.restart_required {
+            "快捷键未能完全恢复，请重启应用后重新设置。"
+        } else {
+            "快捷键保存状态无法确认，请重新设置。"
+        }
+        .to_string();
+        self.error = Some(message.clone());
+        message
+    }
 }
 
 fn state() -> &'static Mutex<ShortcutState> {
@@ -33,19 +69,26 @@ fn state() -> &'static Mutex<ShortcutState> {
 }
 
 trait ShortcutBackend {
-    fn register(&mut self, shortcut: &str) -> Result<(), String>;
+    fn register(&mut self, shortcut: &str, callback: ShortcutCallback) -> Result<(), String>;
     fn unregister(&mut self, shortcut: &str) -> Result<(), String>;
     fn save(&mut self, shortcut: Option<&str>) -> Result<(), String>;
+}
+
+struct RollbackFailure {
+    message: String,
+    unregister_failed: bool,
 }
 
 fn rollback(
     backend: &mut impl ShortcutBackend,
     previous: Option<&str>,
     candidate: Option<&str>,
-) -> Result<(), String> {
+) -> Result<(), RollbackFailure> {
     let mut errors = Vec::new();
+    let mut unregister_failed = false;
     if let Some(candidate) = candidate {
         if let Err(error) = backend.unregister(candidate) {
+            unregister_failed = true;
             errors.push(error);
         }
     }
@@ -55,7 +98,10 @@ fn rollback(
     if errors.is_empty() {
         Ok(())
     } else {
-        Err(errors.join("; "))
+        Err(RollbackFailure {
+            message: errors.join("; "),
+            unregister_failed,
+        })
     }
 }
 
@@ -64,25 +110,33 @@ fn apply(
     backend: &mut impl ShortcutBackend,
     candidate: Option<String>,
 ) -> Result<ShortcutStatus, String> {
+    if state.restart_required {
+        log::error!("Refusing shortcut update after a failed native unregister; restart required");
+        return Err(state.recovery_error(true));
+    }
     if state.saved == candidate && state.active == candidate && state.error.is_none() {
         return Ok(state.status());
     }
     let newly_registered = candidate
         .as_deref()
         .filter(|value| Some(*value) != state.active.as_deref());
+    let candidate_callback = newly_registered.map(|_| state.candidate_callback());
     if let Some(value) = newly_registered {
-        backend.register(value).map_err(|error| {
-            log::error!("Failed to register candidate shortcut: {error}");
-            "此组合无法使用，请试另一个快捷键。".to_string()
-        })?;
+        backend
+            .register(value, candidate_callback.as_ref().unwrap().clone())
+            .map_err(|error| {
+                log::error!("Failed to register candidate shortcut: {error}");
+                "此组合无法使用，请试另一个快捷键。".to_string()
+            })?;
     }
     if let Err(error) = backend.save(candidate.as_deref()) {
         log::error!("Failed to persist candidate shortcut: {error}");
         if let Err(rollback_error) = rollback(backend, state.saved.as_deref(), newly_registered) {
-            log::error!("Failed to roll back shortcut persistence: {rollback_error}");
-            let message = "快捷键保存状态无法确认，请重新设置。".to_string();
-            state.error = Some(message.clone());
-            return Err(message);
+            log::error!(
+                "Failed to roll back shortcut persistence: {}",
+                rollback_error.message
+            );
+            return Err(state.recovery_error(rollback_error.unregister_failed));
         }
         return Err("无法保存快捷键，请重试。".into());
     }
@@ -95,12 +149,27 @@ fn apply(
             log::error!("Failed to unregister previous shortcut: {error}");
             if let Err(rollback_error) = rollback(backend, state.saved.as_deref(), newly_registered)
             {
-                log::error!("Failed to roll back shortcut replacement: {rollback_error}");
-                let message = "快捷键保存状态无法确认，请重新设置。".to_string();
-                state.error = Some(message.clone());
-                return Err(message);
+                log::error!(
+                    "Failed to roll back shortcut replacement: {}",
+                    rollback_error.message
+                );
             }
-            return Err("无法替换快捷键，请重试。".into());
+            // macOS removes its native handle before reporting unregister errors.
+            // A retry can return Ok without releasing the still-held OS chord.
+            if let Some(previous) = state.active_callback.take() {
+                previous.active.store(false, Ordering::Release);
+            }
+            state.active = None;
+            return Err(state.recovery_error(true));
+        }
+    }
+    if state.active != candidate {
+        if let Some(previous) = state.active_callback.take() {
+            previous.active.store(false, Ordering::Release);
+        }
+        if let Some(callback) = candidate_callback {
+            callback.active.store(true, Ordering::Release);
+            state.active_callback = Some(callback);
         }
     }
     state.saved = candidate.clone();
@@ -116,10 +185,17 @@ fn initialize_state(
 ) {
     state.saved = saved.clone();
     state.active = None;
+    state.active_callback = None;
     state.error = None;
+    state.restart_required = false;
     if let Some(shortcut) = saved {
-        match backend.register(&shortcut) {
-            Ok(()) => state.active = Some(shortcut),
+        let callback = state.candidate_callback();
+        match backend.register(&shortcut, callback.clone()) {
+            Ok(()) => {
+                callback.active.store(true, Ordering::Release);
+                state.active_callback = Some(callback);
+                state.active = Some(shortcut);
+            }
             Err(error) => {
                 log::error!("Failed to register initial shortcut: {error}");
                 state.error = Some("快捷键未生效，请重新设置。".into());
@@ -133,26 +209,17 @@ struct NativeBackend<'a>(&'a tauri::AppHandle);
 
 #[cfg(target_os = "macos")]
 impl ShortcutBackend for NativeBackend<'_> {
-    fn register(&mut self, shortcut: &str) -> Result<(), String> {
+    fn register(&mut self, shortcut: &str, callback: ShortcutCallback) -> Result<(), String> {
         use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState as EventState};
-        let expected = shortcut.to_string();
         self.0
             .global_shortcut()
             .on_shortcut(shortcut, move |app, _, event| {
                 if event.state != EventState::Pressed {
                     return;
                 }
-                let enabled = match state().try_lock() {
-                    Ok(current) => {
-                        !current.recording && current.active.as_deref() == Some(expected.as_str())
-                    }
-                    Err(std::sync::TryLockError::WouldBlock) => false,
-                    Err(error) => {
-                        log::error!("Failed to read shortcut registration state: {error}");
-                        false
-                    }
-                };
-                if enabled {
+                // Registration and persistence hold the transaction mutex and
+                // may need the main thread. The native callback must never lock it.
+                if callback.enabled() {
                     crate::panel::toggle_panel(app);
                 }
             })
@@ -205,6 +272,27 @@ fn normalized_shortcut(value: &str) -> Result<String, String> {
 }
 
 #[cfg(target_os = "macos")]
+fn initialize_saved_shortcut(
+    current: &mut ShortcutState,
+    backend: &mut impl ShortcutBackend,
+    saved: Option<String>,
+) {
+    match saved
+        .as_deref()
+        .map(|value| normalized_shortcut(value.trim()))
+        .transpose()
+    {
+        Ok(value) => initialize_state(current, backend, value),
+        Err(error) => {
+            log::error!("Failed to parse initial shortcut setting: {error}");
+            current.saved = saved;
+            current.active = None;
+            current.error = Some("快捷键格式无效，尚未生效，请重新设置。".into());
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
 pub fn initialize(app: &tauri::AppHandle) {
     use tauri_plugin_store::StoreExt;
     let mut current = match state().lock() {
@@ -217,16 +305,14 @@ pub fn initialize(app: &tauri::AppHandle) {
     let saved = app
         .store("settings.json")
         .map_err(|error| error.to_string())
-        .and_then(|store| {
+        .map(|store| {
             store
                 .get("globalShortcut")
                 .and_then(|value| value.as_str().map(str::to_string))
                 .filter(|value| !value.trim().is_empty())
-                .map(|value| normalized_shortcut(value.trim()))
-                .transpose()
         });
     match saved {
-        Ok(value) => initialize_state(&mut current, &mut NativeBackend(app), value),
+        Ok(value) => initialize_saved_shortcut(&mut current, &mut NativeBackend(app), value),
         Err(error) => {
             log::error!("Failed to load initial shortcut settings: {error}");
             current.error = Some("无法读取快捷键设置，请重新设置。".into());
@@ -270,11 +356,11 @@ pub fn update_global_shortcut(
 #[tauri::command]
 pub async fn set_global_shortcut_recording(recording: bool) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let mut current = state().lock().map_err(|error| {
+        let current = state().lock().map_err(|error| {
             log::error!("Failed to update shortcut recorder state: {error}");
             "无法更新快捷键录制状态。".to_string()
         })?;
-        current.recording = recording;
+        current.recording.store(recording, Ordering::Release);
         Ok(())
     })
     .await

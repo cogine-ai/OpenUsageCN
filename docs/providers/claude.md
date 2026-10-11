@@ -177,4 +177,6 @@ Browser connection starts with an explicit browser and profile choice. It can en
 
 Not Logged In, Session Expired, Token Expired and Keychain refresh errors open the local Claude Code login steps directly. Browser connection cannot repair these local login failures.
 
+If the pinned account is no longer active, **跟随本机** remains available to return to the local default. Turning it off requires an active account to pin.
+
 Candidate display identity comes from the verified OAuth identity and stays in memory. A candidate lasts ten minutes and is consumed when adding starts. Failed or expired candidates require another check of the same source. Email and name are redacted from logs and are not added to the persisted registry.

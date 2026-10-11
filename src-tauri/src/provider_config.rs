@@ -27,6 +27,10 @@ pub struct ProviderConfigView {
     pub values: HashMap<String, ProviderConfigViewValue>,
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     pub environment: HashMap<String, ProviderConfigEnvironment>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub environment_error: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub environment_unresolved: Vec<String>,
     pub stored_fields: Vec<String>,
 }
 
@@ -283,6 +287,8 @@ pub fn view_for_plugin(plugin_id: &str, fields: &[PluginConfigField]) -> Provide
     ProviderConfigView {
         values,
         environment: HashMap::new(),
+        environment_error: None,
+        environment_unresolved: vec![],
         stored_fields,
     }
 }

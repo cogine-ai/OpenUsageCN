@@ -62,6 +62,40 @@ describe("ProviderAccountControls quota refresh", () => {
     tauri.listen.mockResolvedValue(vi.fn())
   })
 
+  it.each(["cursor", "claude"])("returns %s to the local default after its pinned account becomes inactive", async (providerId) => {
+    const initialView = {
+      ...baseView(), providerId, activeAccountId: null,
+      accounts: [account("account-2", "Personal", false)],
+    }
+    const autoView = {
+      ...baseView(), providerId, selection: { mode: "auto" as const }, activeAccountId: "account-2",
+      accounts: [account("account-2", "Personal", true)],
+    }
+    tauri.invoke.mockResolvedValueOnce(initialView).mockResolvedValueOnce(receipt(autoView))
+    const onAccountChangeRefresh = vi.fn()
+    testingRender(<ProviderAccountControls standalone providerId={providerId} onAccountChangeRefresh={onAccountChangeRefresh} />)
+    const followLocal = await screen.findByRole("switch", { name: "跟随本机" })
+    expect(followLocal).toBeEnabled()
+    expect(followLocal).not.toBeChecked()
+    await userEvent.setup().click(followLocal)
+    expect(tauri.invoke).toHaveBeenCalledWith("perform_provider_account_operation", {
+      providerId, operation: { kind: "followDefaultConnection" },
+    })
+    await waitFor(() => expect(followLocal).toBeChecked())
+    expect(screen.getByRole("radio", { name: /Personal/i })).toBeChecked()
+    expect(onAccountChangeRefresh).toHaveBeenCalledOnce()
+  })
+
+  it("cannot pin an empty local default", async () => {
+    tauri.invoke.mockResolvedValue({ ...baseView(), selection: { mode: "auto" }, activeAccountId: null, accounts: [] })
+    testingRender(<ProviderAccountControls standalone providerId="cursor" />)
+    const followLocal = await screen.findByRole("switch", { name: "跟随本机" })
+    expect(followLocal).toBeChecked()
+    expect(followLocal).toBeDisabled()
+    await userEvent.setup().click(followLocal)
+    expect(tauri.invoke).not.toHaveBeenCalledWith("perform_provider_account_operation", expect.anything())
+  })
+
   it("refreshes quota after selecting an account and returning to Auto", async () => {
     const initialView = baseView()
     const selectedView = {

@@ -7,22 +7,39 @@ pub fn view_for_plugin(
     plugin_id: &str,
     fields: &[PluginConfigField],
 ) -> Result<ProviderConfigView, String> {
-    let mut view = crate::provider_config::view_for_plugin(plugin_id, fields);
+    let view = crate::provider_config::view_for_plugin(plugin_id, fields);
     let names = environment_names(plugin_id, fields)?;
     if names.is_empty() {
         return Ok(view);
     }
     let names: Vec<&str> = names.iter().map(String::as_str).collect();
     let resolved = host_api::resolve_env_values(&names);
+    Ok(with_environment(view, plugin_id, fields, &resolved))
+}
+
+fn with_environment(
+    mut view: ProviderConfigView,
+    plugin_id: &str,
+    fields: &[PluginConfigField],
+    resolved: &host_api::ResolvedEnvValues,
+) -> ProviderConfigView {
     decorate(&mut view, plugin_id, fields, &resolved.values);
+    // A failed region lookup cannot establish which Moonshot key is active.
+    if plugin_id == "moonshot" && resolved.unresolved.contains("MOONSHOT_REGION") {
+        for field in ["apiKeyIntl", "apiKeyCn"] {
+            view.environment.remove(field);
+        }
+    }
     if !resolved.unresolved.is_empty() {
         log::error!(
             "Unable to confirm provider environment sources for {plugin_id}: {:?}",
             resolved.unresolved
         );
-        return Err("无法确认环境变量配置，请检查终端设置后重试。".into());
+        view.environment_error = Some("无法确认环境变量配置，请检查终端设置后重试。".into());
+        view.environment_unresolved = resolved.unresolved.iter().cloned().collect();
+        view.environment_unresolved.sort();
     }
-    Ok(view)
+    view
 }
 
 fn environment_names(plugin_id: &str, fields: &[PluginConfigField]) -> Result<Vec<String>, String> {

@@ -77,7 +77,12 @@ export function ProviderConfigFields({ pluginId, fields, initialView, focusField
       if (mounted.current) { setPersisted("saved"); setPhase("checking") }
       // Start verification immediately after persistence, even if the page closes.
       const [next, result] = await Promise.allSettled([getProviderConfig(pluginId), onSaved(pluginId)])
-      if (mounted.current && next.status === "fulfilled") { setView(next.value); setDraft(configDraft(fields, next.value)) }
+      if (mounted.current && next.status === "fulfilled") {
+        setView(next.value)
+        const refreshed = configDraft(fields, next.value)
+        // Refresh submitted fields while retaining unsaved input for other methods.
+        setDraft((current) => ({ ...current, ...Object.fromEntries(visible.map((field) => [field.id, refreshed[field.id]])) }))
+      }
       if (result.status === "rejected") throw result.reason
       if (next.status === "rejected") throw next.reason
       if (mounted.current) setPhase("connected")
@@ -113,6 +118,7 @@ export function ProviderConfigFields({ pluginId, fields, initialView, focusField
 
   return <div className="space-y-5 pb-3">
     {phase === "loading" && <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><LoaderCircle className="size-4 animate-spin" />正在读取连接</div>}
+    {view?.environmentError && <p role="alert" className="text-xs text-destructive">{view.environmentError}</p>}
     {visible.map((field) => {
       const inputId = `${pluginId}-${field.id}`
       const saved = view?.values[field.id]
@@ -136,7 +142,16 @@ export function ProviderConfigFields({ pluginId, fields, initialView, focusField
       <button type="button" aria-expanded={advanced} onClick={() => setAdvanced(!advanced)} className="flex w-full items-center justify-between text-xs text-muted-foreground">高级设置<ChevronDown className={cn("size-4 transition-transform", advanced && "rotate-180")} /></button>
       {advanced && <div className="mt-3 space-y-3 text-xs text-muted-foreground">
         {fields.filter((field) => field.autoValue).map((field) => <label key={field.id} className="flex items-center gap-2"><input type="checkbox" checked={draft[field.id] === field.autoValue} disabled={busy} onChange={(event) => edit(field.id, event.target.checked ? field.autoValue! : selections[field.id])} />自动读取{field.label}</label>)}
-        {visible.filter((field) => field.type === "secret").map((field) => <div key={field.id} className="flex items-center justify-between gap-2"><span>{field.label}</span><span>{view?.values[field.id]?.type === "secret" && (view.values[field.id] as { configured: boolean }).configured ? "已保存" : view?.environment?.[field.id]?.configured ? view.environment[field.id].name : field.environmentVariables?.length ? "未发现凭据" : "尚未检查外部来源"}</span></div>)}
+        {visible.filter((field) => field.type === "secret").map((field) => {
+          const saved = view?.values[field.id]
+          const selector = fields.find((candidate) => candidate.id === field.visibleWhen?.field)
+          const unknownSource = Boolean(field.environmentVariables?.length &&
+            [...field.environmentVariables, ...(selector?.environmentVariables ?? [])].some((name) => view?.environmentUnresolved?.includes(name)))
+          const sourceStatus = saved?.type === "secret" && saved.configured ? "已保存"
+            : view?.environment?.[field.id]?.configured ? view.environment[field.id].name : unknownSource ? "环境来源未确认"
+              : field.environmentVariables?.length ? "未发现凭据" : "尚未检查外部来源"
+          return <div key={field.id} className="flex items-center justify-between gap-2"><span>{field.label}</span><span>{sourceStatus}</span></div>
+        })}
         {visible.filter((field) => field.help).map((field) => <details key={field.id}><summary className="cursor-pointer">{field.label}帮助</summary><p className="mt-1 select-text leading-relaxed">{field.help}</p></details>)}
       </div>}
     </div>}

@@ -376,6 +376,10 @@ fn terminal_env_cache() -> &'static Mutex<HashMap<String, Option<String>>> {
     CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+#[cfg(test)]
+#[path = "host_api/env_cache_tests.rs"]
+mod env_cache_tests;
+
 fn shell_from_env() -> Option<String> {
     let shell = std::env::var("SHELL").ok()?;
     let trimmed = shell.trim();

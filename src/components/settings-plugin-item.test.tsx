@@ -81,4 +81,22 @@ describe("SortablePluginItem", () => {
     expect(consoleError).toHaveBeenCalled()
     consoleError.mockRestore()
   })
+
+  it("preserves a saved connection summary when only environment inspection fails", async () => {
+    providerConfigMocks.getProviderConfig.mockResolvedValue({ values: { apiKey: { type: "secret", configured: true } },
+      environmentError: "无法确认环境变量配置，请检查终端设置后重试。", environmentUnresolved: ["API_KEY"] })
+    renderItem({ id: "saved", name: "Saved", enabled: true, config: secretConfig })
+    expect(await screen.findByText("已保存")).toBeVisible()
+    expect(screen.queryByText("无法读取")).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "连接 Saved" }))
+    expect(useAppUiStore.getState().connection).toEqual({ providerId: "saved", kind: "config" })
+  })
+
+  it("shows an unknown source summary without claiming that no credential exists", async () => {
+    providerConfigMocks.getProviderConfig.mockResolvedValue({ values: {}, environmentError: "无法确认环境变量配置，请检查终端设置后重试。",
+      environmentUnresolved: ["API_KEY"] })
+    renderItem({ id: "unknown", name: "Unknown", enabled: true, config: secretConfig })
+    expect(await screen.findByText("环境来源未确认")).toBeVisible()
+    expect(screen.queryByText("无法读取")).not.toBeInTheDocument()
+  })
 })

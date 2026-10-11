@@ -9,6 +9,8 @@ fn empty_view() -> ProviderConfigView {
     ProviderConfigView {
         values: HashMap::new(),
         environment: HashMap::new(),
+        environment_error: None,
+        environment_unresolved: vec![],
         stored_fields: vec![],
     }
 }
@@ -184,4 +186,71 @@ fn moonshot_api_key_presence_belongs_only_to_the_environment_region() {
     );
     assert!(!view.environment.contains_key("apiKeyCn"));
     assert!(!view.environment.contains_key("apiKeyIntl"));
+}
+
+#[test]
+fn unresolved_environment_keeps_saved_values_and_known_sources_with_an_observable_error() {
+    let fields = config_fields(json!([
+        {"id":"apiKey","type":"secret","label":"Key","environmentVariables":["ALIBABA_CODING_PLAN_API_KEY"]},
+        {"id":"cookieHeader","type":"secret","label":"Cookie","environmentVariables":["ALIBABA_CODING_PLAN_COOKIE"]}
+    ]));
+    let mut saved = empty_view();
+    saved.values.insert(
+        "apiKey".into(),
+        crate::provider_config::ProviderConfigViewValue::Secret {
+            configured: true,
+            hint: Some("...1234".into()),
+        },
+    );
+    saved.stored_fields = vec!["apiKey".into()];
+    let resolved = host_api::ResolvedEnvValues {
+        values: env(&[(
+            "ALIBABA_CODING_PLAN_API_KEY",
+            Some("known-env-secret-7468153"),
+        )]),
+        unresolved: HashSet::from(["ALIBABA_CODING_PLAN_COOKIE".into()]),
+    };
+    let view = with_environment(saved, "alibaba-coding-plan", &fields, &resolved);
+    let json = serde_json::to_value(&view).unwrap();
+    assert_eq!(json["values"]["apiKey"]["configured"], true);
+    assert_eq!(json["values"]["apiKey"]["hint"], "...1234");
+    assert_eq!(json["storedFields"], json!(["apiKey"]));
+    assert_eq!(json["environment"]["apiKey"]["configured"], true);
+    assert_eq!(
+        json["environmentError"],
+        "无法确认环境变量配置，请检查终端设置后重试。"
+    );
+    assert!(!json.to_string().contains("known-env-secret-7468153"));
+    assert!(!view.environment.contains_key("cookieHeader"));
+    assert_eq!(
+        json["environmentUnresolved"],
+        json!(["ALIBABA_CODING_PLAN_COOKIE"])
+    );
+}
+
+#[test]
+fn confirmed_absence_has_no_error_but_an_unresolved_region_does_not_choose_a_key() {
+    let fields = moonshot_fields();
+    let absent = host_api::ResolvedEnvValues {
+        values: env(&[("MOONSHOT_REGION", None), ("MOONSHOT_API_KEY", None)]),
+        unresolved: HashSet::new(),
+    };
+    let view = with_environment(empty_view(), "moonshot", &fields, &absent);
+    assert!(view.environment_error.is_none());
+    assert!(
+        serde_json::to_value(view)
+            .unwrap()
+            .get("environmentError")
+            .is_none()
+    );
+    let unknown_region = host_api::ResolvedEnvValues {
+        values: env(&[("MOONSHOT_API_KEY", Some("known-env-secret-7468153"))]),
+        unresolved: HashSet::from(["MOONSHOT_REGION".into()]),
+    };
+    let view = with_environment(empty_view(), "moonshot", &fields, &unknown_region);
+    assert!(view.environment_error.is_some());
+    assert!(!view.environment.contains_key("apiKeyIntl"));
+    assert!(!view.environment.contains_key("apiKeyCn"));
+    assert!(!view.environment.contains_key("region"));
+    assert_eq!(view.environment_unresolved, vec!["MOONSHOT_REGION"]);
 }

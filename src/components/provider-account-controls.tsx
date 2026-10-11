@@ -181,7 +181,7 @@ export function ProviderAccountControls({
               <div className="mb-3 flex items-center justify-between rounded-lg bg-muted/50 p-3 text-sm">
                 <span className="font-medium">跟随本机</span>
                 <button type="button" role="switch" aria-label="跟随本机"
-                  aria-checked={view.selection.mode === "auto"} disabled={busy || !view.activeAccountId}
+                  aria-checked={view.selection.mode === "auto"} disabled={busy || (view.selection.mode === "auto" && !view.activeAccountId)}
                   onClick={() => {
                     const previousAccountId = view.activeAccountId
                     const operation = view.selection.mode === "auto" && previousAccountId

@@ -117,4 +117,19 @@ describe("Provider Config Presentation", () => {
       environment: { region: { name: "MOONSHOT_REGION", configured: true, value: "china" } } }
     expect(selectedFields(regionFields, view)).toEqual(["region", "apiKeyIntl"])
   })
+
+  it("does not treat an unconfirmed automatic region as the international default", () => {
+    const view: ProviderConfigView = { values: { apiKeyIntl: { type: "secret", configured: true } },
+      environmentError: "无法确认环境变量配置，请检查终端设置后重试。", environmentUnresolved: ["MOONSHOT_REGION"] }
+    const draft = configDraft(regionFields, view)
+    expect(effectiveSelections(regionFields, draft, view).region).toBe("")
+    expect(selectedFields(regionFields, view)).toEqual(["region"])
+    expect(selectedFields(regionFields, view, { ...draft, region: "international" })).toEqual(["region", "apiKeyIntl"])
+  })
+
+  it("keeps a confirmed absent region default while another source is unconfirmed", () => {
+    const view: ProviderConfigView = { values: {}, environmentError: "无法确认环境变量配置，请检查终端设置后重试。",
+      environmentUnresolved: ["MOONSHOT_API_KEY"] }
+    expect(effectiveSelections(regionFields, configDraft(regionFields, view), view).region).toBe("international")
+  })
 })

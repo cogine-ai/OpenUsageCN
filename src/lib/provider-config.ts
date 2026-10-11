@@ -10,6 +10,8 @@ export type ProviderConfigView = {
   values: Record<string, ProviderConfigViewValue>
   storedFields?: string[]
   environment?: Record<string, { name: string; configured: boolean; value?: string }>
+  environmentError?: string
+  environmentUnresolved?: string[]
 }
 
 export type ProviderConfigInput = Record<string, string | boolean>

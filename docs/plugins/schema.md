@@ -168,7 +168,7 @@ Field properties:
 | `default`     | any    | No       | Default value used when no saved value exists. |
 | `defaultSource` | boolean | No    | Declares a possible plugin-managed fallback; it is not evidence that credentials were detected. |
 | `required` | boolean | No | Defaults to `false`; only for `secret` and `text` fields. A visible required field needs a new value, saved value, or confirmed environment source before the form can submit. |
-| `visibleWhen` | object | No | `{ "field": "source", "values": ["api-key"] }`; edit this field only for those values of a select field. Hidden saved values remain intact. |
+| `visibleWhen` | object | No | `{ "field": "source", "values": ["api-key"] }`; edit this field only for those values of a select field. Hidden saved values remain intact. Unsaved input for another method stays in the open form when the selected method is saved; it is not saved until that method is selected. |
 | `environmentVariables` | string[] | No | Declared sources from the provider's existing environment whitelist. The configuration view reports actual presence, never a secret value. |
 | `autoValue` | string | No | A select option that delegates selection to the plugin. It must be a declared option. |
 
