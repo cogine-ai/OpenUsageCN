@@ -221,11 +221,14 @@
       var state = states[i]
       var untilMs = null
 
-      if (state.quota.until) {
-        untilMs = ctx.util.parseDateMs(state.quota.until)
-      }
-      if (untilMs === null && state.nextRefill && state.nextRefill.next) {
+      // Prefer nextRefill.next (actual refill/quota window). quota.until is often
+      // the shared subscription end date across IDE versions, so ranking by it
+      // alone ties stale exhausted caches with a freshly refilled IDE.
+      if (state.nextRefill && state.nextRefill.next) {
         untilMs = ctx.util.parseDateMs(state.nextRefill.next)
+      }
+      if (untilMs === null && state.quota.until) {
+        untilMs = ctx.util.parseDateMs(state.quota.until)
       }
       if (untilMs === null) untilMs = -Infinity
 
