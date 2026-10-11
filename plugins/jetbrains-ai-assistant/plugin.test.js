@@ -284,6 +284,39 @@ describe("jetbrains-ai-assistant plugin", () => {
     expect(quota && quota.used).toBe(50)
   })
 
+  it("discovers Android Studio quota under the Google config root", async () => {
+    const ctx = makeCtx()
+    ctx.app.platform = "macos"
+    const androidStudioPath =
+      "~/Library/Application Support/Google/AndroidStudio2025.1.1/options/AIAssistantQuotaManager2.xml"
+    ctx.host.fs.writeText(
+      androidStudioPath,
+      makeQuotaXml({
+        quotaInfo: {
+          type: "Available",
+          current: "40",
+          maximum: "100",
+          available: "60",
+          until: "2099-03-01T00:00:00Z",
+        },
+        nextRefill: {
+          type: "Known",
+          next: "2099-02-01T00:00:00Z",
+          tariff: { amount: "100", duration: "PT720H" },
+        },
+      })
+    )
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    const quota = result.lines.find((line) => line.label === "Quota")
+    const remaining = result.lines.find((line) => line.label === "Remaining")
+
+    expect(quota && quota.used).toBe(40)
+    expect(remaining && remaining.value).toBe("60")
+    expect(ctx.host.log.info).toHaveBeenCalledWith("quota loaded from " + androidStudioPath)
+  })
+
   it("continues gracefully when listDir throws", async () => {
     const ctx = makeCtx()
     ctx.host.fs.writeText(DARWIN_PATH, makeQuotaXml({
