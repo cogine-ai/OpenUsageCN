@@ -49,6 +49,7 @@ export class ProbeBatchStartError extends Error {
   readonly cause: unknown
   readonly pluginIds: string[]
 
+  /** Retain the native failure and only the providers whose current check could not start. */
   constructor(cause: unknown, pluginIds: string[]) {
     super(cause instanceof Error ? cause.message : String(cause))
     this.name = "ProbeBatchStartError"
@@ -57,6 +58,7 @@ export class ProbeBatchStartError extends Error {
   }
 }
 
+/** Limit error state updates to affected providers when the start failure carries ownership details. */
 export function getProbeBatchStartFailedPluginIds(
   error: unknown,
   fallback: string[]
@@ -69,6 +71,7 @@ type UseProbeEventsOptions = {
   onBatchComplete: () => void
 }
 
+/** Deliver only each provider's latest check and cancel verification when its ownership changes. */
 export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOptions) {
   const activeBatchIds = useRef<Set<string>>(new Set())
   const latestBatchByProvider = useRef<Map<string, ProbeBatchMeta>>(new Map())
@@ -91,6 +94,7 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
 
     // Keep setup failures observable even if no probe has yet awaited readiness.
     void listenersReadyRef.current.catch(() => {})
+    /** Install result and completion listeners before allowing a native batch to start. */
     const setup = async () => {
       const resultUnlisten = await listen<ProbeResult>("probe:result", (event) => {
         const latestBatch = latestBatchByProvider.current.get(
@@ -165,6 +169,7 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
     }
   }, [onBatchComplete, onResult])
 
+  /** Claim ownership immediately, then serialize native starts for overlapping providers. */
   const startBatch = useCallback(async (
     pluginIds: string[],
     options: StartBatchOptions = {}
@@ -266,13 +271,16 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
     }
   }, [])
 
+  /** Await one manual connection check, rejecting interruption, start failure, or a queue timeout. */
   const verifyPlugin = useCallback((pluginId: string) => new Promise<PluginOutput>((resolve, reject) => {
     // A native probe has a 30-second limit. Allow time for the four-worker queue.
     const timer = setTimeout(() => {
       console.error("Provider connection check timed out:", pluginId)
       reject(new Error("连接检查超时，请重试。"))
     }, 120_000)
+    /** Release the verification timer before returning the current provider's result. */
     const finish = (output: PluginOutput) => { clearTimeout(timer); resolve(output) }
+    /** Release the verification timer before propagating cancellation or native failure. */
     const interrupt = (error: Error) => { clearTimeout(timer); reject(error) }
     void startBatch([pluginId], { manual: true, onResult: finish, onInterrupted: interrupt }).catch(interrupt)
   }), [startBatch])

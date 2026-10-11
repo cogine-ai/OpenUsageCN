@@ -10,6 +10,7 @@ export type PluginRecovery = {
   diagnostic: string
 }
 
+/** Hide credential-bearing parts before exposing diagnostic details in the interface. */
 function safeDiagnostic(message: string): string {
   return message
     .replace(/https?:\/\/[^\s<>"`]+/gi, (value) => {
@@ -29,6 +30,7 @@ function safeDiagnostic(message: string): string {
     .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[已隐藏]")
 }
 
+/** Use known provider login steps; arbitrary error text cannot supply an executable command. */
 function loginAdvice(providerId?: string): string {
   switch (providerId) {
     case "claude": return "请打开 Claude Code 完成登录，然后重试。"
@@ -40,8 +42,10 @@ function loginAdvice(providerId?: string): string {
   }
 }
 
+/** Match actionable failures to supported recovery routes while preserving sanitized diagnostics. */
 export function getPluginRecovery(message: string, providerId?: string, capabilities?: { config?: { fields: { id: string; type: string; visibleWhen?: {field:string;values:string[]} }[] }; accountSupport?: unknown }): PluginRecovery {
   const diagnostic = safeDiagnostic(message)
+  /** Choose an available recovery entry, keeping Claude local credential failures on local login. */
   const recovery = (kind: RecoveryKind, title: string, advice: string): PluginRecovery => {
     const localReadFailure = /credentials could not be read|(?:file|keychain|local).*permission|EACCES/i.test(message)
     const claudeLocalLogin = providerId === "claude" && /not logged in|(?:session|token) expired|Claude Keychain credentials must be refreshed by Claude Code/i.test(message)

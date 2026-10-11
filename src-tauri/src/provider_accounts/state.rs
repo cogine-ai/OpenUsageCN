@@ -22,6 +22,7 @@ pub(super) struct ProviderState {
 }
 
 impl Default for AccountSelection {
+    /// New or unspecified selection follows the locally discovered default account.
     fn default() -> Self {
         Self::Auto
     }
@@ -55,10 +56,12 @@ pub(super) struct ConnectionRecord {
     pub(super) session_ref: Option<String>,
 }
 
+/// Preserves existing registry connections when an older record omits attachment state.
 fn connection_attached_by_default() -> bool {
     true
 }
 
+/// Projects attached connections and availability; live browser identity is added separately.
 pub(super) fn view_from_state(
     provider_id: &str,
     provider: &ProviderState,
@@ -117,6 +120,7 @@ pub(super) fn view_from_state(
     }
 }
 
+/// Invalidates prior runtime availability for every source whose discovery result is being replaced.
 pub(super) fn mark_connections_unavailable(
     provider: &mut ProviderState,
     outcomes: &[SourceOutcome],
@@ -132,6 +136,7 @@ pub(super) fn mark_connections_unavailable(
     }
 }
 
+/// Returns an account-free automatic view while preserving any storage warning for the caller.
 pub(super) fn empty_view(
     provider_id: &str,
     persistence_warning: Option<ProviderPersistenceWarning>,

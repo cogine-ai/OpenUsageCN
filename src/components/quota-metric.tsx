@@ -9,6 +9,7 @@ import { clamp01, formatCountNumber, formatFixedPrecisionNumber } from "@/lib/ut
 import type { MetricLine } from "@/lib/plugin-types"
 import type { DisplayMode, ResetTimerDisplayMode, TimeFormatMode } from "@/lib/settings"
 
+/** Distinguishes actual exhaustion and unavailable states from estimated quota depletion. */
 function forecastLabel(forecast: QuotaForecast) {
   if (forecast.state === "behind") return `预计 ${formatCompactDuration(forecast.depletionInMs!)}后用尽`
   if (forecast.state === "exhausted") return "已用尽"
@@ -24,6 +25,7 @@ function forecastLabel(forecast: QuotaForecast) {
   return "暂无预测"
 }
 
+/** Shows quota and reset controls with forecast availability determined by data freshness. */
 export function QuotaMetric({ line, displayMode, resetTimerDisplayMode, timeFormatMode, onResetTimerDisplayModeToggle, now, refreshing, stale, lastUpdatedAt }: {
   line: Extract<MetricLine, { type: "progress" }>
   displayMode: DisplayMode

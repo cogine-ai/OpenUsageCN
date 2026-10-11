@@ -247,6 +247,7 @@ pub fn resolved_values(plugin_id: &str, fields: &[PluginConfigField]) -> HashMap
     resolve_values(fields, &stored)
 }
 
+/// Builds a UI view with secret presence/hints and stored field IDs, never raw secret values.
 pub fn view_for_plugin(plugin_id: &str, fields: &[PluginConfigField]) -> ProviderConfigView {
     let stored = {
         let locked = store().lock().expect("provider config store poisoned");

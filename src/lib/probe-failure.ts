@@ -1,5 +1,6 @@
 import type { PluginOutput } from "@/lib/plugin-types"
 
+/** Recognize error badges and Claude cached rate limits without treating cached quota as success. */
 export function probeFailure(output: PluginOutput): string | null {
   const failure = output.lines.find((line) => line.type === "badge" && line.label === "Error")
   if (failure?.type === "badge") return failure.text || "无法更新数据，请重试。"

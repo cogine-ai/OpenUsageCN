@@ -23,6 +23,7 @@ import { useAppUiStore } from "@/stores/app-ui-store"
 const TRAY_PROBE_DEBOUNCE_MS = 500
 const TRAY_SETTINGS_DEBOUNCE_MS = 2000
 
+/** Connect the desktop shell to provider checks, preferences, and native platform capabilities. */
 function App() {
   const platformCapabilities = usePlatformCapabilities()
 
@@ -91,6 +92,7 @@ function App() {
   )
 
   const scheduleProbeTrayUpdateRef = useRef<() => void>(() => {})
+  /** Schedule the current tray updater after a provider result without recreating event listeners. */
   const handleProbeResult = useCallback(() => {
     scheduleProbeTrayUpdateRef.current()
   }, [])
@@ -209,6 +211,7 @@ function App() {
     scheduleTrayIconUpdate,
   })
 
+  /** Verify saved credentials explicitly and report failure without treating cancellation as a provider error. */
   const handleProviderConfigSaved = useCallback(async (pluginId: string) => {
     setLoadingForPlugins([pluginId])
     try {
@@ -237,6 +240,7 @@ function App() {
     pluginStates,
   })
 
+  /** Retry a provider or pause it, persisting the change and leaving a paused provider's detail view. */
   const handlePluginContextAction = useCallback(
     (pluginId: string, action: PluginContextAction) => {
       if (action === "reload") {
@@ -266,6 +270,7 @@ function App() {
     [activeView, handleRetryPlugin, pluginSettings, scheduleTrayIconUpdate, setActiveView, setPluginSettings]
   )
 
+  /** Permit immediate error recovery while preventing duplicate checks and rapid successful refreshes. */
   const isPluginRefreshAvailable = useCallback(
     (pluginId: string) => {
       const pluginState = pluginStates[pluginId]

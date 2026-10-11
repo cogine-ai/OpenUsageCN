@@ -22,6 +22,7 @@ type UseSettingsSystemActionsArgs = {
   setPaceNotifications: (value: PaceNotificationSettings) => void
 }
 
+/** Bind system preferences to native operations and expose recoverable failures to their controls. */
 export function useSettingsSystemActions({
   pluginSettings,
   setAutoUpdateInterval,
@@ -32,6 +33,7 @@ export function useSettingsSystemActions({
   paceNotifications,
   setPaceNotifications,
 }: UseSettingsSystemActionsArgs) {
+  /** Recalculate the enabled providers' next refresh and persist the selected interval. */
   const handleAutoUpdateIntervalChange = useCallback((value: AutoUpdateIntervalMinutes) => {
     setAutoUpdateInterval(value)
 
@@ -49,6 +51,7 @@ export function useSettingsSystemActions({
     })
   }, [pluginSettings, setAutoUpdateInterval, setAutoUpdateNextAt])
 
+  /** Publish a shortcut only after native registration and persistence both succeed. */
   const handleGlobalShortcutChange = useCallback(async (value: GlobalShortcut) => {
     try {
       const status = await applyGlobalShortcut(value)
@@ -59,6 +62,7 @@ export function useSettingsSystemActions({
     }
   }, [setGlobalShortcut])
 
+  /** Save the startup preference and apply it to the OS, logging either operation's failure. */
   const handleStartOnLoginChange = useCallback((value: boolean) => {
     setStartOnLogin(value)
     void saveStartOnLogin(value).catch((error) => {
@@ -69,6 +73,7 @@ export function useSettingsSystemActions({
     })
   }, [applyStartOnLogin, setStartOnLogin])
 
+  /** Restore the previous notification preference if its save fails and let the control report it. */
   const handlePaceNotificationsChange = useCallback(async (value: PaceNotificationSettings) => {
     setPaceNotifications(value)
     try {

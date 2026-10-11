@@ -14,6 +14,7 @@ type Props = {
   lastUpdatedAt?: number | null
 }
 
+/** Offers the matching connection repair action while distinguishing any retained usage data. */
 export function PluginError({ message, providerId, capabilities, onRecovery, onRetry, retrying = false, hasStaleData = false, lastUpdatedAt }: Props) {
   const recovery = getPluginRecovery(message, providerId, capabilities)
   const directs = recovery.action !== "retry" && onRecovery

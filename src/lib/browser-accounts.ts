@@ -49,10 +49,12 @@ export type DiscoverBrowserAccountsInput = {
   profileKey?: string
 }
 
+/** List source profiles without reading their account credentials. */
 export function listBrowserProfiles(browser: BrowserName): Promise<BrowserProfileList> {
   return invoke<BrowserProfileList>("list_browser_profiles", { browser })
 }
 
+/** Check the chosen browser scope and return short-lived, verified candidates. */
 export function discoverBrowserAccounts(
   input: DiscoverBrowserAccountsInput
 ): Promise<BrowserAccountDiscovery> {
@@ -66,6 +68,7 @@ export function discoverBrowserAccounts(
   return invoke<BrowserAccountDiscovery>("discover_browser_accounts", args)
 }
 
+/** Cancel only the discovery request owned by this UI flow. */
 export function cancelBrowserDiscovery(requestId: string): Promise<boolean> {
   return invoke<boolean>("cancel_browser_discovery", { requestId })
 }

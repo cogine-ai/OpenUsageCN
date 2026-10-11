@@ -3,6 +3,7 @@ import { ProviderCard } from "@/components/provider-card"
 import type { MetricLine, ManifestLine, PluginDisplayState } from "@/lib/plugin-types"
 import type { DisplayMode, ResetTimerDisplayMode, TimeFormatMode } from "@/lib/settings"
 
+/** Omits Cursor's percentage total only when both independent monthly pools are available. */
 function overviewLines<T extends MetricLine | ManifestLine>(
   providerId: string, lines: T[], available: (MetricLine | ManifestLine)[] = lines
 ): T[] {
@@ -26,6 +27,7 @@ interface OverviewPageProps {
   onResetTimerDisplayModeToggle?: () => void
 }
 
+/** Lists provider usage summaries and routes recovery actions to their connection method. */
 export function OverviewPage({
   plugins,
   onRetryPlugin,

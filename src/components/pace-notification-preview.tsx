@@ -1,6 +1,7 @@
 import type { PaceNotificationMilestone } from "@/lib/pace-notification-logic"
 import { Progress } from "@/components/ui/progress"
 
+/** Illustrates each alert threshold without representing a live provider prediction. */
 export function PaceNotificationPreview({ kind }: { kind: PaceNotificationMilestone }) {
   if (kind === "almostOut") {
     return (

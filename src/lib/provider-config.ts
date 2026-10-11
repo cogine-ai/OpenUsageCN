@@ -16,10 +16,12 @@ export type ProviderConfigView = {
 
 export type ProviderConfigInput = Record<string, string | boolean>
 
+/** Read masked saved values and confirmed sources, retaining separate lookup errors. */
 export function getProviderConfig(pluginId: string): Promise<ProviderConfigView> {
   return invoke<ProviderConfigView>("get_provider_config", { pluginId })
 }
 
+/** Persist supplied fields only; this does not verify access or enable the provider. */
 export function saveProviderConfig(
   pluginId: string,
   values: ProviderConfigInput
@@ -27,6 +29,7 @@ export function saveProviderConfig(
   return invoke("save_provider_config", { pluginId, values })
 }
 
+/** Remove one saved override so the provider can use its remaining sources. */
 export function deleteProviderConfigField(
   pluginId: string,
   fieldId: string

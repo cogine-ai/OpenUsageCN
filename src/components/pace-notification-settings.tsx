@@ -22,6 +22,7 @@ const rows: Array<{
   { key: "runningOut", label: "预计提前用尽" },
 ]
 
+/** Edits quota alert preferences independently from native notification permission. */
 export function PaceNotificationSettingsSection({
   value,
   onChange,
@@ -29,6 +30,7 @@ export function PaceNotificationSettingsSection({
   const [permission, setPermission] = useState<PermissionState>("unavailable")
   const [error, setError] = useState<string | null>(null)
 
+  /** Refreshes native permission state when the app regains focus. */
   const refreshPermission = useCallback(async () => {
     if (!isTauri()) return
     try {
@@ -47,6 +49,7 @@ export function PaceNotificationSettingsSection({
     return () => window.removeEventListener("focus", refreshPermission)
   }, [refreshPermission])
 
+  /** Requests native notification permission and exposes a recoverable failure. */
   const requestPermission = async () => {
     try {
       setError(null)
@@ -57,6 +60,7 @@ export function PaceNotificationSettingsSection({
     }
   }
 
+  /** Persists the selected alert and requests permission on the first enable. */
   const handleToggle = async (key: keyof PaceNotificationSettings, checked: boolean) => {
     const next = { ...value, [key]: checked }
     const isFirstEnable = !Object.values(value).some(Boolean) && Object.values(next).some(Boolean)
@@ -70,6 +74,7 @@ export function PaceNotificationSettingsSection({
     }
   }
 
+  /** Opens the operating system's notification controls for permission changes. */
   const openSystemSettings = async () => {
     try {
       setError(null)

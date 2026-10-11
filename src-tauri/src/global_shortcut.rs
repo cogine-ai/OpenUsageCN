@@ -29,12 +29,14 @@ struct ShortcutCallback {
 }
 
 impl ShortcutCallback {
+    /// Allows panel actions only for the committed binding outside recorder capture.
     fn enabled(&self) -> bool {
         self.active.load(Ordering::Acquire) && !self.recording.load(Ordering::Acquire)
     }
 }
 
 impl ShortcutState {
+    /// Reports the saved chord as active only when it matches the confirmed registration.
     fn status(&self) -> ShortcutStatus {
         ShortcutStatus {
             shortcut: self.saved.clone(),
@@ -43,6 +45,7 @@ impl ShortcutState {
         }
     }
 
+    /// Creates an inactive candidate gate sharing the recorder's mute flag.
     fn candidate_callback(&self) -> ShortcutCallback {
         ShortcutCallback {
             active: Arc::new(AtomicBool::new(false)),
@@ -50,6 +53,7 @@ impl ShortcutState {
         }
     }
 
+    /// Records a friendly recovery error; uncertain native release requires restart.
     fn recovery_error(&mut self, unregister_failed: bool) -> String {
         self.restart_required |= unregister_failed;
         let message = if self.restart_required {
@@ -63,14 +67,18 @@ impl ShortcutState {
     }
 }
 
+/// Returns the process-wide transaction state shared by shortcut IPC commands.
 fn state() -> &'static Mutex<ShortcutState> {
     static STATE: OnceLock<Mutex<ShortcutState>> = OnceLock::new();
     STATE.get_or_init(|| Mutex::new(ShortcutState::default()))
 }
 
 trait ShortcutBackend {
+    /// Registers a chord with its initially disabled panel-action gate.
     fn register(&mut self, shortcut: &str, callback: ShortcutCallback) -> Result<(), String>;
+    /// Releases a chord; an error leaves its native reservation uncertain.
     fn unregister(&mut self, shortcut: &str) -> Result<(), String>;
+    /// Persists the selected chord, with `None` disabling the saved shortcut.
     fn save(&mut self, shortcut: Option<&str>) -> Result<(), String>;
 }
 
@@ -79,6 +87,7 @@ struct RollbackFailure {
     unregister_failed: bool,
 }
 
+/// Removes an uncommitted candidate and restores the saved selection, collecting failures.
 fn rollback(
     backend: &mut impl ShortcutBackend,
     previous: Option<&str>,
@@ -105,6 +114,8 @@ fn rollback(
     }
 }
 
+/// Commits the candidate only after registration, persistence, and previous release succeed.
+/// Failed native release blocks further changes until restart; other failures roll back.
 fn apply(
     state: &mut ShortcutState,
     backend: &mut impl ShortcutBackend,
@@ -178,6 +189,7 @@ fn apply(
     Ok(state.status())
 }
 
+/// Activates a saved chord only after registration succeeds, retaining failed saved values.
 fn initialize_state(
     state: &mut ShortcutState,
     backend: &mut impl ShortcutBackend,
@@ -209,6 +221,7 @@ struct NativeBackend<'a>(&'a tauri::AppHandle);
 
 #[cfg(target_os = "macos")]
 impl ShortcutBackend for NativeBackend<'_> {
+    /// Registers a pressed-event handler that reads atomic gates without the transaction lock.
     fn register(&mut self, shortcut: &str, callback: ShortcutCallback) -> Result<(), String> {
         use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState as EventState};
         self.0
@@ -225,6 +238,7 @@ impl ShortcutBackend for NativeBackend<'_> {
             })
             .map_err(|error| error.to_string())
     }
+    /// Delegates native release and reports errors without claiming the OS chord is free.
     fn unregister(&mut self, shortcut: &str) -> Result<(), String> {
         use tauri_plugin_global_shortcut::GlobalShortcutExt;
         self.0
@@ -232,6 +246,7 @@ impl ShortcutBackend for NativeBackend<'_> {
             .unregister(shortcut)
             .map_err(|error| error.to_string())
     }
+    /// Writes the shortcut setting and reports disk persistence errors.
     fn save(&mut self, shortcut: Option<&str>) -> Result<(), String> {
         use tauri_plugin_store::StoreExt;
         let store = self
@@ -244,6 +259,7 @@ impl ShortcutBackend for NativeBackend<'_> {
 }
 
 #[cfg(target_os = "macos")]
+/// Validates a native chord and canonicalizes modifier aliases while keeping Control distinct.
 fn normalized_shortcut(value: &str) -> Result<String, String> {
     use tauri_plugin_global_shortcut::{Modifiers, Shortcut};
     let shortcut: Shortcut = value.parse().map_err(|error| {
@@ -272,6 +288,7 @@ fn normalized_shortcut(value: &str) -> Result<String, String> {
 }
 
 #[cfg(target_os = "macos")]
+/// Registers a valid stored chord or retains malformed text with an inactive format error.
 fn initialize_saved_shortcut(
     current: &mut ShortcutState,
     backend: &mut impl ShortcutBackend,
@@ -293,6 +310,7 @@ fn initialize_saved_shortcut(
 }
 
 #[cfg(target_os = "macos")]
+/// Loads the saved chord at startup and records its actual registration outcome.
 pub fn initialize(app: &tauri::AppHandle) {
     use tauri_plugin_store::StoreExt;
     let mut current = match state().lock() {
@@ -322,6 +340,7 @@ pub fn initialize(app: &tauri::AppHandle) {
 
 #[cfg(target_os = "macos")]
 #[tauri::command]
+/// Applies a normalized shortcut off the async thread; `None` clears the committed binding.
 pub async fn update_global_shortcut(
     app_handle: tauri::AppHandle,
     shortcut: Option<String>,
@@ -346,6 +365,7 @@ pub async fn update_global_shortcut(
 
 #[cfg(not(target_os = "macos"))]
 #[tauri::command]
+/// Rejects global shortcut changes on platforms without supported registration.
 pub fn update_global_shortcut(
     _app_handle: tauri::AppHandle,
     _shortcut: Option<String>,
@@ -354,6 +374,7 @@ pub fn update_global_shortcut(
 }
 
 #[tauri::command]
+/// Pauses or resumes panel actions during recording without removing registration.
 pub async fn set_global_shortcut_recording(recording: bool) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         let current = state().lock().map_err(|error| {
@@ -371,6 +392,7 @@ pub async fn set_global_shortcut_recording(recording: bool) -> Result<(), String
 }
 
 #[tauri::command]
+/// Returns the saved chord, confirmed activation, and any recovery error to the UI.
 pub async fn get_global_shortcut_status() -> Result<ShortcutStatus, String> {
     tauri::async_runtime::spawn_blocking(|| {
         state()

@@ -17,6 +17,7 @@ pub(crate) struct VerifiedClaudeOAuthIdentity {
 }
 
 impl VerifiedClaudeOAuthIdentity {
+    /// Normalizes bounded OAuth identity fields and erases both original input buffers.
     pub(crate) fn new(mut email: String, mut organization_uuid: String) -> Option<Self> {
         let normalized_email = normalize_email(&email).map(SecretValue::new);
         let exact_organization_uuid =
@@ -32,6 +33,7 @@ impl VerifiedClaudeOAuthIdentity {
         }
     }
 
+    /// Pairs the opaque OAuth binding with its verified email for account display.
     fn binding_identity(&self) -> VerifiedIdentity {
         VerifiedIdentity::new(self.binding_token())
             .expect("Claude binding digest is valid")
@@ -39,14 +41,17 @@ impl VerifiedClaudeOAuthIdentity {
             .expect("verified Claude email is present")
     }
 
+    /// Returns a stable binding digest without exposing the email or organization UUID.
     pub(crate) fn opaque_identity(&self) -> String {
         self.binding_token()
     }
 
+    /// Requires the session binding to identify this exact normalized email and organization pair.
     fn matches_binding(&self, binding: &str) -> bool {
         self.binding_token() == binding
     }
 
+    /// Hashes a domain-separated, length-delimited identity pair to prevent ambiguous bindings.
     fn binding_token(&self) -> String {
         let mut hasher = Sha256::new();
         hasher.update(b"openusage-claude-oauth-v1\0");
@@ -75,6 +80,7 @@ pub(crate) enum ClaudeTeamPlan {
 }
 
 impl ClaudeTeamPlan {
+    /// Keeps an unknown Team seat generic instead of claiming a verified seat tier.
     pub(crate) fn label(self) -> &'static str {
         match self {
             Self::Team => "Team",
@@ -108,10 +114,12 @@ pub(crate) struct ClaudeTeamEnrichment {
 }
 
 impl ClaudeTeamEnrichment {
+    /// Exposes the accepted credential revision only for exact enrichment results.
     pub(crate) fn credential_generation(&self) -> Option<u64> {
         self.credential_generation
     }
 
+    /// Preserves a typed warning without asserting an exact seat or credential revision.
     fn generic(warning: ClaudeTeamWarningCode) -> Self {
         Self {
             plan: ClaudeTeamPlan::Team,
@@ -121,6 +129,7 @@ impl ClaudeTeamEnrichment {
         }
     }
 
+    /// Records a verified seat tier; a refresh must separately bind it to a credential revision.
     fn exact(plan: ClaudeTeamPlan) -> Self {
         Self {
             plan,
@@ -130,6 +139,7 @@ impl ClaudeTeamEnrichment {
         }
     }
 
+    /// Binds exact enrichment to the credential revision accepted by the roster.
     fn with_credential_generation(mut self, generation: u64) -> Self {
         if self.exact {
             self.credential_generation = Some(generation);
@@ -137,6 +147,7 @@ impl ClaudeTeamEnrichment {
         self
     }
 
+    /// Accepts a matched identity even when its seat tier is unknown, but rejects other warnings.
     fn proves_identity(&self) -> bool {
         self.exact || self.warning == Some(ClaudeTeamWarningCode::UnknownSeat)
     }
@@ -150,6 +161,7 @@ pub(crate) struct ClaudeProfileDiscovery {
 }
 
 impl BrowserSessionBroker {
+    /// Retains a profile candidate only after its browser email and organization match OAuth.
     pub(crate) fn discover_claude_specific(
         &self,
         browser: Browser,
@@ -292,6 +304,7 @@ impl BrowserSessionBroker {
         )
     }
 
+    /// Rechecks the OAuth binding and publishes enrichment only if the session credentials still match.
     pub(crate) fn refresh_claude_enrichment(
         &self,
         session_ref: &str,
@@ -354,6 +367,7 @@ impl BrowserSessionBroker {
     }
 }
 
+/// Requires both email and organization evidence before interpreting the matching seat tier.
 pub(super) fn resolve_claude_account(
     evidence: &ClaudeAccountEvidence,
     oauth_identity: &VerifiedClaudeOAuthIdentity,
@@ -400,6 +414,7 @@ pub(super) fn resolve_claude_account(
     }
 }
 
+/// Keeps a failed profile receipt and its non-exact enrichment warning together.
 fn failed_discovery(
     profile_key: &str,
     error: super::BrowserSessionError,
@@ -411,6 +426,7 @@ fn failed_discovery(
     }
 }
 
+/// Maps transport failures to generic enrichment without retaining an exact seat claim.
 fn transport_fallback(error: ClaudeAccountTransportError) -> ClaudeTeamEnrichment {
     ClaudeTeamEnrichment::generic(match error {
         ClaudeAccountTransportError::Cancelled => ClaudeTeamWarningCode::Cancelled,
@@ -423,33 +439,39 @@ fn transport_fallback(error: ClaudeAccountTransportError) -> ClaudeTeamEnrichmen
     })
 }
 
+/// Erases credentials for every candidate abandoned by discovery.
 fn zero_candidates(candidates: &mut [super::protocol::CookieCandidate]) {
     for candidate in candidates {
         zero_candidate(candidate);
     }
 }
 
+/// Erases the candidate's store identifier and cookie buffer while leaving source metadata intact.
 fn zero_candidate(candidate: &mut super::protocol::CookieCandidate) {
     zero_string(&mut candidate.store_id);
     zero_string(&mut candidate.cookie_header);
 }
 
+/// Overwrites the occupied buffer before clearing the string.
 fn zero_string(value: &mut String) {
     unsafe { value.as_bytes_mut().fill(0) };
     value.clear();
 }
 
+/// Trims and ASCII-folds a bounded, control-free email value used for identity matching.
 fn normalize_email(value: &str) -> Option<String> {
     let normalized = value.trim().to_ascii_lowercase();
     (normalized.len() <= 254 && valid_secret_field(&normalized)).then_some(normalized)
 }
 
+/// Preserves an exact bounded organization identifier and rejects surrounding ASCII whitespace.
 fn exact_organization_uuid(value: &str) -> Option<String> {
     (value == value.trim_matches(|character: char| character.is_ascii_whitespace())
         && valid_secret_field(value))
     .then(|| value.to_string())
 }
 
+/// Restricts identity fields to nonempty bounded values without control characters.
 fn valid_secret_field(value: &str) -> bool {
     !value.is_empty() && value.len() <= 512 && !value.chars().any(char::is_control)
 }

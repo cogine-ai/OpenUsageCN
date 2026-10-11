@@ -15,6 +15,7 @@ interface ProviderDetailPageProps {
   onResetTimerDisplayModeToggle?: () => void
 }
 
+/** Combines provider usage and account controls with explicit connection repair routes. */
 export function ProviderDetailPage({
   plugin,
   onRetry,

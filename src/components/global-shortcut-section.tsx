@@ -11,10 +11,12 @@ interface GlobalShortcutSectionProps {
   onGlobalShortcutChange: (value: GlobalShortcut) => Promise<void> | void
 }
 
+/** Displays normalized shortcut keys as distinct keyboard caps. */
 function Keycaps({ keys }: { keys: string[] }) {
   return <span className="flex items-center gap-1">{keys.map((key, index) => <kbd key={`${key}-${index}`} className="min-w-7 rounded border border-border bg-background px-1.5 py-1 text-center font-sans text-sm shadow-[0_1px_0_var(--border)]">{key}</kbd>)}</span>
 }
 
+/** Records shortcut changes with cancellation and reflects actual native registration state. */
 export function GlobalShortcutSection({ globalShortcut, onGlobalShortcutChange }: GlobalShortcutSectionProps) {
   const [recording, setRecording] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -55,6 +57,7 @@ export function GlobalShortcutSection({ globalShortcut, onGlobalShortcutChange }
 
   useEffect(() => { if (recording) recordingRef.current?.focus() }, [recording])
 
+  /** Discards the pending chord and restores the previously registered shortcut. */
   const stopRecording = () => {
     if (recordingActive.current) {
       recordingActive.current = false
@@ -72,6 +75,7 @@ export function GlobalShortcutSection({ globalShortcut, onGlobalShortcutChange }
     setError(null)
   }
 
+  /** Suspends native shortcut activation before accepting a new recording. */
   const startRecording = async () => {
     setError(null)
     try {
@@ -93,6 +97,7 @@ export function GlobalShortcutSection({ globalShortcut, onGlobalShortcutChange }
     }
   }
 
+  /** Applies the requested binding and reloads native state when registration fails. */
   const apply = async (value: GlobalShortcut) => {
     statusVersion.current += 1
     setBusy(true)
@@ -118,6 +123,7 @@ export function GlobalShortcutSection({ globalShortcut, onGlobalShortcutChange }
     }
   }
 
+  /** Keeps pressed modifiers consistent with the keyboard event's reported flags. */
   const syncModifiers = (event: React.KeyboardEvent) => {
     // OS combinations can report modifiers only as flags on the main key event.
     for (const [prefix, active] of [["Meta", event.metaKey], ["Control", event.ctrlKey], ["Alt", event.altKey], ["Shift", event.shiftKey]] as const) {
@@ -127,6 +133,7 @@ export function GlobalShortcutSection({ globalShortcut, onGlobalShortcutChange }
     }
   }
 
+  /** Collects one chord, rejects invalid combinations, and lets Escape cancel without saving. */
   const handleKeyDown = (event: React.KeyboardEvent) => {
     event.preventDefault()
     event.stopPropagation()
@@ -143,6 +150,7 @@ export function GlobalShortcutSection({ globalShortcut, onGlobalShortcutChange }
     } else if (!invalidChord.current && next.shortcut) candidate.current = next.shortcut
   }
 
+  /** Commits a valid released chord, including the macOS Command-release boundary. */
   const handleKeyUp = (event: React.KeyboardEvent) => {
     event.preventDefault()
     event.stopPropagation()

@@ -26,6 +26,7 @@ type AppShellProps = {
   appContentProps: AppContentActionProps
 }
 
+/** Hosts the desktop panel and gives connection setup its dedicated content area. */
 export function AppShell({
   platformCapabilities,
   onRefreshAll,

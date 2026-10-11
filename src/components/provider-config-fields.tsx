@@ -16,7 +16,9 @@ type Props = {
   onSaved: (pluginId: string) => Promise<void>
 }
 
+/** Edits visible connection fields and reports persistence separately from fresh verification. */
 export function ProviderConfigFields({ pluginId, fields, initialView, focusField, onSaved }: Props) {
+  /** Opens the method containing the requested field while preserving the other draft values. */
   const focusedDraft = (next: ProviderConfigView | null) => {
     const values = configDraft(fields, next)
     const condition = fields.find((field) => field.id === focusField)?.visibleWhen
@@ -59,15 +61,18 @@ export function ProviderConfigFields({ pluginId, fields, initialView, focusField
       !(saved?.type === "secret" && saved.configured) && !view?.environment?.[field.id]?.configured
   })
   const invalidSelection = fields.some((field) => field.type === "select" && !selections[field.id])
+  /** Updates an unsaved field and invalidates the previous verification result. */
   const edit = (id: string, value: string | boolean) => {
     setDraft((current) => ({ ...current, [id]: value }))
     setPhase("idle"); setError(null); setPersisted(false)
   }
+  /** Marks the connection successful only after the supplied verification completes. */
   const check = async () => {
     setPhase("checking")
     await onSaved(pluginId)
     if (mounted.current) setPhase("connected")
   }
+  /** Persists visible fields, retains other drafts, and then verifies the saved connection. */
   const save = async () => {
     setError(null); setPersisted(false); setPhase("saving")
     let saved = false
@@ -91,6 +96,7 @@ export function ProviderConfigFields({ pluginId, fields, initialView, focusField
       if (mounted.current) { setError(saved ? getPluginRecovery(String(err), pluginId).title : "保存失败，请重试。"); setPhase("failed") }
     }
   }
+  /** Deletes one saved credential and verifies the remaining connection sources. */
   const clear = async (fieldId: string) => {
     setPhase("saving"); setError(null)
     let deleted = false
@@ -108,6 +114,7 @@ export function ProviderConfigFields({ pluginId, fields, initialView, focusField
       if (mounted.current) { setError(deleted ? getPluginRecovery(String(err), pluginId).title : "无法清除凭据，请重试。"); setPhase("failed") }
     }
   }
+  /** Verifies the already saved connection without persisting the current draft. */
   const recheck = async () => {
     setError(null)
     try { await check() } catch (err) {

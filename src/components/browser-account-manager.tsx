@@ -19,6 +19,7 @@ type BrowserAccountManagerProps = {
   onAttach: (candidateId: string) => Promise<ProviderAccountOperationReceipt | null>
 }
 type BrowserUiError = { message: string; code: string }
+/** Maps discovery codes to friendly messages without displaying raw provider errors. */
 function browserError(cause: unknown, fallback: string): BrowserUiError {
   const code = typeof cause === "object" && cause !== null && "code" in cause && typeof cause.code === "string" ? cause.code : "unknown"
   const messages: Record<string, string> = {
@@ -29,6 +30,7 @@ function browserError(cause: unknown, fallback: string): BrowserUiError {
   }
   return { code, message: messages[code] ?? fallback }
 }
+/** Guides browser-profile discovery and attachment using verified account identities. */
 export function BrowserAccountManager({ busy, providerId = "cursor", standalone = false, onClose, onAttach }: BrowserAccountManagerProps) {
   const mounted = useRef(true)
   const activeRequestId = useRef<string | null>(null)
@@ -52,15 +54,18 @@ export function BrowserAccountManager({ busy, providerId = "cursor", standalone 
   const needsCheck = selected && (invalidIds.has(selected.candidateId) || selected.expiresAtMs <= now)
   const blocked = busy || attaching
 
+  /** Cancels one backend discovery without logging account or cookie data. */
   function cancelRequest(requestId: string) {
     void cancelBrowserDiscovery(requestId).catch(() => console.error("Failed to cancel browser discovery"))
   }
+  /** Invalidates the pending scan while retaining earlier discovery results. */
   function cancelScan() {
     const requestId = activeRequestId.current
     activeRequestId.current = null
     if (requestId) cancelRequest(requestId)
     setScanning(false)
   }
+  /** Closes the picker and invalidates pending profile and discovery updates. */
   function close() {
     profileRevision.current += 1
     cancelScan()
@@ -89,6 +94,7 @@ export function BrowserAccountManager({ busy, providerId = "cursor", standalone 
     const timer = setTimeout(() => setNow(Date.now()), Math.min(...expires) - Date.now() + 1)
     return () => clearTimeout(timer)
   }, [discovery, now])
+  /** Lists the selected browser's profiles and ignores responses from earlier choices. */
   async function chooseBrowser(nextBrowser: BrowserName) {
     const revision = ++profileRevision.current
     cancelScan()
@@ -114,6 +120,7 @@ export function BrowserAccountManager({ busy, providerId = "cursor", standalone 
       if (mounted.current && profileRevision.current === revision) setLoadingProfiles(false)
     }
   }
+  /** Checks the requested profile and accepts only the current discovery response. */
   async function scanProfile(targetKey: string, preserve = false) {
     if (!browser || blocked) return
     cancelScan()
@@ -146,6 +153,7 @@ export function BrowserAccountManager({ busy, providerId = "cursor", standalone 
       }
     }
   }
+  /** Attaches an opaque candidate and requires another check if attachment fails. */
   async function attach(candidate: BrowserAccountCandidate) {
     if (blocked || scanning) return
     if (invalidIds.has(candidate.candidateId) || candidate.expiresAtMs <= Date.now()) {
@@ -172,6 +180,7 @@ export function BrowserAccountManager({ busy, providerId = "cursor", standalone 
       if (mounted.current) setAttaching(false)
     }
   }
+  /** Resolves the local profile label that identifies a candidate's source. */
   const profileName = (key: string) => profiles.find((profile) => profile.profileKey === key)?.displayName ?? key
   if (!open) {
     return (

@@ -304,6 +304,7 @@ fn is_valid_limit_resource_key(key: &str) -> bool {
         && chars.all(|character| character.is_ascii_alphanumeric())
 }
 
+/// Validates field identities, select options, requirements, visibility, and allowed sources.
 fn validate_plugin_config(manifest: &PluginManifest) -> Result<(), Box<dyn std::error::Error>> {
     let Some(config) = manifest.config.as_ref() else {
         return Ok(());

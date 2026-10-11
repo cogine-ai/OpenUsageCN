@@ -12,16 +12,19 @@ const CANDIDATE_TTL: Duration = Duration::from_secs(10 * 60);
 pub(super) struct SecretValue(String);
 
 impl SecretValue {
+    /// Takes ownership of a secret whose occupied buffer will be overwritten on drop.
     pub(super) fn new(value: String) -> Self {
         Self(value)
     }
 
+    /// Borrows the secret for internal use without creating another owned copy.
     pub(super) fn expose(&self) -> &str {
         &self.0
     }
 }
 
 impl Drop for SecretValue {
+    /// Overwrites the owned secret before its allocation is released.
     fn drop(&mut self) {
         unsafe { self.0.as_bytes_mut().fill(0) };
     }
@@ -71,6 +74,7 @@ pub(super) struct BrokerRoster {
 }
 
 impl BrokerRoster {
+    /// Retains verified credentials for ten minutes and returns only source and display metadata.
     pub(super) fn insert_candidate(
         &mut self,
         now: ClockReading,
@@ -108,6 +112,7 @@ impl BrokerRoster {
         summary
     }
 
+    /// Consumes the candidate even on expiry and transfers a live claim without extending its TTL.
     pub(super) fn attach(
         &mut self,
         now: ClockReading,
@@ -150,6 +155,7 @@ impl BrokerRoster {
         Ok(claim)
     }
 
+    /// Prunes expired entries before returning session metadata that omits credentials.
     pub(super) fn binding(
         &mut self,
         now: ClockReading,
@@ -175,6 +181,7 @@ impl BrokerRoster {
         })
     }
 
+    /// Prunes expired entries and copies credentials with their current rotation generation.
     pub(super) fn credential(
         &mut self,
         now: ClockReading,
@@ -192,6 +199,7 @@ impl BrokerRoster {
         ))
     }
 
+    /// Accepts rotation only for the expected provider, generation, and cookie; mismatch returns None.
     pub(super) fn commit_cookie_refresh(
         &mut self,
         now: ClockReading,
@@ -221,6 +229,7 @@ impl BrokerRoster {
         Ok(Some(session.credential_generation))
     }
 
+    /// Removes a session and drops its secrets; a missing reference returns false.
     pub(super) fn release(&mut self, session_ref: &str) -> bool {
         self.sessions.remove(session_ref).is_some()
     }
@@ -230,6 +239,7 @@ impl BrokerRoster {
         self.sessions.len()
     }
 
+    /// Expires candidates and sessions by monotonic time, dropping all retained secrets.
     fn prune(&mut self, now: Duration) {
         self.candidates
             .retain(|_, candidate| now < candidate.expires_monotonic);

@@ -2,6 +2,7 @@ use super::{PluginConfigField, PluginConfigFieldType};
 use crate::plugin_engine::host_api;
 use std::collections::HashSet;
 
+/// Rejects invalid requirements, selector defaults, visibility cycles, and unsafe environment names.
 pub(super) fn validate_config_sources(
     plugin_id: &str,
     fields: &[PluginConfigField],

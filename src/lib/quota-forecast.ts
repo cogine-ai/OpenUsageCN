@@ -7,6 +7,7 @@ export type QuotaForecast = {
   remainingAtReset?: number
 }
 
+/** Predict from valid current-cycle data only, separating stale, early, and exhausted states. */
 export function quotaForecast({ used, limit, resetsAtMs, periodDurationMs, now, stale, refreshing }: {
   used: number
   limit: number

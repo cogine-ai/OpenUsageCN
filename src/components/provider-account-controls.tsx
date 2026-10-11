@@ -33,6 +33,7 @@ type ProviderAccountControlsProps = {
   onOpenLocalLogin?: () => void
 }
 
+/** Checks whether a successful account operation changed the active selection. */
 function activeAccountChanged(
   previousAccountId: string | null,
   receipt: ProviderAccountOperationReceipt | null
@@ -44,6 +45,7 @@ function activeAccountChanged(
   )
 }
 
+/** Manages account identities and connection sources using backend operation receipts. */
 export function ProviderAccountControls({
   providerId,
   browserBinding = false,
@@ -87,6 +89,7 @@ export function ProviderAccountControls({
     : "未连接账号"
   const activeUnavailable = activeAccount && activeAccount.connections.length > 0 &&
     !activeAccount.connections.some((connection) => connection.available)
+  /** Refreshes changed account usage and retains a retry for incomplete source cleanup. */
   const removeAndRefresh = async (account: { accountId: string; label: string }) => {
     const previousAccountId = view?.activeAccountId ?? null
     const nextReceipt = await removeAccount(account.accountId)

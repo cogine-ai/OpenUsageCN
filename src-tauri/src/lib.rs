@@ -765,6 +765,7 @@ fn plugin_config_fields(
         .unwrap_or_default())
 }
 
+/// Exports validated field metadata, including requirements and source/visibility rules, to IPC.
 fn plugin_config_dto(config: &plugin_engine::manifest::PluginConfig) -> PluginConfigDto {
     PluginConfigDto {
         fields: config
@@ -802,6 +803,7 @@ fn plugin_config_dto(config: &plugin_engine::manifest::PluginConfig) -> PluginCo
 }
 
 #[tauri::command]
+/// Returns stored and environment configuration without raw secrets, resolving shells off-thread.
 async fn get_provider_config(
     plugin_id: String,
     state: tauri::State<'_, Mutex<AppState>>,
@@ -871,6 +873,7 @@ fn get_provider_account_view(
 }
 
 #[tauri::command]
+/// Performs an account operation and publishes committed selection changes even if cleanup fails.
 fn perform_provider_account_operation(
     app_handle: tauri::AppHandle,
     provider_id: String,
@@ -1191,6 +1194,7 @@ fn list_plugins(state: tauri::State<'_, Mutex<AppState>>) -> Vec<PluginMeta> {
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+/// Starts the desktop runtime, registers IPC handlers, and restores native services and shortcuts.
 pub fn run() {
     let runtime = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
     let _guard = runtime.enter();

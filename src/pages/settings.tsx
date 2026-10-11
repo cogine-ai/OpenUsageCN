@@ -75,6 +75,7 @@ interface SettingsPageProps {
   onPaceNotificationsChange: (value: PaceNotificationSettings) => Promise<void>;
 }
 
+/** Edits provider visibility and app preferences while keeping connection setup separate. */
 export function SettingsPage({
   platformCapabilities,
   plugins,
@@ -111,6 +112,7 @@ export function SettingsPage({
     })
   );
 
+  /** Persists provider order only after a valid drop changes the selected position. */
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
 

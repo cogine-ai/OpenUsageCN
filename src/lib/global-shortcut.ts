@@ -8,6 +8,7 @@ export type GlobalShortcutStatus = {
 }
 
 let recordingTail: Promise<void> = Promise.resolve()
+/** Order recorder mute changes across IPC, forwarding each request's own failure. */
 export function setGlobalShortcutRecording(recording: boolean): Promise<void> {
   const request = recordingTail.then(() => invoke<void>("set_global_shortcut_recording", { recording }))
   // Keep later recorder changes ordered after a rejected request; callers still receive its rejection.
@@ -15,7 +16,9 @@ export function setGlobalShortcutRecording(recording: boolean): Promise<void> {
   return request
 }
 
+/** Read the native registration result rather than inferring it from saved preferences. */
 export const getGlobalShortcutStatus = () => invoke<GlobalShortcutStatus>("get_global_shortcut_status")
+/** Return only after the native register, persist, and replacement transaction completes. */
 export const applyGlobalShortcut = (shortcut: GlobalShortcut) =>
   invoke<GlobalShortcutStatus>("update_global_shortcut", { shortcut })
 
@@ -34,10 +37,12 @@ const KEY_LABELS: Record<string, string> = {
   Backslash: "\\", Semicolon: ";", Quote: "'", Comma: ",", Period: ".", Slash: "/", Backquote: "`", Minus: "-", Equal: "=",
 }
 
+/** Format persisted shortcut tokens for display without changing their registration value. */
 export function shortcutKeycaps(shortcut: string): string[] {
   return shortcut.split("+").map((key) => KEY_LABELS[key] ?? key.replace(/^Numpad/, "Num"))
 }
 
+/** Accept one main key with modifiers; multiple main keys are explicitly invalid. */
 export function recordedShortcut(codes: Set<string>): { keys: string[]; shortcut: GlobalShortcut; invalid: boolean } {
   const modifiers = MODIFIERS.filter((modifier) => [...codes].some((code) => code.startsWith(modifier.prefix)))
   const main = [...codes].filter((code) => !MODIFIERS.some((modifier) => code.startsWith(modifier.prefix)))

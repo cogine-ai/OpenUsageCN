@@ -3,6 +3,8 @@ use crate::plugin_engine::manifest::{PluginConfigField, PluginConfigFieldType};
 use crate::provider_config::{ProviderConfigEnvironment, ProviderConfigView};
 use std::collections::{HashMap, HashSet};
 
+/// Adds declared, provider-allowed environment sources to the stored configuration view.
+/// Interactive shell resolution may block; secret values are never returned to the UI.
 pub fn view_for_plugin(
     plugin_id: &str,
     fields: &[PluginConfigField],
@@ -17,6 +19,7 @@ pub fn view_for_plugin(
     Ok(with_environment(view, plugin_id, fields, &resolved))
 }
 
+/// Keeps known configuration while exposing unresolved lookups as errors, not confirmed absence.
 fn with_environment(
     mut view: ProviderConfigView,
     plugin_id: &str,
@@ -42,6 +45,7 @@ fn with_environment(
     view
 }
 
+/// Deduplicates declared environment names and rejects names outside the provider whitelist.
 fn environment_names(plugin_id: &str, fields: &[PluginConfigField]) -> Result<Vec<String>, String> {
     let mut seen = HashSet::new();
     let mut names = Vec::new();
@@ -57,6 +61,7 @@ fn environment_names(plugin_id: &str, fields: &[PluginConfigField]) -> Result<Ve
     Ok(names)
 }
 
+/// Registers all inspected secrets for log redaction and exposes only presence or safe selectors.
 fn decorate(
     view: &mut ProviderConfigView,
     plugin_id: &str,

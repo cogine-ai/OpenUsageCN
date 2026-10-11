@@ -42,6 +42,7 @@ pub(crate) struct SourceOutcome {
 }
 
 impl SourceOutcome {
+    /// Records one source's availability without exposing its observed account identity or credentials.
     pub(crate) fn new(source_key: &str, status: SourceStatus) -> Self {
         Self {
             source_key: source_key.to_string(),

@@ -23,6 +23,7 @@ const LOCAL_STEPS: Record<string, { command?: string; step: string }> = {
   cursor: { step: "在 Cursor 中登录，然后重新检查本机账号。" },
 }
 
+/** Shows the local login or access step and verifies it with a real provider check. */
 function LocalConnection({ plugin, error, onCheck }: { plugin: SettingsPluginConfig; error?: string | null; onCheck: (id: string) => Promise<void> }) {
   const [phase, setPhase] = useState<"idle" | "checking" | "done">("idle")
   const [failure, setFailure] = useState<string | null>(null)
@@ -32,10 +33,12 @@ function LocalConnection({ plugin, error, onCheck }: { plugin: SettingsPluginCon
   const accountLink = plugin.links?.find((link) => /^https:\/\//.test(link.url) && /billing|usage|account|console|dashboard/i.test(link.url))
   const fileStorage = plugin.id === "codex" && /Windows requires Codex file storage/i.test(error ?? "")
   const steps = LOCAL_STEPS[plugin.id]
+  /** Reports a connection only after the supplied verification completes. */
   const check = async () => {
     setPhase("checking"); setFailure(null)
     try { await onCheck(plugin.id); setPhase("done") } catch (err) { console.error("Failed to check local connection:", err); setPhase("idle"); setFailure("尚未连上，请检查登录和读取权限后重试。") }
   }
+  /** Copies the displayed login command without executing it. */
   const copy = async () => {
     try { await navigator.clipboard.writeText(steps!.command!); setCopied(true) } catch (err) { console.error("Failed to copy login command:", err); setFailure("无法复制，请手动输入命令。") }
   }
@@ -49,6 +52,7 @@ function LocalConnection({ plugin, error, onCheck }: { plugin: SettingsPluginCon
   </div>
 }
 
+/** Hosts the selected connection method without changing the provider's enable switch. */
 export function ProviderConnectionPage({ plugin, error, onCheck, onAccountChangeRefresh }: {
   plugin: SettingsPluginConfig | null
   error?: string | null

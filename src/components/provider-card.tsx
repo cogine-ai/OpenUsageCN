@@ -41,6 +41,7 @@ interface ProviderCardProps {
   onResetTimerDisplayModeToggle?: () => void
 }
 
+/** Formats the age of a retained provider snapshot for its freshness notice. */
 function formatRelativeTime(diffMs: number): string {
   const seconds = Math.floor(Math.max(0, diffMs) / 1000)
   if (seconds < 60) return "刚刚"
@@ -52,6 +53,7 @@ function formatRelativeTime(diffMs: number): string {
   return `${days} 天前`
 }
 
+/** Renders provider usage while retaining earlier data during refreshes and connection failures. */
 export function ProviderCard({
   capabilities,
   onRecovery,
@@ -133,7 +135,7 @@ export function ProviderCard({
     [links]
   )
 
-  // Format remaining cooldown time as "Xm Ys"
+  /** Describes when the manual refresh cooldown ends. */
   const formatRemainingTime = () => {
     if (!lastManualRefreshAt) return ""
     const remainingMs = REFRESH_COOLDOWN_MS - (now - lastManualRefreshAt)

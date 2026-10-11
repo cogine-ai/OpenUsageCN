@@ -16,6 +16,7 @@ type UseSettingsPluginListArgs = {
   pluginsMeta: PluginMeta[]
 }
 
+/** Keep saved provider order while exposing only installed plugins and their declared connection capabilities. */
 export function useSettingsPluginList({ pluginSettings, pluginsMeta }: UseSettingsPluginListArgs) {
   return useMemo<SettingsPluginState[]>(() => {
     if (!pluginSettings) return []

@@ -4,6 +4,7 @@ import { QuotaMetric } from "@/components/quota-metric"
 import type { MetricLine } from "@/lib/plugin-types"
 import type { DisplayMode, ResetTimerDisplayMode, TimeFormatMode } from "@/lib/settings"
 
+/** Dispatches provider metrics while passing freshness and reset controls to quota displays. */
 export function MetricLineRenderer({ line, ...props }: {
   line: MetricLine
   displayMode: DisplayMode

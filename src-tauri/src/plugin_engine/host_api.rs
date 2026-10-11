@@ -62,6 +62,7 @@ const WHITELISTED_ENV_VARS: [&str; 42] = [
 ];
 const MIN_BLOCKING_TIMEOUT: Duration = Duration::from_millis(1);
 
+/// Requires an environment name to belong to both the global and provider-specific allowlists.
 pub(crate) fn is_env_var_allowed_for_plugin(plugin_id: &str, name: &str) -> bool {
     if !WHITELISTED_ENV_VARS.contains(&name) {
         return false;
@@ -834,6 +835,7 @@ fn redact_http_response_body(url: &str, body: &str) -> String {
     redact_body(&body)
 }
 
+/// Produces an endpoint-scoped log copy with provider identities hidden; plugin responses stay raw.
 fn redact_plugin_http_response_body(plugin_id: &str, url: &str, body: &str) -> String {
     let path = url.split(['?', '#']).next().unwrap_or(url);
     if plugin_id == "opencode" && path == "https://opencode.ai/_server" {

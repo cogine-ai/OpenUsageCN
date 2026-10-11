@@ -1,7 +1,9 @@
+/// Hides subscription identity fields in a log copy, suppressing malformed JSON entirely.
 pub(super) fn subscription_body(body: &str) -> String {
     let Ok(mut payload) = serde_json::from_str::<serde_json::Value>(body) else {
         return "[REDACTED SUBSCRIPTION RESPONSE]".to_string();
     };
+    /// Removes identity fields recursively while preserving subscription diagnostics.
     fn redact_ids(value: &mut serde_json::Value) {
         match value {
             serde_json::Value::Object(object) => {
@@ -21,11 +23,13 @@ pub(super) fn subscription_body(body: &str) -> String {
     payload.to_string()
 }
 
+/// Hides AMP display text in a log copy, suppressing malformed JSON entirely.
 pub(super) fn amp_body(body: &str) -> String {
     let Ok(mut payload) = serde_json::from_str::<serde_json::Value>(body) else {
         return "[REDACTED AMP RESPONSE]".to_string();
     };
     // HTTP bodies are logged before the plugin validates the response shape.
+    /// Hides display text at any object or array depth before response-shape validation.
     fn redact_display_text(value: &mut serde_json::Value) {
         match value {
             serde_json::Value::Object(object) => {
@@ -46,6 +50,7 @@ pub(super) fn amp_body(body: &str) -> String {
     payload.to_string()
 }
 
+/// Hides OpenRouter key identity in a log copy while keeping quota diagnostics.
 pub(super) fn openrouter_key_body(body: &str) -> String {
     let Ok(mut payload) = serde_json::from_str::<serde_json::Value>(body) else {
         return "[REDACTED OPENROUTER KEY RESPONSE]".to_string();
@@ -66,6 +71,7 @@ pub(super) fn openrouter_key_body(body: &str) -> String {
     payload.to_string()
 }
 
+/// Hides Gemini project identity in a log copy while keeping tier metadata.
 pub(super) fn gemini_assist_body(body: &str) -> String {
     let Ok(mut payload) = serde_json::from_str::<serde_json::Value>(body) else {
         return "[REDACTED GEMINI ASSIST RESPONSE]".to_string();
@@ -79,6 +85,7 @@ pub(super) fn gemini_assist_body(body: &str) -> String {
     payload.to_string()
 }
 
+/// Hides Doubao error messages that may echo keys, retaining error codes and request IDs.
 pub(super) fn doubao_error_body(body: &str) -> String {
     let Ok(mut payload) = serde_json::from_str::<serde_json::Value>(body) else {
         return "[REDACTED DOUBAO GATEWAY RESPONSE]".to_string();

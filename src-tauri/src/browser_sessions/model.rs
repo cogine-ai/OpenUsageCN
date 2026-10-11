@@ -43,6 +43,7 @@ pub(crate) struct ProfileDiscoveryResult {
 }
 
 impl ProfileDiscoveryResult {
+    /// Logs only the typed failure code and returns a receipt with no attachable candidate.
     pub(super) fn failed(profile_key: &str, error: BrowserSessionError) -> Self {
         log::warn!("Browser account check failed: code={:?}", error.code);
         Self {
@@ -53,6 +54,7 @@ impl ProfileDiscoveryResult {
         }
     }
 
+    /// Records a completed profile check that found no cookie candidates, without implying failure.
     pub(super) fn empty(profile_key: &str) -> Self {
         Self {
             profile_key: profile_key.to_string(),
@@ -62,6 +64,7 @@ impl ProfileDiscoveryResult {
         }
     }
 
+    /// Publishes already-verified candidate metadata without exposing its retained credentials.
     pub(super) fn verified(profile_key: &str, candidate: BrowserCandidateSummary) -> Self {
         Self {
             profile_key: profile_key.to_string(),
@@ -109,6 +112,7 @@ pub(crate) struct AttachedSessionClaim {
 }
 
 impl AttachedSessionClaim {
+    /// Holds source metadata and an opaque identity for a session already claimed from the roster.
     pub(super) fn new(
         handle: SessionRefHandle,
         provider: CookieProvider,
@@ -125,22 +129,27 @@ impl AttachedSessionClaim {
         }
     }
 
+    /// Borrows the broker reference used to retain or release this claim's session.
     pub(crate) fn session_ref(&self) -> &str {
         &self.handle.session_ref
     }
 
+    /// Identifies the verified provider so attachment can reject a cross-provider claim.
     pub(crate) fn provider(&self) -> CookieProvider {
         self.provider
     }
 
+    /// Identifies the source browser used to assign the connection kind.
     pub(crate) fn browser(&self) -> Browser {
         self.browser
     }
 
+    /// Borrows the exact source profile used to replace or reconnect its account connection.
     pub(crate) fn profile_key(&self) -> &str {
         &self.profile_key
     }
 
+    /// Borrows the opaque identity for fingerprinting; it must not be serialized or logged.
     pub(crate) fn normalized_identity(&self) -> &str {
         &self.normalized_identity
     }
@@ -154,6 +163,7 @@ impl AttachedSessionClaim {
 }
 
 impl Drop for AttachedSessionClaim {
+    /// Erases the claim's identity copy without releasing the separately owned broker session.
     fn drop(&mut self) {
         unsafe { self.normalized_identity.as_bytes_mut().fill(0) };
     }
@@ -166,6 +176,7 @@ pub(crate) struct BrokerSessionCredential {
 }
 
 impl BrokerSessionCredential {
+    /// Owns a credential snapshot and its rotation generation until both secret buffers are dropped.
     pub(super) fn new(cookie_header: String, normalized_identity: String, generation: u64) -> Self {
         Self {
             cookie_header,
@@ -174,20 +185,24 @@ impl BrokerSessionCredential {
         }
     }
 
+    /// Borrows cookies for internal provider requests; callers must keep them out of receipts.
     pub(crate) fn cookie_header(&self) -> &str {
         &self.cookie_header
     }
 
+    /// Borrows the session identity used to recheck the selected OAuth binding.
     pub(crate) fn normalized_identity(&self) -> &str {
         &self.normalized_identity
     }
 
+    /// Returns the snapshot revision needed to reject enrichment after concurrent cookie rotation.
     pub(crate) fn generation(&self) -> u64 {
         self.generation
     }
 }
 
 impl Drop for BrokerSessionCredential {
+    /// Overwrites both credential and identity copies before their allocations are released.
     fn drop(&mut self) {
         unsafe {
             self.cookie_header.as_bytes_mut().fill(0);

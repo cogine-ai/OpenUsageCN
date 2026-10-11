@@ -50,6 +50,7 @@ export type AppContentActionProps = {
 
 export type AppContentProps = AppContentDerivedProps & AppContentActionProps
 
+/** Routes the active page and passes provider operations separately from display preferences. */
 export function AppContent({
   platformCapabilities,
   displayPlugins,
@@ -156,9 +157,11 @@ export function AppContent({
     )
   }
 
+  /** Retries the selected provider without changing its account selection. */
   const handleRetry = selectedPlugin
     ? () => onRetryPlugin(selectedPlugin.meta.id)
     : /* v8 ignore next */ undefined
+  /** Reloads usage for the selected provider after its account changes. */
   const handleAccountChangeRefresh = selectedPlugin
     ? () => onAccountChangeRefreshPlugin(selectedPlugin.meta.id)
     : /* v8 ignore next */ undefined

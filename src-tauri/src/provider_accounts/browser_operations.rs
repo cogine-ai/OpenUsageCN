@@ -17,6 +17,7 @@ struct ClaimedBrowserSession {
 }
 
 impl ClaimedBrowserSession {
+    /// Owns cleanup of a claimed session until an account mutation explicitly retains it.
     fn new(broker: Arc<BrowserSessionBroker>, session_ref: String) -> Self {
         Self {
             broker,
@@ -25,12 +26,14 @@ impl ClaimedBrowserSession {
         }
     }
 
+    /// Transfers session cleanup responsibility to the successfully attached account connection.
     fn retain(&mut self) {
         self.retained = true;
     }
 }
 
 impl Drop for ClaimedBrowserSession {
+    /// Releases a claim abandoned before the persisted attachment was accepted.
     fn drop(&mut self) {
         if !self.retained {
             self.broker.release_session(&self.session_ref);
@@ -39,6 +42,7 @@ impl Drop for ClaimedBrowserSession {
 }
 
 impl ProviderAccounts {
+    /// Adds provider-verified display identity only from attached, available, live browser sessions.
     pub(super) fn add_browser_identity(
         &self,
         view: &mut ProviderAccountView,
@@ -73,6 +77,7 @@ impl ProviderAccounts {
         Ok(())
     }
 
+    /// Dispatches supported providers to their distinct identity and account-attachment contracts.
     pub(super) fn attach_browser_candidate(
         &self,
         provider_id: &str,
@@ -85,6 +90,7 @@ impl ProviderAccounts {
         }
     }
 
+    /// Consumes a candidate, merges by fingerprint, and retains its session after persisted attachment.
     fn attach_cursor_browser_candidate(
         &self,
         candidate_id: &str,
@@ -226,6 +232,7 @@ impl ProviderAccounts {
         ))
     }
 
+    /// Attaches only to the active matching CLI OAuth account and releases the claim on failure.
     fn attach_claude_browser_candidate(
         &self,
         candidate_id: &str,
@@ -346,6 +353,7 @@ impl ProviderAccounts {
         result
     }
 
+    /// Persists detachment of a browser connection before releasing its retained session secrets.
     pub(super) fn detach_browser_connection(
         &self,
         provider_id: &str,

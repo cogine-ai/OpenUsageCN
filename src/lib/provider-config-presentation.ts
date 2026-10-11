@@ -1,6 +1,7 @@
 import type { PluginConfigField } from "@/lib/plugin-types"
 import type { ProviderConfigView } from "@/lib/provider-config"
 
+/** Populate editable defaults and public values while keeping saved secrets out of input state. */
 export function configDraft(fields: PluginConfigField[], view: ProviderConfigView | null): Record<string, string | boolean> {
   return Object.fromEntries(fields.map((field) => {
     const saved = view?.values[field.id]
@@ -9,6 +10,7 @@ export function configDraft(fields: PluginConfigField[], view: ProviderConfigVie
   }))
 }
 
+/** Resolve Auto for presentation; an unconfirmed environment region remains unselected. */
 export function effectiveSelections(fields: PluginConfigField[], draft: Record<string, string | boolean>, view: ProviderConfigView | null): Record<string, string> {
   return Object.fromEntries(fields.filter((field) => field.type === "select").map((field) => {
     const value = String(draft[field.id] ?? "")
@@ -26,6 +28,7 @@ export function effectiveSelections(fields: PluginConfigField[], draft: Record<s
   }))
 }
 
+/** Restrict editing and submission to fields for the effective selected method. */
 export function visibleConfigFields(fields: PluginConfigField[], selections: Record<string, string>): PluginConfigField[] {
   return fields.filter((field) => !field.visibleWhen || field.visibleWhen.values.includes(selections[field.visibleWhen.field]))
 }

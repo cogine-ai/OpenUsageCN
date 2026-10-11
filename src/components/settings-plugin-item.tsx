@@ -17,6 +17,7 @@ export interface SettingsPluginConfig {
   links?: PluginLink[]
 }
 
+/** Provides pointer and keyboard sorting without opening the provider connection page. */
 function DragHandle({
   attributes,
   listeners,
@@ -43,6 +44,7 @@ function DragHandle({
 }
 
 
+/** Keeps provider ordering, enablement, and connection-source status independently actionable. */
 export function SortablePluginItem({ plugin, onToggle }: {
   plugin: SettingsPluginConfig
   onToggle: (id: string) => void

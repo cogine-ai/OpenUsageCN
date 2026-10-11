@@ -8,6 +8,7 @@ type UseProbeStateArgs = {
   onProbeResult?: () => void
 }
 
+/** Track current checks while retaining the last successful quota and its actual freshness. */
 export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
   const [pluginStates, setPluginStates] = useState<Record<string, PluginState>>({})
 
@@ -16,6 +17,7 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
     pluginStatesRef.current = pluginStates
   }, [pluginStates])
 
+  /** Update the shared ref synchronously so queued events observe the same state as the next render. */
   const updatePluginStates = useCallback(
     (
       updater: (
@@ -29,6 +31,7 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
     []
   )
 
+  /** Mark refreshes pending without discarding the existing quota or its success timestamp. */
   const setLoadingForPlugins = useCallback((ids: string[]) => {
     updatePluginStates((prev) => {
       const next = { ...prev }
@@ -47,6 +50,7 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
     })
   }, [updatePluginStates])
 
+  /** Clear the previous account's quota before a replacement account is checked. */
   const setAccountTransitionForPlugins = useCallback((ids: string[]) => {
     updatePluginStates((prev) => {
       const next = { ...prev }
@@ -65,6 +69,7 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
     })
   }, [updatePluginStates])
 
+  /** Record a failed check while preserving previously retrieved data and successful refresh times. */
   const setErrorForPlugins = useCallback((ids: string[], error: string) => {
     const now = Date.now()
     updatePluginStates((prev) => {
@@ -84,6 +89,7 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
     })
   }, [updatePluginStates])
 
+  /** Distinguish real success from errors and cached Claude rate-limit data when recording freshness. */
   const handleProbeResult = useCallback(
     (output: PluginOutput, { manual }: ProbeResultContext) => {
       const errorMessage = probeFailure(output)

@@ -10,6 +10,7 @@ const MAX_IDENTITY_BODY: u64 = 1024 * 1024;
 pub(crate) struct VerifiedIdentity(String, Option<super::model::AccountIdentityDisplay>);
 
 impl VerifiedIdentity {
+    /// Accepts a bounded, control-free subject and erases input buffers abandoned by normalization.
     pub(crate) fn new(mut value: String) -> Option<Self> {
         let trimmed = value.trim();
         if trimmed.is_empty() || trimmed.len() > 512 || trimmed.chars().any(char::is_control) {
@@ -24,6 +25,7 @@ impl VerifiedIdentity {
         Some(Self(normalized, None))
     }
 
+    /// Requires a usable provider display field and rejects any invalid nonblank email or name.
     pub(crate) fn with_display(
         mut self,
         email: Option<String>,
@@ -46,6 +48,7 @@ impl VerifiedIdentity {
         Some(self)
     }
 
+    /// Copies provider-supplied display fields without exposing the stable subject.
     pub(super) fn display(&self) -> Option<super::model::AccountIdentityDisplay> {
         self.1.clone()
     }
@@ -55,17 +58,20 @@ impl VerifiedIdentity {
         &self.0
     }
 
+    /// Transfers the subject to a new secret owner instead of erasing it on this wrapper's drop.
     pub(super) fn into_inner(mut self) -> String {
         std::mem::take(&mut self.0)
     }
 }
 
 impl Drop for VerifiedIdentity {
+    /// Erases the stable subject when ownership was not transferred to the roster.
     fn drop(&mut self) {
         unsafe { self.0.as_bytes_mut().fill(0) };
     }
 }
 
+/// Bounds and normalizes a display field, erases its input, and registers accepted text for redaction.
 fn display_value(mut value: String, limit: usize) -> Option<String> {
     let trimmed = value.trim();
     let result =
@@ -96,6 +102,7 @@ pub(crate) enum ProviderTransportError {
 }
 
 pub(crate) trait ProviderIdentityTransport: Send + Sync {
+    /// Verifies an isolated cookie candidate within the timeout without exposing transport details.
     fn validate(
         &self,
         provider: CookieProvider,
@@ -114,6 +121,7 @@ pub(super) enum CursorStatusAction {
 }
 
 impl ProviderIdentityTransport for FixedProviderIdentityTransport {
+    /// Sends cookies only to the fixed Cursor identity endpoint and rejects redirects.
     fn validate(
         &self,
         provider: CookieProvider,
@@ -152,6 +160,7 @@ impl ProviderIdentityTransport for FixedProviderIdentityTransport {
     }
 }
 
+/// Preserves timeout classification without carrying request URLs or credentials into errors.
 fn map_request_error(error: reqwest::Error) -> ProviderTransportError {
     if error.is_timeout() {
         ProviderTransportError::Timeout
@@ -160,6 +169,7 @@ fn map_request_error(error: reqwest::Error) -> ProviderTransportError {
     }
 }
 
+/// Reads identity only on 200 and separates rejected authentication from transport failures.
 pub(super) fn classify_cursor_status(
     status: u16,
 ) -> Result<CursorStatusAction, ProviderTransportError> {
@@ -178,6 +188,7 @@ struct CursorAuthBody {
     name: Option<String>,
 }
 
+/// Bounds and erases the response body, with cancellation taking precedence over parsed identity.
 fn decode_cursor_identity(
     response: reqwest::blocking::Response,
     cancellation: &CancellationToken,
@@ -200,6 +211,7 @@ fn decode_cursor_identity(
     outcome
 }
 
+/// Requires a stable subject plus usable provider email or name before reporting verified identity.
 pub(super) fn decode_cursor_identity_bytes(
     body: &[u8],
 ) -> Result<ValidationOutcome, ProviderTransportError> {
