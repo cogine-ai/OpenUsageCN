@@ -356,7 +356,7 @@ export function SettingsPage({
           onGlobalShortcutChange={onGlobalShortcutChange}
         />
       ) : null}
-      {platformCapabilities?.localHttpApi || platformCapabilities?.cli ? (
+      {platformCapabilities ? (
         <section>
           <h3>
             <Button type="button" variant="ghost" className="w-full justify-between px-0 text-sm font-semibold"
@@ -368,13 +368,13 @@ export function SettingsPage({
           </h3>
           <div id={toolsPanelId} hidden={!toolsExpanded} className="space-y-4 pt-2">
             {toolsExpanded ? <>
-              {platformCapabilities?.localHttpApi ? <LocalHttpApiSection /> : null}
-              {platformCapabilities?.cli ? <CliSection /> : null}
+              <LocalHttpApiSection />
+              {platformCapabilities.cli ? <CliSection /> : null}
             </> : null}
           </div>
         </section>
       ) : null}
-      {platformCapabilities?.autostart ? (
+      {platformCapabilities ? (
         <section>
           <h3 className="text-sm font-semibold mb-0">登录时启动</h3>
           <p className="text-sm text-muted-foreground mb-2">
