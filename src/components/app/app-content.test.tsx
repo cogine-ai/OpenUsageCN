@@ -58,8 +58,6 @@ function createProps(): AppContentProps {
   return {
     platformCapabilities: {
       platform: "macos",
-      localHttpApi: true,
-      autostart: true,
       cli: true,
       paceNotifications: true,
       globalShortcuts: true,
