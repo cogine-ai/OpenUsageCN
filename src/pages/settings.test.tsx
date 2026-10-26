@@ -64,8 +64,6 @@ import { useAppUiStore } from "@/stores/app-ui-store"
 
 const macosCapabilities = {
   platform: "macos",
-  localHttpApi: true,
-  autostart: true,
   cli: true,
   paceNotifications: true,
   globalShortcuts: true,
@@ -75,8 +73,6 @@ const macosCapabilities = {
 
 const windowsCapabilities = {
   platform: "windows",
-  localHttpApi: true,
-  autostart: true,
   cli: false,
   paceNotifications: false,
   globalShortcuts: false,
@@ -194,7 +190,8 @@ describe("SettingsPage", () => {
     expect(screen.queryByRole("button", { name: "安装命令" })).not.toBeInTheDocument()
   })
 
-  it.each([null, { ...windowsCapabilities, localHttpApi: false }])("omits tool access when no tool capability is supported", (platformCapabilities) => {
+  it("omits tool access while platform capabilities are still loading", () => {
+    const platformCapabilities = null
     render(<SettingsPage {...defaultProps} platformCapabilities={platformCapabilities} />)
     expect(screen.queryByRole("button", { name: "工具接入" })).not.toBeInTheDocument()
     expect(toolMocks.invoke).not.toHaveBeenCalledWith("get_local_http_api_status")
