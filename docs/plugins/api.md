@@ -345,19 +345,20 @@ Reads a generic password from the macOS Keychain. Pass `account` when the servic
 
 ### Example
 
+Only a confirmed missing file selects Keychain. Metadata, file-read, JSON parsing and Keychain errors stop the attempt; they do not select another credential source.
+
 ```javascript
 let credentials = null
+const credentialsPath = "~/.myapp/credentials.json"
 
-// Try file first, fall back to keychain
-if (ctx.host.fs.exists("~/.myapp/credentials.json")) {
-  credentials = JSON.parse(ctx.host.fs.readText("~/.myapp/credentials.json"))
-} else {
-  try {
-    const keychainValue = ctx.host.keychain.readGenericPassword("MyApp-credentials")
-    credentials = JSON.parse(keychainValue)
-  } catch {
-    throw "Login required. Sign in to continue."
-  }
+try {
+  const rawCredentials = ctx.host.fs.existsStrict(credentialsPath)
+    ? ctx.host.fs.readText(credentialsPath)
+    : ctx.host.keychain.readGenericPassword("MyApp-credentials")
+  credentials = JSON.parse(rawCredentials)
+} catch {
+  ctx.host.log.error("Credentials could not be loaded.")
+  throw "Credentials could not be loaded. Check file access or sign in again."
 }
 ```
 

@@ -20,7 +20,10 @@ pub(super) fn exists_strict(path: &Path) -> Result<bool, &'static str> {
 
 // metadata follows symlinks; a dangling link is existing broken storage, not an absent source.
 fn confirm_absent_entry(path: &Path) -> Result<(), &'static str> {
-    match std::fs::symlink_metadata(path) {
+    // Trailing separators or `/.` force link traversal even for symlink_metadata.
+    // Components remove those spellings while retaining `..` for filesystem resolution.
+    let entry_path: std::path::PathBuf = path.components().collect();
+    match std::fs::symlink_metadata(&entry_path) {
         Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
         Err(error) => metadata_error(error.kind()).map(|_| ()),
         Ok(_) => metadata_error(ErrorKind::NotFound).map(|_| ()),
@@ -60,26 +63,48 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn dangling_database_or_ancestor_symlinks_never_allow_legacy_fallback() {
-        let root = tempfile::tempdir().unwrap();
-        let link = root.path().join("broken-storage");
-        std::os::unix::fs::symlink(root.path().join("absent-target"), &link).unwrap();
+        let root = std::env::temp_dir().join(format!("openusage-links-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&root).unwrap();
+        let link = root.join("broken-storage");
+        std::os::unix::fs::symlink(root.join("absent-target"), &link).unwrap();
         for path in [
             link.clone(),
             link.join("database"),
             link.join("nested/deeper/database"),
+            std::path::PathBuf::from(format!("{}/", link.display())),
+            std::path::PathBuf::from(format!("{}/.", link.display())),
+            std::path::PathBuf::from(format!("{}///./", link.display())),
+            std::path::PathBuf::from(format!("{}//./nested///database/.", link.display())),
+            link.join("../database"),
         ] {
             assert_eq!(exists_strict(&path), Err(UNREADABLE_METADATA));
         }
         assert_eq!(
-            exists_strict(&root.path().join("missing/nested/database")),
+            exists_strict(&root.join("missing/nested/database")),
             Ok(false)
         );
-        let directory_link = root.path().join("working-storage");
-        std::os::unix::fs::symlink(root.path(), &directory_link).unwrap();
+        let directory_link = root.join("working-storage");
+        std::os::unix::fs::symlink(&root, &directory_link).unwrap();
         assert_eq!(
             exists_strict(&directory_link.join("missing-database")),
             Ok(false)
         );
+        let existing = root.join("database");
+        std::fs::write(&existing, b"synthetic").unwrap();
+        assert_eq!(exists_strict(&root.join("missing/../database")), Ok(false));
+        assert_eq!(
+            exists_strict(
+                &directory_link
+                    .join("../")
+                    .join(root.file_name().unwrap())
+                    .join("database")
+            ),
+            Ok(true)
+        );
+        std::fs::remove_file(existing).unwrap();
+        std::fs::remove_file(link).unwrap();
+        std::fs::remove_file(directory_link).unwrap();
+        std::fs::remove_dir(root).unwrap();
     }
 
     #[test]
