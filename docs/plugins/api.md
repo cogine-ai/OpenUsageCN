@@ -113,7 +113,7 @@ host.fs.listDir(path: string): string[]  // Throws if directory cannot be opened
 
 ### Error Handling
 
-Use `existsStrict` before choosing between credential sources. It returns `false` only when the path is missing beneath a readable directory. An existing non-directory parent is an error, including on Windows where the original lookup may report a missing path. Permission failures and other metadata errors throw a fixed message without the local path; they must not select an older login. The existing `exists` keeps its previous behavior, including returning `false` on metadata errors.
+Use `existsStrict` before choosing between credential sources. It returns `false` only when the path is missing beneath a readable directory. An existing non-directory parent or a broken symbolic link at the path or any parent is an error, including on Windows where the original lookup may report a missing path. Permission failures and other metadata errors throw a fixed message without the local path; they must not select an older login. The existing `exists` keeps its previous behavior, including returning `false` on metadata errors.
 
 Filesystem reads and writes throw on I/O errors. Always wrap them in try/catch:
 
@@ -339,7 +339,8 @@ Reads a generic password from the macOS Keychain. Pass `account` when the servic
 - **Shared reads**: Concurrent reads of the same service/account share one operation. A caller timing out does not cancel another caller's read.
 - **Distinct failures**: Errors start with `missing:`, `denied:`, `locked:`, `timedOut:` or `failed:`. A rejected or locked item is not reported as missing. Raw system output is not included.
 - **Denied access**: After a subprocess reports denial, later background attempts for that item stay blocked until restart. Restore access before restarting.
-- **Existing-item writes**: Background writes update an existing authorized item and preserve its account. They do not create new items or grant access. Missing items require login through the owning tool.
+- **Write preflight**: Background writes first require an existing authorized item and preserve its selected service and account. If the item is missing at this check, log in through the owning tool. The host requests no account or access-rule changes.
+- **Concurrent deletion limitation**: The check and `/usr/bin/security add-generic-password -U` are not atomic. If another process deletes the item between them, the command can recreate it under the selected service and account with the system's creation defaults. This API does not guarantee update-only writes. Prefer restoring a missing login through its owning tool.
 - **Optional account scope**: When `account` is set, lookup uses both service and account
 
 ### Example

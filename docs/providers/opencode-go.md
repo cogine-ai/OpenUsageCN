@@ -18,6 +18,8 @@ unreadable or invalid modern credential store never revives an old login.
 The initial database check also preserves access errors: denied metadata access is
 reported as **Unreadable Credentials**, without reading the older file or requesting usage.
 A database path below an ordinary file is also rejected rather than treated as a missing database.
+A broken symbolic link at the database or any parent directory is reported as unreadable storage;
+it never permits using the older login.
 Readable storage without an active login is reported as **Not Detected**.
 
 An absolute `XDG_DATA_HOME` changes the data root; relative values use the default

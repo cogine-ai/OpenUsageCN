@@ -9,11 +9,21 @@ pub(super) fn exists_strict(path: &Path) -> Result<bool, &'static str> {
     match std::fs::metadata(path) {
         Ok(_) => Ok(true),
         Err(error) if error.kind() == ErrorKind::NotFound => {
+            confirm_absent_entry(path)?;
             confirm_missing_parent(path, |parent| {
                 std::fs::metadata(parent).map(|value| value.is_dir())
             })
         }
         Err(error) => metadata_error(error.kind()),
+    }
+}
+
+// metadata follows symlinks; a dangling link is existing broken storage, not an absent source.
+fn confirm_absent_entry(path: &Path) -> Result<(), &'static str> {
+    match std::fs::symlink_metadata(path) {
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+        Err(error) => metadata_error(error.kind()).map(|_| ()),
+        Ok(_) => metadata_error(ErrorKind::NotFound).map(|_| ()),
     }
 }
 
@@ -36,7 +46,7 @@ fn confirm_missing_parent(
         match is_directory(parent) {
             Ok(true) => return Ok(false),
             Ok(false) => return metadata_error(ErrorKind::NotADirectory),
-            Err(error) if error.kind() == ErrorKind::NotFound => continue,
+            Err(error) if error.kind() == ErrorKind::NotFound => confirm_absent_entry(parent)?,
             Err(error) => return metadata_error(error.kind()),
         }
     }
@@ -46,6 +56,31 @@ fn confirm_missing_parent(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn dangling_database_or_ancestor_symlinks_never_allow_legacy_fallback() {
+        let root = tempfile::tempdir().unwrap();
+        let link = root.path().join("broken-storage");
+        std::os::unix::fs::symlink(root.path().join("absent-target"), &link).unwrap();
+        for path in [
+            link.clone(),
+            link.join("database"),
+            link.join("nested/deeper/database"),
+        ] {
+            assert_eq!(exists_strict(&path), Err(UNREADABLE_METADATA));
+        }
+        assert_eq!(
+            exists_strict(&root.path().join("missing/nested/database")),
+            Ok(false)
+        );
+        let directory_link = root.path().join("working-storage");
+        std::os::unix::fs::symlink(root.path(), &directory_link).unwrap();
+        assert_eq!(
+            exists_strict(&directory_link.join("missing-database")),
+            Ok(false)
+        );
+    }
 
     #[test]
     fn distinguishes_missing_paths_from_unreadable_metadata() {
