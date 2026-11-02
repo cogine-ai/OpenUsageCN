@@ -32,8 +32,9 @@ mod tests {
         std::fs::write(&file, b"synthetic").unwrap();
         assert_eq!(exists_strict(&file), Ok(true));
         assert_eq!(exists_strict(&root.join("missing")), Ok(false));
-        // ENOTDIR is a real metadata error even when tests run as root, unlike chmod-based tests.
-        let inaccessible = file.join("private-storage-path");
+        // NUL is invalid on both Windows and Unix, even under an administrator/root account.
+        // A regular-file parent is unsuitable here: Windows reports that case as NotFound.
+        let inaccessible = file.join("private-storage-path\0");
         assert!(std::fs::metadata(&inaccessible).is_err());
         let error = exists_strict(&inaccessible).unwrap_err();
         assert_eq!(error, UNREADABLE_METADATA);
@@ -55,7 +56,7 @@ mod tests {
             let host = rquickjs::Object::new(ctx.clone()).unwrap();
             super::super::inject_fs(&ctx, &host).unwrap();
             ctx.globals().set("host", host).unwrap();
-            ctx.globals().set("privatePath", root.join("private-storage-path").to_str().unwrap()).unwrap();
+            ctx.globals().set("privatePath", root.join("private-storage-path\0").to_str().unwrap()).unwrap();
             let error: String = ctx.eval("try { host.fs.existsStrict(privatePath); 'no error' } catch (error) { String(error) }").unwrap();
             assert!(error.contains(UNREADABLE_METADATA));
             assert!(!error.contains("private-storage-path"));
