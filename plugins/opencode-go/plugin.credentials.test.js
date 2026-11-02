@@ -104,6 +104,32 @@ describe("OpenCode Go Active Credentials", () => {
     expect(ctx.host.http.request).not.toHaveBeenCalled();
   });
 
+  it.each(["EACCES", "ENOTDIR"])("does not revive legacy auth after a %s database metadata error", async code => {
+    const { ctx, plugin, db } = await setup([]);
+    const readText = vi.spyOn(ctx.host.fs, "readText");
+    ctx.host.fs.existsStrict.mockImplementation(() => {
+      throw new Error(code + ": private-storage-path");
+    });
+    expect(() => plugin.probe(ctx)).toThrow("credentials could not be read");
+    expect(ctx.host.fs.existsStrict).toHaveBeenCalledWith(db);
+    expect(readText).not.toHaveBeenCalled();
+    expect(ctx.host.sqlite.query).not.toHaveBeenCalled();
+    expect(ctx.host.http.request).not.toHaveBeenCalled();
+    expect(ctx.host.log.error).toHaveBeenCalledWith("OpenCode Go credential database metadata could not be read.");
+    expect(JSON.stringify(ctx.host.log.error.mock.calls)).not.toContain("private-storage-path");
+  });
+
+  it("still uses legacy auth when the modern database is confirmed missing", async () => {
+    const { ctx, plugin } = await setup([]);
+    ctx.host.fs.existsStrict.mockReturnValue(false);
+    const readText = vi.spyOn(ctx.host.fs, "readText");
+    plugin.probe(ctx);
+    expect(readText).toHaveBeenCalledWith(DIRECTORY + "/auth.json");
+    expect(ctx.host.sqlite.query).not.toHaveBeenCalled();
+    expect(ctx.host.http.request).toHaveBeenCalledTimes(1);
+    expect(ctx.host.http.request.mock.calls[0][0].headers.Authorization).toBe("Bearer stale-legacy-key");
+  });
+
   it("does not fall back after a modern database error", async () => {
     const { ctx, plugin } = await setup([]);
     ctx.host.sqlite.query.mockImplementation(() => { throw new Error("private-storage-path"); });

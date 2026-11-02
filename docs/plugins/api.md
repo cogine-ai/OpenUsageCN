@@ -99,6 +99,7 @@ ctx.host.log.error("API request failed: " + error.message)
 
 ```typescript
 host.fs.exists(path: string): boolean
+host.fs.existsStrict(path: string): boolean  // False only for missing paths; throws on other metadata errors
 host.fs.readText(path: string): string   // Throws on error
 host.fs.writeText(path: string, content: string): void  // Throws on error
 host.fs.writeTextIfUnchanged(path: string, content: string, expectedSha256: string): boolean  // Throws on I/O error
@@ -111,6 +112,8 @@ host.fs.listDir(path: string): string[]  // Throws if directory cannot be opened
 - `~/foo` expands under the user's home directory on macOS and Windows
 
 ### Error Handling
+
+Use `existsStrict` before choosing between credential sources. It returns `false` only when the path is missing. Permission failures and other metadata errors throw a fixed message without the local path; they must not select an older login. The existing `exists` keeps its previous behavior, including returning `false` on metadata errors.
 
 Filesystem reads and writes throw on I/O errors. Always wrap them in try/catch:
 

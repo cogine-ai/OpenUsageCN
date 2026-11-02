@@ -294,7 +294,9 @@ Unavailable or denied access is reported rather than silently selecting a differ
 
 Encrypted Desktop credentials remain read-only. Refreshed tokens stay in memory;
 OpenUsageCN never replaces Cursor's encrypted values with plaintext. Account identity and
-credential-change checks still apply to quota and history requests.
+credential-change checks still apply to quota and history requests. Desktop credential-version checks
+hash the stored values without decrypting them or accessing Keychain; token decryption occurs
+only when the session itself is needed.
 
 #### 2) Cursor CLI keychain (fallback)
 

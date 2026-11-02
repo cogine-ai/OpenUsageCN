@@ -231,12 +231,16 @@
     throw "Selected Cursor account connection is unavailable."
   }
 
-  function loadDesktopAuth(ctx) {
-    // Capture stored values once; generation must describe the credentials actually decrypted.
-    const rawAuth = {
+  function loadDesktopRawAuth(ctx) {
+    return {
       accessToken: readStateValue(ctx, "cursorAuth/accessToken", true),
       refreshToken: readStateValue(ctx, "cursorAuth/refreshToken", true),
     }
+  }
+
+  function loadDesktopAuth(ctx) {
+    // Capture stored values once; generation must describe the credentials actually decrypted.
+    const rawAuth = loadDesktopRawAuth(ctx)
     const decode = (value) => {
       if (typeof value !== "string" || !value.startsWith("cursor-safe-storage:")) return value
       if (!ctx.host.cursor || typeof ctx.host.cursor.decryptToken !== "function") {
@@ -268,7 +272,9 @@
   function credentialGeneration(ctx, connectionTarget) {
     return credentialGenerationForAuthState(
       ctx,
-      loadAuthStateForConnection(ctx, connectionTarget)
+      connectionTarget && connectionTarget.connectionKey === "cursor-desktop"
+        ? loadDesktopRawAuth(ctx)
+        : loadAuthStateForConnection(ctx, connectionTarget)
     )
   }
 

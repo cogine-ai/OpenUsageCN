@@ -44,6 +44,22 @@ describe("Cursor encrypted Desktop credentials", () => {
     expect(plugin.credentialGeneration(ctx, target)).not.toBe(generation)
   })
 
+  it("calculates Desktop generation without decryption or Keychain access even when decryption is denied", async () => {
+    const { ctx, plugin, raw } = await setup()
+    ctx.host.cursor.decryptToken.mockImplementation(() => { throw new Error("denied: Cursor credential access") })
+    const target = { connectionKey: "cursor-desktop" }
+    const generation = plugin.credentialGeneration(ctx, target)
+    const framed = "cursor-credential-v1\n" +
+      raw.access.length + ":" + raw.access + raw.refresh.length + ":" + raw.refresh
+    expect(generation).toBe(ctx.host.crypto.sha256Hex(framed))
+    raw.refresh = envelope("changed-refresh")
+    expect(plugin.credentialGeneration(ctx, target)).not.toBe(generation)
+    expect(ctx.host.cursor.decryptToken).not.toHaveBeenCalled()
+    expect(ctx.host.keychain.readGenericPassword).not.toHaveBeenCalled()
+    expect(ctx.host.keychain.readGenericPasswordForCurrentUser).not.toHaveBeenCalled()
+    expect(ctx.host.http.request).not.toHaveBeenCalled()
+  })
+
   it("rejects a newer lease when storage rotates after the credential snapshot was captured", async () => {
     const { ctx, plugin, raw, tokens } = await setup()
     const captured = { ...raw }

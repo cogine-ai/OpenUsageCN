@@ -71,7 +71,14 @@
   function loadAuth(ctx) {
     const paths = credentialPaths(ctx);
     if (paths.database === null) return null;
-    if (!ctx.host.fs.exists(paths.database)) return loadAuthFromFile(ctx, paths.auth);
+    let databaseExists;
+    try {
+      databaseExists = ctx.host.fs.existsStrict(paths.database);
+    } catch (_) {
+      ctx.host.log.error("OpenCode Go credential database metadata could not be read.");
+      throw "OpenCode Go credentials could not be read. Check OpenCode's local files and try again.";
+    }
+    if (!databaseExists) return loadAuthFromFile(ctx, paths.auth);
     const tables = credentialRows(ctx, paths.database,
       "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'credential'");
     if (!tables.length) return loadAuthFromFile(ctx, paths.auth);

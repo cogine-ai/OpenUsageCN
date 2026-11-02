@@ -1213,6 +1213,9 @@ fn inject_log<'js>(ctx: &Ctx<'js>, host: &Object<'js>, plugin_id: &str) -> rquic
     Ok(())
 }
 
+#[path = "host_api/fs_metadata.rs"]
+mod fs_metadata;
+
 fn inject_fs<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()> {
     let fs_obj = Object::new(ctx.clone())?;
 
@@ -1222,6 +1225,18 @@ fn inject_fs<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()> {
             let expanded = expand_path(&path);
             std::path::Path::new(&expanded).exists()
         })?,
+    )?;
+
+    fs_obj.set(
+        "existsStrict",
+        Function::new(
+            ctx.clone(),
+            move |ctx_inner: Ctx<'_>, path: String| -> rquickjs::Result<bool> {
+                let expanded = expand_path(&path);
+                fs_metadata::exists_strict(Path::new(&expanded))
+                    .map_err(|error| Exception::throw_message(&ctx_inner, error))
+            },
+        )?,
     )?;
 
     fs_obj.set(

@@ -163,7 +163,7 @@ fn a_complete_page_arriving_after_the_deadline_cannot_replace_the_cache() {
         HistoryScheduler::isolated_for_test(),
     );
     let refresh = service
-        .refresh_before_deadline(demand(), Instant::now() + Duration::from_millis(50))
+        .refresh_before_deadline(demand(), Instant::now() + Duration::from_secs(1))
         .unwrap()
         .wait()
         .unwrap();

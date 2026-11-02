@@ -19,7 +19,7 @@ The version number was retained for this local build. This was not a public rele
 The old application was stopped for replacement. The previous signed application and application
 settings/account data were retained in a private rollback directory:
 
-`/Users/kiedis/Library/Application Support/OpenUsageCN Local Builds/20261102-first-backend-batch`
+`~/Library/Application Support/OpenUsageCN Local Builds/20261102-first-backend-batch`
 
 The installation used `cp` and `mv`, preserving the original application and existing data.
 

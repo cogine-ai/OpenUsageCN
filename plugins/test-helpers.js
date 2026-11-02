@@ -49,6 +49,7 @@ export const makeCtx = () => {
           }
           return false
         },
+        existsStrict: vi.fn((path) => ctx.host.fs.exists(path)),
         readText: (path) => files.get(path),
         writeText: vi.fn((path, text) => files.set(path, text)),
         writeTextIfUnchanged: vi.fn((path, text, expectedSha256) => {
