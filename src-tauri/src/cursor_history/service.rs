@@ -1,4 +1,7 @@
 use std::sync::Arc;
+use std::time::Instant;
+
+use super::scheduler::REFRESH_BUDGET;
 
 use super::{
     BillingCycle, CompleteHistory, CredentialLeasePort, CredentialRequest, FetchRequest,
@@ -85,6 +88,14 @@ impl HistoryService {
         &self,
         demand: HistoryDemand,
     ) -> Result<HistoryRefreshHandle, HistoryError> {
+        self.refresh_before_deadline(demand, Instant::now() + REFRESH_BUDGET)
+    }
+
+    pub(super) fn refresh_before_deadline(
+        &self,
+        demand: HistoryDemand,
+        deadline: Instant,
+    ) -> Result<HistoryRefreshHandle, HistoryError> {
         if demand.provider_id != "cursor" {
             return Err(HistoryError::UnsupportedProvider);
         }
@@ -127,46 +138,47 @@ impl HistoryService {
         let store = self.store.clone();
         let prior_for_job = previous.clone();
         let key_for_job = key.clone();
-        let scheduled = self.scheduler.schedule(key, move |cancel| {
-            let fetched = fetch_complete_history_with_lease(
-                credentials.as_ref(),
-                transport.as_ref(),
-                &lease,
-                request,
-                &|| cancel.is_cancelled(),
-            );
-            let mut history = match fetched {
-                Ok(history) => history,
-                Err(error) => return Ok(failed_refresh(prior_for_job, error)),
-            };
-            if history.account_id != key_for_job.account_id
-                || history.coverage.from_ms != key_for_job.from_ms
-                || history.coverage.to_ms != key_for_job.to_ms
-                || history.coverage.time_zone != key_for_job.time_zone
-                || !history.coverage.complete
-            {
-                return Ok(failed_refresh(
-                    prior_for_job,
-                    HistoryError::ResultScopeChanged,
-                ));
-            }
-
-            history.coverage.billing_cycle = window.billing_cycle;
-            let mut commit = || {
-                if cancel.is_cancelled() {
-                    return Err(HistoryError::Cancelled);
+        let scheduled = self
+            .scheduler
+            .schedule_with_deadline(key, deadline, move |cancel| {
+                let fetched = fetch_complete_history_with_lease(
+                    credentials.as_ref(),
+                    transport.as_ref(),
+                    &lease,
+                    request,
+                    &|| cancel.is_cancelled(),
+                    cancel.deadline(),
+                );
+                let mut history = match fetched {
+                    Ok(history) => history,
+                    Err(error) => return Ok(failed_refresh(prior_for_job, error)),
+                };
+                if history.account_id != key_for_job.account_id
+                    || history.coverage.from_ms != key_for_job.from_ms
+                    || history.coverage.to_ms != key_for_job.to_ms
+                    || history.coverage.time_zone != key_for_job.time_zone
+                    || !history.coverage.complete
+                {
+                    return Ok(failed_refresh(
+                        prior_for_job,
+                        HistoryError::ResultScopeChanged,
+                    ));
                 }
-                store.save(&key_for_job.provider_id, &key_for_job.account_id, &history)
-            };
-            match credentials.with_current_lease(&lease, &mut commit) {
-                Ok(()) => Ok(HistoryRefresh {
-                    snapshot: Some(history),
-                    stale: false,
-                    error: None,
-                }),
-                Err(error) => Ok(failed_refresh(prior_for_job, error)),
-            }
-        });
+
+                history.coverage.billing_cycle = window.billing_cycle;
+                let mut commit = || {
+                    cancel.check()?;
+                    store.save(&key_for_job.provider_id, &key_for_job.account_id, &history)
+                };
+                match credentials.with_current_lease(&lease, &mut commit) {
+                    Ok(()) => Ok(HistoryRefresh {
+                        snapshot: Some(history),
+                        stale: false,
+                        error: None,
+                    }),
+                    Err(error) => Ok(failed_refresh(prior_for_job, error)),
+                }
+            });
 
         match scheduled {
             Ok(job) => Ok(HistoryRefreshHandle {
@@ -178,6 +190,12 @@ impl HistoryService {
 }
 
 fn failed_refresh(previous: Option<CompleteHistory>, error: HistoryError) -> HistoryRefresh {
+    if matches!(
+        error,
+        HistoryError::Transport(super::TransportError::Timeout)
+    ) {
+        log::warn!("Cursor history refresh timed out; keeping the previous complete result");
+    }
     HistoryRefresh {
         stale: previous.is_some(),
         snapshot: previous,

@@ -72,8 +72,13 @@ subjects stay in memory; persisted account data contains random IDs, an identity
 chosen profile locator, and local labels. A saved browser connection is reacquired from that exact
 profile after restart and can be detached at any time.
 
-Local account-scoped probes verify `GET https://cursor.com/api/auth/me` against the complete JWT
-subject before requesting quota. A refreshed Desktop token is written with one SQLite transaction
+Local account-scoped probes verify `GET https://cursor.com/api/auth/me` before requesting quota.
+The actual access token must still carry the selected account's complete JWT subject. The server
+may return that complete subject, or its exact user component when the token has one unambiguous
+`provider|user` subject. This response compatibility applies only to that authenticated local
+session; account identities, fingerprints and caches always keep the complete subject. A refreshed
+token with another provider or user is rejected even when the user component happens to match.
+Browser sessions are not mapped by user-component matching. A refreshed plaintext Desktop token is written with one SQLite transaction
 that requires the original access token and refresh token to remain unchanged. A scoped CLI
 Keychain refresh stays in memory because macOS Keychain does not provide a compare-by-value update.
 A concurrent login switch therefore cannot be overwritten. Model-history refreshes also stay in
@@ -281,6 +286,18 @@ sqlite3 ~/Library/Application\ Support/Cursor/User/globalStorage/state.vscdb \
 | `cursorAuth/stripeMembershipType` | Plan tier (e.g. `pro`, `ultra`) |
 | `cursorAuth/stripeSubscriptionStatus` | Subscription status |
 
+Cursor 3.27+ may encrypt both token values with `cursor-safe-storage:v1:`.
+OpenUsageCN decrypts these in the macOS backend using the **Cursor Safe Storage**
+Keychain item, checking account **Cursor Key** and then **Cursor** only when the first item
+is absent. The Safe Storage password is never passed to plugins or written to logs.
+Unavailable or denied access is reported rather than silently selecting a different account.
+
+Encrypted Desktop credentials remain read-only. Refreshed tokens stay in memory;
+OpenUsageCN never replaces Cursor's encrypted values with plaintext. Account identity and
+credential-change checks still apply to quota and history requests. Desktop credential-version checks
+hash the stored values without decrypting them or accessing Keychain; token decryption occurs
+only when the session itself is needed.
+
 #### 2) Cursor CLI keychain (fallback)
 
 OpenUsageCN reads Cursor CLI tokens from keychain:
@@ -297,7 +314,8 @@ agent login
 ### Token Refresh
 
 Access tokens are short-lived JWTs. The legacy single-account probe refreshes before a request and
-persists the new access token back to its original SQLite or Keychain source. Account-scoped probes
+persists the new access token back to its original plaintext SQLite or Keychain source.
+Encrypted Desktop tokens are refreshed only in memory. Account-scoped probes
 verify the complete identity before use. Desktop writes use the guarded SQLite transaction described
 above; CLI Keychain and model-history refreshes stay in memory and never overwrite the local source.
 

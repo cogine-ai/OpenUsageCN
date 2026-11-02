@@ -16,8 +16,12 @@ dates, they cover a bounded 30-day interval. Actual coverage dates appear beside
 receiving all requested pages does not mean a full billing cycle or a complete invoice.
 The data notes include the update time and time zone.
 
-Failed or incomplete refreshes keep the previous successful result, marked **Stale**. Removing
-an account clears its quota and model-usage caches and all its connections in OpenUsageCN.
+Each refresh has a 60-second budget, including time waiting for another history refresh.
+Identity checks and page requests use only the time left, with at most 30 seconds per request.
+Timed-out, failed, or incomplete refreshes report a failure and keep the previous successful
+result, marked **Stale**. Partially fetched pages are never saved.
+
+Removing an account clears its quota and model-usage caches and all its connections in OpenUsageCN.
 Other accounts remain unaffected. Adding that account again fetches fresh data; it does not
 restore the old cache. Removing one browser connection leaves the account and its cache intact.
 Neither action signs out of Cursor, its CLI, or the browser.

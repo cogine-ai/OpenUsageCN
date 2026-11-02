@@ -107,6 +107,11 @@ fn history_lease_is_account_scoped_and_matches_only_the_full_subject() {
             .unwrap()
     );
     assert!(!accounts.identity_matches(&lease, "desktop-user").unwrap());
+    assert!(
+        !accounts
+            .identity_matches(&lease, "google-oauth2|desktop-user")
+            .unwrap()
+    );
 }
 
 #[test]

@@ -76,7 +76,16 @@ impl CredentialLeasePort for ProviderAccounts {
                 )
             };
             generations.push((connection.connection_id.clone(), generation));
-            candidates.push(CredentialCandidate::new(connection.connection_id, cookie));
+            candidates.push(
+                if matches!(
+                    connection.kind,
+                    super::ConnectionKind::Desktop | super::ConnectionKind::Cli
+                ) {
+                    CredentialCandidate::new_local(connection.connection_id, cookie)
+                } else {
+                    CredentialCandidate::new(connection.connection_id, cookie)
+                },
+            );
         }
         if candidates.is_empty() {
             return Err(HistoryError::AuthenticationUnavailable);

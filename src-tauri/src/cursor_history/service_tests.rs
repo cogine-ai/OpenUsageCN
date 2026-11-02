@@ -45,6 +45,7 @@ impl HistoryTransport for FailingPageTransport {
         &self,
         _candidate: &CredentialCandidate,
         _correlation_id: &str,
+        _timeout: std::time::Duration,
     ) -> Result<AuthOutcome, TransportError> {
         Ok(AuthOutcome::Authenticated(AuthIdentity::new(
             "bound-subject".to_string(),
@@ -56,6 +57,7 @@ impl HistoryTransport for FailingPageTransport {
         _candidate: &CredentialCandidate,
         _request: &PageRequest,
         _correlation_id: &str,
+        _timeout: std::time::Duration,
     ) -> Result<ScriptedPage, TransportError> {
         Err(TransportError::Network)
     }
@@ -68,6 +70,7 @@ impl HistoryTransport for SuccessfulPageTransport {
         &self,
         _candidate: &CredentialCandidate,
         _correlation_id: &str,
+        _timeout: std::time::Duration,
     ) -> Result<AuthOutcome, TransportError> {
         Ok(AuthOutcome::Authenticated(AuthIdentity::new(
             "bound-subject".to_string(),
@@ -79,6 +82,7 @@ impl HistoryTransport for SuccessfulPageTransport {
         _candidate: &CredentialCandidate,
         request: &PageRequest,
         _correlation_id: &str,
+        _timeout: std::time::Duration,
     ) -> Result<ScriptedPage, TransportError> {
         Ok(ScriptedPage {
             page: request.page,

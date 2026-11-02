@@ -1,6 +1,8 @@
 pub(crate) mod account_runtime;
+mod cursor_credentials;
 pub(crate) mod endpoint_url;
 pub mod host_api;
+pub(crate) mod keychain_control;
 pub mod manifest;
 pub mod runtime;
 
@@ -439,3 +441,6 @@ mod tests {
         assert!(plugins.is_empty());
     }
 }
+
+#[cfg(all(test, target_os = "macos"))]
+mod live_cursor_acceptance;

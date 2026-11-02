@@ -55,6 +55,7 @@ impl HistoryTransport for TestTransport {
         &self,
         candidate: &CredentialCandidate,
         _correlation_id: &str,
+        _timeout: std::time::Duration,
     ) -> Result<AuthOutcome, TransportError> {
         self.auth_candidates
             .lock()
@@ -74,6 +75,7 @@ impl HistoryTransport for TestTransport {
         candidate: &CredentialCandidate,
         request: &PageRequest,
         _correlation_id: &str,
+        _timeout: std::time::Duration,
     ) -> Result<ScriptedPage, TransportError> {
         self.page_candidates
             .lock()
@@ -167,6 +169,7 @@ impl HistoryTransport for IdentityTransport {
         &self,
         candidate: &CredentialCandidate,
         _correlation_id: &str,
+        _timeout: std::time::Duration,
     ) -> Result<AuthOutcome, TransportError> {
         self.auth_candidates
             .lock()
@@ -183,6 +186,7 @@ impl HistoryTransport for IdentityTransport {
         _candidate: &CredentialCandidate,
         _request: &PageRequest,
         _correlation_id: &str,
+        _timeout: std::time::Duration,
     ) -> Result<ScriptedPage, TransportError> {
         panic!("identity mismatch must stop before pagination")
     }
@@ -221,6 +225,7 @@ impl HistoryTransport for FatalAuthTransport {
         &self,
         candidate: &CredentialCandidate,
         _correlation_id: &str,
+        _timeout: std::time::Duration,
     ) -> Result<AuthOutcome, TransportError> {
         self.auth_candidates
             .lock()
@@ -234,6 +239,7 @@ impl HistoryTransport for FatalAuthTransport {
         _candidate: &CredentialCandidate,
         _request: &PageRequest,
         _correlation_id: &str,
+        _timeout: std::time::Duration,
     ) -> Result<ScriptedPage, TransportError> {
         panic!("fatal auth error must stop before pagination")
     }
@@ -272,6 +278,7 @@ impl HistoryTransport for NeverCalledTransport {
         &self,
         _candidate: &CredentialCandidate,
         _correlation_id: &str,
+        _timeout: std::time::Duration,
     ) -> Result<AuthOutcome, TransportError> {
         panic!("cancelled fetch must not authenticate")
     }
@@ -281,6 +288,7 @@ impl HistoryTransport for NeverCalledTransport {
         _candidate: &CredentialCandidate,
         _request: &PageRequest,
         _correlation_id: &str,
+        _timeout: std::time::Duration,
     ) -> Result<ScriptedPage, TransportError> {
         panic!("cancelled fetch must not paginate")
     }
@@ -308,6 +316,7 @@ fn cancellation_stops_before_authentication_or_pagination() {
             time_zone: "UTC".to_string(),
         },
         &|| true,
+        std::time::Instant::now() + scheduler::REFRESH_BUDGET,
     );
 
     assert_eq!(result, Err(HistoryError::Cancelled));

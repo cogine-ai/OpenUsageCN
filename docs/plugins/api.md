@@ -99,6 +99,7 @@ ctx.host.log.error("API request failed: " + error.message)
 
 ```typescript
 host.fs.exists(path: string): boolean
+host.fs.existsStrict(path: string): boolean  // False only for missing paths; throws on other metadata errors
 host.fs.readText(path: string): string   // Throws on error
 host.fs.writeText(path: string, content: string): void  // Throws on error
 host.fs.writeTextIfUnchanged(path: string, content: string, expectedSha256: string): boolean  // Throws on I/O error
@@ -111,6 +112,8 @@ host.fs.listDir(path: string): string[]  // Throws if directory cannot be opened
 - `~/foo` expands under the user's home directory on macOS and Windows
 
 ### Error Handling
+
+Use `existsStrict` before choosing between credential sources. It returns `false` only when the path is missing beneath a readable directory. An existing non-directory parent or a broken symbolic link at the path or any parent is an error, including on Windows where the original lookup may report a missing path. Permission failures and other metadata errors throw a fixed message without the local path; they must not select an older login. The existing `exists` keeps its previous behavior, including returning `false` on metadata errors.
 
 Filesystem reads and writes throw on I/O errors. Always wrap them in try/catch:
 
@@ -205,6 +208,7 @@ Reads an environment variable by name.
 - Variable must be whitelisted first in `src-tauri/src/plugin_engine/host_api.rs`
 - Resolution order: current process env first, then a login+interactive shell lookup (macOS)
 - Values may be cached for the app session; restart OpenUsageCN after changing shell config
+- `XDG_DATA_HOME` and `OPENCODE_DB` are available only to the OpenCode Go plugin for locating its existing CLI store
 
 ### Example
 
@@ -330,24 +334,31 @@ Reads a generic password from the macOS Keychain. Pass `account` when the servic
 ### Behavior
 
 - **macOS only**: Throws on other platforms
-- **Throws if not found**: Returns the password string if found, throws otherwise
+- **Bounded reads and writes**: Keychain operations use the remaining probe budget, capped at ten seconds. Timed-out subprocesses are stopped and reaped.
+- **No background authorization prompts**: Before reading, the host checks the existing item's access rules without reading its password. It runs `/usr/bin/security` only when those rules already allow that accessor without a prompt. The host does not change access rules.
+- **Shared reads**: Concurrent reads of the same service/account share one operation. A caller timing out does not cancel another caller's read.
+- **Distinct failures**: Errors start with `missing:`, `denied:`, `locked:`, `timedOut:` or `failed:`. A rejected or locked item is not reported as missing. Raw system output is not included.
+- **Denied access**: After a subprocess reports denial, later background attempts for that item stay blocked until restart. Restore access before restarting.
+- **Write preflight**: Background writes first require an existing authorized item and preserve its selected service and account. If the item is missing at this check, log in through the owning tool. The host requests no account or access-rule changes.
+- **Concurrent deletion limitation**: The check and `/usr/bin/security add-generic-password -U` are not atomic. If another process deletes the item between them, the command can recreate it under the selected service and account with the system's creation defaults. This API does not guarantee update-only writes. Prefer restoring a missing login through its owning tool.
 - **Optional account scope**: When `account` is set, lookup uses both service and account
 
 ### Example
 
+Only a confirmed missing file selects Keychain. Metadata, file-read, JSON parsing and Keychain errors stop the attempt; they do not select another credential source.
+
 ```javascript
 let credentials = null
+const credentialsPath = "~/.myapp/credentials.json"
 
-// Try file first, fall back to keychain
-if (ctx.host.fs.exists("~/.myapp/credentials.json")) {
-  credentials = JSON.parse(ctx.host.fs.readText("~/.myapp/credentials.json"))
-} else {
-  try {
-    const keychainValue = ctx.host.keychain.readGenericPassword("MyApp-credentials")
-    credentials = JSON.parse(keychainValue)
-  } catch {
-    throw "Login required. Sign in to continue."
-  }
+try {
+  const rawCredentials = ctx.host.fs.existsStrict(credentialsPath)
+    ? ctx.host.fs.readText(credentialsPath)
+    : ctx.host.keychain.readGenericPassword("MyApp-credentials")
+  credentials = JSON.parse(rawCredentials)
+} catch {
+  ctx.host.log.error("Credentials could not be loaded.")
+  throw "Credentials could not be loaded. Check file access or sign in again."
 }
 ```
 

@@ -6,17 +6,30 @@ used to estimate your remaining account quota.
 
 ## Setup
 
-Sign in to OpenCode Go in OpenCode as usual. OpenUsageCN reuses the saved Go API key:
+Sign in to OpenCode Go in OpenCode as usual. OpenUsageCN reuses OpenCode's active
+login from the `credential` table in `~/.local/share/opencode/opencode.db`.
+An active `opencode-go` login takes priority over an active `opencode` login.
+Both API keys and unexpired OAuth access tokens are supported. Multiple active
+logins for the selected integration produce an error instead of choosing an account.
 
-1. `~/.local/share/opencode/auth.json`: the `opencode-go` entry with `type: "api"`.
-2. If that entry is absent, the `credential` table in
-   `~/.local/share/opencode/opencode.db`: only a record whose `integration_id` is
-   `opencode-go` and whose value contains `type: "key"`.
+Only when the database or credential table does not exist does OpenUsageCN read
+the older `auth.json` file's `opencode-go` entry with `type: "api"`. An empty,
+unreadable or invalid modern credential store never revives an old login.
+The initial database check also preserves access errors: denied metadata access is
+reported as **Unreadable Credentials**, without reading the older file or requesting usage.
+A database path below an ordinary file is also rejected rather than treated as a missing database.
+A broken symbolic link at the database or any parent directory is reported as unreadable storage;
+it never permits using the older login.
+Readable storage without an active login is reported as **Not Detected**.
 
-The database is read-only. Keys belonging to other providers are never tried.
-Readable storage without a saved Go key is reported as **Not Detected**.
-These are OpenCode's default data locations; custom data directories and preview
-channel databases are not discovered by this plugin.
+An absolute `XDG_DATA_HOME` changes the data root; relative values use the default
+`~/.local/share`. `OPENCODE_DB` selects a database filename under the `opencode`
+directory, or an absolute database path. An in-memory database (`:memory:`) cannot
+be used by this separate process and is reported as **Not Detected**.
+
+Credentials are read-only. OpenCode remains responsible for refreshing OAuth
+tokens and changing the active login. Keys belonging to unrelated providers are
+never tried.
 
 ## What You See
 
@@ -60,7 +73,7 @@ change the OpenCode login, or publish raw provider error bodies.
 
 ## Data Source
 
-`GET https://opencode.ai/zen/go/v1/usage` with the Go key as a Bearer token returns
+`GET https://opencode.ai/zen/go/v1/usage` with the selected credential as a Bearer token returns
 `usage.rolling`, `usage.weekly`, and `usage.monthly`. Each includes `status`,
 `percent`, and `resetsAt`. HTTP 401 rejects the key; HTTP 403 with `EntitlementError`
 means that key has no Go subscription.
@@ -69,3 +82,6 @@ Verified against [OpenCode's usage handler](https://github.com/anomalyco/opencod
 and [credential schema](https://github.com/anomalyco/opencode/blob/57ef3828431790c53f8f333c7ffbfe88770a1812/packages/schema/src/credential.ts)
 on September 7, 2026. See the [OpenCode Go documentation](https://opencode.ai/docs/go/)
 for current plan rules.
+
+Active-login selection follows CodexBar's [CLI credential reader](https://github.com/steipete/CodexBar/blob/0179d0e11300226f4c33130d878c243dc1dbcb4b/Sources/CodexBarCore/Providers/OpenCodeGo/OpenCodeGoLocalUsageReader.swift),
+including modern-store precedence and the shared OpenCode login.

@@ -16,40 +16,24 @@
   const REFRESH_BUFFER_MS = 5 * 60 * 1000 // refresh 5 minutes before expiration
   const LOGIN_HINT = "Sign in via Cursor app or run `agent login`."
 
-  function readStateValue(ctx, key) {
+  function readStateValue(ctx, key, raw = false) {
+    let value = null
     try {
-      const sql =
-        "SELECT value FROM ItemTable WHERE key = '" + key + "' LIMIT 1;"
-      const json = ctx.host.sqlite.query(STATE_DB, sql)
-      const rows = ctx.util.tryParseJson(json)
-      if (!Array.isArray(rows)) {
-        throw new Error("sqlite returned invalid json")
-      }
-      if (rows.length > 0 && rows[0].value) {
-        return rows[0].value
-      }
+      const rows = ctx.util.tryParseJson(ctx.host.sqlite.query(STATE_DB,
+        "SELECT value FROM ItemTable WHERE key = '" + key + "' LIMIT 1;"))
+      if (!Array.isArray(rows)) throw new Error("sqlite returned invalid json")
+      if (rows.length && rows[0].value) value = rows[0].value
     } catch (e) {
       ctx.host.log.warn("sqlite read failed for " + key + ": " + String(e))
+      return null
     }
-    return null
-  }
-
-  function writeStateValue(ctx, key, value) {
-    try {
-      // Escape single quotes in value for SQL
-      const escaped = String(value).replace(/'/g, "''")
-      const sql =
-        "INSERT OR REPLACE INTO ItemTable (key, value) VALUES ('" +
-        key +
-        "', '" +
-        escaped +
-        "');"
-      ctx.host.sqlite.exec(STATE_DB, sql)
-      return true
-    } catch (e) {
-      ctx.host.log.warn("sqlite write failed for " + key + ": " + String(e))
-      return false
+    if (!raw && typeof value === "string" && value.startsWith("cursor-safe-storage:")) {
+      if (!ctx.host.cursor || typeof ctx.host.cursor.decryptToken !== "function") {
+        throw new Error("Cursor encrypted credentials require an updated host.")
+      }
+      return ctx.host.cursor.decryptToken(value)
     }
+    return value
   }
 
   function sqlLiteral(value) {
@@ -122,8 +106,9 @@
   }
 
   function loadAuthState(ctx) {
-    const sqliteAccessToken = readStateValue(ctx, "cursorAuth/accessToken")
-    const sqliteRefreshToken = readStateValue(ctx, "cursorAuth/refreshToken")
+    const desktop = loadDesktopAuth(ctx)
+    const sqliteAccessToken = desktop.accessToken
+    const sqliteRefreshToken = desktop.refreshToken
     const sqliteMembershipTypeRaw = readStateValue(ctx, "cursorAuth/stripeMembershipType")
     const sqliteMembershipType = typeof sqliteMembershipTypeRaw === "string"
       ? sqliteMembershipTypeRaw.trim().toLowerCase()
@@ -148,9 +133,7 @@
       }
 
       return {
-        accessToken: sqliteAccessToken,
-        refreshToken: sqliteRefreshToken,
-        source: "sqlite",
+        ...desktop,
       }
     }
 
@@ -170,8 +153,9 @@
   }
 
   function discoverConnections(ctx) {
-    const sqliteAccessToken = readStateValue(ctx, "cursorAuth/accessToken")
-    const sqliteRefreshToken = readStateValue(ctx, "cursorAuth/refreshToken")
+    const desktop = loadDesktopAuth(ctx)
+    const sqliteAccessToken = desktop.accessToken
+    const sqliteRefreshToken = desktop.refreshToken
     const sqliteMembershipTypeRaw = readStateValue(ctx, "cursorAuth/stripeMembershipType")
     const sqliteMembershipType = typeof sqliteMembershipTypeRaw === "string"
       ? sqliteMembershipTypeRaw.trim().toLowerCase()
@@ -235,11 +219,7 @@
     }
     const connectionKey = connectionTarget && connectionTarget.connectionKey
     if (connectionKey === "cursor-desktop") {
-      return {
-        accessToken: readStateValue(ctx, "cursorAuth/accessToken"),
-        refreshToken: readStateValue(ctx, "cursorAuth/refreshToken"),
-        source: "sqlite",
-      }
+      return loadDesktopAuth(ctx)
     }
     if (connectionKey === "cursor-cli") {
       return {
@@ -251,7 +231,33 @@
     throw "Selected Cursor account connection is unavailable."
   }
 
+  function loadDesktopRawAuth(ctx) {
+    return {
+      accessToken: readStateValue(ctx, "cursorAuth/accessToken", true),
+      refreshToken: readStateValue(ctx, "cursorAuth/refreshToken", true),
+    }
+  }
+
+  function loadDesktopAuth(ctx) {
+    // Capture stored values once; generation must describe the credentials actually decrypted.
+    const rawAuth = loadDesktopRawAuth(ctx)
+    const decode = (value) => {
+      if (typeof value !== "string" || !value.startsWith("cursor-safe-storage:")) return value
+      if (!ctx.host.cursor || typeof ctx.host.cursor.decryptToken !== "function") {
+        throw new Error("Cursor encrypted credentials require an updated host.")
+      }
+      return ctx.host.cursor.decryptToken(value)
+    }
+    return { accessToken: decode(rawAuth.accessToken), refreshToken: decode(rawAuth.refreshToken), source: "sqlite", rawAuth }
+  }
+
+  function encryptedDesktopAuth(authState) {
+    return authState.source === "sqlite" && !!authState.rawAuth &&
+      Object.values(authState.rawAuth).some((value) => typeof value === "string" && value.startsWith("cursor-safe-storage:"))
+  }
+
   function credentialGenerationForAuthState(ctx, authState) {
+    if (authState.rawAuth) authState = authState.rawAuth
     const accessToken = typeof authState.accessToken === "string" ? authState.accessToken : ""
     const refreshTokenValue = typeof authState.refreshToken === "string" ? authState.refreshToken : ""
     if (!accessToken && !refreshTokenValue) {
@@ -266,7 +272,9 @@
   function credentialGeneration(ctx, connectionTarget) {
     return credentialGenerationForAuthState(
       ctx,
-      loadAuthStateForConnection(ctx, connectionTarget)
+      connectionTarget && connectionTarget.connectionKey === "cursor-desktop"
+        ? loadDesktopRawAuth(ctx)
+        : loadAuthStateForConnection(ctx, connectionTarget)
     )
   }
 
@@ -278,11 +286,15 @@
     return subject || null
   }
 
-  function persistAccessToken(ctx, source, accessToken) {
+  function persistAccessToken(ctx, source, accessToken, expectedAuthState) {
     if (source === "keychain") {
       return writeKeychainValue(ctx, KEYCHAIN_ACCESS_TOKEN_SERVICE, accessToken)
     }
-    return writeStateValue(ctx, "cursorAuth/accessToken", accessToken)
+    if (!expectedAuthState || !writeStateValueIfAuthUnchanged(ctx, "cursorAuth/accessToken", accessToken,
+      expectedAuthState.rawAuth || expectedAuthState)) {
+      throw "Account credentials changed during refresh. Try again."
+    }
+    return true
   }
 
   function persistScopedAccessTokenCas(
@@ -302,7 +314,8 @@
     if (currentSubject !== selectedSubject || current.source !== source) {
       throw "Account identity changed during refresh. Try again."
     }
-    if (source === "keychain") {
+    if (source === "keychain" || encryptedDesktopAuth(current)) {
+      // Encrypted Desktop credentials also remain read-only; never write plaintext over ciphertext.
       // macOS Keychain has no compare-by-value update primitive. Keep scoped refreshes in memory
       // so an old probe can never overwrite a concurrent CLI login or logout.
       return expectedGeneration
@@ -338,7 +351,7 @@
     })
   }
 
-  function refreshToken(ctx, refreshTokenValue, source, persistRefreshedCredential) {
+  function refreshToken(ctx, refreshTokenValue, source, persistRefreshedCredential, expectedAuthState) {
     if (!refreshTokenValue) {
       ctx.host.log.warn("refresh skipped: no refresh token")
       return null
@@ -393,7 +406,7 @@
       }
 
       if (persistRefreshedCredential) {
-        persistAccessToken(ctx, source, newAccessToken)
+        persistAccessToken(ctx, source, newAccessToken, expectedAuthState)
         ctx.host.log.info("refresh succeeded, token persisted")
       } else {
         ctx.host.log.info("refresh succeeded for scoped probe")
@@ -426,15 +439,19 @@
   function buildSessionToken(ctx, accessToken) {
     var payload = ctx.jwt.decodePayload(accessToken)
     if (!payload || !payload.sub) return null
-    var parts = String(payload.sub).split("|")
-    var userId = parts.length > 1 ? parts[1] : parts[0]
+    if (typeof payload.sub !== "string") return null
+    var parts = payload.sub.split("|")
+    if (parts.length > 2 || parts.some((part) => !part || /\s/.test(part))) return null
+    var userId = parts.length === 2 ? parts[1] : parts[0]
     if (!userId) return null
     return { userId: userId, sessionToken: userId + "%3A%3A" + accessToken }
   }
 
   function verifyScopedLocalIdentity(ctx, accessToken, expectedSubject) {
     const session = buildSessionToken(ctx, accessToken)
-    if (!session || !expectedSubject) {
+    // The lease binds the complete subject, including the provider. A refreshed token
+    // from another provider must never be accepted just because its user component matches.
+    if (!session || !expectedSubject || ctx.jwt.decodePayload(accessToken)?.sub !== expectedSubject) {
       throw "Selected Cursor account identity could not be verified."
     }
 
@@ -463,7 +480,13 @@
       throw "Selected Cursor account identity could not be verified."
     }
     const identity = ctx.util.tryParseJson(response.bodyText)
-    if (!identity || typeof identity.sub !== "string" || identity.sub !== expectedSubject) {
+    const parts = expectedSubject.split("|")
+    const acceptsBareSubject = parts.length === 2 && parts.every((part) => part && !/\s/.test(part)) &&
+      identity && typeof identity.sub === "string" && !identity.sub.includes("|") && identity.sub === parts[1]
+    // New responses omit the provider prefix. This validates only this accepted token;
+    // account registration, fingerprints and cache ownership still use the full subject.
+    if (!identity || typeof identity.sub !== "string" ||
+        (identity.sub !== expectedSubject && !acceptsBareSubject)) {
       ctx.host.log.error("scoped identity verification failed")
       throw "Selected Cursor account identity could not be verified."
     }
@@ -479,6 +502,7 @@
       throw "Account credentials changed during refresh. Try again."
     }
     let accessToken = authState.accessToken
+    const originalSubject = getTokenSubject(ctx, accessToken) || getTokenSubject(ctx, authState.refreshToken)
     if (needsRefresh(ctx, accessToken, Date.now())) {
       let refreshed = null
       try {
@@ -489,7 +513,7 @@
       if (refreshed) accessToken = refreshed
     }
     const session = buildSessionToken(ctx, accessToken)
-    if (!session) {
+    if (!session || !originalSubject || ctx.jwt.decodePayload(accessToken)?.sub !== originalSubject) {
       throw "Cursor model usage is unavailable for this local session."
     }
     return {
@@ -701,7 +725,7 @@
       ctx.host.log.info("token needs refresh (expired or expiring soon)")
       let refreshed = null
       try {
-        refreshed = refreshToken(ctx, refreshTokenValue, authSource, !connectionTarget)
+        refreshed = refreshToken(ctx, refreshTokenValue, authSource, !connectionTarget && !encryptedDesktopAuth(authState), authState)
       } catch (e) {
         // If refresh fails but we have an access token, try it anyway
         ctx.host.log.warn("refresh failed but have access token, will try: " + String(e))
@@ -748,7 +772,7 @@
         refresh: () => {
           ctx.host.log.info("usage returned 401, attempting refresh")
           didRefresh = true
-          const refreshed = refreshToken(ctx, refreshTokenValue, authSource, !connectionTarget)
+          const refreshed = refreshToken(ctx, refreshTokenValue, authSource, !connectionTarget && !encryptedDesktopAuth(authState), authState)
           if (refreshed) {
             accessToken = refreshed
             if (isScopedProbe) {

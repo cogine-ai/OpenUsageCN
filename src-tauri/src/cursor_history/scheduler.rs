@@ -2,7 +2,18 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, OnceLock, mpsc};
 
-use super::HistoryError;
+use std::time::{Duration, Instant};
+
+use super::{HistoryError, TransportError};
+
+pub(super) const REFRESH_BUDGET: Duration = Duration::from_secs(60);
+
+pub(super) fn remaining_budget(deadline: Instant) -> Result<Duration, HistoryError> {
+    deadline
+        .checked_duration_since(Instant::now())
+        .filter(|remaining| !remaining.is_zero())
+        .ok_or(HistoryError::Transport(TransportError::Timeout))
+}
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub(crate) struct HistoryJobKey {
@@ -36,17 +47,30 @@ impl From<&HistoryJobKey> for HistoryJobScope {
 #[derive(Clone)]
 pub(crate) struct CancellationToken {
     cancelled: Arc<AtomicBool>,
+    deadline: Instant,
 }
 
 impl CancellationToken {
-    fn new() -> Self {
+    fn new(deadline: Instant) -> Self {
         Self {
             cancelled: Arc::new(AtomicBool::new(false)),
+            deadline,
         }
     }
 
     pub(crate) fn is_cancelled(&self) -> bool {
         self.cancelled.load(Ordering::Acquire)
+    }
+
+    pub(super) fn deadline(&self) -> Instant {
+        self.deadline
+    }
+
+    pub(super) fn check(&self) -> Result<(), HistoryError> {
+        if self.is_cancelled() {
+            return Err(HistoryError::Cancelled);
+        }
+        remaining_budget(self.deadline).map(|_| ())
     }
 
     fn cancel(&self) {
@@ -109,6 +133,7 @@ impl HistoryScheduler {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn schedule<T, F>(
         &self,
         key: HistoryJobKey,
@@ -118,7 +143,20 @@ impl HistoryScheduler {
         T: Send + 'static,
         F: FnOnce(CancellationToken) -> Result<T, HistoryError> + Send + 'static,
     {
-        let token = CancellationToken::new();
+        self.schedule_with_deadline(key, Instant::now() + REFRESH_BUDGET, work)
+    }
+
+    pub(super) fn schedule_with_deadline<T, F>(
+        &self,
+        key: HistoryJobKey,
+        deadline: Instant,
+        work: F,
+    ) -> Result<ScheduledJob<T>, HistoryError>
+    where
+        T: Send + 'static,
+        F: FnOnce(CancellationToken) -> Result<T, HistoryError> + Send + 'static,
+    {
+        let token = CancellationToken::new(deadline);
         let scope = HistoryJobScope::from(&key);
         {
             let mut state = self.inner.state.lock().unwrap();
@@ -137,7 +175,7 @@ impl HistoryScheduler {
             .spawn(move || {
                 let mut state = inner.state.lock().unwrap();
                 loop {
-                    if worker_token.is_cancelled() {
+                    if let Err(error) = worker_token.check() {
                         if state
                             .latest
                             .get(&worker_scope)
@@ -147,7 +185,7 @@ impl HistoryScheduler {
                         }
                         inner.changed.notify_all();
                         drop(state);
-                        let _ = sender.send(Err(HistoryError::Cancelled));
+                        let _ = sender.send(Err(error));
                         return;
                     }
                     if state.active < 2 && !state.running.contains_key(&worker_scope) {
@@ -157,13 +195,14 @@ impl HistoryScheduler {
                             .insert(worker_scope.clone(), worker_token.clone());
                         break;
                     }
-                    state = inner.changed.wait(state).unwrap();
+                    let remaining = deadline.saturating_duration_since(Instant::now());
+                    state = inner.changed.wait_timeout(state, remaining).unwrap().0;
                 }
                 drop(state);
 
                 let mut result = work(worker_token.clone());
-                if worker_token.is_cancelled() {
-                    result = Err(HistoryError::Cancelled);
+                if let Err(error) = worker_token.check() {
+                    result = Err(error);
                 }
 
                 let mut state = inner.state.lock().unwrap();

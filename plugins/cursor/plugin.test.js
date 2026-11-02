@@ -653,7 +653,8 @@ describe("cursor plugin", () => {
         credentialGeneration,
       })
     ).toThrow("Selected Cursor account identity could not be verified")
-    expect(authCalls).toBe(2)
+    // The refreshed JWT already names another account, so reject before a second auth request.
+    expect(authCalls).toBe(1)
     expect(usageCalls).toBe(1)
   })
 
