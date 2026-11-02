@@ -229,6 +229,18 @@ describe("openrouter plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("Key quota is unavailable")
   })
 
+  it.each([
+    ["not-json", "Usage response invalid. Try again later."],
+    ["25", "Usage response invalid. Try again later."],
+    ["null", "Usage response invalid. Try again later."],
+  ])("rejects non-object responses when both endpoints fail (%s)", async (bodyText, message) => {
+    const ctx = makeCtx()
+    setEnv(ctx, { OPENROUTER_API_KEY: "fixture-key" })
+    ctx.host.http.request.mockReturnValue({ status: 200, bodyText })
+    const plugin = await loadPlugin()
+    expect(() => plugin.probe(ctx)).toThrow(message)
+  })
+
   it("counts BYOK spend when an all-time key includes it in the limit", async () => {
     const ctx = makeCtx()
     setEnv(ctx, { OPENROUTER_API_KEY: "fixture-key" })
