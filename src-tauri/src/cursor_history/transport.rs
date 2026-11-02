@@ -41,6 +41,7 @@ pub(crate) enum AuthOutcome {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TransportError {
     Network,
+    Timeout,
     Redirect,
     InvalidResponse,
     HttpStatus(u16),
@@ -59,6 +60,7 @@ pub(crate) trait HistoryTransport: Send + Sync {
         &self,
         candidate: &CredentialCandidate,
         correlation_id: &str,
+        timeout: Duration,
     ) -> Result<AuthOutcome, TransportError>;
 
     fn fetch_page(
@@ -66,6 +68,7 @@ pub(crate) trait HistoryTransport: Send + Sync {
         candidate: &CredentialCandidate,
         request: &PageRequest,
         correlation_id: &str,
+        timeout: Duration,
     ) -> Result<ScriptedPage, TransportError>;
 }
 
@@ -256,15 +259,23 @@ impl HistoryTransport for FixedCursorTransport {
         &self,
         candidate: &CredentialCandidate,
         correlation_id: &str,
+        timeout: Duration,
     ) -> Result<AuthOutcome, TransportError> {
         let started = Instant::now();
         let response = self
             .client
             .get(AUTH_ENDPOINT)
+            .timeout(timeout.min(Duration::from_secs(30)))
             .header(reqwest::header::ACCEPT, "application/json")
             .header(reqwest::header::COOKIE, candidate.cookie())
             .send()
-            .map_err(|_| TransportError::Network)?;
+            .map_err(|error| {
+                if error.is_timeout() {
+                    TransportError::Timeout
+                } else {
+                    TransportError::Network
+                }
+            })?;
         let status = response.status().as_u16();
         log_transport("auth", status, None, None, started, correlation_id);
         if status == 401 || status == 403 {
@@ -277,7 +288,7 @@ impl HistoryTransport for FixedCursorTransport {
             return Err(TransportError::HttpStatus(status));
         }
         let mut body = read_bounded(response, MAX_AUTH_BODY)?;
-        let result = decode_auth_body(&body);
+        let result = super::auth_session::decode_accepted_auth(&body, candidate);
         body.fill(0);
         result
     }
@@ -287,6 +298,7 @@ impl HistoryTransport for FixedCursorTransport {
         candidate: &CredentialCandidate,
         request: &PageRequest,
         correlation_id: &str,
+        timeout: Duration,
     ) -> Result<ScriptedPage, TransportError> {
         if request.page == 0 || request.page > 200 || request.page_size != 1_000 {
             return Err(TransportError::InvalidResponse);
@@ -296,13 +308,20 @@ impl HistoryTransport for FixedCursorTransport {
         let response = self
             .client
             .post(HISTORY_ENDPOINT)
+            .timeout(timeout.min(Duration::from_secs(30)))
             .header(reqwest::header::ACCEPT, "application/json")
             .header(reqwest::header::CONTENT_TYPE, "application/json")
             .header(reqwest::header::ORIGIN, CURSOR_ORIGIN)
             .header(reqwest::header::COOKIE, candidate.cookie())
             .body(body)
             .send()
-            .map_err(|_| TransportError::Network)?;
+            .map_err(|error| {
+                if error.is_timeout() {
+                    TransportError::Timeout
+                } else {
+                    TransportError::Network
+                }
+            })?;
         let status = response.status().as_u16();
         if (300..400).contains(&status) {
             log_transport(

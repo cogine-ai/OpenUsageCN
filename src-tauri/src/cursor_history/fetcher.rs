@@ -1,5 +1,10 @@
+use std::time::Instant;
+
 #[cfg(test)]
 use super::CredentialRequest;
+#[cfg(test)]
+use super::scheduler::REFRESH_BUDGET;
+use super::scheduler::remaining_budget;
 use super::{
     AuthOutcome, CompleteHistory, CredentialLease, CredentialLeasePort, HistoryError,
     HistoryTransport, PageRequest, ScriptedHistory, aggregate_scripted_history,
@@ -28,7 +33,14 @@ pub(crate) fn fetch_complete_history(
         provider_id: &request.provider_id,
         account_id: &request.account_id,
     })?;
-    fetch_complete_history_with_lease(credentials, transport, &lease, request, &|| false)
+    fetch_complete_history_with_lease(
+        credentials,
+        transport,
+        &lease,
+        request,
+        &|| false,
+        Instant::now() + REFRESH_BUDGET,
+    )
 }
 
 pub(crate) fn fetch_complete_history_with_lease(
@@ -37,23 +49,24 @@ pub(crate) fn fetch_complete_history_with_lease(
     lease: &CredentialLease,
     request: FetchRequest,
     is_cancelled: &dyn Fn() -> bool,
+    deadline: Instant,
 ) -> Result<CompleteHistory, HistoryError> {
     if lease.provider_id() != request.provider_id || lease.account_id() != request.account_id {
         return Err(HistoryError::CredentialLeaseMismatch);
     }
-    check_current(credentials, lease, is_cancelled)?;
+    check_current(credentials, lease, is_cancelled, deadline)?;
 
     let correlation_id = uuid::Uuid::new_v4().to_string();
     let mut accepted = None;
     for candidate in lease.candidates() {
-        check_current(credentials, lease, is_cancelled)?;
-        match transport
-            .authenticate(candidate, &correlation_id)
-            .map_err(HistoryError::Transport)?
-        {
+        check_current(credentials, lease, is_cancelled, deadline)?;
+        let outcome =
+            transport.authenticate(candidate, &correlation_id, remaining_budget(deadline)?);
+        check_current(credentials, lease, is_cancelled, deadline)?;
+        match outcome.map_err(HistoryError::Transport)? {
             AuthOutcome::CandidateRejected => continue,
             AuthOutcome::Authenticated(identity) => {
-                check_current(credentials, lease, is_cancelled)?;
+                check_current(credentials, lease, is_cancelled, deadline)?;
                 if !credentials.identity_matches(&lease, identity.subject())? {
                     return Err(HistoryError::IdentityChanged);
                 }
@@ -66,20 +79,20 @@ pub(crate) fn fetch_complete_history_with_lease(
 
     let mut pages = Vec::new();
     for page in 1..=MAX_PAGES {
-        check_current(credentials, lease, is_cancelled)?;
-        let response = transport
-            .fetch_page(
-                candidate,
-                &PageRequest {
-                    page,
-                    page_size: PAGE_SIZE,
-                    start_date_ms: request.from_ms.to_string(),
-                    end_date_ms: request.to_ms.to_string(),
-                },
-                &correlation_id,
-            )
-            .map_err(HistoryError::Transport)?;
-        check_current(credentials, lease, is_cancelled)?;
+        check_current(credentials, lease, is_cancelled, deadline)?;
+        let response = transport.fetch_page(
+            candidate,
+            &PageRequest {
+                page,
+                page_size: PAGE_SIZE,
+                start_date_ms: request.from_ms.to_string(),
+                end_date_ms: request.to_ms.to_string(),
+            },
+            &correlation_id,
+            remaining_budget(deadline)?,
+        );
+        check_current(credentials, lease, is_cancelled, deadline)?;
+        let response = response.map_err(HistoryError::Transport)?;
         let is_final = response.events.len() < PAGE_SIZE;
         pages.push(response);
         if is_final {
@@ -87,7 +100,7 @@ pub(crate) fn fetch_complete_history_with_lease(
         }
     }
 
-    check_current(credentials, lease, is_cancelled)?;
+    check_current(credentials, lease, is_cancelled, deadline)?;
     let history = aggregate_scripted_history(ScriptedHistory {
         account_id: request.account_id,
         from_ms: request.from_ms,
@@ -97,7 +110,7 @@ pub(crate) fn fetch_complete_history_with_lease(
         requested_page_size: PAGE_SIZE,
         pages,
     })?;
-    check_current(credentials, lease, is_cancelled)?;
+    check_current(credentials, lease, is_cancelled, deadline)?;
     Ok(history)
 }
 
@@ -105,6 +118,7 @@ fn check_current(
     credentials: &dyn CredentialLeasePort,
     lease: &CredentialLease,
     is_cancelled: &dyn Fn() -> bool,
+    deadline: Instant,
 ) -> Result<(), HistoryError> {
     if is_cancelled() {
         return Err(HistoryError::Cancelled);
@@ -112,5 +126,5 @@ fn check_current(
     if !credentials.is_current(lease) {
         return Err(HistoryError::CredentialLeaseChanged);
     }
-    Ok(())
+    remaining_budget(deadline).map(|_| ())
 }

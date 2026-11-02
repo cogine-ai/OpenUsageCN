@@ -23,6 +23,7 @@ impl Drop for SecretCookie {
 pub(crate) struct CredentialCandidate {
     candidate_id: String,
     cookie: SecretCookie,
+    local_session: bool,
 }
 
 impl CredentialCandidate {
@@ -30,7 +31,19 @@ impl CredentialCandidate {
         Self {
             candidate_id,
             cookie,
+            local_session: false,
         }
+    }
+
+    pub(crate) fn new_local(candidate_id: String, cookie: SecretCookie) -> Self {
+        Self {
+            local_session: true,
+            ..Self::new(candidate_id, cookie)
+        }
+    }
+
+    pub(super) fn is_local_session(&self) -> bool {
+        self.local_session
     }
 
     pub(crate) fn candidate_id(&self) -> &str {

@@ -49,7 +49,7 @@ Windows MVP 启用和展示 **Codex、BigModel CN、OpenAI API、OpenRouter、Z.
 - [**Claude**](docs/providers/claude.md)：session、weekly、extra usage、按需加载本地 token 用量（ccusage）、可验证的 Team 席位、本机账号的浏览器连接补充
 - [**Codex**](docs/providers/codex.md)：5 小时、每周、代码审查、点数、手动重置及最近到期时间
 - [**Copilot**](docs/providers/copilot.md)：premium、chat、completions
-- [**Cursor**](docs/providers/cursor.md)：credits、总用量、Desktop/CLI/Chrome/Arc 多账号与身份确认、Cursor Models / Other Models 月额度、Grok Bot 周额度、按模型用量和 CSV 导出
+- [**Cursor**](docs/providers/cursor.md)：credits、总用量、Cursor 3.27+ 加密登录读取、Desktop/CLI/Chrome/Arc 多账号与完整身份隔离、Cursor Models / Other Models 月额度、Grok Bot 周额度、按模型用量和 CSV 导出
 - [**DeepSeek**](docs/providers/deepseek.md)：按人民币或美元显示 API 余额、赠额和充值额
 - [**Doubao**](docs/providers/doubao.md)：火山引擎 Ark Coding Plan 与 Agent Plan 配额
 - [**Factory / Droid**](docs/providers/factory.md)：standard、premium tokens
@@ -63,7 +63,7 @@ Windows MVP 启用和展示 **Codex、BigModel CN、OpenAI API、OpenRouter、Z.
 - [**Ollama Cloud**](docs/providers/ollama.md)：云端月度额度与旧套餐返回的短期额度
 - [**OpenAI API**](docs/providers/openai-api.md)：organization spend、requests、tokens、legacy credits
 - [**OpenCode**](docs/providers/opencode.md)：opencode.ai session、weekly subscription usage
-- [**OpenCode Go**](docs/providers/opencode-go.md)：账号级 5h、weekly、monthly 额度百分比及官方重置时间
+- [**OpenCode Go**](docs/providers/opencode-go.md)：账号级 5h、weekly、monthly 额度百分比及官方重置时间，优先读取当前有效的 CLI 登录
 - [**OpenRouter**](docs/providers/openrouter.md)：credits、balance、key usage
 - [**Perplexity**](docs/providers/perplexity.md)：balance、usage analytics、本地 app session
 - [**Synthetic**](docs/providers/synthetic.md)：subscription、search、weekly token、5h limits

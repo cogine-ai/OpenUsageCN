@@ -205,6 +205,7 @@ Reads an environment variable by name.
 - Variable must be whitelisted first in `src-tauri/src/plugin_engine/host_api.rs`
 - Resolution order: current process env first, then a login+interactive shell lookup (macOS)
 - Values may be cached for the app session; restart OpenUsageCN after changing shell config
+- `XDG_DATA_HOME` and `OPENCODE_DB` are available only to the OpenCode Go plugin for locating its existing CLI store
 
 ### Example
 
@@ -330,7 +331,12 @@ Reads a generic password from the macOS Keychain. Pass `account` when the servic
 ### Behavior
 
 - **macOS only**: Throws on other platforms
-- **Throws if not found**: Returns the password string if found, throws otherwise
+- **Bounded reads and writes**: Keychain operations use the remaining probe budget, capped at ten seconds. Timed-out subprocesses are stopped and reaped.
+- **No background authorization prompts**: Before reading, the host checks the existing item's access rules without reading its password. It runs `/usr/bin/security` only when those rules already allow that accessor without a prompt. The host does not change access rules.
+- **Shared reads**: Concurrent reads of the same service/account share one operation. A caller timing out does not cancel another caller's read.
+- **Distinct failures**: Errors start with `missing:`, `denied:`, `locked:`, `timedOut:` or `failed:`. A rejected or locked item is not reported as missing. Raw system output is not included.
+- **Denied access**: After a subprocess reports denial, later background attempts for that item stay blocked until restart. Restore access before restarting.
+- **Existing-item writes**: Background writes update an existing authorized item and preserve its account. They do not create new items or grant access. Missing items require login through the owning tool.
 - **Optional account scope**: When `account` is set, lookup uses both service and account
 
 ### Example

@@ -176,9 +176,7 @@ describe("opencode-go plugin", () => {
     ctx.host.fs.writeText("~/.local/share/opencode/opencode.db", "fixture database");
     ctx.host.sqlite.query.mockImplementation((_path, sql) => {
       if (sql.includes("sqlite_master")) return JSON.stringify([{ name: "credential" }]);
-      expect(sql).toContain("integration_id = 'opencode-go'");
-      expect(sql).not.toMatch(/\bOR\b|\bLIKE\b/i);
-      return JSON.stringify([{ value: JSON.stringify({ type: "key", key: "go-v2-key" }) }]);
+      return JSON.stringify([{ integration_id: "opencode-go", value: JSON.stringify({ type: "key", key: "go-v2-key" }) }]);
     });
     respond(ctx);
 
@@ -187,6 +185,7 @@ describe("opencode-go plugin", () => {
     expect(result.lines.map(line => line.used)).toEqual([0, 0.25, 100]);
     expect(result.lines[0].resetsAt).toBe("2026-09-07T15:00:00.000Z");
     expect(ctx.host.http.request.mock.calls[0][0].headers.Authorization).toBe("Bearer go-v2-key");
+    expect(ctx.host.sqlite.query.mock.calls[1][1]).toContain("WHERE active = 1 AND integration_id IN ('opencode-go', 'opencode')");
     expect(ctx.host.sqlite.exec).not.toHaveBeenCalled();
   });
 
@@ -333,10 +332,11 @@ describe("opencode-go plugin", () => {
     expect(ctx.host.http.request).not.toHaveBeenCalled();
   });
 
-  it("reuses the Go auth file without reading or modifying SQLite credentials", async () => {
+  it("reuses the Go auth file when the database has no credential table without modifying credentials", async () => {
     const ctx = makeCtx();
     setAuth(ctx, "  go-key  ");
     ctx.host.fs.writeText("~/.local/share/opencode/opencode.db", "fixture database");
+    ctx.host.sqlite.query.mockReturnValue("[]");
     respond(ctx);
     ctx.host.fs.writeText.mockClear();
 
@@ -344,7 +344,7 @@ describe("opencode-go plugin", () => {
 
     expect(result.lines.map(line => line.used)).toEqual([0, 0.25, 100]);
     expect(ctx.host.http.request.mock.calls[0][0].headers.Authorization).toBe("Bearer go-key");
-    expect(ctx.host.sqlite.query).not.toHaveBeenCalled();
+    expect(ctx.host.sqlite.query).toHaveBeenCalledTimes(1);
     expect(ctx.host.sqlite.exec).not.toHaveBeenCalled();
     expect(ctx.host.fs.writeText).not.toHaveBeenCalled();
   });

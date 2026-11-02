@@ -1,4 +1,5 @@
 mod aggregate;
+mod auth_session;
 pub(crate) mod commands;
 mod credential;
 mod export;
@@ -66,6 +67,8 @@ pub(crate) fn aggregate_scripted_history(
 
 #[cfg(test)]
 mod aggregate_tests;
+#[cfg(test)]
+mod budget_tests;
 #[cfg(test)]
 mod cache_tests;
 #[cfg(test)]
