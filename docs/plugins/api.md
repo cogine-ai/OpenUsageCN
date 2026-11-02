@@ -113,7 +113,7 @@ host.fs.listDir(path: string): string[]  // Throws if directory cannot be opened
 
 ### Error Handling
 
-Use `existsStrict` before choosing between credential sources. It returns `false` only when the path is missing. Permission failures and other metadata errors throw a fixed message without the local path; they must not select an older login. The existing `exists` keeps its previous behavior, including returning `false` on metadata errors.
+Use `existsStrict` before choosing between credential sources. It returns `false` only when the path is missing beneath a readable directory. An existing non-directory parent is an error, including on Windows where the original lookup may report a missing path. Permission failures and other metadata errors throw a fixed message without the local path; they must not select an older login. The existing `exists` keeps its previous behavior, including returning `false` on metadata errors.
 
 Filesystem reads and writes throw on I/O errors. Always wrap them in try/catch:
 
