@@ -4,6 +4,23 @@
 
 暂无。
 
+## v0.6.45
+
+### Bug Fixes
+
+- 恢复 Cursor 加密桌面凭据读取，兼容新版身份接口，保持完整账号隔离和加密凭据只读。 ([#254](https://github.com/cogine-ai/OpenUsageCN/pull/254)) by @lc708
+- 为 Keychain 后台访问设置时间上限、合并并发读取，并改善授权失败提示。 ([#254](https://github.com/cogine-ai/OpenUsageCN/pull/254)) by @lc708
+- OpenCode Go 优先读取当前登录；数据库不可读或路径损坏时，不再回退到旧账号。 ([#254](https://github.com/cogine-ai/OpenUsageCN/pull/254)) by @lc708
+- Cursor 历史用量刷新设置 60 秒总时限，包含排队时间；失败时保留上次成功结果。 ([#254](https://github.com/cogine-ai/OpenUsageCN/pull/254)) by @lc708
+
+---
+
+### Changelog
+
+**Full Changelog**: [v0.6.44...v0.6.45](https://github.com/cogine-ai/OpenUsageCN/compare/v0.6.44...v0.6.45)
+
+- [755e0d2](https://github.com/cogine-ai/OpenUsageCN/commit/755e0d276b57b7e696002e9ff62ff668e1ea6ac0) Fix Cursor authentication and bound backend refreshes (#254) by @lc708
+
 ## v0.6.44
 
 ### Bug Fixes
