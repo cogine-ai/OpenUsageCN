@@ -480,3 +480,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "limits_cursor_tests.rs"]
+mod cursor_tests;

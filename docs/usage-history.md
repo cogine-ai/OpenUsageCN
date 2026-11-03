@@ -1,5 +1,9 @@
 # Usage History
 
+Cursor's shared weekly allowance and separate Grok Bot allowance are quota windows, not monthly
+billing periods. Model Usage keeps the verified monthly period when available; otherwise it uses
+the existing bounded 30-day window. A weekly reset does not turn the model history into a weekly report.
+
 The Cursor Models, Other Models and Grok Bot quota bars are current allowances with their own
 reset dates. They are separate from the model-usage cache described below; weekly Grok Bot
 allowance is not calculated from cached events or added to monthly Total.

@@ -56,6 +56,10 @@ openusage guard claude --window weekly --min-remaining 20 --force
 
 The threshold is a percentage between 0 and 100, inclusive. Only `session` and `weekly` windows are supported. `guard` uses the same cache, provider settings and active account as the other CLI commands. It does not switch accounts or estimate how much a future task will consume.
 
+For a confirmed Cursor shared plan, use `openusage guard cursor --window weekly`. Its shared pool
+is published as `weekly`; legacy monthly pools and the separate Grok Bot allowance do not satisfy
+this check. If no shared weekly pool is available, the decision is `unknown`.
+
 The result is one compact JSON object with schema `openusage.guard.v1`. `decision` is `allowed`, `blocked`, or `unknown`; `reason` explains why. It also includes the selected provider, window, threshold, remaining percentage when known, and snapshot timestamps when available.
 
 | Code | Guard Meaning |

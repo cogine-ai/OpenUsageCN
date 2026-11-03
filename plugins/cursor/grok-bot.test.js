@@ -108,6 +108,27 @@ describe("Cursor Grok Bot quota", () => {
     expect(grok(plugin.probe(ctx))).toBeUndefined()
   })
 
+  it.each([undefined, "2026-09-14T03:00:00Z", "invalid", "2026-09-18T03:00:00Z"])("uses a seven-day paid cadence regardless of period start %s", async (start) => {
+    const { plugin, ctx } = await setup({ ...paid, currentPeriodStart: start })
+    expect(grok(plugin.probe(ctx))).toMatchObject({
+      resetsAt: "2026-09-17T03:00:00.000Z", periodDurationMs: 7 * 86400000,
+    })
+  })
+
+  it("does not infer paid eligibility from reset dates or available usage", async () => {
+    const { plugin, ctx } = await setup({ usagePercent: 25, hasAvailableUsage: true,
+      currentPeriodStart: paid.currentPeriodStart, nextResetTimestampUtc: paid.nextResetTimestampUtc })
+    expect(grok(plugin.probe(ctx))).toMatchObject({ type: "text", value: "Unavailable" })
+  })
+
+  it.each([undefined, "tomorrow"])("does not assign a paid cadence without a valid reset %s", async (reset) => {
+    const { plugin, ctx } = await setup({ ...paid, nextResetTimestampUtc: reset })
+    const line = grok(plugin.probe(ctx))
+    expect(line.used).toBe(25)
+    expect(line.resetsAt).toBeUndefined()
+    expect(line.periodDurationMs).toBeUndefined()
+  })
+
   it("ignores malformed paid timestamps without inventing a weekly period", async () => {
     const { plugin, ctx } = await setup({ ...paid, currentPeriodStart: "2026", nextResetTimestampUtc: "tomorrow" })
     const line = grok(plugin.probe(ctx))

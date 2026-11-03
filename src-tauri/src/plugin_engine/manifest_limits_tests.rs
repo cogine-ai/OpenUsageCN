@@ -121,6 +121,7 @@ fn bundled_provider_limit_resource_keys_are_stable() {
                 "onDemand",
                 "requests",
                 "totalUsage",
+                "weekly",
             ][..],
         ),
         ("deepseek", &[][..]),

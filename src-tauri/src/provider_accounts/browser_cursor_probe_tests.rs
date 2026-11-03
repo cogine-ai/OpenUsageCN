@@ -153,3 +153,94 @@ fn malformed_browser_quota_data_fails_instead_of_returning_success_shaped_output
         build_legacy_output(br#"{"gpt-4":{"maxRequestUsage":0}}"#, None, "Cursor", "").is_err()
     );
 }
+
+/// Exercise the actual HTTP/status path without provider credentials or external requests.
+fn fetch_local_browser_response(status: u16, endpoint_class: &str) -> Result<Vec<u8>, String> {
+    use super::browser_cursor_probe::FixedBrowserCursorProbe;
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::time::{Duration, Instant};
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let server = std::thread::spawn(move || {
+        let started = Instant::now();
+        let mut stream = loop {
+            match listener.accept() {
+                Ok((stream, _)) => break stream,
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    assert!(
+                        started.elapsed() < Duration::from_secs(5),
+                        "fixture server timed out"
+                    );
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+                Err(_) => panic!("fixture server could not accept a request"),
+            }
+        };
+        stream
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        let mut request = Vec::new();
+        let mut buffer = [0; 1024];
+        while !request.windows(4).any(|bytes| bytes == b"\r\n\r\n") {
+            let length = stream.read(&mut buffer).unwrap();
+            assert!(length > 0 && request.len() < 8192);
+            request.extend_from_slice(&buffer[..length]);
+        }
+        let body = br#"{"error":"server-response-secret"}"#;
+        let mut response = format!("HTTP/1.1 {status} Fixture\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len()).into_bytes();
+        response.extend_from_slice(body);
+        stream.write_all(&response).unwrap();
+    });
+    let probe = FixedBrowserCursorProbe::with_test_client(
+        reqwest::blocking::Client::builder()
+            .no_proxy()
+            .redirect(reqwest::redirect::Policy::none())
+            .timeout(Duration::from_secs(5))
+            .build()
+            .unwrap(),
+    );
+    let result = probe.get_json(
+        &format!("http://{address}/{endpoint_class}"),
+        "WorkosCursorSessionToken=synthetic-cookie-secret",
+        endpoint_class,
+        "synthetic-correlation",
+    );
+    server.join().unwrap();
+    result
+}
+
+#[test]
+fn browser_http_401_requires_reauthentication_without_echoing_secrets() {
+    for endpoint in ["usage-summary", "legacy-usage"] {
+        let error = fetch_local_browser_response(401, endpoint).unwrap_err();
+        assert_eq!(
+            error,
+            "The selected Cursor browser session expired. Scan it again."
+        );
+        assert!(!error.contains("secret"));
+    }
+}
+
+#[test]
+fn browser_http_403_reports_access_denied_without_expiring_the_session() {
+    for endpoint in ["usage-summary", "legacy-usage"] {
+        let error = fetch_local_browser_response(403, endpoint).unwrap_err();
+        assert_eq!(
+            error,
+            "Cursor browser usage access was denied (HTTP 403). Check the account's permissions."
+        );
+        assert!(!error.contains("expired") && !error.contains("Scan"));
+        assert!(!error.contains("secret"));
+    }
+}
+
+#[test]
+fn successful_browser_http_response_preserves_the_body_for_quota_decoding() {
+    assert_eq!(
+        fetch_local_browser_response(200, "usage-summary").unwrap(),
+        br#"{"error":"server-response-secret"}"#,
+    );
+}

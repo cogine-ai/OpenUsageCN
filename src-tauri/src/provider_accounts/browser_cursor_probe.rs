@@ -12,6 +12,11 @@ pub(super) struct FixedBrowserCursorProbe {
 }
 
 impl FixedBrowserCursorProbe {
+    #[cfg(test)]
+    pub(super) fn with_test_client(client: reqwest::blocking::Client) -> Self {
+        Self { client }
+    }
+
     pub(super) fn new() -> Result<Self, String> {
         let client = crate::config::blocking_client_builder()
             .redirect(reqwest::redirect::Policy::none())
@@ -35,7 +40,25 @@ impl FixedBrowserCursorProbe {
             "usage-summary",
             correlation_id,
         )?;
-        let mut output = match decode_usage_summary_output(&summary_body, display_name, icon_url) {
+        let summary = decode_usage_summary_output(&summary_body, display_name, icon_url);
+        if matches!(summary, Err(DecodeError::Invalid)) {
+            return Err(decode_error_message(DecodeError::Invalid));
+        }
+        let grok_body = super::browser_cursor_grok::fetch_grok_usage(&self.client, cookie_header);
+        let now = time::OffsetDateTime::now_utc();
+        let weekly = grok_body.as_ref().ok().and_then(|body| {
+            super::browser_cursor_weekly::decode_shared_weekly(body, now)
+                .map_err(|reason| {
+                    log::warn!(
+                        "Cursor shared weekly usage unavailable: reason={} correlationId={}",
+                        reason,
+                        correlation_id
+                    )
+                })
+                .ok()
+                .flatten()
+        });
+        let output = match summary {
             Ok(output) => Ok(output),
             Err(DecodeError::NoQuota { membership_type }) => {
                 let user_id = subject
@@ -51,26 +74,39 @@ impl FixedBrowserCursorProbe {
                 url.query_pairs_mut().append_pair("user", user_id);
                 let legacy_body =
                     self.get_json(url.as_str(), cookie_header, "legacy-usage", correlation_id)?;
-                decode_legacy_output(
+                let legacy = decode_legacy_output(
                     &legacy_body,
                     membership_type.as_deref(),
                     display_name,
                     icon_url,
-                )
-                .map_err(decode_error_message)
+                );
+                match legacy {
+                    Ok(output) => Ok(output),
+                    Err(error) => weekly
+                        .as_ref()
+                        .and_then(|_| {
+                            super::browser_cursor_weekly::recover_summary_without_quota(
+                                &summary_body,
+                                &legacy_body,
+                                display_name,
+                                icon_url,
+                            )
+                        })
+                        .ok_or_else(|| decode_error_message(error)),
+                }
             }
             Err(error) => Err(decode_error_message(error)),
         }?;
-        super::browser_cursor_grok::append_grok_usage(
-            &mut output,
-            super::browser_cursor_grok::fetch_grok_usage(&self.client, cookie_header),
-            time::OffsetDateTime::now_utc(),
+        Ok(super::browser_cursor_weekly::finish_with_allowance(
+            output,
+            weekly,
+            grok_body,
+            now,
             correlation_id,
-        );
-        Ok(output)
+        ))
     }
 
-    fn get_json(
+    pub(super) fn get_json(
         &self,
         url: &str,
         cookie_header: &str,
@@ -93,8 +129,11 @@ impl FixedBrowserCursorProbe {
             started.elapsed().as_millis(),
             correlation_id
         );
-        if status == 401 || status == 403 {
+        if status == 401 {
             return Err("The selected Cursor browser session expired. Scan it again.".to_string());
+        }
+        if status == 403 {
+            return Err("Cursor browser usage access was denied (HTTP 403). Check the account's permissions.".to_string());
         }
         if (300..400).contains(&status) {
             return Err("Cursor browser usage rejected an unexpected redirect.".to_string());
@@ -415,7 +454,7 @@ fn positive(value: Option<f64>) -> Option<f64> {
     value.filter(|value| value.is_finite() && *value > 0.0)
 }
 
-fn plan_label(value: &str) -> Option<String> {
+pub(super) fn plan_label(value: &str) -> Option<String> {
     let normalized = value.trim().to_ascii_lowercase();
     match normalized.as_str() {
         "" => None,

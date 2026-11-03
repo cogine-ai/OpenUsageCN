@@ -278,4 +278,16 @@ mod tests {
             .is_none()
         );
     }
+
+    #[test]
+    fn shared_weekly_and_independent_grok_cannot_establish_a_monthly_history_cycle() {
+        for (label, key) in [("Shared Weekly Usage", "weekly"), ("Grok Bot", "grokBotUsage")] {
+            let mut quota = line(Some("2026-09-01T00:00:00Z"), Some(7 * 86_400_000));
+            if let MetricLine::Progress { label: quota_label, limit_resource_key, .. } = &mut quota {
+                *quota_label = label.to_string();
+                *limit_resource_key = Some(key.to_string());
+            }
+            assert!(billing_cycle_from_lines(&[quota], 1_787_961_600_000).is_none());
+        }
+    }
 }

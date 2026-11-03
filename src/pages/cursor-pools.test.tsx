@@ -87,4 +87,18 @@ describe("Cursor Pool Presentation", () => {
     expect(screen.getByText("Unavailable")).toBeInTheDocument()
     expect(screen.queryByText("Total usage")).not.toBeInTheDocument()
   })
+
+  it("renders the shared weekly quota directly without turning it into Monthly Total or Grok Bot", () => {
+    const weekly = progress("Shared Weekly Usage", 21, weeklyReset)
+    const state = plugin([weekly])
+    const { unmount } = render(<OverviewPage plugins={[state]} displayMode="used" resetTimerDisplayMode="relative" />)
+    expect(row("Shared Weekly Usage").getByText("已用 21%")).toBeInTheDocument()
+    expect(manifest.lines.find((line) => line.label === weekly.label)).toMatchObject({
+      scope: "overview", primaryOrder: 2, period: "weekly", limitResource: { key: "weekly" },
+    })
+    unmount()
+    render(<ProviderDetailPage plugin={state} displayMode="left" resetTimerDisplayMode="relative" />)
+    expect(row("Shared Weekly Usage").getByText("剩余 79%")).toBeInTheDocument()
+    for (const label of ["Monthly Total", "Cursor Models", "Other Models", "Grok Bot"]) expect(screen.queryByText(label)).not.toBeInTheDocument()
+  })
 })

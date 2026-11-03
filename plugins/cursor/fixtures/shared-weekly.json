@@ -1,0 +1,15 @@
+[
+  {"name":"unified enterprise paid","sand":{"isUnified":true,"usagePercent":10.205850487540628,"hasNonZeroIncludedLimit":true,"nextResetTimestampUtc":"2026-09-20T10:27:36.178Z"},"weeklyUsed":10.205850487540628},
+  {"name":"explicit zero usage","sand":{"isUnified":true,"usagePercent":0,"includedLimitZero":false,"nextResetTimestampUtc":"2026-09-20T00:00:00Z"},"weeklyUsed":0},
+  {"name":"exhausted","sand":{"isUnified":true,"usagePercent":125,"includedLimitZero":false,"nextResetTimestampUtc":"2026-09-20T00:00:00Z"},"weeklyUsed":100},
+  {"name":"legacy paid","sand":{"isUnified":false,"usagePercent":25,"includedLimitZero":false,"nextResetTimestampUtc":"2026-09-20T00:00:00Z"},"weeklyUsed":null},
+  {"name":"unified missing","sand":{"usagePercent":25,"includedLimitZero":false,"nextResetTimestampUtc":"2026-09-20T00:00:00Z"},"weeklyUsed":null},
+  {"name":"unified string is not true","sand":{"isUnified":"true","usagePercent":25,"includedLimitZero":false,"nextResetTimestampUtc":"2026-09-20T00:00:00Z"},"weeklyUsed":null},
+  {"name":"trial","sand":{"isUnified":true,"usagePercent":25,"includedLimitZero":true,"sandTrialExpiresAt":"2026-09-20T00:00:00Z","nextResetTimestampUtc":"2026-09-20T00:00:00Z"},"weeklyUsed":null},
+  {"name":"zero flag takes priority","sand":{"isUnified":true,"usagePercent":25,"includedLimitZero":true,"hasNonZeroIncludedLimit":true,"nextResetTimestampUtc":"2026-09-20T00:00:00Z"},"weeklyUsed":null},
+  {"name":"pooled","sand":{"isUnified":true,"usesPooledEnterpriseAllowance":true,"usagePercent":25,"includedLimitZero":false,"nextResetTimestampUtc":"2026-09-20T00:00:00Z"},"weeklyUsed":null},
+  {"name":"missing paid flag","sand":{"isUnified":true,"usagePercent":25,"nextResetTimestampUtc":"2026-09-20T00:00:00Z"},"weeklyUsed":null},
+  {"name":"missing reset","sand":{"isUnified":true,"usagePercent":25,"includedLimitZero":false},"weeklyUsed":null},
+  {"name":"expired reset","sand":{"isUnified":true,"usagePercent":25,"includedLimitZero":false,"nextResetTimestampUtc":"2026-09-15T00:00:00Z"},"weeklyUsed":null},
+  {"name":"negative percentage","sand":{"isUnified":true,"usagePercent":-1,"includedLimitZero":false,"nextResetTimestampUtc":"2026-09-20T00:00:00Z"},"weeklyUsed":null}
+]

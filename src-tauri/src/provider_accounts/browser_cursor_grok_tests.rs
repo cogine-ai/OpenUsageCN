@@ -50,20 +50,34 @@ fn browser_grok_keeps_zero_exhausted_and_clamps_overage() {
 }
 
 #[test]
-fn browser_grok_paid_reset_uses_actual_interval_and_no_assumed_week() {
-    let line = decode(json!({"usagePercent":20,"hasNonZeroIncludedLimit":true,"currentPeriodStart":"2026-09-14T00:00:00Z","nextResetTimestampUtc":"2026-09-20T00:00:00Z"})).unwrap().unwrap();
-    assert!(
-        matches!(line, MetricLine::Progress { resets_at: Some(end), period_duration_ms: Some(duration), .. } if end == "2026-09-20T00:00:00Z" && duration == 6*24*60*60*1000)
-    );
-    let line = decode(json!({"usagePercent":20,"hasNonZeroIncludedLimit":true,"nextResetTimestampUtc":"2026-09-20T00:00:00Z"})).unwrap().unwrap();
-    assert!(matches!(
-        line,
-        MetricLine::Progress {
-            resets_at: Some(_),
-            period_duration_ms: None,
-            ..
-        }
-    ));
+fn browser_grok_paid_reset_uses_a_week_even_when_start_is_midweek_or_missing() {
+    for start in [
+        Value::Null,
+        json!("2026-09-14T00:00:00Z"),
+        json!("invalid"),
+        json!("2026-09-21T00:00:00Z"),
+    ] {
+        let line = decode(json!({"usagePercent":20,"hasNonZeroIncludedLimit":true,"currentPeriodStart":start,"nextResetTimestampUtc":"2026-09-20T00:00:00Z"})).unwrap().unwrap();
+        assert!(
+            matches!(line, MetricLine::Progress { resets_at: Some(end), period_duration_ms: Some(duration), .. } if end == "2026-09-20T00:00:00Z" && duration == 7*24*60*60*1000)
+        );
+    }
+    for reset in [Value::Null, json!("invalid")] {
+        let line = decode(
+            json!({"usagePercent":0,"includedLimitZero":false,"nextResetTimestampUtc":reset}),
+        )
+        .unwrap()
+        .unwrap();
+        assert!(matches!(
+            line,
+            MetricLine::Progress {
+                used: 0.0,
+                resets_at: None,
+                period_duration_ms: None,
+                ..
+            }
+        ));
+    }
 }
 
 #[test]
@@ -90,6 +104,7 @@ fn browser_grok_hides_explicit_ineligible_and_rejects_unknown_or_invalid_data() 
     for value in [
         json!({"usesPooledEnterpriseAllowance":true}),
         json!({"includedLimitZero":true}),
+        json!({"includedLimitZero":true,"hasNonZeroIncludedLimit":true,"usagePercent":0,"nextResetTimestampUtc":"2026-09-20T00:00:00Z"}),
         json!({"hasNonZeroIncludedLimit":false}),
     ] {
         assert!(decode(value).unwrap().is_none());
@@ -98,6 +113,7 @@ fn browser_grok_hides_explicit_ineligible_and_rejects_unknown_or_invalid_data() 
         assert!(decode(json!({"usagePercent":percent,"includedLimitZero":false})).is_err());
     }
     assert!(decode(json!({"usagePercent":20})).is_err());
+    assert!(decode(json!({"usagePercent":20,"hasAvailableUsage":true,"nextResetTimestampUtc":"2026-09-20T00:00:00Z"})).is_err());
 }
 
 #[test]

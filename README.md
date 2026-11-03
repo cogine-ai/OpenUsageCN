@@ -49,7 +49,7 @@ Windows MVP 启用和展示 **Codex、BigModel CN、OpenAI API、OpenRouter、Z.
 - [**Claude**](docs/providers/claude.md)：session、weekly、extra usage、按需加载本地 token 用量（ccusage）、可验证的 Team 席位、本机账号的浏览器连接补充
 - [**Codex**](docs/providers/codex.md)：5 小时、每周、代码审查、点数、手动重置及最近到期时间
 - [**Copilot**](docs/providers/copilot.md)：premium、chat、completions
-- [**Cursor**](docs/providers/cursor.md)：credits、总用量、Cursor 3.27+ 加密登录读取、Desktop/CLI/Chrome/Arc 多账号与完整身份隔离、Cursor Models / Other Models 月额度、Grok Bot 周额度、按模型用量和 CSV 导出
+- [**Cursor**](docs/providers/cursor.md)：credits、总用量、Cursor 3.27+ 加密登录读取、Desktop/CLI/Chrome/Arc 多账号与完整身份隔离、旧套餐月度双池或新套餐共享周额度、独立 Grok Bot 额度、按模型用量和 CSV 导出
 - [**DeepSeek**](docs/providers/deepseek.md)：按人民币或美元显示 API 余额、赠额和充值额
 - [**Doubao**](docs/providers/doubao.md)：火山引擎 Ark Coding Plan 与 Agent Plan 配额
 - [**Factory / Droid**](docs/providers/factory.md)：standard、premium tokens
