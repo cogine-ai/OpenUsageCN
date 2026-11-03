@@ -200,7 +200,7 @@ On Windows, only the ten Windows MVP providers are present; the rest of this tab
 | `claude` | `session`, `weekly`, `sonnet`, `claudeDesign`, `extraUsage` |
 | `codex` | `session`, `weekly`, `spark`, `sparkWeekly`, `codeReview` |
 | `copilot` | `premiumCredits`, `chat`, `completions` |
-| `cursor` | `credits`, `totalUsage`, `requests`, `autoUsage`, `apiUsage`, `grokBotUsage`, `onDemand` |
+| `cursor` | `credits`, `totalUsage`, `weekly`, `requests`, `autoUsage`, `apiUsage`, `grokBotUsage`, `onDemand` |
 | `deepseek` | None; balance is text in `/v1/usage` |
 | `devin` | `weekly`, `daily` |
 | `doubao` | `codingSession`, `codingWeekly`, `codingMonthly`, `agentSession`, `agentWeekly`, `agentMonthly` |
