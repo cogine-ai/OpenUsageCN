@@ -26,6 +26,9 @@ jobs:
       - name: Test Cookie Helper Relink Release Gate
         run: python3 -m unittest discover -s scripts -p 'test_verify_cookie_helper_relink_release.py'
 
+      - name: Test Stapler Guard
+        run: python3 -m unittest discover -s scripts -p 'test_macos_stapler_guard.py'
+
       - name: Type-check and build
         run: bun run build
 
@@ -59,6 +62,9 @@ jobs:
 
       - name: Test Cookie Helper
         run: bun run test:cookie-helper
+
+      - name: Test Stapler Guard
+        run: python3 -m unittest discover -s scripts -p 'test_macos_stapler_guard.py'
 
       - name: Build Cookie Helper
         run: bun run build:cookie-helper -- ${{ matrix.target }}
