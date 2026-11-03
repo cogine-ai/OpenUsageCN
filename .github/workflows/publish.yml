@@ -30,7 +30,7 @@ defaults:
 jobs:
   prepare:
     name: Prepare Draft Release
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    if: (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
     steps:
       - name: Validate release inputs
@@ -61,7 +61,7 @@ jobs:
           fi
 
   build:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    if: (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
     needs: prepare
     strategy:
       fail-fast: false
@@ -242,7 +242,7 @@ jobs:
 
   windows:
     name: Build Windows x64
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    if: (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
     needs: build
     runs-on: windows-latest
     steps:
@@ -361,7 +361,7 @@ jobs:
           }
 
   publish:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    if: (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
     needs: [build, windows]
     runs-on: ubuntu-latest
     steps:

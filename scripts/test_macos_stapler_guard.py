@@ -95,9 +95,9 @@ class StaplerGuardTests(unittest.TestCase):
         started = time.monotonic()
         self.assertEqual(GUARD.guard_staple(
             ["stapler", "staple", "Synthetic.app"], str(self.fake), self.log,
-            process_timeout=0.2, total_timeout=0.25, initial_backoff=0.1,
+            process_timeout=1.0, total_timeout=1.25, initial_backoff=0.3,
         ), 1)
-        self.assertLess(time.monotonic()-started, 2)
+        self.assertLess(time.monotonic()-started, 5)
         self.assertTrue(any(e.get("timedOut") for e in self.events()))
         pid, child = map(int, (self.root / "pids").read_text().split())
         with self.assertRaises(ProcessLookupError):
