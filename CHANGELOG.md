@@ -4,6 +4,30 @@
 
 暂无。
 
+## v0.6.46
+
+### New Features
+
+- 支持 Cursor 新套餐共享周额度，保留旧套餐月度双池；CLI 和本地 HTTP API 使用独立周额度资源，避免与 Grok Bot 重复统计。 ([#257](https://github.com/cogine-ai/OpenUsageCN/pull/257)) by @lc708
+
+### Bug Fixes
+
+- 修正 Grok Bot 周中开通时的周期计算；明确付费额度与有效重置时间时按七天计算，试用额度不推测循环周期。 ([#257](https://github.com/cogine-ai/OpenUsageCN/pull/257)) by @lc708
+- Cursor 浏览器连接区分 HTTP 401 登录失效与 HTTP 403 访问拒绝，保留完整账号隔离和原有加密凭据保护。 ([#257](https://github.com/cogine-ai/OpenUsageCN/pull/257)) by @lc708
+
+### Chores
+
+- 补齐 Cursor 额度资源表和错误范围说明，将实现与验收细节保留在设计文档。 ([#258](https://github.com/cogine-ai/OpenUsageCN/pull/258)) by @lc708
+
+---
+
+### Changelog
+
+**Full Changelog**: [v0.6.45...v0.6.46](https://github.com/cogine-ai/OpenUsageCN/compare/v0.6.45...v0.6.46)
+
+- [8d5b358](https://github.com/cogine-ai/OpenUsageCN/commit/8d5b358f03f80ad7b34a31e02bd48754f67bae19) feat(cursor): support confirmed shared weekly quotas (#257) by @lc708
+- [1c44f95](https://github.com/cogine-ai/OpenUsageCN/commit/1c44f95aa4a02f40113b91ac8d885c60441fbd6e) docs(cursor): finish shared weekly quota review follow-up (#258) by @lc708
+
 ## v0.6.45
 
 ### Bug Fixes
