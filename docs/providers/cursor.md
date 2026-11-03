@@ -44,10 +44,8 @@ The CLI and Local HTTP API use `weekly`; `guard cursor --window weekly` checks t
 
 Shared weekly usage requires an explicit `isUnified: true`, a paid included allowance and a valid
 future reset. Trial allowance, missing fields or an expired reset do not establish a shared week.
-Both local and browser connections reuse one Sand response from the selected account. Optional
-Sand failures keep an available base quota; permission errors and malformed base responses are
-not replaced with a guessed weekly quota. This compatibility is covered by synthetic fixtures;
-real shared-plan accounts require separate device acceptance.
+If the optional weekly data is unavailable, the other Cursor quotas stay visible. Permission
+errors and invalid base responses still report an error. OpenUsageCN never shows a guessed weekly quota.
 
 **Legacy request-based Enterprise flow** continues to use the REST `/api/usage` endpoint.
 Request counts remain available when that endpoint only supplies `startOfMonth`; OpenUsageCN

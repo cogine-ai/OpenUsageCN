@@ -42,3 +42,9 @@
 行为文档：`docs/providers/cursor.md`、`docs/usage-history.md`、`docs/local-http-api.md`、`docs/cli.md`、`docs/capture-logs.md`；插件能力说明涉及变化时更新 `docs/plugins/api.md`。核对 README 插件清单。
 
 本批不新增额外月消费 endpoint；`creditsUsedCents` 不混入已有余额或用量。Ollama API Key、OpenRouter 管理 Key、Antigravity 多池和 ChatGPT 日报仍按上游评估逐项设计后实施。本文件不宣称这些能力已经完成。
+
+## 验收边界
+
+JS 与 Rust 共用合成 fixture 验证共享周额度分类。现有组件的合成渲染证据见
+[截图与验收说明](evidence/cursor-weekly-quota/README.md)。真实共享套餐账号仍需单独实机验收；
+自动测试与截图不能替代真实服务端额度对照。
