@@ -20,11 +20,12 @@
 | Total usage | `planUsage.totalPercentUsed` | overview | percent (individual) / dollars (team) | Falls back to `totalSpend / limit * 100` (or `(limit - remaining) / limit * 100` without spend) when `totalPercentUsed` is not finite. Free/individual payloads observed on 2026-03-06 may omit `limit`; plugin uses `totalPercentUsed` directly in that case. Team accounts use dollars format and still require `limit`. |
 | Cursor Models | `planUsage.autoPercentUsed` | overview + detail | percent | Cursor model pool; omitted when missing or non-finite |
 | Other Models | `planUsage.apiPercentUsed` | overview + detail | percent | Third-party model pool; omitted when missing or non-finite |
+| Shared Weekly Usage | Sand `isUnified` + paid `usagePercent` and future `nextResetTimestampUtc` | overview + detail | percent | Replaces the old monthly pools for a confirmed shared plan; not inferred from the plan name |
 | Grok Bot | `GetSandUsageStatus.usagePercent` | overview + detail | percent | Separate included allowance; its own reset dates, or a trial without recurring reset |
 | Requests | `/api/usage` (enterprise) | overview | count | Enterprise accounts only; unchanged from previous behavior |
 | On-demand | `spendLimitUsage` | detail | dollars | Only when individual or pooled limit > 0 |
 
-The overview shows the individual model pools and Grok Bot separately. When both model pools
+For legacy plans, the overview shows the individual model pools and Grok Bot separately. When both model pools
 are available, their percentage Total is omitted there to avoid repeating the same information.
 Team dollar budgets and accounts without both pools retain Total. The detail page labels it **Monthly Total**;
 it remains the provider-reported total, not a sum or average of the displayed percentages.
@@ -35,7 +36,20 @@ The underlying resource keys `autoUsage`, `apiUsage` and `totalUsage` remain sta
 Local HTTP API consumers. Grok Bot adds `grokBotUsage`. The Auto routing mode can use different
 model pools; **Cursor Models** describes the quota pool, not the routing mode.
 
-**Enterprise flow** remains request-based via the REST `/api/usage` endpoint -- unchanged.
+Confirmed shared plans publish one **Shared Weekly Usage** pool with the separate resource key
+`weekly`. They omit the old Total, Cursor Models, Other Models and duplicate Grok Bot lines.
+This applies to Enterprise accounts too when the server explicitly identifies a shared plan.
+Valid legacy request quotas still take priority. Credits and on-demand spending stay separate.
+The CLI and Local HTTP API use `weekly`; `guard cursor --window weekly` checks that pool only.
+
+Shared weekly usage requires an explicit `isUnified: true`, a paid included allowance and a valid
+future reset. Trial allowance, missing fields or an expired reset do not establish a shared week.
+Both local and browser connections reuse one Sand response from the selected account. Optional
+Sand failures keep an available base quota; permission errors and malformed base responses are
+not replaced with a guessed weekly quota. This compatibility is covered by synthetic fixtures;
+real shared-plan accounts require separate device acceptance.
+
+**Legacy request-based Enterprise flow** continues to use the REST `/api/usage` endpoint.
 Request counts remain available when that endpoint only supplies `startOfMonth`; OpenUsageCN
 does not assume a 30-day duration or invent the cycle's end date from it.
 
@@ -117,6 +131,8 @@ History accepts billing dates only from a new quota reading with explicit start 
 Quota snapshots saved by older app versions remain visible, but their old duration fields are
 not used to infer a billing period. Until an explicit cycle is available, history uses the bounded
 window and labels its billing period as unknown.
+Shared weekly and Grok Bot reset dates are not monthly billing dates and do not shorten this
+history window to a week.
 
 **Export CSV** saves the currently displayed cached result to Downloads and shows the saved path.
 The file contains daily model details, source and coverage dates, and separate list-price and
@@ -133,8 +149,9 @@ Both send an empty JSON object. No other account or browser session is used as a
 
 The response supplies `usagePercent`, `currentPeriodStart` and `nextResetTimestampUtc`.
 Percentages are already in percent units: `0.36` means 0.36%, not 36%. Displayed Grok Bot usage
-is capped at 100%; exhausted allowance stays visible. Reset time and period length come from
-valid response timestamps rather than the connection time or monthly billing cycle.
+is capped at 100%; exhausted allowance stays visible. A confirmed paid included allowance with
+a valid reset uses a seven-day cycle even if its grant starts mid-week. Missing or invalid reset
+dates do not establish a cycle. The monthly billing cycle is never used for Grok Bot.
 
 An explicitly absent included allowance is omitted. Active trial allowance may be shown, but
 trial expiry is not presented as a recurring weekly reset. Unsupported pooled allowances are

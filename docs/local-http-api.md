@@ -176,6 +176,12 @@ Resource keys such as `session` and `weekly` are stable identifiers declared by 
 
 The resource key is stable, but its `unit` can follow the live plan or metric. Consumers should read `unit` from every response instead of assuming one permanent unit for a key.
 
+Cursor shared plans publish the confirmed shared allowance as `weekly`, in percent with a seven-day
+`windowSeconds`. This replaces the old monthly `totalUsage`, `autoUsage` and `apiUsage` resources
+for that reading; the same shared pool is not duplicated as `grokBotUsage`. Legacy plans retain
+their existing keys, and the independent Grok Bot allowance remains `grokBotUsage`. Existing
+credits and on-demand spending stay separate. A missing shared quota is omitted, not reported as zero.
+
 If a refresh fails for the same selected account, the last successful provider snapshot remains available and a redacted entry may appear in `errors`. If the selected account changes or its stored snapshot is unreadable, the previous account's projection is removed so it cannot be shown as the new account. If the account registry itself is unavailable, the last projection remains available with an error. Consumers should use numeric fields instead of parsing text from `/v1/usage`.
 
 ### Current Resource Keys

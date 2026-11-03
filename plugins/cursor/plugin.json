@@ -22,6 +22,7 @@
   "lines": [
     { "type": "progress", "label": "Credits", "scope": "overview", "primaryOrder": 1, "limitResource": { "key": "credits" } },
     { "type": "progress", "label": "Total usage", "scope": "overview", "primaryOrder": 2, "limitResource": { "key": "totalUsage" } },
+    { "type": "progress", "label": "Shared Weekly Usage", "scope": "overview", "primaryOrder": 2, "period": "weekly", "limitResource": { "key": "weekly" } },
     { "type": "progress", "label": "Requests", "scope": "overview", "primaryOrder": 3, "limitResource": { "key": "requests", "countUnit": "requests" } },
     { "type": "progress", "label": "Cursor Models", "scope": "overview", "limitResource": { "key": "autoUsage" } },
     { "type": "progress", "label": "Other Models", "scope": "overview", "limitResource": { "key": "apiUsage" } },

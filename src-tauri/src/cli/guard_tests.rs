@@ -240,3 +240,45 @@ fn reader_configuration_errors_produce_json_but_unknown_provider_is_invalid_inpu
         }
     }
 }
+
+#[test]
+fn cursor_guard_weekly_uses_shared_quota_and_never_substitutes_grok_or_monthly_total() {
+    for (resource_key, remaining, expected_code, expected_decision, expected_reason) in [
+        ("weekly", 75.0, 0, "allowed", "threshold_met"),
+        ("weekly", 0.0, 1, "blocked", "below_threshold"),
+        ("grokBotUsage", 75.0, 3, "unknown", "window_unavailable"),
+        ("totalUsage", 75.0, 3, "unknown", "window_unavailable"),
+    ] {
+        let mut read = reading(remaining);
+        let mut provider = read.envelope.providers.remove("codex").unwrap();
+        provider.display_name = "Cursor".into();
+        let mut resource = provider.resources.remove("session").unwrap();
+        // Even a seven-day Grok window is not the shared Cursor weekly allowance.
+        resource.window_seconds = Some(604_800.0);
+        provider.resources.insert(resource_key.into(), resource);
+        read.envelope.providers.insert("cursor".into(), provider);
+        let mut out = Vec::new();
+        let mut err = Vec::new();
+        let code = execute(
+            &["cursor", "--window", "weekly"].map(String::from),
+            |provider, _| {
+                assert_eq!(provider, Some("cursor"));
+                Ok(read)
+            },
+            &mut out,
+            &mut err,
+        );
+        let json: serde_json::Value = serde_json::from_slice(&out).unwrap();
+        assert_eq!(code, expected_code, "resource={resource_key}");
+        assert_eq!(json["decision"], expected_decision);
+        assert_eq!(json["reason"], expected_reason);
+        assert_eq!(json["providerId"], "cursor");
+        assert_eq!(json["window"], "weekly");
+        if resource_key == "weekly" {
+            assert_eq!(json["remainingPercent"], remaining);
+        } else {
+            assert!(json["remainingPercent"].is_null());
+        }
+        assert!(err.is_empty());
+    }
+}

@@ -528,6 +528,7 @@
       const status = ctx.util.tryParseJson(response.bodyText)
       if (!status || typeof status !== "object" || Array.isArray(status)) throw new Error("invalid response")
       if (status.usesPooledEnterpriseAllowance === true) return null
+      if (status.includedLimitZero != null && typeof status.includedLimitZero !== "boolean") throw new Error("invalid allowance")
       const hasLimit = typeof status.includedLimitZero === "boolean"
         ? !status.includedLimitZero
         : status.hasNonZeroIncludedLimit
@@ -541,16 +542,17 @@
       if (hasLimit !== true && !trial) throw new Error("allowance unavailable")
       const used = status.usagePercent
       if (typeof used !== "number" || !Number.isFinite(used) || used < 0) throw new Error("invalid percentage")
-      const start = parseDate(status.currentPeriodStart)
       const end = parseDate(status.nextResetTimestampUtc)
+      const sharedWeekly = status.isUnified === true && hasLimit === true && Number.isFinite(end) && end > Date.now()
       return ctx.line.progress({
-        label: "Grok Bot",
+        label: sharedWeekly ? "Shared Weekly Usage" : "Grok Bot",
+        ...(sharedWeekly ? { limitResourceKey: "weekly" } : {}),
         used: Math.min(100, used),
         limit: 100,
         format: { kind: "percent" },
         resetsAt: !trial && Number.isFinite(end) ? ctx.util.toIso(end) : null,
-        periodDurationMs: !trial && Number.isFinite(start) && Number.isFinite(end) && end > start
-          ? end - start : null,
+        // Paid included allowance resets weekly, even when its grant starts mid-week.
+        periodDurationMs: !trial && Number.isFinite(end) ? 7 * 86400000 : null,
       })
     } catch (_) {
       // Never include response bodies, credentials, or transport exception text in logs.
@@ -629,7 +631,19 @@
     return Number.isSafeInteger(value) && value > 0 && value <= 8640000000000000 ? value : null
   }
 
-  function buildRequestBasedResult(ctx, accessToken, planName, unavailableMessage) {
+  function onDemandLine(ctx, su) {
+    if (!su) return null
+    const limit = su.individualLimit ?? su.pooledLimit ?? 0
+    const remaining = su.individualRemaining ?? su.pooledRemaining ?? 0
+    return limit > 0 ? ctx.line.progress({
+      label: "On-demand",
+      used: ctx.fmt.dollars(limit - remaining),
+      limit: ctx.fmt.dollars(limit),
+      format: { kind: "dollars" },
+    }) : null
+  }
+
+  function buildRequestBasedResult(ctx, accessToken, planName, unavailableMessage, allowance, spendLimitUsage) {
     var requestUsage = fetchRequestBasedUsage(ctx, accessToken)
     var lines = []
 
@@ -649,41 +663,49 @@
     }
 
     if (lines.length === 0) {
+      if (requestUsage && typeof requestUsage === "object" && !Array.isArray(requestUsage) &&
+          !Object.prototype.hasOwnProperty.call(requestUsage, "error") && !Object.prototype.hasOwnProperty.call(requestUsage, "gpt-4") &&
+          allowance && allowance.limitResourceKey === "weekly") {
+        const onDemand = onDemandLine(ctx, spendLimitUsage)
+        return { plan: formatCursorPlan(ctx, planName), lines: onDemand ? [allowance, onDemand] : [allowance] }
+      }
       ctx.host.log.warn("request-based: no usage data available")
       throw unavailableMessage
     }
 
     var plan = formatCursorPlan(ctx, planName)
-    const grokBot = grokBotLine(ctx, accessToken)
-    if (grokBot) lines.push(grokBot)
+    if (allowance && allowance.limitResourceKey !== "weekly") lines.push(allowance)
 
     return { plan: plan, lines: lines }
   }
 
-  function buildEnterpriseResult(ctx, accessToken, planName) {
+  function buildEnterpriseResult(ctx, accessToken, planName, allowance, spendLimitUsage) {
     return buildRequestBasedResult(
       ctx,
       accessToken,
       planName,
-      "Enterprise usage data unavailable. Try again later."
+      "Enterprise usage data unavailable. Try again later.",
+      allowance, spendLimitUsage
     )
   }
 
-  function buildTeamRequestBasedResult(ctx, accessToken, planName) {
+  function buildTeamRequestBasedResult(ctx, accessToken, planName, allowance, spendLimitUsage) {
     return buildRequestBasedResult(
       ctx,
       accessToken,
       planName,
-      "Team request-based usage data unavailable. Try again later."
+      "Team request-based usage data unavailable. Try again later.",
+      allowance, spendLimitUsage
     )
   }
 
-  function buildUnknownRequestBasedResult(ctx, accessToken, planName) {
+  function buildUnknownRequestBasedResult(ctx, accessToken, planName, allowance, spendLimitUsage) {
     return buildRequestBasedResult(
       ctx,
       accessToken,
       planName,
-      "Cursor request-based usage data unavailable. Try again later."
+      "Cursor request-based usage data unavailable. Try again later.",
+      allowance, spendLimitUsage
     )
   }
 
@@ -809,7 +831,9 @@
     ctx.host.log.info("usage fetch succeeded")
 
     const usage = ctx.util.tryParseJson(usageResp.bodyText)
-    if (usage === null) {
+    if (usage === null || typeof usage !== "object" || Array.isArray(usage) ||
+        Object.prototype.hasOwnProperty.call(usage, "error") ||
+        (usage.planUsage != null && (typeof usage.planUsage !== "object" || Array.isArray(usage.planUsage)))) {
       throw "Usage response invalid. Try again later."
     }
 
@@ -835,6 +859,16 @@
     const normalizedPlanName = typeof planName === "string"
       ? planName.toLowerCase()
       : ""
+    // One selected-account Sand response serves either Grok Bot or the shared pool.
+    const allowance = grokBotLine(ctx, accessToken)
+    if (allowance && allowance.limitResourceKey === "weekly" && usage.planUsage) {
+      for (const key of ["limit", "remaining", "totalSpend", "totalPercentUsed", "autoPercentUsed", "apiPercentUsed"]) {
+        const value = usage.planUsage[key]
+        if (value != null && (typeof value !== "number" || !Number.isFinite(value) || value < 0)) {
+          throw "Usage response invalid. Try again later."
+        }
+      }
+    }
 
     const hasPlanUsage = !!usage.planUsage
     const hasPlanUsageLimit = hasPlanUsage &&
@@ -854,10 +888,10 @@
     if (needsRequestBasedFallback) {
       if (normalizedPlanName === "enterprise") {
         ctx.host.log.info("detected enterprise account, using REST usage API")
-        return buildEnterpriseResult(ctx, accessToken, planName)
+        return buildEnterpriseResult(ctx, accessToken, planName, allowance, usage.spendLimitUsage)
       }
       ctx.host.log.info("detected team request-based account, using REST usage API")
-      return buildTeamRequestBasedResult(ctx, accessToken, planName)
+      return buildTeamRequestBasedResult(ctx, accessToken, planName, allowance, usage.spendLimitUsage)
     }
 
     const needsFallbackWithoutPlanInfo = usage.enabled !== false &&
@@ -867,13 +901,13 @@
       planInfoUnavailable
     if (needsFallbackWithoutPlanInfo) {
       ctx.host.log.info("plan info unavailable with missing planUsage, attempting REST usage API fallback")
-      return buildUnknownRequestBasedResult(ctx, accessToken, planName)
+      return buildUnknownRequestBasedResult(ctx, accessToken, planName, allowance, usage.spendLimitUsage)
     }
 
     if (usage.enabled !== false && planUsageLimitMissing && !hasTotalUsagePercent) {
       ctx.host.log.warn("planUsage.limit missing, attempting REST usage API fallback")
       try {
-        return buildUnknownRequestBasedResult(ctx, accessToken, planName)
+        return buildUnknownRequestBasedResult(ctx, accessToken, planName, allowance, usage.spendLimitUsage)
       } catch (e) {
         ctx.host.log.warn("REST usage fallback unavailable: " + String(e))
       }
@@ -881,6 +915,9 @@
 
     // Team plans may omit `enabled` even with valid plan usage data.
     if (usage.enabled === false || !usage.planUsage) {
+      if (usage.enabled === true && allowance && allowance.limitResourceKey === "weekly") {
+        return buildUnknownRequestBasedResult(ctx, accessToken, planName, allowance, usage.spendLimitUsage)
+      }
       throw "No active Cursor subscription."
     }
 
@@ -953,7 +990,7 @@
     if (isTeamAccount) {
       if (!hasPlanUsageLimit) {
         ctx.host.log.warn("team-inferred account missing planUsage.limit, attempting REST usage API fallback")
-        return buildUnknownRequestBasedResult(ctx, accessToken, planName)
+        return buildUnknownRequestBasedResult(ctx, accessToken, planName, allowance, usage.spendLimitUsage)
       }
       lines.push(ctx.line.progress({
         label: "Total usage",
@@ -1000,23 +1037,18 @@
       }))
     }
 
-    const grokBot = grokBotLine(ctx, accessToken)
-    if (grokBot) lines.push(grokBot)
+    if (allowance) {
+      if (allowance.limitResourceKey === "weekly") {
+        for (let index = lines.length - 1; index >= 0; index--) {
+          if (["Total usage", "Cursor Models", "Other Models"].includes(lines[index].label)) lines.splice(index, 1)
+        }
+      }
+      lines.push(allowance)
+    }
 
     // On-demand (if available) - not a primary candidate
-    if (su) {
-      const limit = su.individualLimit ?? su.pooledLimit ?? 0
-      const remaining = su.individualRemaining ?? su.pooledRemaining ?? 0
-      if (limit > 0) {
-        const used = limit - remaining
-        lines.push(ctx.line.progress({
-          label: "On-demand",
-          used: ctx.fmt.dollars(used),
-          limit: ctx.fmt.dollars(limit),
-          format: { kind: "dollars" },
-        }))
-      }
-    }
+    const onDemand = onDemandLine(ctx, su)
+    if (onDemand) lines.push(onDemand)
 
     return { plan: plan, lines: lines }
   }

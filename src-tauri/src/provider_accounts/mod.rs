@@ -1,6 +1,7 @@
 mod account_records_serde;
 mod browser_cursor_probe;
 mod browser_cursor_grok;
+mod browser_cursor_weekly;
 mod browser_operations;
 mod browser_probe_operation;
 mod claude_browser;

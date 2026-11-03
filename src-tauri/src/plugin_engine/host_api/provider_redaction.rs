@@ -229,6 +229,7 @@ mod tests {
         let body = serde_json::json!({
             "userId": "synthetic-private-user-1234567890",
             "email": "synthetic-private@example.com",
+            "isUnified": true,
             "usagePercent": 0.36,
             "includedLimitZero": false,
             "hasNonZeroIncludedLimit": true,
@@ -238,17 +239,19 @@ mod tests {
             "nextResetTimestampUtc": "2026-09-17T00:00:00Z",
             "sandTrialExpiresAt": null,
         });
-        let redacted = redact_http_response_body(
+        for url in [
             "https://api2.cursor.sh/aiserver.v1.DashboardService/GetSandUsageStatus",
-            &body.to_string(),
-        );
-        let output: serde_json::Value = serde_json::from_str(&redacted).unwrap();
-        for (key, value) in body.as_object().unwrap() {
-            if matches!(key.as_str(), "userId" | "email") {
-                assert_ne!(&output[key], value, "identity must be redacted");
-                assert!(!redacted.contains(value.as_str().unwrap()));
-            } else {
-                assert_eq!(&output[key], value, "quota metadata must remain readable");
+            "https://cursor.com/api/dashboard/get-sand-usage-status",
+        ] {
+            let redacted = redact_http_response_body(url, &body.to_string());
+            let output: serde_json::Value = serde_json::from_str(&redacted).unwrap();
+            for (key, value) in body.as_object().unwrap() {
+                if matches!(key.as_str(), "userId" | "email") {
+                    assert_ne!(&output[key], value, "identity must be redacted");
+                    assert!(!redacted.contains(value.as_str().unwrap()));
+                } else {
+                    assert_eq!(&output[key], value, "quota metadata must remain readable");
+                }
             }
         }
     }

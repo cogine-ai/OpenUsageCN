@@ -203,3 +203,9 @@ Perplexity 本地 `fetchRestState/probe` 展示 API credits。上游 [79438e43](
 后续按用户授权修复了身份响应兼容，并触发用户确认的系统 Keychain 授权。Desktop/CLI 各两次真实账号限定额度刷新通过；凭据和条目元数据在刷新前后未改变。最新证据见 [实机验收记录](evidence/cursor-backend-acceptance/README.md)。账号仍按完整 JWT subject 隔离，未改成后缀合并。
 
 安装后的实际界面手动刷新验收已完成：Cursor 刷新时间更新为台北时间 18:54:27，旧错误消除，原 Arc 绑定账号与登录/加密凭据均保持不变。详见实机记录的 Local Installation Acceptance。
+
+## 发布后的后续批次
+
+第一批已随 v0.6.45 发布。下一批先处理 Cursor：共享周额度、403 权限分类和 Grok Bot 固定周周期。
+指标与显示契约先记录在 [Cursor 周额度设计](cursor-weekly-quota-followup.md)，实现与验证状态以该批次提交为准。
+Ollama、OpenRouter、Antigravity 和独立日报仍是后续设计范围，不能将本批完成视为所有上游能力已同步。

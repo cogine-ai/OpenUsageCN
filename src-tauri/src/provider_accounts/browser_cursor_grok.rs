@@ -106,11 +106,8 @@ pub(super) fn decode_grok_usage(
     let reset = (!trial)
         .then(|| timestamp(&usage["nextResetTimestampUtc"]))
         .flatten();
-    let duration = reset
-        .zip(timestamp(&usage["currentPeriodStart"]))
-        .filter(|(end, start)| end > start)
-        .and_then(|(end, start)| u64::try_from((end - start).whole_milliseconds()).ok())
-        .filter(|duration| *duration > 0);
+    // Paid included allowance resets weekly, even when its grant starts mid-week.
+    let duration = reset.map(|_| 7 * 24 * 60 * 60 * 1000);
     Ok(Some(MetricLine::Progress {
         label: "Grok Bot".to_string(),
         limit_resource_key: Some("grokBotUsage".to_string()),
