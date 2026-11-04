@@ -7,7 +7,9 @@ use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 mod account_projection;
-pub(crate) use account_projection::replace_account_projection;
+pub(crate) use account_projection::{
+    replace_account_projection, replace_cached_account_projection,
+};
 #[cfg(test)]
 #[path = "cache_account_projection_tests.rs"]
 mod account_projection_tests;
@@ -101,7 +103,13 @@ pub(super) fn cache_state() -> &'static Mutex<CacheState> {
     STATE.get_or_init(|| {
         Mutex::new(CacheState {
             snapshots: HashMap::new(),
+            #[cfg(not(test))]
             app_data_dir: PathBuf::new(),
+            #[cfg(test)]
+            app_data_dir: std::env::temp_dir().join(format!(
+                "openusage-uninitialized-cache-test-{}",
+                uuid::Uuid::new_v4()
+            )),
             settings_data_dir: PathBuf::new(),
             known_plugin_ids: Vec::new(),
             limit_catalog: HashMap::new(),

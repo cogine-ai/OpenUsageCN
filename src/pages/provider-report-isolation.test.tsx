@@ -2,8 +2,9 @@ import { act, fireEvent, render, screen } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { PluginDisplayState } from "@/lib/plugin-types"
 
-const tauri = vi.hoisted(() => ({ invoke: vi.fn() }))
+const tauri = vi.hoisted(() => ({ invoke: vi.fn(), listen: vi.fn() }))
 vi.mock("@tauri-apps/api/core", () => ({ invoke: tauri.invoke }))
+vi.mock("@tauri-apps/api/event", () => ({ listen: tauri.listen }))
 vi.mock("@/components/local-usage-history", () => ({ LocalUsageHistory: () => null }))
 import { ProviderDetailPage } from "./provider-detail"
 
@@ -26,12 +27,13 @@ function report(args: { providerId: string; requestId: string }, account = "A") 
 describe("provider report account isolation during quota refresh", () => {
   beforeEach(() => {
     tauri.invoke.mockReset()
-    tauri.invoke.mockImplementation((command, args) => Promise.resolve(command === "refresh_provider_reports" ? report(args) : null))
+    tauri.listen.mockResolvedValue(vi.fn())
+    tauri.invoke.mockImplementation((command, args) => Promise.resolve(command === "get_ollama_accounts" ? { revision: 0, primary: { mode: "legacy" }, connections: [] } : command === "refresh_provider_reports" ? report(args) : null))
   })
 
   it.each(["codex", "ollama", "openrouter"])("clears loaded %s reports when quota refresh starts and requires a new load", async (providerId) => {
     const { rerender } = render(page(state(providerId)))
-    fireEvent.click(screen.getByRole("button", { name: "Load Reports" }))
+    fireEvent.click(await screen.findByRole("button", { name: "Load Reports" }))
     expect(await screen.findByText("A Report")).toBeVisible()
     rerender(page(state(providerId, { loading: true })))
     expect(screen.queryByText("A Report")).not.toBeInTheDocument()

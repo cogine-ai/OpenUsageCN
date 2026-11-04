@@ -10,6 +10,7 @@ const PROBE_TIMEOUT_SECS: u64 = 30;
 #[path = "runtime_reports.rs"]
 mod reports;
 pub(crate) use reports::run_reports;
+pub(crate) use reports::run_reports_with_configuration;
 
 #[cfg(test)]
 #[path = "runtime_report_tests.rs"]
@@ -22,6 +23,10 @@ mod history_tests;
 #[cfg(test)]
 #[path = "runtime_provider_expansion_tests.rs"]
 mod provider_expansion_tests;
+
+#[cfg(test)]
+#[path = "runtime_ollama_account_tests.rs"]
+mod ollama_account_tests;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]

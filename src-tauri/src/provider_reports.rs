@@ -143,6 +143,7 @@ pub(crate) struct ProviderReportsSnapshot {
 pub(crate) async fn refresh_provider_reports(
     provider_id: String,
     request_id: String,
+    connection_id: Option<String>,
     state: tauri::State<'_, Mutex<AppState>>,
     reports: tauri::State<'_, ProviderReportsState>,
 ) -> Result<ProviderReportsSnapshot, String> {
@@ -182,7 +183,31 @@ pub(crate) async fn refresh_provider_reports(
         &config_fields,
     ))?;
     let worker_cancelled = Arc::clone(&cancelled);
+    let ollama_connection = if provider_id == "ollama" {
+        Some(crate::ollama_accounts::report_connection(
+            &plugin,
+            connection_id.as_deref(),
+        )?)
+    } else {
+        if connection_id.is_some() {
+            return Err("Account reports are unavailable for this provider.".into());
+        }
+        None
+    };
     let output = tauri::async_runtime::spawn_blocking(move || {
+        if let Some(connection) = ollama_connection {
+            crate::ollama_accounts::report_connection_unchanged(&plugin, &connection)?;
+            let result = runtime::run_reports_with_configuration(
+                &plugin,
+                &app_data_dir,
+                &app_version,
+                deadline,
+                worker_cancelled,
+                connection.configuration.as_ref(),
+            );
+            crate::ollama_accounts::report_connection_unchanged(&plugin, &connection)?;
+            return result;
+        }
         with_configuration_guard(
             &expected_config,
             || crate::provider_config::resolved_values(&plugin.manifest.id, &config_fields),

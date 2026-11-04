@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { cancelProviderReports, refreshProviderReports, type ProviderReportsSnapshot } from "@/lib/provider-reports"
 import { PROVIDER_CONFIG_CHANGED } from "@/lib/provider-config"
 
-export function useProviderReports(providerId: string) {
+export function useProviderReports(providerId: string, connectionId?: string) {
   const active = useRef<{ id: string; providerId: string } | null>(null)
   const revision = useRef(0)
   const [snapshot, setSnapshot] = useState<ProviderReportsSnapshot | null>(null)
@@ -32,7 +32,7 @@ export function useProviderReports(providerId: string) {
       window.removeEventListener(PROVIDER_CONFIG_CHANGED, changed)
       invalidate()
     }
-  }, [providerId, invalidate])
+  }, [providerId, connectionId, invalidate])
 
   const load = useCallback(async () => {
     invalidate()
@@ -42,7 +42,7 @@ export function useProviderReports(providerId: string) {
     // Do not display a previous scope while another identity may be loading.
     setSnapshot(null); setLoading(true); setError(null)
     try {
-      const next = await refreshProviderReports(providerId, requestId)
+      const next = await refreshProviderReports(providerId, requestId, connectionId)
       if (revision.current !== current) return
       if (next.providerId !== providerId || next.requestId !== requestId || !/^[a-f0-9]{64}$/.test(next.scopeKey)) {
         throw new Error("Server report scope mismatch")
@@ -58,7 +58,7 @@ export function useProviderReports(providerId: string) {
         setLoading(false)
       }
     }
-  }, [providerId, invalidate])
+  }, [providerId, connectionId, invalidate])
 
   return { snapshot, loading, error, load }
 }

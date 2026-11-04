@@ -91,12 +91,12 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
 
   /** Distinguish real success from errors and cached Claude rate-limit data when recording freshness. */
   const handleProbeResult = useCallback(
-    (output: PluginOutput, { manual }: ProbeResultContext) => {
+    (output: PluginOutput, { manual, invalidateCachedData }: ProbeResultContext) => {
       const errorMessage = probeFailure(output)
 
       const now = Date.now()
       updatePluginStates((prev) => {
-        const existing = prev[output.providerId]
+        const existing = invalidateCachedData ? undefined : prev[output.providerId]
         return {
           ...prev,
           [output.providerId]: {

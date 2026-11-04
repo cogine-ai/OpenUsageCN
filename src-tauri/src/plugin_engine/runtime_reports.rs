@@ -12,6 +12,24 @@ pub(crate) fn run_reports(
     deadline_at: Instant,
     cancelled: Arc<AtomicBool>,
 ) -> Result<ReportsOutput, String> {
+    run_reports_with_configuration(
+        plugin,
+        app_data_dir,
+        app_version,
+        deadline_at,
+        cancelled,
+        None,
+    )
+}
+
+pub(crate) fn run_reports_with_configuration(
+    plugin: &LoadedPlugin,
+    app_data_dir: &PathBuf,
+    app_version: &str,
+    deadline_at: Instant,
+    cancelled: Arc<AtomicBool>,
+    configuration: Option<&std::collections::HashMap<String, serde_json::Value>>,
+) -> Result<ReportsOutput, String> {
     let check = || {
         if cancelled.load(Ordering::Acquire) {
             Err("Server reports request was cancelled.".to_string())
@@ -44,6 +62,10 @@ pub(crate) fn run_reports(
             host_api::ProbeDeadline::at(deadline_at),
         )
         .map_err(|_| "Could not load report settings.".to_string())?;
+        if let Some(configuration) = configuration {
+            host_api::override_configuration(&ctx, configuration)
+                .map_err(|_| "Could not load this account's report settings.".to_string())?;
+        }
         host_api::patch_http_wrapper(&ctx)
             .map_err(|_| "Could not prepare report transport.".to_string())?;
         host_api::inject_utils(&ctx)

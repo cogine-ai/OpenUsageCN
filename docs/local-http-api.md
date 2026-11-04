@@ -239,6 +239,14 @@ On Windows, only the ten Windows MVP providers are present; the rest of this tab
 - The collection endpoint (`/v1/usage`) returns **enabled providers only**, in the order defined by your plugin settings.
 - Only **successful** probe results are cached. A failed probe never overwrites a previous successful snapshot.
 - For an account-aware provider, the cache contains only the account selected in OpenUsageCN. Changing the selection removes an unreadable or missing target projection until that account refreshes; data from different accounts is never combined.
+- For Ollama Cloud, only the explicitly selected primary connection is exposed. Browsing another
+  connection does not change the API result. Adding named keys leaves the original connection
+  active until a primary is chosen. Changing, replacing or removing the primary clears the old
+  projection; removing it does not select another key or restore the original connection automatically.
+  The API does not expose the saved key list or the credentials.
+  The standalone CLI uses the same primary for cached reads and forced refreshes. Restoring a
+  stored result preserves its original update time. If the Ollama account configuration becomes
+  unreadable, its projection is removed rather than switching to the original connection.
 - The API has no account selector and does not expose account lists, connection metadata, or Cursor Model Usage history in version 1.
 - The single-provider endpoint (`/v1/usage/:providerId`) works for any known provider, including disabled ones.
 - The limits collection follows the same enabled-provider selection. `providers` is an object, so consumers must not rely on key order. Its single-provider route also works for disabled providers.

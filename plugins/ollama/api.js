@@ -56,9 +56,9 @@
     const value = account.Plan === undefined ? account.plan : account.Plan
     return typeof value === "string" && value.trim() ? value.trim() : undefined
   }
-  function quota(ctx) {
+  function quota(ctx, loadedBalance, loadedAccount) {
     try {
-      const apiKey = key(ctx), balance = request(ctx, apiKey, "/api/balance")
+      const apiKey = key(ctx), balance = loadedBalance || request(ctx, apiKey, "/api/balance")
       const included = balance.included
       if (!included || typeof included !== "object" || Array.isArray(included)) throw failure("error", "Ollama returned no supported usage windows.")
       const lines = []
@@ -85,7 +85,7 @@
       if (!lines.some((line) => line.type === "progress") && !(knownZeroAllowance && knownPurchased)) throw failure("error", "Ollama returned no supported usage windows.")
       let accountPlan
       try {
-        accountPlan = plan(request(ctx, apiKey, "/api/me", "POST"))
+        accountPlan = plan(loadedAccount || request(ctx, apiKey, "/api/me", "POST"))
         if (!accountPlan) throw failure("error", "Account plan missing")
       } catch (_) {
         ctx.host.log.warn("Ollama account plan details unavailable; quota remains available")

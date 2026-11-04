@@ -64,3 +64,18 @@ it("keeps an account transition superseded when its batch fails to start", async
   })
   expect(onResult).not.toHaveBeenCalled()
 })
+
+it("forwards the native scope invalidation without changing ordinary result contexts", async () => {
+  tauri.invoke.mockImplementation(async (_command: string, args: any) => ({
+    batchId: args.batchId, pluginIds: args.pluginIds,
+  }))
+  const onResult = vi.fn()
+  const { result } = renderHook(() => useProbeEvents({ onResult, onBatchComplete: vi.fn() }))
+  await act(() => result.current.startBatch(["ollama"]))
+  const batchId = tauri.invoke.mock.calls[0][1].batchId
+  const output = { providerId: "ollama", displayName: "Ollama Cloud", lines: [], iconUrl: "" }
+  act(() => tauri.listeners.get("probe:result")?.({ payload: { batchId, output } }))
+  expect(onResult).toHaveBeenLastCalledWith(output, { manual: false })
+  act(() => tauri.listeners.get("probe:result")?.({ payload: { batchId, output, invalidateCachedData: true } }))
+  expect(onResult).toHaveBeenLastCalledWith(output, { manual: false, invalidateCachedData: true })
+})

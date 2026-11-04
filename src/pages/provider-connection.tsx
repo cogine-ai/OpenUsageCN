@@ -6,6 +6,8 @@ import { ProviderConfigFields } from "@/components/provider-config-fields"
 import { ProviderAccountControls } from "@/components/provider-account-controls"
 import { useAppUiStore } from "@/stores/app-ui-store"
 import type { SettingsPluginConfig } from "@/components/settings-plugin-item"
+import { OllamaAccountsPage } from "@/pages/ollama-accounts"
+import { checkOllamaLegacyConnection, getOllamaAccounts } from "@/lib/ollama-accounts"
 
 const LOCAL_STEPS: Record<string, { command?: string; step: string }> = {
   claude: { command: "claude", step: "在终端打开 Claude Code，输入 /login 完成登录。" },
@@ -61,6 +63,28 @@ export function ProviderConnectionPage({ plugin, error, onCheck, onAccountChange
 }) {
   const { connection, closeConnection, openConnection } = useAppUiStore()
   if (!connection || !plugin) return <Button variant="ghost" onClick={closeConnection}><ArrowLeft className="size-4" />返回</Button>
+  if (plugin.id === "ollama") {
+    return <OllamaAccountsPage
+      initialScreen="keys"
+      onBack={closeConnection}
+      onPrimaryChange={() => onAccountChangeRefresh("ollama")}
+      onQuotaRefresh={() => {
+        void onCheck("ollama").catch(() => {
+          console.error("Failed to refresh the Ollama primary connection")
+        })
+      }}
+      legacyConfiguration={plugin.config ? <ProviderConfigFields
+        pluginId="ollama"
+        fields={plugin.config.fields}
+        focusField={connection.focusField}
+        onSaved={async () => {
+          const current = await getOllamaAccounts()
+          if (current.primary.mode === "legacy") onAccountChangeRefresh("ollama")
+          await checkOllamaLegacyConnection()
+        }}
+      /> : undefined}
+    />
+  }
   return <div className="space-y-5 py-3">
     <div className="flex items-center gap-2"><Button variant="ghost" size="icon-sm" aria-label="返回" onClick={closeConnection}><ArrowLeft className="size-4" /></Button><h2 className="min-w-0 truncate text-base font-semibold">{plugin.name} · {connection.kind === "accounts" ? "账号" : "连接"}</h2></div>
     {connection.kind === "config" && plugin.config ? <ProviderConfigFields key={plugin.id} pluginId={plugin.id} fields={plugin.config.fields} focusField={connection.focusField} onSaved={onCheck} /> : connection.kind === "accounts" && plugin.accountSupport ? <ProviderAccountControls key={plugin.id} providerId={plugin.id} browserBinding={plugin.accountSupport.browserBinding} modelHistory={false} standalone onOpenLocalLogin={() => openConnection(plugin.id, "local")} onAccountChangeRefresh={() => onAccountChangeRefresh(plugin.id)} /> : <LocalConnection key={plugin.id} plugin={plugin} error={error} onCheck={onCheck} />}

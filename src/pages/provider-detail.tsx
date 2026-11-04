@@ -3,6 +3,9 @@ import { ProviderAccountControls } from "@/components/provider-account-controls"
 import { ProviderCard } from "@/components/provider-card"
 import { LocalUsageHistory } from "@/components/local-usage-history"
 import { ServerUsageReports } from "@/components/server-usage-reports"
+import { ProviderConfigFields } from "@/components/provider-config-fields"
+import { OllamaAccountsPage } from "@/pages/ollama-accounts"
+import { checkOllamaLegacyConnection, getOllamaAccounts } from "@/lib/ollama-accounts"
 import type { PluginDisplayState } from "@/lib/plugin-types"
 import type { DisplayMode, ResetTimerDisplayMode, TimeFormatMode } from "@/lib/settings"
 
@@ -35,7 +38,7 @@ export function ProviderDetailPage({
     )
   }
 
-  return (
+  const usage = (
     <>
       <ProviderCard
         capabilities={plugin.meta}
@@ -86,4 +89,24 @@ export function ProviderDetailPage({
       ) : null}
     </>
   )
+  if (plugin.meta.id === "ollama") {
+    return <OllamaAccountsPage
+      legacyUsage={usage}
+      legacyConfiguration={plugin.meta.config ? <ProviderConfigFields
+        pluginId="ollama"
+        fields={plugin.meta.config.fields}
+        onSaved={async () => {
+          const current = await getOllamaAccounts()
+          if (current.primary.mode === "legacy") onAccountChangeRefresh?.()
+          await checkOllamaLegacyConnection()
+        }}
+      /> : undefined}
+      onPrimaryChange={onAccountChangeRefresh}
+      onQuotaRefresh={onRetry}
+      displayMode={displayMode}
+      resetTimerDisplayMode={resetTimerDisplayMode}
+      timeFormatMode={timeFormatMode}
+    />
+  }
+  return usage
 }

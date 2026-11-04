@@ -69,6 +69,14 @@ pub(crate) fn replace_account_projection(
 ) -> Result<(), String> {
     let projection =
         projection.map(|(output, started_at)| super::snapshot_from_output(output, started_at));
+    replace_cached_account_projection(provider_id, projection)
+}
+
+/// Restores a selected account's stored result without making its fetch time look current.
+pub(crate) fn replace_cached_account_projection(
+    provider_id: &str,
+    projection: Option<CachedPluginSnapshot>,
+) -> Result<(), String> {
     if projection
         .as_ref()
         .is_some_and(|snapshot| snapshot.provider_id != provider_id)

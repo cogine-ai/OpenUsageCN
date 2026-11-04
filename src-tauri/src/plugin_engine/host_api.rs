@@ -656,6 +656,11 @@ fn redact_url(url: &str) -> String {
         "owning_team",
         "credentialgeneration",
         "credential_generation",
+        "verificationid",
+        "verification_id",
+        "identityfingerprint",
+        "identity_fingerprint",
+        "managedaccountfingerprint",
         "email",
         "login",
     ];
@@ -772,6 +777,11 @@ fn redact_body(body: &str) -> String {
         "credentialGeneration",
         "credential_generation",
         "auth_token",
+        "verificationId",
+        "verification_id",
+        "identityFingerprint",
+        "identity_fingerprint",
+        "managedAccountFingerprint",
         "authToken",
         "id_token",
         "idToken",
@@ -1170,6 +1180,25 @@ fn inject_config<'js>(
     config_obj.set("_valuesJson", values_json)?;
     host.set("config", config_obj)?;
     Ok(())
+}
+
+/// Replaces only this request's resolved settings; never writes the provider config store.
+pub(crate) fn override_configuration(
+    ctx: &Ctx<'_>,
+    values: &HashMap<String, serde_json::Value>,
+) -> rquickjs::Result<()> {
+    let host: Object = ctx
+        .globals()
+        .get::<_, Object>("__openusage_ctx")?
+        .get("host")?;
+    let config = Object::new(ctx.clone())?;
+    config.set(
+        "_valuesJson",
+        serde_json::to_string(values)
+            .map_err(|_| Exception::throw_message(ctx, "config encode failed"))?,
+    )?;
+    host.set("config", config)?;
+    patch_config_wrapper(ctx)
 }
 
 fn patch_config_wrapper(ctx: &rquickjs::Ctx<'_>) -> rquickjs::Result<()> {
@@ -4333,6 +4362,41 @@ mod tests {
             redact_http_response_body("https://example.com/api/usage", body),
             redact_body(body)
         );
+    }
+
+    #[test]
+    fn ollama_verification_tokens_and_stable_identity_fingerprints_are_redacted() {
+        let body = r#"{"verificationId":"pending-private-token-1234567890","verification_id":"pending-private-token-0987654321","identityFingerprint":"private-identity-fingerprint-1234567890","identity_fingerprint":"private-identity-fingerprint-0987654321","managedAccountFingerprint":"private-managed-fingerprint-1234567890","apiKey":"opaque-ollama-secret-1234567890"}"#;
+        let logged = redact_body(body);
+        for secret in [
+            "pending-private-token-1234567890",
+            "pending-private-token-0987654321",
+            "private-identity-fingerprint-1234567890",
+            "private-identity-fingerprint-0987654321",
+            "private-managed-fingerprint-1234567890",
+            "opaque-ollama-secret-1234567890",
+        ] {
+            assert!(!logged.contains(secret), "private field leaked: {logged}");
+        }
+        for url in [
+            "https://ollama.com/api/me",
+            "https://ollama.com/api/balance",
+            "https://ollama.com/api/usage?range=7d&group_by=model&scope=self",
+        ] {
+            assert_eq!(
+                redact_http_response_body(url, body),
+                "[REDACTED OLLAMA ACCOUNT RESPONSE]"
+            );
+        }
+        let url = "https://example.invalid/usage?verificationId=private-pending-token&identityFingerprint=private-identity&managedAccountFingerprint=private-managed-identity";
+        let logged = redact_url(url);
+        for secret in [
+            "private-pending-token",
+            "private-identity",
+            "private-managed-identity",
+        ] {
+            assert!(!logged.contains(secret), "URL identity leaked: {logged}");
+        }
     }
 
     #[test]
