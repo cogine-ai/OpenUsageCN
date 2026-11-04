@@ -4,6 +4,37 @@
 
 暂无。
 
+## v0.6.47
+
+### New Features
+
+- Antigravity 分别显示 Gemini、Claude 的五小时与周额度，以及独立 Argon 周额度；缺失数据不再按零处理。 ([#262](https://github.com/cogine-ai/OpenUsageCN/pull/262)) by @lc708
+- OpenRouter 支持管理 Key 的完整用量汇总、独立 BYOK 消费和按需加载的 Activity 报告，明确账号与工作区范围。 ([#262](https://github.com/cogine-ai/OpenUsageCN/pull/262)) by @lc708
+- Ollama Cloud 新增显式 API Key 连接、JSON 额度与购买余额，以及 7/30 天模型用量报告。 ([#262](https://github.com/cogine-ai/OpenUsageCN/pull/262)) by @lc708
+- ChatGPT 新增当前登录的服务端每日 tokens、turns 和套餐支持的 charged credits 报告，与本地日志估算分开。 ([#262](https://github.com/cogine-ai/OpenUsageCN/pull/262)) by @lc708
+- Cursor Model Usage 新增明确的按量扣费分类、完整事件数和 CSV 列，保留原有消费与请求数定义。 ([#262](https://github.com/cogine-ai/OpenUsageCN/pull/262)) by @lc708
+- MiniMax 新增 China Web 周额度、Boost 和 Unlimited；Perplexity 新增网站个人与组织订阅 credits，连接来源由用户明确选择。 ([#262](https://github.com/cogine-ai/OpenUsageCN/pull/262)) by @lc708
+
+### Bug Fixes
+
+- 主额度刷新会清空旧服务端报告并取消旧请求，避免切号后保留上个账号的数据；读取损坏凭据时不再尝试旧登录来源。 ([#262](https://github.com/cogine-ai/OpenUsageCN/pull/262)) by @lc708
+- 修复 OpenRouter 和 ChatGPT 模型明细过多时整份报告被拒的问题，保留完整总计，明确标记部分模型展示。 ([#262](https://github.com/cogine-ai/OpenUsageCN/pull/262)) by @lc708
+- 修正 MiniMax 短倒计时单位判断，保留负 credit 调整与未报告日期的含义，并补齐新增来源的日志脱敏。 ([#262](https://github.com/cogine-ai/OpenUsageCN/pull/262)) by @lc708
+
+### Chores
+
+- 补齐服务商、报表与本地 HTTP API 文档，以及修改前后截图和回归测试。 ([#262](https://github.com/cogine-ai/OpenUsageCN/pull/262)) by @lc708
+- 加强 macOS 公证票据的有界重试、独立校验和旧标签发布恢复检查。 ([#261](https://github.com/cogine-ai/OpenUsageCN/pull/261)) by @lc708
+
+---
+
+### Changelog
+
+**Full Changelog**: [v0.6.46...v0.6.47](https://github.com/cogine-ai/OpenUsageCN/compare/v0.6.46...v0.6.47)
+
+- [13cfb31](https://github.com/cogine-ai/OpenUsageCN/commit/13cfb31df8ac1c7723ddaaf7f24aefbaeaf98be2) fix(release): verify and retry macOS stapling (#261) by @lc708
+- [4dc528c](https://github.com/cogine-ai/OpenUsageCN/commit/4dc528cf19eec65fb16ac6499aaaa63acfee970a) Merge pull request #262: expand provider quotas and scoped usage reports by @lc708
+
 ## v0.6.46
 
 ### New Features
