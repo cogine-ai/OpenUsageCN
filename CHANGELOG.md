@@ -4,6 +4,29 @@
 
 暂无。
 
+## v0.6.49
+
+### New Features
+
+- 首页统一展示所有 Ollama Cloud 账号及已配置旧连接的独立用量、余额和更新时间；主账号决定菜单栏与本地 API 的默认用量。 ([#266](https://github.com/cogine-ai/OpenUsageCN/pull/266)) by @lc708
+
+### Bug Fixes
+
+- 全部账号自动刷新，单账号刷新、错误和报告保持隔离；原有凭据与配置不迁移、不覆盖。 ([#266](https://github.com/cogine-ai/OpenUsageCN/pull/266)) by @lc708
+- 修复配置变更、晚到请求及缓存恢复中的串号风险，报告读取共用完整超时预算。 ([#266](https://github.com/cogine-ai/OpenUsageCN/pull/266)) by @lc708
+
+### Chores
+
+- 补齐回归测试、使用文档、界面设计和前后截图。 ([#266](https://github.com/cogine-ai/OpenUsageCN/pull/266)) by @lc708
+
+---
+
+### Changelog
+
+**Full Changelog**: [v0.6.48...v0.6.49](https://github.com/cogine-ai/OpenUsageCN/compare/v0.6.48...v0.6.49)
+
+- [2890b30](https://github.com/cogine-ai/OpenUsageCN/commit/2890b30270fff656a9db12ca622b209c0c5d3d5a) Merge pull request #266: Ollama Cloud 首页统一展示全部账号 by @lc708
+
 ## v0.6.48
 
 ### New Features
