@@ -111,7 +111,7 @@ The website source sends the configured Cookie to `GET https://www.minimax.cn/ba
 - **Session Capacity** and **Weekly Capacity** show a nonstandard quota multiplier, such as 150% of base quota. These percentages are not prompt counts.
 - Both current `used_percent` / `total_percent` strings and older remaining-percent responses are supported, including the two observed boost field spellings.
 - **Unlimited** appears as text without a progress bar or reset. An empty, excluded service lane is not treated as unlimited.
-- Resets come from returned end timestamps or the website's countdown (seconds, or milliseconds for values above 1,000,000). An expired end timestamp falls back to a valid countdown. Pacing uses actual start/end timestamps when supplied; an unknown duration is not guessed.
+- A valid future end timestamp takes priority. Otherwise, countdown interpretation is bounded by the actual start/end span when supplied, or the [documented text windows](https://platform.minimax.cn/docs/m-plan/faq): five hours for Session and seven days for Weekly. Seconds retain priority when they fit the known window; otherwise a fitting millisecond value is used. Thus `900000` means 15 minutes for either standard window, rather than more than ten days. This compatibility rule cannot prove the unit of small ambiguous values. If neither interpretation fits, or the supplied interval is invalid, the reset is omitted with a fixed warning. Pacing uses actual timestamps only.
 
 Only the selected text-generation lane is shown. A general lane takes priority over model-specific text lanes, including legacy `m2.7` names; video and other excluded lanes do not become coding quotas. The existing API Key source's prompt-count scaling and plan inference are unchanged.
 

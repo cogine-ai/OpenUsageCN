@@ -1,7 +1,7 @@
 use base64::{Engine, engine::general_purpose::STANDARD};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[path = "manifest_scripts.rs"]
 mod scripts;

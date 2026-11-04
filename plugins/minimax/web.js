@@ -42,12 +42,17 @@
     const end = date(row[weekly ? "weekly_end_time" : "end_time"]), start = date(row[weekly ? "weekly_start_time" : "start_time"])
     const remains = number(row[weekly ? "weekly_remains_time" : "remains_time"])
     const now = Date.parse(ctx.nowIso)
+    const actualWindowMs = start !== null && end !== null ? (end > start ? end - start : null) : undefined
+    const maxWindowMs = actualWindowMs === undefined ? (weekly ? 7 * 24 : 5) * 60 * 60 * 1000 : actualWindowMs
     if (end !== null && end > now) opts.resetsAt = new Date(end).toISOString()
     else if (remains !== null && remains > 0 && Number.isFinite(now)) {
-      const milliseconds = remains > 1000000 ? remains : remains * 1000
-      if (Number.isFinite(new Date(now + milliseconds).getTime())) opts.resetsAt = new Date(now + milliseconds).toISOString()
+      // MiniMax omits countdown units. Keep seconds priority only within the known window.
+      const milliseconds = maxWindowMs !== null && remains * 1000 <= maxWindowMs ? remains * 1000
+        : maxWindowMs !== null && remains <= maxWindowMs ? remains : null
+      if (milliseconds !== null && Number.isFinite(new Date(now + milliseconds).getTime())) opts.resetsAt = new Date(now + milliseconds).toISOString()
+      else ctx.host.log.warn("MiniMax quota countdown exceeds its known window; reset unavailable")
     }
-    if (start !== null && end !== null && end > start) opts.periodDurationMs = end - start
+    if (actualWindowMs !== undefined && actualWindowMs !== null) opts.periodDurationMs = actualWindowMs
     const lines = [ctx.line.progress(opts)]
     if (capacity !== 100) lines.push(ctx.line.text({ label: name + " Capacity", value: capacity + "% of base quota" }))
     return lines

@@ -1,4 +1,5 @@
 use super::*;
+use std::path::Path;
 use std::collections::{BTreeMap, BTreeSet};
 
 fn manifest_with_lines(lines: &str) -> PluginManifest {

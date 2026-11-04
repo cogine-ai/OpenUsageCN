@@ -204,7 +204,7 @@ Response returns new `access_token`, and optionally new `refresh_token` and `id_
 
 ## Server Reports
 
-Open Codex details and choose **Load Server Reports** to read the latest 30 UTC calendar days,
+Open Codex details and choose **Load Reports** to read the latest 30 UTC calendar days,
 including today. This is separate from **Local History** and does not run ccusage or estimate API costs.
 Tokens, turns and charged credits keep their own units. Credits are never converted to dollars.
 
@@ -221,7 +221,7 @@ If the login expires, refresh Codex usage through the existing control, then loa
 No report data is added to the quota bars or the local cost estimate.
 
 Token and turn reports show only dates and measures the server reports. An absent date is not zero;
-an explicitly reported zero remains visible. The coverage note lists missing dates. Daily charts
+an explicitly reported zero remains visible. The coverage note shows the number of unreported days. Daily charts
 use UTC. Available model attribution is shown separately and may cover fewer turns or tokens than
 the daily total.
 

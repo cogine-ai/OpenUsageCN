@@ -49,6 +49,38 @@ describe("MiniMax China web source", () => {
     const lines = loadTestPlugin("minimax").probe(ctx).lines.filter((line) => line.type === "progress")
     expect(lines.map((line) => line.resetsAt)).toEqual(["2026-02-02T01:00:00.000Z", "2026-02-02T01:00:00.000Z"])
   })
+  it("interprets 900000 as milliseconds for both text windows rather than a ten-day reset", () => {
+    const ctx = context([row({ remains_time: 900000, weekly_remains_time: 900000 })])
+    expect(loadTestPlugin("minimax").probe(ctx).lines.filter((line) => line.type === "progress").map((line) => line.resetsAt)).toEqual(["2026-02-02T00:15:00.000Z", "2026-02-02T00:15:00.000Z"])
+  })
+  it.each([[18000, 604800], [18000000, 604800000]])("preserves the documented window maximum in either supported unit (%s, %s)", (session, weekly) => {
+    const ctx = context([row({ remains_time: session, weekly_remains_time: weekly })])
+    expect(loadTestPlugin("minimax").probe(ctx).lines.filter((line) => line.type === "progress").map((line) => line.resetsAt)).toEqual(["2026-02-02T05:00:00.000Z", "2026-02-09T00:00:00.000Z"])
+  })
+  it("uses milliseconds once a seconds interpretation exceeds its known window", () => {
+    const ctx = context([row({ remains_time: 18001, weekly_remains_time: 604801 })])
+    expect(loadTestPlugin("minimax").probe(ctx).lines.filter((line) => line.type === "progress").map((line) => line.resetsAt)).toEqual(["2026-02-02T00:00:18.001Z", "2026-02-02T00:10:04.801Z"])
+  })
+  it("omits impossible countdowns while retaining quota and logging a fixed warning", () => {
+    const ctx = context([row({ remains_time: 18000001, weekly_remains_time: 604800001 })])
+    expect(loadTestPlugin("minimax").probe(ctx).lines.filter((line) => line.type === "progress").every((line) => line.resetsAt === undefined)).toBe(true)
+    expect(ctx.host.log.warn).toHaveBeenCalledWith("MiniMax quota countdown exceeds its known window; reset unavailable")
+  })
+  it("does not infer a countdown reset from an invalid explicit interval", () => {
+    const ctx = context([row({ start_time: Date.parse("2026-02-01T23:00:00Z"), end_time: Date.parse("2026-02-01T22:00:00Z"), remains_time: 3600 })])
+    expect(loadTestPlugin("minimax").probe(ctx).lines.find((line) => line.label === "Session").resetsAt).toBeUndefined()
+    expect(ctx.host.log.warn).toHaveBeenCalledWith("MiniMax quota countdown exceeds its known window; reset unavailable")
+  })
+  it("keeps an explicit future end ahead of countdown inference", () => {
+    const end = "2026-02-02T02:00:00.000Z", ctx = context([row({ end_time: Date.parse(end), weekly_end_time: Date.parse(end), remains_time: 900000, weekly_remains_time: 900000 })])
+    expect(loadTestPlugin("minimax").probe(ctx).lines.filter((line) => line.type === "progress").map((line) => line.resetsAt)).toEqual([end, end])
+  })
+  it("uses an explicit actual interval duration instead of guessing a five-hour window", () => {
+    const ctx = context([row({ start_time: Date.parse("2026-02-01T17:00:00Z"), end_time: Date.parse("2026-02-02T00:00:00Z"), remains_time: 21600 })])
+    const session = loadTestPlugin("minimax").probe(ctx).lines.find((line) => line.label === "Session")
+    expect(session.resetsAt).toBe("2026-02-02T06:00:00.000Z")
+    expect(session.periodDurationMs).toBe(7 * 60 * 60 * 1000)
+  })
   it("uses a valid countdown when the supplied end timestamp has already passed", () => {
     const ctx = context([row({ end_time: Date.parse("2026-02-01T23:00:00Z"), weekly_end_time: Date.parse("2026-02-01T23:30:00Z"), remains_time: 3600, weekly_remains_time: 3600000 })])
     expect(loadTestPlugin("minimax").probe(ctx).lines.filter((line) => line.type === "progress").map((line) => line.resetsAt)).toEqual(["2026-02-02T01:00:00.000Z", "2026-02-02T01:00:00.000Z"])
