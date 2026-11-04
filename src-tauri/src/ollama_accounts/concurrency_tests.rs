@@ -78,7 +78,7 @@ fn projection_guard_prevents_mutation_until_publication_finishes() {
         done_tx.send(()).unwrap();
         store::TEST_PATH.with(|p| *p.borrow_mut() = None);
     });
-    with_projection_guard(&p, &stamp, || {
+    with_projection_guard(&p, Some(&stamp), || {
         start_tx.send(()).unwrap();
         assert!(
             done_rx
@@ -92,7 +92,7 @@ fn projection_guard_prevents_mutation_until_publication_finishes() {
         .unwrap();
     worker.join().unwrap();
     assert_eq!(store::read().unwrap().primary, Primary::None);
-    assert!(with_projection_guard(&p, &stamp, || ()).is_err());
+    assert!(with_projection_guard(&p, Some(&stamp), || ()).is_err());
 }
 
 #[test]

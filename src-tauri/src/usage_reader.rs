@@ -155,26 +155,14 @@ pub(crate) fn read_limits_once(
                 output,
                 started_at,
                 generation,
-            } => {
-                let result = match generation {
-                    Some(generation) => {
-                        crate::ollama_accounts::with_projection_guard(&plugin, &generation, || {
-                            publish_cli_probe(&provider_id, &output, started_at);
-                            output
-                        })
-                    }
-                    None => Err("Could not verify the Ollama primary connection.".to_string()),
-                };
-                if result.is_err() {
-                    if let Err(error) = crate::clear_ollama_projection() {
-                        eprintln!(
-                            "openusage: could not clear the changed Ollama projection: {}",
-                            plugin_engine::host_api::redact_log_message(&error)
-                        );
-                    }
-                }
-                result
-            }
+            } => crate::ollama_accounts::with_projection_guard(
+                &plugin,
+                generation.as_deref(),
+                || {
+                    publish_cli_probe(&provider_id, &output, started_at);
+                    output
+                },
+            ),
             PendingUsageProbe::Account(probe) => provider_accounts
                 .publish_active_probe(probe, |output, started_at| {
                     publish_cli_probe(&provider_id, output, started_at)

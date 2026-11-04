@@ -84,7 +84,10 @@ pub(super) fn lock() -> Result<StoreGuard<'static>, String> {
     let state = STATE
         .get_or_init(|| Mutex::new(Transient::default()))
         .lock()
-        .map_err(|_| "账号状态暂不可用，请重试。".to_string())?;
+        .unwrap_or_else(|poisoned| {
+            log::error!("Ollama account store lock recovered after a worker panic");
+            poisoned.into_inner()
+        });
     let file = open_lock_file()?;
     let started = Instant::now();
     loop {
@@ -254,3 +257,7 @@ pub(super) fn apply_probe(
         }
     }
 }
+
+#[cfg(test)]
+#[path = "store_poison_tests.rs"]
+mod poison_tests;

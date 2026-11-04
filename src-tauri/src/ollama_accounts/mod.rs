@@ -76,16 +76,49 @@ pub(crate) fn projection_generation(plugin: &LoadedPlugin) -> Result<String, Str
 
 pub(crate) fn with_projection_guard<T>(
     plugin: &LoadedPlugin,
-    expected: &str,
+    expected: Option<&str>,
     publish: impl FnOnce() -> T,
 ) -> Result<T, String> {
-    let _guard = store::lock()?;
-    if generation(plugin, &store::read()?)? != expected {
-        return Err(store::changed());
-    }
-    Ok(publish())
+    with_projection_state(|stored| {
+        if Some(generation(plugin, stored)?.as_str()) != expected {
+            return Err(store::changed());
+        }
+        Ok(publish())
+    })
 }
 
+fn with_projection_state<T>(
+    work: impl FnOnce(&model::StoredAccounts) -> Result<T, String>,
+) -> Result<T, String> {
+    let _guard = store::lock()?;
+    match store::read() {
+        Ok(stored) => work(&stored),
+        Err(error) => {
+            // Keep the store lock through cleanup so a valid replacement cannot publish between
+            // the failed read and removal. A mere generation mismatch must preserve newer data.
+            crate::clear_ollama_projection()?;
+            Err(error)
+        }
+    }
+}
+
+pub(crate) fn restore_primary_projection() -> Result<(), String> {
+    with_projection_state(|stored| {
+        if stored.primary == Primary::Legacy {
+            return Ok(());
+        }
+        crate::local_http_api::cache::replace_cached_account_projection(
+            "ollama",
+            cached_snapshot(stored),
+        )
+    })
+}
+
+pub(crate) fn check_primary_projection() -> Result<(), String> {
+    with_projection_state(|_| Ok(()))
+}
+
+#[cfg(test)]
 pub(crate) fn uses_legacy_primary() -> Result<bool, String> {
     let _guard = store::lock()?;
     Ok(store::read()?.primary == Primary::Legacy)
@@ -102,29 +135,34 @@ pub(crate) fn with_legacy_configuration_change(
     work()
 }
 
-pub(crate) fn primary_cached_snapshot()
+#[cfg(test)]
+fn primary_cached_snapshot()
 -> Result<Option<crate::local_http_api::cache::CachedPluginSnapshot>, String> {
     let _guard = store::lock()?;
-    let stored = store::read()?;
+    Ok(cached_snapshot(&store::read()?))
+}
+
+fn cached_snapshot(
+    stored: &model::StoredAccounts,
+) -> Option<crate::local_http_api::cache::CachedPluginSnapshot> {
     let Primary::Connection { connection_id } = &stored.primary else {
-        return Ok(None);
+        return None;
     };
     let record = stored
         .connections
         .iter()
-        .find(|r| &r.connection_id == connection_id)
-        .ok_or_else(store::changed)?;
+        .find(|r| &r.connection_id == connection_id)?;
     let (Some(snapshot), Some(updated)) = (&record.snapshot, &record.last_updated_at) else {
-        return Ok(None);
+        return None;
     };
-    Ok(Some(crate::local_http_api::cache::CachedPluginSnapshot {
+    Some(crate::local_http_api::cache::CachedPluginSnapshot {
         provider_id: "ollama".into(),
         display_name: snapshot.display_name.clone(),
         plan: snapshot.plan.clone(),
         lines: snapshot.lines.clone(),
         started_at: updated.clone(),
         fetched_at: updated.clone(),
-    }))
+    })
 }
 
 pub(super) fn legacy_configuration_generation(plugin: &LoadedPlugin) -> String {

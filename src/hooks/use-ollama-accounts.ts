@@ -19,7 +19,6 @@ export function useOllamaAccounts(onPrimaryChange?: () => void, onQuotaRefresh?:
   const readRevision = useRef(0)
   const operationRevision = useRef(0)
   const viewRef = useRef(view)
-  viewRef.current = view
 
   const accept = useCallback((next: OllamaAccountsView) => {
     if (next && (!viewRef.current || next.revision >= viewRef.current.revision)) {

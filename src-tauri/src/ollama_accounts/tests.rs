@@ -243,7 +243,10 @@ fn selection_aba_invalidates_projection_and_removal_never_falls_back() {
     .unwrap();
     assert_ne!(projection_generation(&p).unwrap(), original);
     assert!(
-        with_projection_guard(&p, &original, || panic!("old projection must not publish")).is_err()
+        with_projection_guard(&p, Some(&original), || panic!(
+            "old projection must not publish"
+        ))
+        .is_err()
     );
     let view =
         commands::perform(&p, &f.dir(), "test", Operation::Remove { connection_id: a }).unwrap();
@@ -423,3 +426,6 @@ fn waiting_for_same_connection_is_bounded_by_the_refresh_deadline() {
 
 #[path = "concurrency_tests.rs"]
 mod concurrency;
+
+#[path = "projection_tests.rs"]
+mod projection;
