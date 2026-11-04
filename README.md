@@ -60,7 +60,7 @@ Windows MVP 启用和展示 **Codex、BigModel CN、OpenAI API、OpenRouter、Z.
 - [**Kimi Code**](docs/providers/kimi.md)：session、weekly
 - [**MiniMax**](docs/providers/minimax.md)：API Key session、China Web 的 session/weekly、Boost 与 Unlimited
 - [**Moonshot / Kimi Open Platform**](docs/providers/moonshot.md)：中国站与国际站 API 余额、现金和代金券
-- [**Ollama Cloud**](docs/providers/ollama.md)：Cookie 或 API Key 额度、购买余额、按需加载 7/30 天模型统计
+- [**Ollama Cloud**](docs/providers/ollama.md)：多账号、多 API Key 按连接分别展示额度与余额；同一账号的多个 Key 可能共享额度，额度不会相加；支持指定首页主账号及按需加载 7/30 天模型统计，保留原有 Cookie 和环境变量配置
 - [**OpenAI API**](docs/providers/openai-api.md)：organization spend、requests、tokens、legacy credits
 - [**OpenCode**](docs/providers/opencode.md)：opencode.ai session、weekly subscription usage
 - [**OpenCode Go**](docs/providers/opencode-go.md)：账号级 5h、weekly、monthly 额度百分比及官方重置时间，优先读取当前有效的 CLI 登录

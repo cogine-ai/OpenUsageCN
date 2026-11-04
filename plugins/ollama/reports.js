@@ -119,11 +119,16 @@
     if (selected !== "apiKey") throw "Ollama source is invalid. Check Settings."
     const apiKey = api.key(ctx), deadline = Date.now() + 25000
     try {
-      const account = api.identity(api.request(ctx, apiKey, "/api/me", "POST", deadline))
+      const before = api.request(ctx, apiKey, "/api/me", "POST", deadline)
+      const account = api.identity(before)
+      const expected = ctx.host.config.get("managedAccountFingerprint")
+      if (expected && globalThis.__openusage_ollama_account_identity(ctx, before).fingerprint !== expected) throw api.failure("authExpired", "Ollama account identity changed. Re-verify this connection.")
       const now = Date.parse(ctx.nowIso), today = Math.floor(now / DAY) * DAY
       if (!Number.isFinite(today)) throw api.failure("error", "Could not determine the Ollama report window.")
       const results = ["7d", "30d"].map((range) => read(ctx, api, apiKey, range, today, deadline))
-      const after = api.identity(api.request(ctx, apiKey, "/api/me", "POST", deadline))
+      const afterAccount = api.request(ctx, apiKey, "/api/me", "POST", deadline)
+      const after = api.identity(afterAccount)
+      if (expected && globalThis.__openusage_ollama_account_identity(ctx, afterAccount).fingerprint !== expected) throw api.failure("authExpired", "Ollama account identity changed. Re-verify this connection.")
       if (api.source(ctx) !== selected || api.key(ctx) !== apiKey || after !== account) throw api.failure("authExpired", "Ollama account changed. Refresh usage and reload reports.")
       return { scopeKey: ctx.host.crypto.sha256Hex(JSON.stringify(["ollama", selected, apiKey, account])), lines: results.flatMap((result) => result.lines), reports: results.map((result) => result.meta) }
     } catch (error) {

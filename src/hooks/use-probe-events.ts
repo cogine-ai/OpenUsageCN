@@ -6,6 +6,7 @@ import type { PluginOutput } from "@/lib/plugin-types"
 type ProbeResult = {
   batchId: string
   output: PluginOutput
+  invalidateCachedData?: boolean
 }
 
 type ProbeBatchComplete = {
@@ -29,6 +30,7 @@ type ProbeBatchMeta = {
 
 export type ProbeResultContext = {
   manual: boolean
+  invalidateCachedData?: boolean
 }
 
 export type StartBatchOptions = {
@@ -112,7 +114,10 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
           eventBatch !== undefined &&
           eventBatch === latestBatch
         ) {
-          onResult(event.payload.output, { manual: latestBatch.manual })
+          onResult(event.payload.output, {
+            manual: latestBatch.manual,
+            ...(event.payload.invalidateCachedData ? { invalidateCachedData: true } : {}),
+          })
           latestBatch.onResult?.(event.payload.output)
         }
       })

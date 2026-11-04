@@ -25,12 +25,18 @@ pub(crate) enum LimitsReadError {
     NoProviderPlugins,
 }
 
-enum PendingUsageProbe {
+pub(crate) enum PendingUsageProbe {
     Unscoped {
         output: PluginOutput,
         started_at: time::OffsetDateTime,
     },
     Account(ActiveAccountProbe),
+    Ollama {
+        plugin: LoadedPlugin,
+        output: PluginOutput,
+        started_at: time::OffsetDateTime,
+        generation: Option<String>,
+    },
 }
 
 pub(crate) fn read_limits_once(
@@ -71,6 +77,9 @@ pub(crate) fn read_limits_once(
         .into_iter()
         .map(|plugin| (plugin.manifest.id.clone(), plugin))
         .collect();
+    if selected_ids.iter().any(|id| id == "ollama") {
+        crate::sync_ollama_startup_projection(by_id.get("ollama"));
+    }
     let provider_accounts = ProviderAccounts::open(&app_data_dir)
         .unwrap_or_else(|error| ProviderAccounts::unavailable(&error));
     provider_accounts.set_browser_broker(Arc::new(
@@ -141,6 +150,19 @@ pub(crate) fn read_limits_once(
                 publish_cli_probe(&provider_id, &output, started_at);
                 Ok(output)
             }
+            PendingUsageProbe::Ollama {
+                plugin,
+                output,
+                started_at,
+                generation,
+            } => crate::ollama_accounts::with_projection_guard(
+                &plugin,
+                generation.as_deref(),
+                || {
+                    publish_cli_probe(&provider_id, &output, started_at);
+                    output
+                },
+            ),
             PendingUsageProbe::Account(probe) => provider_accounts
                 .publish_active_probe(probe, |output, started_at| {
                     publish_cli_probe(&provider_id, output, started_at)
@@ -209,6 +231,9 @@ fn run_probes(
                 let provider_id = plugin.manifest.id.clone();
                 let probe_started_at = time::OffsetDateTime::now_utc();
                 let output = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    if provider_id == "ollama" {
+                        return prepare_ollama_probe(&plugin, &app_data_dir, &app_version, probe_started_at);
+                    }
                     let account_aware = plugin
                         .manifest
                         .account_support
@@ -258,9 +283,13 @@ fn run_probes(
                         },
                     }
                 }))
-                .unwrap_or_else(|_| PendingUsageProbe::Unscoped {
-                    output: plugin_engine::runtime::panic_probe_output(&plugin),
-                    started_at: probe_started_at,
+                .unwrap_or_else(|_| {
+                    let output = plugin_engine::runtime::panic_probe_output(&plugin);
+                    if provider_id == "ollama" {
+                        PendingUsageProbe::Ollama { plugin: plugin.clone(), output, started_at: probe_started_at, generation: None }
+                    } else {
+                        PendingUsageProbe::Unscoped { output, started_at: probe_started_at }
+                    }
                 });
                 results
                     .lock()
@@ -287,6 +316,28 @@ fn run_probes(
     )
 }
 
+pub(crate) fn prepare_ollama_probe(
+    plugin: &LoadedPlugin,
+    app_data_dir: &PathBuf,
+    app_version: &str,
+    started_at: time::OffsetDateTime,
+) -> PendingUsageProbe {
+    let generation = crate::ollama_accounts::projection_generation(plugin);
+    let output = match &generation {
+        Ok(_) => crate::ollama_accounts::run_primary_probe(plugin, app_data_dir, app_version),
+        Err(_) => plugin_engine::runtime::provider_account_probe_error(
+            plugin,
+            "Could not read Ollama Cloud connections. Check Settings.",
+        ),
+    };
+    PendingUsageProbe::Ollama {
+        plugin: plugin.clone(),
+        output,
+        started_at,
+        generation: generation.ok(),
+    }
+}
+
 fn publish_cli_probe(provider_id: &str, output: &PluginOutput, started_at: time::OffsetDateTime) {
     if let Some(message) = probe_error_message(output) {
         local_http_api::record_probe_error(
@@ -294,7 +345,23 @@ fn publish_cli_probe(provider_id: &str, output: &PluginOutput, started_at: time:
             plugin_engine::host_api::redact_log_message(message),
         );
     } else {
-        local_http_api::cache_successful_output(output, started_at);
+        if provider_id == "ollama" {
+            if let Err(error) = local_http_api::cache::replace_account_projection(
+                provider_id,
+                Some((output, started_at)),
+            ) {
+                local_http_api::record_probe_error(
+                    provider_id,
+                    "Could not persist Ollama primary usage.",
+                );
+                eprintln!(
+                    "openusage: could not persist Ollama primary usage: {}",
+                    plugin_engine::host_api::redact_log_message(&error)
+                );
+            }
+        } else {
+            local_http_api::cache_successful_output(output, started_at);
+        }
     }
 }
 

@@ -109,6 +109,7 @@
   ],
   "supportingScripts": [
     "api.js",
+    "accounts.js",
     "reports.js"
   ]
 }

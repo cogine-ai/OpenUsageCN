@@ -92,6 +92,13 @@ watched automatically; refresh the main quota and load reports again after switc
 - Ollama API Key reports provide 7d and 30d server windows with model totals. The service may include
   today's bucket as well as the preceding days. Cookie-only connections retain their existing quota
   behavior and explain why JSON reports require the API Key source.
+  Named API Key connections load reports for the account currently being viewed, independently of
+  the primary account shown on the home page and menu bar. Switching the viewed account clears
+  displayed reports. Replacing or removing its key invalidates pending reports, even if a request
+  finishes successfully afterward. Quota caches and reports are never combined across connections.
+  An app-level or scheduled quota refresh clears and cancels reports when viewing the primary
+  connection, including failed refreshes. Reports for another viewed connection remain available.
+  These are account statistics; multiple keys do not establish independent spending or allowances.
 
 The requests have a 60-second host limit; individual providers can use a shorter budget.
 Windows can read these server reports even though local ccusage history remains unavailable there.

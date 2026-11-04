@@ -11,6 +11,7 @@ mod local_history;
 mod local_http_api;
 mod log_path;
 mod notifications;
+mod ollama_accounts;
 #[cfg(target_os = "macos")]
 mod panel;
 #[cfg(not(target_os = "macos"))]
@@ -57,6 +58,11 @@ enum PendingProbe {
         started_at: time::OffsetDateTime,
     },
     Account(provider_accounts::ActiveAccountProbe),
+    Ollama {
+        output: plugin_engine::runtime::PluginOutput,
+        started_at: time::OffsetDateTime,
+        generation: Option<String>,
+    },
 }
 
 struct CursorHistoryState {
@@ -358,6 +364,8 @@ pub struct ProbeBatchStarted {
 pub struct ProbeResult {
     pub batch_id: String,
     pub output: plugin_engine::runtime::PluginOutput,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub invalidate_cached_data: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -373,6 +381,19 @@ fn publish_probe_output(
     output: plugin_engine::runtime::PluginOutput,
     started_at: time::OffsetDateTime,
 ) {
+    publish_probe_output_with_invalidation(
+        app_handle, batch_id, plugin_id, output, started_at, false,
+    );
+}
+
+fn publish_probe_output_with_invalidation(
+    app_handle: &tauri::AppHandle,
+    batch_id: &str,
+    plugin_id: &str,
+    output: plugin_engine::runtime::PluginOutput,
+    started_at: time::OffsetDateTime,
+    invalidate_cached_data: bool,
+) {
     if let Some(message) = plugin_engine::runtime::probe_error_message(&output) {
         log::warn!("probe {} completed with error", plugin_id);
         local_http_api::record_probe_error(
@@ -385,13 +406,26 @@ fn publish_probe_output(
             plugin_id,
             output.lines.len()
         );
-        local_http_api::cache_successful_output(&output, started_at);
+        if plugin_id == "ollama" {
+            if let Err(error) = local_http_api::cache::replace_account_projection(
+                plugin_id,
+                Some((&output, started_at)),
+            ) {
+                log::error!(
+                    "Ollama primary cache could not be saved: {}",
+                    plugin_engine::host_api::redact_log_message(&error)
+                );
+            }
+        } else {
+            local_http_api::cache_successful_output(&output, started_at);
+        }
     }
     if let Err(error) = app_handle.emit(
         "probe:result",
         ProbeResult {
             batch_id: batch_id.to_string(),
             output,
+            invalidate_cached_data: invalidate_cached_data.then_some(true),
         },
     ) {
         log::error!(
@@ -399,6 +433,39 @@ fn publish_probe_output(
             plugin_id,
             batch_id,
             error
+        );
+    }
+}
+
+/// Clears persisted and in-memory primary data while the Ollama mutation lock is held.
+pub(crate) fn clear_ollama_projection() -> Result<(), String> {
+    local_http_api::cache::replace_account_projection("ollama", None)
+}
+
+fn panic_probe_invalidates_cached_data(plugin_id: &str) -> Option<bool> {
+    if plugin_id != "ollama" {
+        return None;
+    }
+    match ollama_accounts::check_primary_projection() {
+        Ok(()) => None,
+        Err(error) => {
+            log::error!(
+                "Ollama crashed projection cleanup failed: {}",
+                plugin_engine::host_api::redact_log_message(&error)
+            );
+            Some(true)
+        }
+    }
+}
+
+fn sync_ollama_startup_projection(plugin: Option<&plugin_engine::manifest::LoadedPlugin>) {
+    if plugin.is_none() {
+        return;
+    }
+    if let Err(error) = ollama_accounts::restore_primary_projection() {
+        log::error!(
+            "Ollama primary cache could not be restored: {}",
+            plugin_engine::host_api::redact_log_message(&error)
         );
     }
 }
@@ -586,6 +653,23 @@ async fn start_probe_batch(
                     .as_ref()
                     .is_some_and(|support| support.local_discovery);
                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    if plugin_id == "ollama" {
+                        let generation = ollama_accounts::projection_generation(&plugin);
+                        let output = match &generation {
+                            Ok(_) => {
+                                ollama_accounts::run_primary_probe(&plugin, &data_dir, &version)
+                            }
+                            Err(_) => plugin_engine::runtime::provider_account_probe_error(
+                                &plugin,
+                                "Could not read Ollama Cloud connections. Check Settings.",
+                            ),
+                        };
+                        return PendingProbe::Ollama {
+                            output,
+                            started_at: probe_started_at,
+                            generation: generation.ok(),
+                        };
+                    }
                     if !account_aware {
                         return PendingProbe::Unscoped {
                             output: plugin_engine::runtime::run_probe(&plugin, &data_dir, &version),
@@ -644,6 +728,37 @@ async fn start_probe_batch(
                         Ok(PendingProbe::Unscoped { output, started_at }) => {
                             publish_probe_output(&handle, &bid, &plugin_id, output, started_at);
                         }
+                        Ok(PendingProbe::Ollama {
+                            output,
+                            started_at,
+                            generation,
+                        }) => {
+                            let published = ollama_accounts::with_projection_guard(
+                                &plugin,
+                                generation.as_deref(),
+                                || publish_probe_output(&handle, &bid, &plugin_id, output, started_at),
+                            );
+                            if let Err(error) = published {
+                                log::warn!(
+                                    "Ollama primary probe publication rejected: {}",
+                                    plugin_engine::host_api::redact_log_message(&error)
+                                );
+                                publish_probe_output_with_invalidation(
+                                    &handle,
+                                    &bid,
+                                    &plugin_id,
+                                    plugin_engine::runtime::provider_account_probe_error(
+                                        &plugin,
+                                        "Ollama Cloud connection changed. Refresh usage.",
+                                    ),
+                                    started_at,
+                                    true,
+                                );
+                            }
+                            if let Err(error) = handle.emit("ollama-accounts-changed", ()) {
+                                log::error!("Ollama quota view update event failed: {error}");
+                            }
+                        }
                         Ok(PendingProbe::Account(probe)) => {
                             let accounts =
                                 handle.state::<Arc<provider_accounts::ProviderAccounts>>();
@@ -694,6 +809,7 @@ async fn start_probe_batch(
                         }
                         Err(_) => {
                             log::error!("probe {} panicked", plugin_id);
+                            let invalidate_cached_data = panic_probe_invalidates_cached_data(&plugin_id);
                             let output = plugin_engine::runtime::panic_probe_output(&plugin);
                             local_http_api::record_probe_error(
                                 &plugin_id,
@@ -704,6 +820,7 @@ async fn start_probe_batch(
                                 ProbeResult {
                                     batch_id: bid.clone(),
                                     output,
+                                    invalidate_cached_data,
                                 },
                             ) {
                                 log::error!(
@@ -842,7 +959,13 @@ fn save_provider_config(
     if fields.is_empty() && !values.is_empty() {
         return Err(format!("Plugin '{plugin_id}' has no configurable fields"));
     }
-    provider_config::save_plugin_values(&plugin_id, &fields, values)
+    if plugin_id == "ollama" {
+        ollama_accounts::with_legacy_configuration_change(|| {
+            provider_config::save_plugin_values(&plugin_id, &fields, values)
+        })
+    } else {
+        provider_config::save_plugin_values(&plugin_id, &fields, values)
+    }
 }
 
 #[tauri::command]
@@ -852,7 +975,13 @@ fn delete_provider_config_field(
     state: tauri::State<'_, Mutex<AppState>>,
 ) -> Result<(), String> {
     let fields = plugin_config_fields(state, &plugin_id)?;
-    provider_config::delete_plugin_field(&plugin_id, &fields, &field_id)
+    if plugin_id == "ollama" {
+        ollama_accounts::with_legacy_configuration_change(|| {
+            provider_config::delete_plugin_field(&plugin_id, &fields, &field_id)
+        })
+    } else {
+        provider_config::delete_plugin_field(&plugin_id, &fields, &field_id)
+    }
 }
 
 #[tauri::command]
@@ -1267,6 +1396,11 @@ pub fn run() {
             local_history::refresh_local_history,
             provider_reports::refresh_provider_reports,
             provider_reports::cancel_provider_reports,
+            ollama_accounts::commands::get_ollama_accounts,
+            ollama_accounts::commands::verify_ollama_key,
+            ollama_accounts::commands::save_ollama_key,
+            ollama_accounts::commands::perform_ollama_account_operation,
+            ollama_accounts::commands::check_ollama_legacy_connection,
             platform_capabilities::get_platform_capabilities,
             windows_autostart::repair_windows_autostart_command,
             provider_status::get_provider_status,
@@ -1333,6 +1467,10 @@ pub fn run() {
             let known_plugin_ids: Vec<String> =
                 plugins.iter().map(|p| p.manifest.id.clone()).collect();
             let limit_catalog = local_http_api::limits::catalog_from_plugins(&plugins);
+            let ollama_plugin = plugins
+                .iter()
+                .find(|plugin| plugin.manifest.id == "ollama")
+                .cloned();
             provider_config::register_existing_secrets(&plugins);
             let provider_accounts = Arc::new(
                 provider_accounts::ProviderAccounts::open(&app_data_dir).unwrap_or_else(|error| {
@@ -1377,6 +1515,7 @@ pub fn run() {
                 limit_catalog,
                 version.clone(),
             );
+            sync_ollama_startup_projection(ollama_plugin.as_ref());
             local_http_api::start_server();
 
             tray::create(app.handle())?;

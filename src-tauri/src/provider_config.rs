@@ -79,16 +79,30 @@ fn default_file() -> ProviderConfigFile {
 }
 
 pub fn config_path() -> Result<PathBuf, String> {
+    // Runtime tests inject the host API too. They must never load or recover a user's real file.
+    #[cfg(test)]
+    return Ok(CONFIG_PATH
+        .get_or_init(|| {
+            std::env::temp_dir()
+                .join(format!(
+                    "openusage-provider-config-tests-{}",
+                    uuid::Uuid::new_v4()
+                ))
+                .join("providers.json")
+        })
+        .clone());
+
+    #[cfg(not(test))]
     if let Some(path) = CONFIG_PATH.get() {
         return Ok(path.clone());
     }
 
-    #[cfg(target_os = "windows")]
+    #[cfg(all(not(test), target_os = "windows"))]
     return dirs::data_local_dir()
         .map(|base| base.join("ai.cogine.openusagecn").join("providers.json"))
         .ok_or_else(|| "No local app data directory found".to_string());
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(all(not(test), not(target_os = "windows")))]
     dirs::home_dir()
         .map(|home| home.join(".openusagecn").join("providers.json"))
         .ok_or_else(|| "No home directory found".to_string())

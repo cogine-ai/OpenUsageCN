@@ -129,6 +129,48 @@ fn account_projection_force_replaces_and_removes_a_provider_snapshot() {
 
 #[test]
 #[serial_test::serial]
+fn restoring_ollama_primary_preserves_the_actual_fetch_time_and_other_providers() {
+    let directory = test_dir("ollama-restored-time");
+    std::fs::create_dir_all(&directory).unwrap();
+    init(
+        &directory,
+        vec!["cursor".into(), "ollama".into()],
+        "test".into(),
+    );
+    let started_at = time::OffsetDateTime::now_utc();
+    cache_successful_output(&output("Cursor Kept"), started_at);
+    flush_cache().unwrap();
+    let restored = CachedPluginSnapshot {
+        provider_id: "ollama".into(),
+        display_name: "Ollama Cloud".into(),
+        plan: Some("Work".into()),
+        lines: vec![],
+        started_at: "2026-11-03T00:00:00Z".into(),
+        fetched_at: "2026-11-03T00:00:00Z".into(),
+    };
+    replace_cached_account_projection("ollama", Some(restored)).unwrap();
+    assert_eq!(
+        snapshot_for_provider("ollama").unwrap().fetched_at,
+        "2026-11-03T00:00:00Z"
+    );
+    assert_eq!(
+        load_cache(&directory)["ollama"].started_at,
+        "2026-11-03T00:00:00Z"
+    );
+    assert_eq!(
+        snapshot_for_provider("cursor").unwrap().display_name,
+        "Cursor Kept"
+    );
+    crate::clear_ollama_projection().unwrap();
+    assert!(snapshot_for_provider("ollama").is_none());
+    assert!(!load_cache(&directory).contains_key("ollama"));
+    assert!(load_cache(&directory).contains_key("cursor"));
+    wait_for_cache_writer_idle();
+    let _ = std::fs::remove_dir_all(directory);
+}
+
+#[test]
+#[serial_test::serial]
 fn unavailable_provider_accounts_preserve_existing_account_projection() {
     let directory = test_dir("unavailable");
     std::fs::create_dir_all(&directory).unwrap();
