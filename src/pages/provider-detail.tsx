@@ -30,6 +30,8 @@ export function ProviderDetailPage({
   onResetTimerDisplayModeToggle,
 }: ProviderDetailPageProps) {
   const openConnection = useAppUiStore((state) => state.openConnection)
+  const initialAccount = useAppUiStore((state) => state.ollamaAccount)
+  const clearAccount = useAppUiStore((state) => state.clearOllamaAccount)
   if (!plugin) {
     return (
       <div className="text-center text-muted-foreground py-8">
@@ -71,7 +73,7 @@ export function ProviderDetailPage({
         onResetTimerDisplayModeToggle={onResetTimerDisplayModeToggle}
       />
       {plugin.meta.id === "codex" ? <LocalUsageHistory providerId="codex" /> : null}
-      {["codex", "openrouter", "ollama"].includes(plugin.meta.id) ? <ServerUsageReports
+      {["codex", "openrouter"].includes(plugin.meta.id) ? <ServerUsageReports
         key={`${plugin.meta.id}:${plugin.loading}:${plugin.lastUpdatedAt}`}
         providerId={plugin.meta.id}
         sourceRefreshing={plugin.loading}
@@ -91,7 +93,6 @@ export function ProviderDetailPage({
   )
   if (plugin.meta.id === "ollama") {
     return <OllamaAccountsPage
-      legacyUsage={usage}
       legacyConfiguration={plugin.meta.config ? <ProviderConfigFields
         pluginId="ollama"
         fields={plugin.meta.config.fields}
@@ -102,8 +103,9 @@ export function ProviderDetailPage({
         }}
       /> : undefined}
       onPrimaryChange={onAccountChangeRefresh}
-      onQuotaRefresh={onRetry}
-      primaryRefreshing={plugin.loading}
+      allRefreshing={plugin.loading}
+      initialAccount={initialAccount}
+      onAccountBack={clearAccount}
       displayMode={displayMode}
       resetTimerDisplayMode={resetTimerDisplayMode}
       timeFormatMode={timeFormatMode}

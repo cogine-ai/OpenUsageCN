@@ -7,6 +7,9 @@ import {
 import { useProbeAutoUpdate } from "@/hooks/app/use-probe-auto-update"
 import { useProbeRefreshActions } from "@/hooks/app/use-probe-refresh-actions"
 import { useProbeState } from "@/hooks/app/use-probe-state"
+import { useOllamaPrimaryProjection } from "@/hooks/app/use-ollama-primary-projection"
+import type { PluginOutput } from "@/lib/plugin-types"
+import type { ProbeResultContext } from "@/hooks/use-probe-events"
 
 type UseProbeArgs = {
   pluginSettings: PluginSettings | null
@@ -23,17 +26,37 @@ export function useProbe({
   const {
     pluginStates,
     pluginStatesRef,
-    setLoadingForPlugins,
-    setAccountTransitionForPlugins,
+    setLoadingForPlugins: markLoading,
+    setAccountTransitionForPlugins: markAccountTransition,
     setErrorForPlugins,
     handleProbeResult,
+    syncOllamaProjection,
   } = useProbeState({ onProbeResult })
+
+  const isOllamaLoading = useCallback(() => Boolean(pluginStatesRef.current.ollama?.loading), [pluginStatesRef])
+  const { reload: syncPrimary, invalidate: invalidatePrimaryRead } = useOllamaPrimaryProjection({
+    enabled: Boolean(pluginSettings?.order.includes("ollama") && !pluginSettings.disabled.includes("ollama")),
+    isLoading: isOllamaLoading,
+    apply: syncOllamaProjection,
+  })
+  const setLoadingForPlugins = useCallback((ids: string[]) => {
+    if (ids.includes("ollama")) invalidatePrimaryRead()
+    markLoading(ids)
+  }, [invalidatePrimaryRead, markLoading])
+  const setAccountTransitionForPlugins = useCallback((ids: string[]) => {
+    if (ids.includes("ollama")) invalidatePrimaryRead()
+    markAccountTransition(ids)
+  }, [invalidatePrimaryRead, markAccountTransition])
+  const receiveProbeResult = useCallback((output: PluginOutput, context: ProbeResultContext) => {
+    handleProbeResult(output, context)
+    if (output.providerId === "ollama") void syncPrimary(true)
+  }, [handleProbeResult, syncPrimary])
 
   /** Keep completion registration stable; individual results own provider state updates. */
   const handleBatchComplete = useCallback(() => {}, [])
 
   const { startBatch, verifyPlugin } = useProbeEvents({
-    onResult: handleProbeResult,
+    onResult: receiveProbeResult,
     onBatchComplete: handleBatchComplete,
   })
 

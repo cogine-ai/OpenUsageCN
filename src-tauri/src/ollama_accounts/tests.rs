@@ -435,3 +435,12 @@ mod queued_probe;
 
 #[path = "panic_probe_tests.rs"]
 mod panic_probe;
+
+#[path = "legacy_tests.rs"]
+mod legacy_usage;
+
+#[path = "batch_tests.rs"]
+mod batch_usage;
+
+#[path = "deadline_tests.rs"]
+mod deadlines;

@@ -139,17 +139,39 @@ pub(crate) struct ProviderReportsSnapshot {
     pub reports: Vec<ReportSection>,
 }
 
+fn validate_connection_selector(
+    provider_id: &str,
+    connection_id: Option<&str>,
+    use_legacy: bool,
+) -> Result<(), String> {
+    let error = if use_legacy && connection_id.is_some() {
+        Some("Choose either the original connection or a named account for reports.")
+    } else if provider_id != "ollama" && (use_legacy || connection_id.is_some()) {
+        Some("Account reports are unavailable for this provider.")
+    } else {
+        None
+    };
+    if let Some(error) = error {
+        log::warn!("Rejected an invalid server report connection selector");
+        return Err(error.into());
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub(crate) async fn refresh_provider_reports(
     provider_id: String,
     request_id: String,
     connection_id: Option<String>,
+    use_legacy: Option<bool>,
     state: tauri::State<'_, Mutex<AppState>>,
     reports: tauri::State<'_, ProviderReportsState>,
 ) -> Result<ProviderReportsSnapshot, String> {
     if !matches!(provider_id.as_str(), "codex" | "ollama" | "openrouter") {
         return Err("Server reports are unavailable for this provider.".to_string());
     }
+    let use_legacy = use_legacy.unwrap_or(false);
+    validate_connection_selector(&provider_id, connection_id.as_deref(), use_legacy)?;
     // Start the overall budget before setup or waiting for a blocking worker.
     let deadline = Instant::now() + Duration::from_secs(60);
     if request_id.is_empty() || request_id.len() > 128 {
@@ -184,14 +206,12 @@ pub(crate) async fn refresh_provider_reports(
     ))?;
     let worker_cancelled = Arc::clone(&cancelled);
     let ollama_connection = if provider_id == "ollama" {
-        Some(crate::ollama_accounts::report_connection(
-            &plugin,
-            connection_id.as_deref(),
-        )?)
+        Some(if use_legacy {
+            crate::ollama_accounts::report_legacy_connection(&plugin)?
+        } else {
+            crate::ollama_accounts::report_connection(&plugin, connection_id.as_deref())?
+        })
     } else {
-        if connection_id.is_some() {
-            return Err("Account reports are unavailable for this provider.".into());
-        }
         None
     };
     let output = tauri::async_runtime::spawn_blocking(move || {
@@ -283,6 +303,26 @@ pub(crate) fn cancel_provider_reports(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn report_selectors_keep_original_named_and_default_requests_unambiguous() {
+        assert!(validate_connection_selector("ollama", None, false).is_ok());
+        assert!(validate_connection_selector("ollama", None, true).is_ok());
+        assert!(validate_connection_selector("ollama", Some("work"), false).is_ok());
+        let error =
+            validate_connection_selector("ollama", Some("private-input"), true).unwrap_err();
+        assert!(error.contains("either"));
+        assert!(!error.contains("private-input"));
+    }
+
+    #[test]
+    fn other_provider_reports_reject_ollama_selectors() {
+        for provider in ["codex", "openrouter"] {
+            assert!(validate_connection_selector(provider, None, false).is_ok());
+            assert!(validate_connection_selector(provider, None, true).is_err());
+            assert!(validate_connection_selector(provider, Some("work"), false).is_err());
+        }
+    }
 
     #[test]
     fn replacing_or_cancelling_a_request_invalidates_only_its_provider() {

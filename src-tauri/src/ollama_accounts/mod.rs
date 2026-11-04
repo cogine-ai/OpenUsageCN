@@ -1,14 +1,24 @@
+mod batch;
 pub(crate) mod commands;
+mod legacy;
 mod model;
+mod reports;
 mod runtime;
 mod store;
+
+#[cfg(test)]
+use batch::run_gui_probe;
+pub(crate) use batch::run_gui_probe_before;
+pub(crate) use reports::{
+    report_connection, report_connection_unchanged, report_legacy_connection,
+};
 
 use crate::plugin_engine::{
     manifest::LoadedPlugin,
     runtime::{MetricLine, PluginOutput},
 };
 pub(crate) use model::{AccountsView, Operation, Primary, VerificationView};
-use std::{collections::BTreeMap, path::PathBuf};
+use std::path::PathBuf;
 
 #[cfg(test)]
 mod tests;
@@ -41,18 +51,25 @@ pub(super) fn output(
 }
 
 fn generation(plugin: &LoadedPlugin, stored: &model::StoredAccounts) -> Result<String, String> {
+    generation_before(
+        plugin,
+        stored,
+        std::time::Instant::now() + std::time::Duration::from_secs(5),
+    )
+}
+
+fn generation_before(
+    plugin: &LoadedPlugin,
+    stored: &model::StoredAccounts,
+    deadline: std::time::Instant,
+) -> Result<String, String> {
     let value = match &stored.primary {
         Primary::Legacy => {
-            let fields = plugin
-                .manifest
-                .config
-                .as_ref()
-                .map(|c| c.fields.as_slice())
-                .unwrap_or(&[]);
-            let values: BTreeMap<_, _> = crate::provider_config::resolved_values("ollama", fields)
-                .into_iter()
-                .collect();
-            serde_json::json!(["legacy", values])
+            serde_json::json!([
+                "legacy",
+                stored.legacy.revision,
+                legacy::configuration_before(plugin, deadline).generation
+            ])
         }
         Primary::None => serde_json::json!(["none"]),
         Primary::Connection { connection_id } => {
@@ -77,6 +94,10 @@ fn generation(plugin: &LoadedPlugin, stored: &model::StoredAccounts) -> Result<S
 }
 
 pub(crate) fn projection_generation(plugin: &LoadedPlugin) -> Result<String, String> {
+    legacy::synchronize(
+        plugin,
+        std::time::Instant::now() + std::time::Duration::from_secs(10),
+    )?;
     let _guard = store::lock()?;
     generation(plugin, &store::read()?)
 }
@@ -94,31 +115,53 @@ pub(crate) fn with_projection_guard<T>(
     })
 }
 
+pub(crate) fn with_projection_guard_before<T>(
+    plugin: &LoadedPlugin,
+    expected: Option<&str>,
+    deadline: std::time::Instant,
+    publish: impl FnOnce() -> T,
+) -> Result<T, String> {
+    with_projection_state_before(deadline, |stored| {
+        if Some(generation_before(plugin, stored, deadline)?.as_str()) != expected {
+            return Err(store::changed());
+        }
+        Ok(publish())
+    })
+}
+
 fn with_projection_state<T>(
     work: impl FnOnce(&model::StoredAccounts) -> Result<T, String>,
 ) -> Result<T, String> {
-    let _guard = store::lock()?;
+    with_projection_state_before(
+        std::time::Instant::now() + std::time::Duration::from_secs(10),
+        work,
+    )
+}
+
+fn with_projection_state_before<T>(
+    deadline: std::time::Instant,
+    work: impl FnOnce(&model::StoredAccounts) -> Result<T, String>,
+) -> Result<T, String> {
+    let _guard = store::lock_until(deadline)?;
     match store::read() {
         Ok(stored) => work(&stored),
         Err(error) => {
             // Keep the store lock through cleanup so a valid replacement cannot publish between
             // the failed read and removal. A mere generation mismatch must preserve newer data.
-            crate::clear_ollama_projection()?;
+            crate::local_http_api::cache::replace_cached_account_projection_before(
+                "ollama", None, deadline,
+            )?;
             Err(error)
         }
     }
 }
 
-pub(crate) fn restore_primary_projection() -> Result<(), String> {
-    with_projection_state(|stored| {
-        if stored.primary == Primary::Legacy {
-            return Ok(());
-        }
-        crate::local_http_api::cache::replace_cached_account_projection(
-            "ollama",
-            cached_snapshot(stored),
-        )
-    })
+pub(crate) fn restore_primary_projection(plugin: &LoadedPlugin) -> Result<(), String> {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    if let Err(error) = legacy::synchronize(plugin, deadline) {
+        return with_projection_state_before(deadline, |_| Err(error));
+    }
+    with_projection_state_before(deadline, |stored| publish_cached_primary(stored, deadline))
 }
 
 pub(crate) fn check_primary_projection() -> Result<(), String> {
@@ -136,9 +179,17 @@ pub(crate) fn with_legacy_configuration_change(
 ) -> Result<(), String> {
     let _guard = store::lock()?;
     let mut stored = store::read()?;
-    if stored.primary == Primary::Legacy {
-        store::write(&mut stored, true)?;
-    }
+    stored.legacy.revision = stored
+        .legacy
+        .revision
+        .checked_add(1)
+        .ok_or_else(store::changed)?;
+    stored.legacy.configuration_generation = None;
+    stored.legacy.snapshot = None;
+    stored.legacy.last_updated_at = None;
+    stored.legacy.error = None;
+    let projection_changed = stored.primary == Primary::Legacy;
+    store::write(&mut stored, projection_changed)?;
     work()
 }
 
@@ -152,6 +203,21 @@ fn primary_cached_snapshot()
 fn cached_snapshot(
     stored: &model::StoredAccounts,
 ) -> Option<crate::local_http_api::cache::CachedPluginSnapshot> {
+    if stored.primary == Primary::Legacy {
+        let (Some(snapshot), Some(updated)) =
+            (&stored.legacy.snapshot, &stored.legacy.last_updated_at)
+        else {
+            return None;
+        };
+        return Some(crate::local_http_api::cache::CachedPluginSnapshot {
+            provider_id: "ollama".into(),
+            display_name: snapshot.display_name.clone(),
+            plan: snapshot.plan.clone(),
+            lines: snapshot.lines.clone(),
+            started_at: updated.clone(),
+            fetched_at: updated.clone(),
+        });
+    }
     let Primary::Connection { connection_id } = &stored.primary else {
         return None;
     };
@@ -172,20 +238,14 @@ fn cached_snapshot(
     })
 }
 
-pub(super) fn legacy_configuration_generation(plugin: &LoadedPlugin) -> String {
-    let fields = plugin
-        .manifest
-        .config
-        .as_ref()
-        .map(|c| c.fields.as_slice())
-        .unwrap_or(&[]);
-    let values: BTreeMap<_, _> = crate::provider_config::resolved_values("ollama", fields)
-        .into_iter()
-        .collect();
-    crate::safe_file::sha256_hex(
-        serde_json::to_string(&values)
-            .unwrap_or_default()
-            .as_bytes(),
+fn publish_cached_primary(
+    stored: &model::StoredAccounts,
+    deadline: std::time::Instant,
+) -> Result<(), String> {
+    crate::local_http_api::cache::replace_cached_account_projection_before(
+        "ollama",
+        cached_snapshot(stored),
+        deadline,
     )
 }
 
@@ -199,7 +259,7 @@ pub(crate) fn run_primary_probe(
         crate::plugin_engine::runtime::provider_account_probe_error(plugin, &message)
     };
     let prepared = (|| {
-        let _guard = store::lock()?;
+        let _guard = store::lock_until(deadline)?;
         let stored = store::read()?;
         let stamp = generation(plugin, &stored)?;
         let record = match &stored.primary {
@@ -218,7 +278,7 @@ pub(crate) fn run_primary_probe(
     })();
     let (stamp, record) = match prepared {
         Ok(Some(prepared)) => prepared,
-        Ok(None) => return crate::plugin_engine::runtime::run_probe(plugin, dir, version),
+        Ok(None) => return legacy::refresh(plugin, dir, version, deadline).unwrap_or_else(fail),
         Err(error) => return fail(error),
     };
     #[cfg(test)]
@@ -230,7 +290,7 @@ pub(crate) fn run_primary_probe(
         Err(e) => return fail(e),
     };
     // A queued refresh must not use a key removed or replaced while another process held the lock.
-    if let Err(error) = with_projection_guard(plugin, Some(&stamp), || ()) {
+    if let Err(error) = with_projection_guard_before(plugin, Some(&stamp), deadline, || ()) {
         return fail(error);
     }
     let result = runtime::probe_with_deadline(
@@ -242,7 +302,7 @@ pub(crate) fn run_primary_probe(
         Some(&record.identity_fingerprint),
     );
     let committed = (|| {
-        let _guard = store::lock()?;
+        let _guard = store::lock_until(deadline)?;
         let mut stored = store::read()?;
         if generation(plugin, &stored)? != stamp {
             return Err(store::changed());
@@ -262,8 +322,9 @@ pub(crate) fn run_primary_probe(
         let projection_changed = target
             .error
             .as_ref()
-            .is_some_and(|e| e.code == "identityChanged");
-        store::write(&mut stored, projection_changed)?;
+            .is_some_and(|e| matches!(e.code.as_str(), "identityChanged" | "authExpired"));
+        store::write_before(&mut stored, projection_changed, Some(deadline))?;
+        publish_cached_primary(&stored, deadline)?;
         Ok(output)
     })();
     committed.unwrap_or_else(fail)
@@ -276,9 +337,10 @@ pub(super) fn refresh(
     id: &str,
     deadline: std::time::Instant,
 ) -> Result<(), String> {
+    let deadline = deadline.min(std::time::Instant::now() + std::time::Duration::from_secs(30));
     let _connection_guard = store::acquire_refresh(id, deadline)?;
     let captured = {
-        let _guard = store::lock()?;
+        let _guard = store::lock_until(deadline)?;
         store::read()?
             .connections
             .into_iter()
@@ -293,7 +355,7 @@ pub(super) fn refresh(
         deadline,
         Some(&captured.identity_fingerprint),
     );
-    let _guard = store::lock()?;
+    let _guard = store::lock_until(deadline)?;
     let mut stored = store::read()?;
     let target = stored
         .connections
@@ -304,87 +366,11 @@ pub(super) fn refresh(
     let projection_changed = target
         .error
         .as_ref()
-        .is_some_and(|e| e.code == "identityChanged")
+        .is_some_and(|e| matches!(e.code.as_str(), "identityChanged" | "authExpired"))
         && matches!(&stored.primary, Primary::Connection { connection_id } if connection_id == id);
-    store::write(&mut stored, projection_changed)
-}
-
-pub(crate) struct ReportConnection {
-    pub configuration: Option<std::collections::HashMap<String, serde_json::Value>>,
-    pub stamp: String,
-    pub connection_id: Option<String>,
-    pub uses_primary: bool,
-}
-
-pub(crate) fn report_connection(
-    plugin: &LoadedPlugin,
-    id: Option<&str>,
-) -> Result<ReportConnection, String> {
-    let id_is_primary_request = id.is_none();
-    let _guard = store::lock()?;
-    let stored = store::read()?;
-    let id = match (id, &stored.primary) {
-        (Some(id), _) => Some(id),
-        (None, Primary::Connection { connection_id }) => Some(connection_id.as_str()),
-        (None, Primary::Legacy) => None,
-        (None, Primary::None) => return Err("尚未设置主账号，请先选择账号。".into()),
-    };
-    if let Some(id) = id {
-        let r = stored
-            .connections
-            .iter()
-            .find(|r| r.connection_id == id)
-            .ok_or_else(store::changed)?;
-        let uses_primary = id_is_primary_request;
-        let stamp = crate::safe_file::sha256_hex(
-            serde_json::json!([
-                r.connection_id,
-                r.revision,
-                r.api_key,
-                if uses_primary {
-                    Some(generation(plugin, &stored)?)
-                } else {
-                    None
-                }
-            ])
-            .to_string()
-            .as_bytes(),
-        );
-        let mut configuration = runtime::configuration(&r.api_key);
-        configuration.insert(
-            "managedAccountFingerprint".into(),
-            serde_json::json!(r.identity_fingerprint),
-        );
-        Ok(ReportConnection {
-            configuration: Some(configuration),
-            stamp,
-            connection_id: Some(id.into()),
-            uses_primary,
-        })
-    } else {
-        Ok(ReportConnection {
-            configuration: None,
-            stamp: generation(plugin, &stored)?,
-            connection_id: None,
-            uses_primary: true,
-        })
-    }
-}
-
-pub(crate) fn report_connection_unchanged(
-    plugin: &LoadedPlugin,
-    captured: &ReportConnection,
-) -> Result<(), String> {
-    let current = report_connection(
-        plugin,
-        if captured.uses_primary {
-            None
-        } else {
-            captured.connection_id.as_deref()
-        },
-    )?;
-    if current.stamp != captured.stamp {
-        return Err(store::changed());
+    store::write_before(&mut stored, projection_changed, Some(deadline))?;
+    if matches!(&stored.primary, Primary::Connection { connection_id } if connection_id == id) {
+        publish_cached_primary(&stored, deadline)?;
     }
     Ok(())
 }

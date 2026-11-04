@@ -16,10 +16,10 @@ const SCOPE_NOTES: Record<string, string> = {
   ollama: "当前 API Key 的个人模型统计；账号共享额度与余额请查看额度卡片。",
 }
 
-export function ServerUsageReports({ providerId, sourceRefreshing = false, connectionId }: { providerId: string; sourceRefreshing?: boolean; connectionId?: string }) {
-  const { snapshot, loading, error, load } = useProviderReports(providerId, connectionId)
+export function ServerUsageReports({ providerId, sourceRefreshing = false, connectionId, useLegacy = false }: { providerId: string; sourceRefreshing?: boolean; connectionId?: string; useLegacy?: boolean }) {
+  const { snapshot, loading, error, load } = useProviderReports(providerId, connectionId, useLegacy)
   const [range, setRange] = useState("7d")
-  const scoped = providerId === "ollama" && Boolean(connectionId)
+  const scoped = providerId === "ollama" && (Boolean(connectionId) || useLegacy)
   const reports = snapshot?.reports.filter((report) => !scoped || report.id === range) ?? []
   const lines = snapshot?.lines.filter((line) => !scoped || line.label.startsWith(range.toUpperCase() + " ")) ?? []
   return (

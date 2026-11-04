@@ -11,6 +11,7 @@ import { OllamaAccountsPage } from "./ollama-accounts"
 function accountView(): OllamaAccountsView {
   return {
     revision: 1,
+    legacy: { source: "apiKey", configured: true, revision: 0 },
     primary: { mode: "connection", connectionId: "home" },
     connections: ["home", "work"].map((id) => ({
       connectionId: id,
@@ -88,8 +89,9 @@ describe("Ollama multi-account management", () => {
   it("shows independent account summaries and browsing never selects a primary", async () => {
     const onPrimaryChange = vi.fn()
     render(<OllamaAccountsPage onPrimaryChange={onPrimaryChange} />)
-    expect(await screen.findByRole("button", { name: "查看个人账号用量" })).toHaveTextContent("24")
-    expect(screen.getByRole("button", { name: "查看工作账号用量" })).toHaveTextContent("68")
+    await screen.findByRole("button", { name: "查看个人账号用量" })
+    expect(screen.getByRole("article", { name: "个人账号用量" })).toHaveTextContent("24")
+    expect(screen.getByRole("article", { name: "工作账号用量" })).toHaveTextContent("68")
     await userEvent.click(screen.getByRole("button", { name: "查看工作账号用量" }))
     expect(screen.getByRole("heading", { name: "工作账号" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "设为主账号" })).toBeEnabled()
@@ -107,7 +109,7 @@ describe("Ollama multi-account management", () => {
 
   it("verifies a new key before saving and sends only its opaque verification token to save", async () => {
     render(<OllamaAccountsPage initialScreen="keys" />)
-    await screen.findByText("API Keys")
+    await screen.findByText("账号连接")
     await userEvent.click(screen.getByRole("button", { name: "添加 Key" }))
     await userEvent.type(screen.getByRole("textbox", { name: "名称" }), "旅行")
     const key = screen.getByLabelText("API Key", { selector: "input" })
@@ -184,7 +186,7 @@ describe("Ollama multi-account management", () => {
         : Promise.resolve(accountView())
     )
     render(<OllamaAccountsPage initialScreen="keys" />)
-    await screen.findByText("API Keys")
+    await screen.findByText("账号连接")
     await userEvent.click(screen.getByRole("button", { name: "添加 Key" }))
     await userEvent.type(screen.getByRole("textbox", { name: "名称" }), "新账号")
     await userEvent.type(screen.getByLabelText("API Key", { selector: "input" }), "synthetic-key")
@@ -214,7 +216,7 @@ describe("Ollama multi-account management", () => {
     await userEvent.click(within(menu.parentElement!).getByRole("button", { name: "移除连接" }))
     const confirmation = screen.getByRole("group", { name: "确认移除 个人账号" })
     expect(confirmation).toHaveTextContent("不会在 Ollama 撤销 Key")
-    expect(confirmation).toHaveTextContent("不自动选择其他账号")
+    expect(confirmation).toHaveTextContent("不自动选择其他主账号")
     expect(tauri.invoke).not.toHaveBeenCalledWith(
       "perform_ollama_account_operation",
       expect.anything()
@@ -227,7 +229,7 @@ describe("Ollama multi-account management", () => {
     })
   })
 
-  it("keeps previous quota visible with a temporary failure and uses ordinary primary refresh", async () => {
+  it("keeps previous quota visible with a temporary failure without starting another global refresh", async () => {
     const next = accountView()
     next.connections[0].error = { code: "rateLimited", message: "请求过于频繁，请稍后重试。" }
     tauri.invoke.mockImplementation((command) =>
@@ -235,15 +237,14 @@ describe("Ollama multi-account management", () => {
         command === "perform_ollama_account_operation" ? { ...next, revision: 2 } : accountView()
       )
     )
-    const onPrimaryChange = vi.fn(),
-      onQuotaRefresh = vi.fn()
-    render(<OllamaAccountsPage onPrimaryChange={onPrimaryChange} onQuotaRefresh={onQuotaRefresh} />)
+    const onPrimaryChange = vi.fn()
+    render(<OllamaAccountsPage onPrimaryChange={onPrimaryChange} />)
     await userEvent.click(await screen.findByRole("button", { name: "查看个人账号用量" }))
     await userEvent.click(screen.getByRole("button", { name: "刷新当前账号" }))
     expect(await screen.findByRole("alert")).toHaveTextContent("本次未更新")
     expect(screen.getByRole("region", { name: "账户额度" })).toHaveTextContent("24")
     expect(onPrimaryChange).not.toHaveBeenCalled()
-    expect(onQuotaRefresh).toHaveBeenCalledOnce()
+    expect(tauri.invoke.mock.calls.filter(([command]) => command === "perform_ollama_account_operation")).toHaveLength(1)
   })
 
   it("preserves original configuration and requires an explicit primary switch to use it", async () => {
@@ -255,8 +256,7 @@ describe("Ollama multi-account management", () => {
         legacyConfiguration={<div>Existing Source Fields</div>}
       />
     )
-    await screen.findByText("API Keys")
-    fireEvent.click(screen.getByText("其他连接方式"))
+    await screen.findByText("账号连接")
     await userEvent.click(screen.getByRole("button", { name: "管理原有连接" }))
     expect(screen.getByText("Existing Source Fields")).toBeInTheDocument()
     expect(tauri.invoke).not.toHaveBeenCalledWith("save_provider_config", expect.anything())
@@ -312,8 +312,8 @@ describe("Ollama multi-account management", () => {
   })
 
   it("never displays legacy quota when the managed primary was removed", async () => {
-    tauri.invoke.mockResolvedValue({ revision: 3, primary: { mode: "none" }, connections: [] })
-    render(<OllamaAccountsPage legacyUsage={<div>Old Legacy Quota</div>} />)
+    tauri.invoke.mockResolvedValue({ revision: 3, primary: { mode: "none" }, connections: [], legacy: { source: "cookie", configured: false, revision: 0 } })
+    render(<OllamaAccountsPage />)
     expect(await screen.findByText(/尚未设置主账号/)).toBeInTheDocument()
     expect(screen.queryByText("Old Legacy Quota")).not.toBeInTheDocument()
   })

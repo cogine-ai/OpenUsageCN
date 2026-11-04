@@ -85,21 +85,34 @@ fn transient_state() -> &'static Mutex<Transient> {
 }
 
 pub(super) fn lock() -> Result<StoreGuard<'static>, String> {
+    lock_until(Instant::now() + std::time::Duration::from_secs(10))
+}
+
+pub(super) fn lock_until(deadline: Instant) -> Result<StoreGuard<'static>, String> {
     let mutex = transient_state();
-    let state = mutex.lock().unwrap_or_else(|poisoned| {
-        log::error!("Ollama account store lock recovered after a worker panic");
-        let guard = poisoned.into_inner();
-        mutex.clear_poison();
-        guard
-    });
+    let state = loop {
+        match mutex.try_lock() {
+            Ok(guard) => break guard,
+            Err(std::sync::TryLockError::Poisoned(poisoned)) => {
+                log::error!("Ollama account store lock recovered after a worker panic");
+                let guard = poisoned.into_inner();
+                mutex.clear_poison();
+                break guard;
+            }
+            Err(std::sync::TryLockError::WouldBlock) if Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+            Err(_) => {
+                log::error!("Ollama account store lock timed out");
+                return Err("账号配置正在被其他操作使用，请稍后重试。".into());
+            }
+        }
+    };
     let file = open_lock_file()?;
-    let started = Instant::now();
     loop {
         match file.try_lock() {
             Ok(()) => return Ok(StoreGuard { state, file }),
-            Err(std::fs::TryLockError::WouldBlock)
-                if started.elapsed() < std::time::Duration::from_secs(10) =>
-            {
+            Err(std::fs::TryLockError::WouldBlock) if Instant::now() < deadline => {
                 std::thread::sleep(std::time::Duration::from_millis(5))
             }
             Err(_) => {
@@ -176,6 +189,14 @@ pub(super) fn read_from(path: &std::path::Path) -> Result<StoredAccounts, String
 }
 
 pub(super) fn write(stored: &mut StoredAccounts, projection_changed: bool) -> Result<(), String> {
+    write_before(stored, projection_changed, None)
+}
+
+pub(super) fn write_before(
+    stored: &mut StoredAccounts,
+    projection_changed: bool,
+    deadline: Option<Instant>,
+) -> Result<(), String> {
     stored.revision = stored.revision.checked_add(1).ok_or_else(storage_error)?;
     if projection_changed {
         stored.projection_revision = stored
@@ -184,7 +205,13 @@ pub(super) fn write(stored: &mut StoredAccounts, projection_changed: bool) -> Re
             .ok_or_else(storage_error)?;
     }
     if projection_changed {
-        clear_projection()?;
+        if let Some(deadline) = deadline {
+            crate::local_http_api::cache::replace_cached_account_projection_before(
+                "ollama", None, deadline,
+            )?;
+        } else {
+            clear_projection()?;
+        }
     }
     write_to(&path()?, stored)?;
     Ok(())
@@ -253,7 +280,7 @@ pub(super) fn apply_probe(
             record.error = Some(super::runtime::friendly_error("identityChanged"));
         }
         Err(error) => {
-            if error.code == "identityChanged" {
+            if matches!(error.code.as_str(), "identityChanged" | "authExpired") {
                 record.snapshot = None;
                 record.last_updated_at = None;
             }

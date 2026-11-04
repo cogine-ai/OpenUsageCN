@@ -9,6 +9,7 @@ import { ProviderDetailPage } from "./provider-detail"
 
 const accounts = {
   revision: 1,
+  legacy: { source: "cookie", configured: false, revision: 0 },
   primary: { mode: "connection", connectionId: "home" },
   connections: ["home", "work"].map((id) => ({
     connectionId: id,
@@ -90,19 +91,19 @@ it("cancels a pending primary report and discards its late response across app r
   expect(screen.getByRole("button", { name: "Load Reports", exact: true })).toBeEnabled()
 })
 
-it("preserves a non-primary account's loaded report while the primary refreshes", async () => {
+it("clears a non-primary loaded report during an app-wide account refresh", async () => {
   const { rerender } = render(page())
   fireEvent.click(await screen.findByRole("button", { name: "查看工作账号用量" }))
   fireEvent.click(screen.getByRole("button", { name: "Load Reports", exact: true }))
   await screen.findByText("work Report")
   rerender(page(true))
-  expect(screen.getByText("work Report")).toBeInTheDocument()
-  expect(screen.getByRole("button", { name: "Refresh Reports", exact: true })).toBeEnabled()
+  expect(screen.queryByText("work Report")).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "Load Reports", exact: true })).toBeDisabled()
   rerender(page(false, "Network error"))
-  expect(screen.getByText("work Report")).toBeInTheDocument()
+  expect(screen.queryByText("work Report")).not.toBeInTheDocument()
 })
 
-it("allows a non-primary report to finish while the primary refreshes", async () => {
+it("cancels pending non-primary reports when the app refreshes every account", async () => {
   let finish: (value: unknown) => void = () => {}
   tauri.invoke.mockImplementation((command) =>
     command === "get_ollama_accounts"
@@ -116,8 +117,8 @@ it("allows a non-primary report to finish while the primary refreshes", async ()
   fireEvent.click(screen.getByRole("button", { name: "Load Reports", exact: true }))
   const args = tauri.invoke.mock.calls.find(([command]) => command === "refresh_provider_reports")![1]
   rerender(page(true))
-  expect(tauri.invoke).not.toHaveBeenCalledWith("cancel_provider_reports", expect.anything())
+  expect(tauri.invoke).toHaveBeenCalledWith("cancel_provider_reports", { providerId: "ollama", requestId: args.requestId })
   await act(async () => finish(report(args)))
-  expect(screen.getByText("work Report")).toBeInTheDocument()
-  expect(screen.getByRole("button", { name: "Refresh Reports", exact: true })).toBeEnabled()
+  expect(screen.queryByText("work Report")).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "Load Reports", exact: true })).toBeDisabled()
 })

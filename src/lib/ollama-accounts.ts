@@ -20,7 +20,17 @@ export type OllamaAccountsView = {
   revision: number
   primary: OllamaPrimary
   connections: OllamaConnection[]
+  legacy: OllamaLegacyConnection
 }
+export type OllamaLegacyConnection = {
+  source: "cookie" | "apiKey"
+  configured: boolean
+  revision: number
+  snapshot?: PluginOutput
+  lastUpdatedAt?: string
+  error?: { code: string; message: string }
+}
+export type OllamaAccountSelection = { kind: "legacy" } | { kind: "connection"; connectionId: string }
 export type OllamaVerification = {
   verificationId: string
   identity: OllamaIdentity
@@ -30,7 +40,7 @@ export type OllamaVerification = {
   sameAccount?: boolean
 }
 export type OllamaAccountOperation = {
-  kind: "selectPrimary" | "useLegacy" | "rename" | "remove" | "refresh"
+  kind: "selectPrimary" | "useLegacy" | "rename" | "remove" | "refresh" | "refreshLegacy"
   connectionId?: string
   label?: string
 }

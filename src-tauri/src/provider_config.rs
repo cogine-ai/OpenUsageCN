@@ -261,6 +261,32 @@ pub fn resolved_values(plugin_id: &str, fields: &[PluginConfigField]) -> HashMap
     resolve_values(fields, &stored)
 }
 
+/// Fresh, read-only settings for requests that can wait behind another process's refresh.
+pub(crate) fn resolved_values_from_disk(
+    plugin_id: &str,
+    fields: &[PluginConfigField],
+) -> Result<HashMap<String, Value>, String> {
+    let path = config_path()?;
+    resolved_values_from_path(&path, plugin_id, fields)
+}
+
+fn resolved_values_from_path(
+    path: &Path,
+    plugin_id: &str,
+    fields: &[PluginConfigField],
+) -> Result<HashMap<String, Value>, String> {
+    let config = match std::fs::read(path) {
+        Ok(bytes) => serde_json::from_slice::<ProviderConfigFile>(&bytes)
+            .map_err(|_| damaged_config_message(path))?,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => default_file(),
+        Err(_) => return Err("无法读取原连接设置，请检查文件访问权限。".into()),
+    };
+    Ok(resolve_values(
+        fields,
+        config.providers.get(plugin_id).unwrap_or(&HashMap::new()),
+    ))
+}
+
 /// Builds a UI view with secret presence/hints and stored field IDs, never raw secret values.
 pub fn view_for_plugin(plugin_id: &str, fields: &[PluginConfigField]) -> ProviderConfigView {
     let stored = {
@@ -564,3 +590,7 @@ fn secret_hint(value: &str) -> Option<String> {
 
 #[cfg(test)]
 mod provider_config_tests;
+
+#[cfg(test)]
+#[path = "provider_config/fresh_config_tests.rs"]
+mod fresh_config_tests;

@@ -1,7 +1,7 @@
 use super::*;
 use crate::local_http_api::cache::{self, CachedPluginSnapshot};
 
-fn initialize_cache(fixture: &Fixture) {
+pub(super) fn initialize_cache(fixture: &Fixture) {
     cache::init_with_catalog(
         &fixture.dir(),
         &fixture.dir(),
@@ -102,7 +102,7 @@ fn all_projection_entrypoints_clear_unreadable_state_without_affecting_other_pro
             "uncaptured" => with_projection_guard(&plugin, None, || {
                 panic!("unverified state must not publish")
             }),
-            "startup" => restore_primary_projection(),
+            "startup" => restore_primary_projection(&plugin),
             _ => check_primary_projection(),
         };
         assert!(result.is_err(), "{entrypoint}");
@@ -129,7 +129,7 @@ fn startup_restores_current_primary_without_reentering_the_store_lock() {
     initialize_cache(&fixture);
     cache::replace_cached_account_projection("ollama", Some(snapshot("ollama", "Old Account")))
         .unwrap();
-    restore_primary_projection().unwrap();
+    restore_primary_projection(&plugin).unwrap();
     let restored = cache::snapshot_for_provider("ollama").unwrap();
     assert_eq!(restored.plan.as_deref(), Some("Account B"));
     assert_eq!(restored.fetched_at, "2026-11-04T13:00:00Z");
@@ -138,18 +138,13 @@ fn startup_restores_current_primary_without_reentering_the_store_lock() {
     store::write_to(&fixture.path, &stored).unwrap();
     cache::replace_cached_account_projection("ollama", Some(snapshot("ollama", "Legacy Kept")))
         .unwrap();
-    restore_primary_projection().unwrap();
-    assert_eq!(
-        cache::snapshot_for_provider("ollama")
-            .unwrap()
-            .plan
-            .as_deref(),
-        Some("Legacy Kept")
-    );
+    restore_primary_projection(&plugin).unwrap();
+    // An older provider cache without a current original-connection stamp cannot be attributed.
+    assert!(cache::snapshot_for_provider("ollama").is_none());
 
     stored.primary = Primary::None;
     store::write_to(&fixture.path, &stored).unwrap();
-    restore_primary_projection().unwrap();
+    restore_primary_projection(&plugin).unwrap();
     assert!(cache::snapshot_for_provider("ollama").is_none());
 }
 

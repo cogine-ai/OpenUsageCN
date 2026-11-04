@@ -60,7 +60,7 @@ enum PendingProbe {
     Account(provider_accounts::ActiveAccountProbe),
     Ollama {
         output: plugin_engine::runtime::PluginOutput,
-        started_at: time::OffsetDateTime,
+        deadline: std::time::Instant,
         generation: Option<String>,
     },
 }
@@ -406,19 +406,7 @@ fn publish_probe_output_with_invalidation(
             plugin_id,
             output.lines.len()
         );
-        if plugin_id == "ollama" {
-            if let Err(error) = local_http_api::cache::replace_account_projection(
-                plugin_id,
-                Some((&output, started_at)),
-            ) {
-                log::error!(
-                    "Ollama primary cache could not be saved: {}",
-                    plugin_engine::host_api::redact_log_message(&error)
-                );
-            }
-        } else {
-            local_http_api::cache_successful_output(&output, started_at);
-        }
+        local_http_api::cache_successful_output(&output, started_at);
     }
     if let Err(error) = app_handle.emit(
         "probe:result",
@@ -434,6 +422,33 @@ fn publish_probe_output_with_invalidation(
             batch_id,
             error
         );
+    }
+}
+
+fn emit_ollama_probe_output(
+    app_handle: &tauri::AppHandle,
+    batch_id: &str,
+    output: plugin_engine::runtime::PluginOutput,
+    invalidate_cached_data: bool,
+) {
+    // The selected row already persisted its exact successful quota and fetch time.
+    // Final publication sends UI/error state without a second cache write or file-lock wait.
+    if let Some(message) = plugin_engine::runtime::probe_error_message(&output) {
+        log::warn!("Ollama primary refresh completed with an error");
+        local_http_api::record_probe_error(
+            "ollama",
+            plugin_engine::host_api::redact_log_message(message),
+        );
+    }
+    if let Err(error) = app_handle.emit(
+        "probe:result",
+        ProbeResult {
+            batch_id: batch_id.into(),
+            output,
+            invalidate_cached_data: invalidate_cached_data.then_some(true),
+        },
+    ) {
+        log::error!("Ollama result event failed: {error}");
     }
 }
 
@@ -459,10 +474,10 @@ fn panic_probe_invalidates_cached_data(plugin_id: &str) -> Option<bool> {
 }
 
 fn sync_ollama_startup_projection(plugin: Option<&plugin_engine::manifest::LoadedPlugin>) {
-    if plugin.is_none() {
+    let Some(plugin) = plugin else {
         return;
-    }
-    if let Err(error) = ollama_accounts::restore_primary_projection() {
+    };
+    if let Err(error) = ollama_accounts::restore_primary_projection(plugin) {
         log::error!(
             "Ollama primary cache could not be restored: {}",
             plugin_engine::host_api::redact_log_message(&error)
@@ -654,20 +669,23 @@ async fn start_probe_batch(
                     .is_some_and(|support| support.local_discovery);
                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     if plugin_id == "ollama" {
-                        let generation = ollama_accounts::projection_generation(&plugin);
-                        let output = match &generation {
-                            Ok(_) => {
-                                ollama_accounts::run_primary_probe(&plugin, &data_dir, &version)
-                            }
-                            Err(_) => plugin_engine::runtime::provider_account_probe_error(
-                                &plugin,
-                                "Could not read Ollama Cloud connections. Check Settings.",
-                            ),
-                        };
+                        let deadline =
+                            std::time::Instant::now() + std::time::Duration::from_secs(60);
+                        let (output, generation) = ollama_accounts::run_gui_probe_before(
+                            &plugin,
+                            &data_dir,
+                            &version,
+                            deadline,
+                            || {
+                                if let Err(error) = handle.emit("ollama-accounts-changed", ()) {
+                                    log::error!("Ollama quota view update event failed: {error}");
+                                }
+                            },
+                        );
                         return PendingProbe::Ollama {
                             output,
-                            started_at: probe_started_at,
-                            generation: generation.ok(),
+                            deadline,
+                            generation,
                         };
                     }
                     if !account_aware {
@@ -730,28 +748,27 @@ async fn start_probe_batch(
                         }
                         Ok(PendingProbe::Ollama {
                             output,
-                            started_at,
+                            deadline,
                             generation,
                         }) => {
-                            let published = ollama_accounts::with_projection_guard(
+                            let published = ollama_accounts::with_projection_guard_before(
                                 &plugin,
                                 generation.as_deref(),
-                                || publish_probe_output(&handle, &bid, &plugin_id, output, started_at),
+                                deadline,
+                                || emit_ollama_probe_output(&handle, &bid, output, false),
                             );
                             if let Err(error) = published {
                                 log::warn!(
                                     "Ollama primary probe publication rejected: {}",
                                     plugin_engine::host_api::redact_log_message(&error)
                                 );
-                                publish_probe_output_with_invalidation(
+                                emit_ollama_probe_output(
                                     &handle,
                                     &bid,
-                                    &plugin_id,
                                     plugin_engine::runtime::provider_account_probe_error(
                                         &plugin,
                                         "Ollama Cloud connection changed. Refresh usage.",
                                     ),
-                                    started_at,
                                     true,
                                 );
                             }

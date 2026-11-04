@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { cancelProviderReports, refreshProviderReports, type ProviderReportsSnapshot } from "@/lib/provider-reports"
 import { PROVIDER_CONFIG_CHANGED } from "@/lib/provider-config"
 
-export function useProviderReports(providerId: string, connectionId?: string) {
+export function useProviderReports(providerId: string, connectionId?: string, useLegacy = false) {
   const active = useRef<{ id: string; providerId: string } | null>(null)
   const revision = useRef(0)
   const [snapshot, setSnapshot] = useState<ProviderReportsSnapshot | null>(null)
@@ -24,6 +24,8 @@ export function useProviderReports(providerId: string, connectionId?: string) {
     setSnapshot(null); setLoading(false); setError(null)
     const changed = (event: Event) => {
       if ((event as CustomEvent<string>).detail !== providerId) return
+      // Named Ollama keys have their own credentials; legacy settings cannot change their scope.
+      if (providerId === "ollama" && connectionId && !useLegacy) return
       invalidate()
       setSnapshot(null); setLoading(false); setError(null)
     }
@@ -32,7 +34,7 @@ export function useProviderReports(providerId: string, connectionId?: string) {
       window.removeEventListener(PROVIDER_CONFIG_CHANGED, changed)
       invalidate()
     }
-  }, [providerId, connectionId, invalidate])
+  }, [providerId, connectionId, useLegacy, invalidate])
 
   const load = useCallback(async () => {
     invalidate()
@@ -42,7 +44,7 @@ export function useProviderReports(providerId: string, connectionId?: string) {
     // Do not display a previous scope while another identity may be loading.
     setSnapshot(null); setLoading(true); setError(null)
     try {
-      const next = await refreshProviderReports(providerId, requestId, connectionId)
+      const next = await refreshProviderReports(providerId, requestId, connectionId, useLegacy)
       if (revision.current !== current) return
       if (next.providerId !== providerId || next.requestId !== requestId || !/^[a-f0-9]{64}$/.test(next.scopeKey)) {
         throw new Error("Server report scope mismatch")
@@ -58,7 +60,7 @@ export function useProviderReports(providerId: string, connectionId?: string) {
         setLoading(false)
       }
     }
-  }, [providerId, connectionId, invalidate])
+  }, [providerId, connectionId, useLegacy, invalidate])
 
   return { snapshot, loading, error, load }
 }

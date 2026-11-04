@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { PluginConfigField } from "@/lib/plugin-types"
@@ -29,6 +29,7 @@ describe("Ollama original connection validation", () => {
         if (command === "get_ollama_accounts")
           return Promise.resolve({
             revision: 1,
+            legacy: { source: "apiKey", configured: true, revision: 0 },
             primary: { mode, ...(mode === "connection" ? { connectionId: "managed" } : {}) },
             connections: [],
           })
@@ -50,8 +51,7 @@ describe("Ollama original connection validation", () => {
           onAccountChangeRefresh={onAccountChangeRefresh}
         />
       )
-      await screen.findByText("API Keys")
-      fireEvent.click(screen.getByText("其他连接方式"))
+      await screen.findByText("账号连接")
       await userEvent.click(screen.getByRole("button", { name: "管理原有连接" }))
       const input = await screen.findByLabelText("API Key")
       await waitFor(() => expect(input).toBeEnabled())

@@ -26,7 +26,8 @@ fn context(state: &Mutex<AppState>) -> Result<(LoadedPlugin, PathBuf, String), S
     ))
 }
 
-fn view() -> Result<AccountsView, String> {
+fn view(plugin: &LoadedPlugin) -> Result<AccountsView, String> {
+    super::legacy::synchronize(plugin, Instant::now() + Duration::from_secs(10))?;
     let _guard = store::lock()?;
     Ok(store::read()?.view())
 }
@@ -43,23 +44,35 @@ fn emit(app: &tauri::AppHandle, revision: u64) {
 #[tauri::command]
 pub(crate) async fn check_ollama_legacy_connection(
     state: tauri::State<'_, Mutex<AppState>>,
+    app: tauri::AppHandle,
 ) -> Result<crate::plugin_engine::runtime::PluginOutput, String> {
     let (plugin, dir, version) = context(&state)?;
-    tauri::async_runtime::spawn_blocking(move || {
-        let stamp = super::legacy_configuration_generation(&plugin);
-        let output = crate::plugin_engine::runtime::run_probe(&plugin, &dir, &version);
-        if stamp != super::legacy_configuration_generation(&plugin) { return Err(store::changed()); }
-        if output.lines.iter().any(|line| matches!(line, crate::plugin_engine::runtime::MetricLine::Badge { label, .. } if label == "Error")) {
-            log::warn!("Ollama legacy connection check failed");
-            return Err("原连接检查失败，请检查所选来源的凭据和网络；其他账号未改变。".into());
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        super::legacy::refresh(
+            &plugin,
+            &dir,
+            &version,
+            Instant::now() + Duration::from_secs(30),
+        )
+    })
+    .await
+    .map_err(|_| "原连接检查意外停止，请重试。".to_string())?;
+    emit(&app, 0);
+    result.and_then(|output| {
+        if crate::plugin_engine::runtime::probe_error_message(&output).is_some() {
+            Err("原连接检查失败，请检查所选来源的凭据和网络；其他账号未改变。".into())
+        } else {
+            Ok(output)
         }
-        Ok(output)
-    }).await.map_err(|_| "原连接检查意外停止，请重试。".to_string())?
+    })
 }
 
 #[tauri::command]
-pub(crate) async fn get_ollama_accounts() -> Result<AccountsView, String> {
-    tauri::async_runtime::spawn_blocking(view)
+pub(crate) async fn get_ollama_accounts(
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<AccountsView, String> {
+    let (plugin, _, _) = context(&state)?;
+    tauri::async_runtime::spawn_blocking(move || view(&plugin))
         .await
         .map_err(|_| "无法加载 Ollama 账号，请重试。".to_string())?
 }
@@ -245,46 +258,89 @@ pub(crate) async fn perform_ollama_account_operation(
     state: tauri::State<'_, Mutex<AppState>>,
 ) -> Result<AccountsView, String> {
     let (plugin, dir, version) = context(&state)?;
-    let result =
-        tauri::async_runtime::spawn_blocking(move || perform(&plugin, &dir, &version, operation))
-            .await
-            .map_err(|_| "账号操作意外停止，请重试。".to_string())?;
+    let event_app = app.clone();
+    let deadline = operation_deadline(&operation);
+    let (result, revision) = tauri::async_runtime::spawn_blocking(move || {
+        let result = perform_before(&plugin, &dir, &version, operation, deadline, &|| {
+            emit(&event_app, 0)
+        });
+        // Do not resolve credentials or open a new time budget just to announce partial success.
+        let revision = result
+            .as_ref()
+            .ok()
+            .map(|view| view.revision)
+            .or_else(|| masked_view(deadline).ok().map(|view| view.revision));
+        (result, revision)
+    })
+    .await
+    .map_err(|_| {
+        log::error!("Ollama account operation worker panicked");
+        "账号操作意外停止，请重试。".to_string()
+    })?;
     // A bounded refresh-all can stop after publishing successful earlier connections.
     // Announce the persisted revision even when the operation reports a later failure.
-    if let Ok(latest) = view() {
-        emit(&app, latest.revision);
+    if let Some(revision) = revision {
+        emit(&app, revision);
     }
     result
 }
 
+#[cfg(test)]
 pub(super) fn perform(
     plugin: &LoadedPlugin,
     dir: &PathBuf,
     version: &str,
     operation: Operation,
 ) -> Result<AccountsView, String> {
+    let deadline = operation_deadline(&operation);
+    perform_before(plugin, dir, version, operation, deadline, &|| {})
+}
+
+fn operation_deadline(operation: &Operation) -> Instant {
+    Instant::now()
+        + Duration::from_secs(
+            if matches!(
+                operation,
+                Operation::Refresh {
+                    connection_id: None
+                }
+            ) {
+                60
+            } else {
+                30
+            },
+        )
+}
+
+fn masked_view(deadline: Instant) -> Result<AccountsView, String> {
+    let _guard = store::lock_until(deadline)?;
+    Ok(store::read()?.view())
+}
+
+pub(super) fn perform_before(
+    plugin: &LoadedPlugin,
+    dir: &PathBuf,
+    version: &str,
+    operation: Operation,
+    deadline: Instant,
+    changed: &(impl Fn() + Sync),
+) -> Result<AccountsView, String> {
+    if let Operation::RefreshLegacy = operation {
+        super::legacy::refresh(plugin, dir, version, deadline)?;
+        return masked_view(deadline);
+    }
     if let Operation::Refresh { connection_id } = operation {
-        let ids = {
-            let _guard = store::lock()?;
-            let stored = store::read()?;
-            match connection_id {
-                Some(id) => vec![id],
-                None => stored
-                    .connections
-                    .into_iter()
-                    .map(|r| r.connection_id)
-                    .collect(),
-            }
-        };
-        let started = Instant::now();
-        for id in ids {
-            if started.elapsed() >= Duration::from_secs(60) {
-                log::warn!("Ollama refresh-all time budget reached");
-                return Err("批量刷新已超时，未完成的连接保留原数据，请分别刷新。".into());
-            }
-            super::refresh(plugin, dir, version, &id, started + Duration::from_secs(60))?;
+        if connection_id.is_none() {
+            super::legacy::synchronize(plugin, deadline)?;
+            let stored = {
+                let _guard = store::lock_until(deadline)?;
+                store::read()?
+            };
+            super::batch::refresh_all(plugin, dir, version, &stored, deadline, changed)?;
+            return masked_view(deadline);
         }
-        return view();
+        super::refresh(plugin, dir, version, &connection_id.unwrap(), deadline)?;
+        return masked_view(deadline);
     }
     let _guard = store::lock()?;
     let mut stored = store::read()?;
@@ -330,7 +386,7 @@ pub(super) fn perform(
                 projection_changed = true;
             }
         }
-        Operation::Refresh { .. } => unreachable!(),
+        Operation::Refresh { .. } | Operation::RefreshLegacy => unreachable!(),
     }
     store::write(&mut stored, projection_changed)?;
     Ok(stored.view())

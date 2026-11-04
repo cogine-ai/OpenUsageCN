@@ -7,14 +7,19 @@ import {
   OLLAMA_ACCOUNTS_CHANGED,
   type OllamaAccountOperation,
   type OllamaAccountsView,
+  type OllamaAccountSelection,
 } from "@/lib/ollama-accounts"
 
+type RefreshTarget = OllamaAccountSelection | { kind: "all" } | null
+type Failure = { kind: "read" | "operation" | "subscription"; message: string }
+
 /** Reads masked connections only; viewing an account never changes the primary projection. */
-export function useOllamaAccounts(onPrimaryChange?: () => void, onQuotaRefresh?: () => void) {
+export function useOllamaAccounts(onPrimaryChange?: () => void) {
   const [view, setView] = useState<OllamaAccountsView | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState<RefreshTarget>(null)
+  const [failure, setFailure] = useState<Failure | null>(null)
   const mounted = useRef(false)
   const readRevision = useRef(0)
   const operationRevision = useRef(0)
@@ -31,11 +36,14 @@ export function useOllamaAccounts(onPrimaryChange?: () => void, onQuotaRefresh?:
     const revision = ++readRevision.current
     try {
       const next = await getOllamaAccounts()
-      if (mounted.current && revision === readRevision.current) accept(next)
+      if (mounted.current && revision === readRevision.current) {
+        accept(next)
+        setFailure((current) => (current?.kind === "read" ? null : current))
+      }
     } catch {
       console.error("Failed to load Ollama account connections")
       if (mounted.current && revision === readRevision.current)
-        setError("无法读取账号连接，请重试。")
+        setFailure({ kind: "read", message: "无法读取账号连接，请重试。" })
     } finally {
       if (mounted.current && revision === readRevision.current) setLoading(false)
     }
@@ -54,7 +62,8 @@ export function useOllamaAccounts(onPrimaryChange?: () => void, onQuotaRefresh?:
       })
       .catch(() => {
         console.error("Failed to subscribe to Ollama connection changes")
-        if (mounted.current) setError("账号实时更新不可用，请重新打开此页面。")
+        if (mounted.current)
+          setFailure({ kind: "subscription", message: "账号实时更新不可用，请重新打开此页面。" })
       })
     return () => {
       mounted.current = false
@@ -65,34 +74,43 @@ export function useOllamaAccounts(onPrimaryChange?: () => void, onQuotaRefresh?:
   }, [reload])
 
   const mutate = useCallback(
-    async (work: () => Promise<OllamaAccountsView>, projection?: "primary" | "refresh") => {
+    async (
+      work: () => Promise<OllamaAccountsView>,
+      projection?: "primary",
+      target: RefreshTarget = null
+    ) => {
       const revision = ++operationRevision.current
       readRevision.current += 1
       setBusy(true)
-      setError(null)
+      setRefreshing(target)
+      setFailure(null)
       try {
         const next = await work()
         if (!mounted.current || operationRevision.current !== revision) return null
         accept(next)
         if (projection === "primary") onPrimaryChange?.()
-        if (projection === "refresh") onQuotaRefresh?.()
         return next
       } catch (reason) {
         console.error("Failed to update Ollama account connection")
         if (mounted.current && operationRevision.current === revision) {
-          setError(
-            typeof reason === "string" && reason.trim()
-              ? reason
-              : "账号操作未完成，请重新读取连接状态后重试。"
-          )
+          setFailure({
+            kind: "operation",
+            message:
+              typeof reason === "string" && reason.trim()
+                ? reason
+                : "账号操作未完成，请重新读取连接状态后重试。",
+          })
           await reload()
         }
         return null
       } finally {
-        if (mounted.current && operationRevision.current === revision) setBusy(false)
+        if (mounted.current && operationRevision.current === revision) {
+          setBusy(false)
+          setRefreshing(null)
+        }
       }
     },
-    [accept, onPrimaryChange, onQuotaRefresh, reload]
+    [accept, onPrimaryChange, reload]
   )
 
   const operate = useCallback(
@@ -102,13 +120,16 @@ export function useOllamaAccounts(onPrimaryChange?: () => void, onQuotaRefresh?:
         operation.kind === "useLegacy" ||
         (operation.kind === "remove" &&
           viewRef.current?.primary.connectionId === operation.connectionId)
-      const quotaRefreshed =
-        operation.kind === "refresh" &&
-        (!operation.connectionId ||
-          viewRef.current?.primary.connectionId === operation.connectionId)
       return mutate(
         () => performOllamaAccountOperation(operation),
-        primaryChanged ? "primary" : quotaRefreshed ? "refresh" : undefined
+        primaryChanged ? "primary" : undefined,
+        operation.kind === "refreshLegacy"
+          ? { kind: "legacy" }
+          : operation.kind === "refresh"
+            ? operation.connectionId
+              ? { kind: "connection", connectionId: operation.connectionId }
+              : { kind: "all" }
+            : null
       )
     },
     [mutate]
@@ -125,5 +146,5 @@ export function useOllamaAccounts(onPrimaryChange?: () => void, onQuotaRefresh?:
     [mutate]
   )
 
-  return { view, loading, busy, error, reload, operate, save }
+  return { view, loading, busy, refreshing, error: failure?.message ?? null, reload, operate, save }
 }

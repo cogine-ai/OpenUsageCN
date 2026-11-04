@@ -1,45 +1,40 @@
 import { useEffect, useRef, useState, type ReactNode } from "react"
-import { ArrowLeft, KeyRound, LoaderCircle, Pencil, Plus, RefreshCw, Star } from "lucide-react"
+import { ArrowLeft, LoaderCircle, Pencil, Plus, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { MetricLineRenderer } from "@/components/provider-metric"
-import { ServerUsageReports } from "@/components/server-usage-reports"
-import { OllamaAccountList, OllamaPrimaryBadge } from "@/components/ollama-account-list"
+import { OllamaAccountDetail } from "@/components/ollama-account-detail"
+import { OllamaAccountList } from "@/components/ollama-account-list"
 import { OllamaKeyForm } from "@/components/ollama-key-form"
 import { useOllamaAccounts } from "@/hooks/use-ollama-accounts"
-import { useNowTicker } from "@/hooks/use-now-ticker"
-import { ollamaIdentityLabel, type OllamaVerification } from "@/lib/ollama-accounts"
+import { type OllamaAccountSelection, type OllamaVerification } from "@/lib/ollama-accounts"
 import type { DisplayMode, ResetTimerDisplayMode, TimeFormatMode } from "@/lib/settings"
 
-type Screen = "overview" | "keys" | "detail" | "form" | "legacy"
+type Screen = "overview" | "keys" | "detail" | "form" | "legacy" | "legacyDetail"
 
 export function OllamaAccountsPage({
   initialScreen = "overview",
-  legacyUsage,
   legacyConfiguration,
   onBack,
   onPrimaryChange,
-  onQuotaRefresh,
-  primaryRefreshing = false,
+  allRefreshing = false,
+  initialAccount,
+  onAccountBack,
   displayMode = "used",
   resetTimerDisplayMode = "relative",
   timeFormatMode = "auto",
 }: {
   initialScreen?: "overview" | "keys"
-  legacyUsage?: ReactNode
   legacyConfiguration?: ReactNode
   onBack?: () => void
   onPrimaryChange?: () => void
-  onQuotaRefresh?: () => void
-  primaryRefreshing?: boolean
+  allRefreshing?: boolean
+  initialAccount?: OllamaAccountSelection | null
+  onAccountBack?: () => void
   displayMode?: DisplayMode
   resetTimerDisplayMode?: ResetTimerDisplayMode
   timeFormatMode?: TimeFormatMode
 }) {
-  const { view, loading, busy, error, reload, operate, save } = useOllamaAccounts(
-    onPrimaryChange,
-    onQuotaRefresh
-  )
+  const { view, loading, busy, refreshing, error, reload, operate, save } =
+    useOllamaAccounts(onPrimaryChange)
   const [screen, setScreen] = useState<Screen>(initialScreen)
   const [formOrigin, setFormOrigin] = useState<Screen>("keys")
   const [selected, setSelected] = useState<string | undefined>()
@@ -52,14 +47,21 @@ export function OllamaAccountsPage({
   const edited = view?.connections.find((item) => item.connectionId === editing)
   const removed = view?.connections.find((item) => item.connectionId === removing)
   const primary = view?.primary.mode === "connection" && view.primary.connectionId === selected
-  const reportSourceRefreshing = busy || (primary && primaryRefreshing)
   const connections = view?.connections ?? []
-  const now = useNowTicker({
-    enabled:
-      screen === "detail" &&
-      Boolean(connection?.snapshot?.lines.some((line) => line.type === "progress" && line.resetsAt)),
-    intervalMs: 30_000,
-  })
+  const visibleCount =
+    connections.length + Number(view?.legacy.configured || Boolean(view?.legacy.error))
+  const legacyDetail = screen === "legacyDetail"
+  const reportSourceRefreshing =
+    allRefreshing ||
+    refreshing?.kind === "all" ||
+    (legacyDetail
+      ? refreshing?.kind === "legacy"
+      : refreshing?.kind === "connection" && refreshing.connectionId === selected)
+  useEffect(() => {
+    if (!initialAccount) return
+    setSelected(initialAccount.kind === "connection" ? initialAccount.connectionId : undefined)
+    setScreen(initialAccount.kind === "legacy" ? "legacyDetail" : "detail")
+  }, [initialAccount])
   useEffect(() => {
     if (!removed) return
     removalRef.current?.focus()
@@ -85,11 +87,14 @@ export function OllamaAccountsPage({
     if (screen === "form") navigate(formOrigin)
     else if (screen === "legacy") navigate("keys")
     else if (screen === initialScreen && onBack) onBack()
-    else navigate("overview")
+    else {
+      onAccountBack?.()
+      navigate("overview")
+    }
   }
   const selectPrimary = async (id: string) => {
     if (await operate({ kind: "selectPrimary", connectionId: id }))
-      setNotice("已设为主账号，首页和菜单栏将显示此连接。")
+      setNotice("已设为主账号，菜单栏和本地 API 将使用此连接。")
   }
   const saveKey = async (verified: OllamaVerification, label: string) => {
     const next = await save(verified.verificationId, label, verified.differentAccount, editing)
@@ -115,7 +120,9 @@ export function OllamaAccountsPage({
             : "添加 API Key"
           : screen === "legacy"
             ? "原有连接设置"
-            : "Ollama Cloud"
+            : screen === "legacyDetail"
+              ? "原有连接"
+              : "Ollama Cloud"
 
   return (
     <div className="space-y-3 py-3">
@@ -133,13 +140,13 @@ export function OllamaAccountsPage({
               variant="ghost"
               size="icon-sm"
               aria-label="刷新全部账号"
-              disabled={busy || !connections.length}
+              disabled={busy || allRefreshing || !(connections.length || view?.legacy.configured)}
               onClick={() => void operate({ kind: "refresh" })}
             >
               <RefreshCw className={busy ? "size-4 animate-spin" : "size-4"} />
             </Button>
             <Button type="button" variant="outline" onClick={() => navigate("keys")}>
-              管理 Key
+              管理账号
             </Button>
           </>
         ) : null}
@@ -155,7 +162,7 @@ export function OllamaAccountsPage({
             <Plus className="size-4" />
           </Button>
         ) : null}
-        {screen === "detail" && connection ? (
+        {(screen === "detail" && connection) || legacyDetail ? (
           <>
             <Button
               type="button"
@@ -164,7 +171,11 @@ export function OllamaAccountsPage({
               aria-label="刷新当前账号"
               disabled={busy}
               onClick={() =>
-                void operate({ kind: "refresh", connectionId: connection.connectionId })
+                void operate(
+                  legacyDetail
+                    ? { kind: "refreshLegacy" }
+                    : { kind: "refresh", connectionId: connection!.connectionId }
+                )
               }
             >
               <RefreshCw className={busy ? "size-4 animate-spin" : "size-4"} />
@@ -175,7 +186,7 @@ export function OllamaAccountsPage({
               size="icon-sm"
               aria-label="编辑当前连接"
               disabled={busy}
-              onClick={() => edit(connection.connectionId)}
+              onClick={() => (legacyDetail ? navigate("legacy") : edit(connection!.connectionId))}
             >
               <Pencil className="size-4" />
             </Button>
@@ -233,116 +244,52 @@ export function OllamaAccountsPage({
             type="button"
             variant="outline"
             className="w-full"
-            disabled={busy || view?.primary.mode === "legacy"}
+            disabled={busy || !view?.legacy.configured || view?.primary.mode === "legacy"}
             onClick={() =>
               void operate({ kind: "useLegacy" }).then((next) => {
-                if (next) setNotice("首页和菜单栏已改用原有连接。")
+                if (next) setNotice("菜单栏和本地 API 已改用原有连接。")
               })
             }
           >
             将原有连接设为主账号
           </Button>
         </div>
-      ) : screen === "detail" && connection ? (
-        <>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="break-all text-xs text-muted-foreground">
-              Ollama Cloud · {ollamaIdentityLabel(connection.identity)}
-            </span>
-            {connection.plan ? <Badge variant="outline">{connection.plan}</Badge> : null}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            读取连接 · {connection.label} · ••••{connection.keyHint}
-          </p>
-          {primary ? (
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <OllamaPrimaryBadge />
-              用于首页和菜单栏
-            </div>
-          ) : (
-            <Button
-              type="button"
-              variant="outline"
-              className="h-10 w-full"
-              disabled={
-                busy ||
-                connection.error?.code === "authExpired" ||
-                connection.error?.code === "identityChanged"
-              }
-              onClick={() => void selectPrimary(connection.connectionId)}
-            >
-              <Star className="size-4" />
-              设为主账号
-            </Button>
-          )}
-          {connection.error ? (
-            <div role="alert" className="space-y-2 rounded-lg border p-3 text-xs">
-              <p className="text-destructive">{connection.error.message}</p>
-              {connection.snapshot ? (
-                <p className="text-muted-foreground">本次未更新，下方保留上次成功读取的数据。</p>
-              ) : null}
-              {connection.error.code === "authExpired" ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => edit(connection.connectionId)}
-                >
-                  更新 Key
-                </Button>
-              ) : null}
-            </div>
-          ) : null}
-          {connection.snapshot ? (
-            <section aria-label="账户额度" className="space-y-3 pt-2">
-              {connection.snapshot.lines.map((line, index) => (
-                <MetricLineRenderer
-                  key={`${line.label}-${index}`}
-                  line={line}
-                  displayMode={displayMode}
-                  resetTimerDisplayMode={resetTimerDisplayMode}
-                  timeFormatMode={timeFormatMode}
-                  now={now}
-                  refreshing={busy}
-                  stale={Boolean(connection.error)}
-                  lastUpdatedAt={
-                    connection.lastUpdatedAt ? Date.parse(connection.lastUpdatedAt) : null
-                  }
-                />
-              ))}
-            </section>
-          ) : (
-            <p className="text-xs text-muted-foreground">尚未读取到额度，请刷新此账号。</p>
-          )}
-          {connection.lastUpdatedAt ? (
-            <p className="text-xs text-muted-foreground">
-              额度更新于{" "}
-              <time dateTime={connection.lastUpdatedAt}>
-                {new Date(connection.lastUpdatedAt).toLocaleString()}
-              </time>
-            </p>
-          ) : null}
-          <ServerUsageReports
-            key={`${connection.connectionId}:${connection.revision}:${connection.lastUpdatedAt}:${reportSourceRefreshing}`}
-            providerId="ollama"
-            connectionId={connection.connectionId}
-            sourceRefreshing={reportSourceRefreshing}
-          />
-        </>
+      ) : view && ((screen === "detail" && connection) || legacyDetail) ? (
+        <OllamaAccountDetail
+          account={
+            legacyDetail
+              ? { kind: "legacy", value: view.legacy }
+              : { kind: "connection", value: connection! }
+          }
+          primary={legacyDetail ? view.primary.mode === "legacy" : primary}
+          busy={busy}
+          refreshing={Boolean(reportSourceRefreshing)}
+          onPrimary={() =>
+            legacyDetail
+              ? void operate({ kind: "useLegacy" })
+              : void selectPrimary(connection!.connectionId)
+          }
+          onEdit={() => (legacyDetail ? navigate("legacy") : edit(connection!.connectionId))}
+          displayMode={displayMode}
+          resetTimerDisplayMode={resetTimerDisplayMode}
+          timeFormatMode={timeFormatMode}
+        />
       ) : (
         <>
           {screen === "keys" ? (
             <>
               <div className="flex items-center justify-between gap-2">
-                <h3 className="text-sm font-semibold">API Keys</h3>
-                <span className="text-xs text-muted-foreground">{connections.length} 个连接</span>
+                <h3 className="text-sm font-semibold">账号连接</h3>
+                <span className="text-xs text-muted-foreground">
+                  {connections.length + 1} 个连接
+                </span>
               </div>
               <p className="text-xs leading-relaxed text-muted-foreground">
                 每个 Key 单独命名，验证后显示账号归属。已有 Key 只显示尾号。
               </p>
             </>
-          ) : connections.length ? (
-            <p className="text-xs text-muted-foreground">账户用量 · {connections.length} 个连接</p>
+          ) : visibleCount ? (
+            <p className="text-xs text-muted-foreground">账户用量 · {visibleCount} 个连接</p>
           ) : null}
           {view ? (
             <OllamaAccountList
@@ -360,6 +307,13 @@ export function OllamaAccountsPage({
                 setRemoving(id)
               }}
               onAdd={add}
+              onLegacySelect={() => navigate("legacyDetail")}
+              onLegacyEdit={() => navigate("legacy")}
+              onLegacyPrimary={() => void operate({ kind: "useLegacy" })}
+              displayMode={displayMode}
+              resetTimerDisplayMode={resetTimerDisplayMode}
+              timeFormatMode={timeFormatMode}
+              refreshing={busy || allRefreshing}
             />
           ) : null}
           {removed ? (
@@ -374,7 +328,7 @@ export function OllamaAccountsPage({
               <p className="text-xs leading-relaxed text-muted-foreground">
                 只从 OpenUsageCN 移除连接和缓存，不会在 Ollama 撤销 Key。
                 {view?.primary.connectionId === removed.connectionId
-                  ? "移除后不自动选择其他账号，首页和菜单栏将暂不显示 Ollama 用量。"
+                  ? "移除后不自动选择其他主账号，菜单栏和本地 API 将暂不显示 Ollama 用量。"
                   : "其他账号连接保持不变。"}
               </p>
               <div className="flex justify-end gap-2">
@@ -411,43 +365,17 @@ export function OllamaAccountsPage({
           ) : null}
           {view?.primary.mode === "none" ? (
             <p className="text-xs text-muted-foreground">
-              尚未设置主账号。请选择一个连接，首页和菜单栏不会自动切换到其他账号。
+              尚未设置主账号。菜单栏和本地 API 不会自动切换到其他账号；首页仍展示所有连接。
             </p>
           ) : view?.primary.mode === "legacy" && connections.length ? (
             <p className="text-xs text-muted-foreground">
-              主账号仍使用原有 Cookie、单个 API Key 或环境变量连接。
+              主账号仍使用原有连接，仅影响菜单栏和本地 API。
             </p>
           ) : null}
           {connections.length ? (
             <p className="text-xs leading-relaxed text-muted-foreground">
               各连接显示其可读取的账户用量，不计算总额。同一用户的多个 Key 可能共享额度。
             </p>
-          ) : null}
-          {screen === "keys" ? (
-            <details className="border-t pt-3">
-              <summary className="cursor-pointer text-xs text-muted-foreground">
-                其他连接方式
-              </summary>
-              <div className="space-y-3 pt-3">
-                <p className="text-xs leading-relaxed text-muted-foreground">
-                  保留原有 Cookie、单个 API Key 和环境变量配置。
-                </p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => navigate("legacy")}
-                >
-                  <KeyRound className="size-4" />
-                  管理原有连接
-                </Button>
-              </div>
-            </details>
-          ) : view?.primary.mode === "legacy" ? (
-            <section aria-label="当前首页连接" className="space-y-2 border-t pt-3">
-              <h3 className="text-xs font-medium text-muted-foreground">当前首页连接 · 原有设置</h3>
-              {legacyUsage}
-            </section>
           ) : null}
         </>
       )}

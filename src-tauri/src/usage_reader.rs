@@ -345,21 +345,8 @@ fn publish_cli_probe(provider_id: &str, output: &PluginOutput, started_at: time:
             plugin_engine::host_api::redact_log_message(message),
         );
     } else {
-        if provider_id == "ollama" {
-            if let Err(error) = local_http_api::cache::replace_account_projection(
-                provider_id,
-                Some((output, started_at)),
-            ) {
-                local_http_api::record_probe_error(
-                    provider_id,
-                    "Could not persist Ollama primary usage.",
-                );
-                eprintln!(
-                    "openusage: could not persist Ollama primary usage: {}",
-                    plugin_engine::host_api::redact_log_message(&error)
-                );
-            }
-        } else {
+        // Ollama already persisted its account snapshot and original fetch time in the probe.
+        if provider_id != "ollama" {
             local_http_api::cache_successful_output(output, started_at);
         }
     }
@@ -414,6 +401,10 @@ fn is_packaged_resource_dir(path: &Path) -> bool {
             .and_then(|name| name.to_str())
             == Some("Contents")
 }
+
+#[cfg(test)]
+#[path = "usage_reader/ollama_publication_tests.rs"]
+mod ollama_publication_tests;
 
 #[cfg(test)]
 mod tests {

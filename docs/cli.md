@@ -31,6 +31,13 @@ Without `--force`, snapshots newer than five minutes are reused. Missing or stal
 
 Codex and Claude local-log history is also detail-only. Reading or refreshing quota from the CLI never starts a local-history scan. In the app, use **Load Local History** to request it separately.
 
+For Ollama Cloud, `openusage ollama` and `openusage ollama --force` use the explicit primary from
+**Manage Accounts**, matching the menu bar and local API. The app's home page shows all connections
+independently; the CLI still returns or refreshes only that primary and never adds their allowances.
+If the original connection's settings or environment credential change, an older cached reading
+is cleared before use. Unreadable Ollama account settings clear its default projection instead of
+returning another connection's usage.
+
 ## Exit Codes
 
 | Code | Meaning |

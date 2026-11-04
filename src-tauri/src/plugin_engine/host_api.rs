@@ -478,7 +478,19 @@ pub(crate) fn resolve_env_values(names: &[&str]) -> ResolvedEnvValues {
     resolve_env_values_using_shells(names, &interactive_shell_programs())
 }
 
+pub(crate) fn resolve_env_values_before(names: &[&str], deadline: Instant) -> ResolvedEnvValues {
+    resolve_env_values_using_shells_before(names, &interactive_shell_programs(), deadline)
+}
+
 fn resolve_env_values_using_shells(names: &[&str], programs: &[String]) -> ResolvedEnvValues {
+    resolve_env_values_using_shells_before(names, programs, Instant::now() + Duration::from_secs(5))
+}
+
+fn resolve_env_values_using_shells_before(
+    names: &[&str],
+    programs: &[String],
+    deadline: Instant,
+) -> ResolvedEnvValues {
     let mut values = HashMap::new();
     let mut pending = Vec::new();
     for &name in names {
@@ -502,7 +514,12 @@ fn resolve_env_values_using_shells(names: &[&str], programs: &[String]) -> Resol
         if pending.is_empty() {
             break;
         }
-        let Some(remaining) = Duration::from_secs(5).checked_sub(started.elapsed()) else {
+        let Some(remaining) = deadline
+            .checked_duration_since(Instant::now())
+            .map(|remaining| {
+                remaining.min(Duration::from_secs(5).saturating_sub(started.elapsed()))
+            })
+        else {
             log::error!("provider startup shell lookup exceeded its time limit");
             break;
         };
