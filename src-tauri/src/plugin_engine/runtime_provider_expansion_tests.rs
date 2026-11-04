@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 // Evaluate the production manifest bundle in a fresh VM. This harness never injects
 // native host APIs: every credential, file and HTTP operation is synthetic or denied.
-fn probe(id: &str, setup: &str) -> Value {
+fn probe_result(id: &str, setup: &str) -> Result<Value, String> {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../plugins");
     let plugin = manifest::load_plugins_from_dir(&root)
         .into_iter()
@@ -50,9 +50,13 @@ fn probe(id: &str, setup: &str) -> Value {
             .unwrap_or_else(|error| panic!("{id} synthetic setup failed: {error}"));
         let json: String = vm
             .eval("JSON.stringify({output:__openusage_plugin.probe(ctx),calls,logs})")
-            .unwrap_or_else(|error| panic!("{id} production probe failed in QuickJS: {error}"));
-        serde_json::from_str(&json).unwrap()
+            .map_err(|_| super::extract_error_string(&vm))?;
+        Ok(serde_json::from_str(&json).unwrap())
     })
+}
+
+fn probe(id: &str, setup: &str) -> Value {
+    probe_result(id, setup).unwrap_or_else(|error| panic!("{id} production probe failed: {error}"))
 }
 
 fn line<'a>(value: &'a Value, label: &str) -> &'a Value {
@@ -207,4 +211,36 @@ fn perplexity_production_bundle_keeps_personal_org_and_cap_credits_separate_in_q
         "credits"
     );
     assert_eq!(result["calls"].as_array().unwrap().len(), 1);
+}
+
+#[test]
+fn antigravity_subscription_failure_reaches_the_host_as_actionable_text() {
+    let error = probe_result("antigravity", r#"
+      ctx.host.fs.exists=path=>path==='/synthetic/plugin/auth.json';
+      ctx.host.fs.readText=()=>JSON.stringify({accessToken:'synthetic-token',expiresAtMs:Date.now()+3600000});
+      ctx.host.http.request=options=>options.url.endsWith(':loadCodeAssist')?
+        reply({cloudaicompanionProject:'synthetic-project'}):
+        reply({error:{details:[{reason:'SUBSCRIPTION_REQUIRED'}],message:'PRIVATE_RESPONSE'}},403);
+    "#).unwrap_err();
+    assert_eq!(
+        error,
+        "Google reports no Antigravity quota subscription for this project."
+    );
+    assert!(!error.contains("PRIVATE_RESPONSE"));
+}
+
+#[test]
+fn openrouter_incomplete_page_reaches_the_host_as_actionable_text() {
+    let error = probe_result("openrouter", r#"
+      config.apiKey='synthetic-key';ctx.host.env.get=()=>null;
+      const row=i=>({hash:String(i).padStart(64,'0'),usage_daily:1,usage_weekly:2,usage_monthly:3});
+      ctx.host.http.request=options=>{
+        if(options.url.endsWith('/key'))return reply({data:{is_management_key:true}});
+        if(options.url.endsWith('offset=0'))return reply({data:Array.from({length:100},(_,i)=>row(i))});
+        if(options.url.endsWith('offset=100'))return reply({data:[row(0)]});
+        return denied();
+      };
+    "#).unwrap_err();
+    assert_eq!(error, "Key list pagination is incomplete. Try again later.");
+    assert!(!error.contains("synthetic-key"));
 }

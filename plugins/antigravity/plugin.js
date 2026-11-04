@@ -171,7 +171,7 @@
     var ctx = Object.assign({}, originalCtx, { host: Object.assign({}, originalCtx.host, {
       http: Object.assign({}, originalCtx.host.http, { request: function (options) {
         var remaining = deadline - Date.now()
-        if (remaining <= 0) throw new Error("Antigravity usage request timed out. Try again later.")
+        if (remaining <= 0) throw "Antigravity usage request timed out. Try again later."
         return originalCtx.host.http.request(Object.assign({}, options, { timeoutMs: Math.min(options.timeoutMs || 15000, remaining) }))
       } })
     }) })

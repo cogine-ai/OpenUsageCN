@@ -25,7 +25,7 @@
     let argon = null
     for (const body of bodies) {
       const list = groups(body)
-      if (!list) throw new Error("Antigravity quota response invalid. Try again later.")
+      if (!list) throw "Antigravity quota response invalid. Try again later."
       for (const group of list) {
         if (group.displayName === "Gemini 4 Argon") continue
         for (const bucket of group.buckets || []) {
@@ -91,7 +91,7 @@
       if (response.status >= 200 && response.status < 300) {
         if (!groups(response.data)) {
           ctx.host.log.error("Antigravity quota response has no valid groups")
-          throw new Error("Antigravity quota response invalid. Try again later.")
+          throw "Antigravity quota response invalid. Try again later."
         }
         bodies.push(response.data)
         if (parse(bodies, ctx).complete) break
@@ -101,7 +101,7 @@
       const result = parse(bodies, ctx)
       if (!result.lines.length) {
         ctx.host.log.error("Antigravity quota summary has no usable quota buckets")
-        throw new Error("Antigravity quota data unavailable. Try again later.")
+        throw "Antigravity quota data unavailable. Try again later."
       }
       return { plan, lines: result.lines }
     }
@@ -110,18 +110,18 @@
     if (responses.some((response) => response.status === 403 && response.data && response.data.error &&
         Array.isArray(response.data.error.details) && response.data.error.details.some((detail) => detail && detail.reason === "SUBSCRIPTION_REQUIRED"))) {
       ctx.host.log.error("Antigravity quota subscription required")
-      throw new Error("Google reports no Antigravity quota subscription for this project.")
+      throw "Google reports no Antigravity quota subscription for this project."
     }
     if (responses.some((response) => response.status === 403)) {
       ctx.host.log.error("Antigravity quota access denied")
-      throw new Error("Antigravity quota access denied. Check access in Antigravity and try again.")
+      throw "Antigravity quota access denied. Check access in Antigravity and try again."
     }
     if (responses.some((response) => response.status === 429)) {
       ctx.host.log.error("Antigravity quota rate limited")
-      throw new Error("Antigravity is rate limiting requests. Try again later.")
+      throw "Antigravity is rate limiting requests. Try again later."
     }
     ctx.host.log.error("Antigravity quota summary unavailable")
-    throw new Error("Antigravity quota request failed. Try again later.")
+    throw "Antigravity quota request failed. Try again later."
   }
   globalThis.__antigravitySummary = { read, parse }
 })()

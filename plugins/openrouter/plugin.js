@@ -86,7 +86,7 @@
     throw failure("error", "Key list pagination is incomplete. Try again later.")
   }
 
-  function probe(ctx) {
+  function probeQuota(ctx) {
     const config = settings(ctx)
     const deadline = Date.now() + 25000
     let keyResponse
@@ -131,6 +131,18 @@
     }
     if (!lines.length) lines.push(ctx.line.badge({ label: "Status", text: "No usage data", color: "#a3a3a3" }))
     return { plan: key.is_free_tier ? "Free Tier" : null, lines }
+  }
+
+  function probe(ctx) {
+    try {
+      return probeQuota(ctx)
+    } catch (error) {
+      ctx.host.log.error("OpenRouter quota refresh failed")
+      if (typeof error === "string") throw error
+      if (error && ["error", "authExpired", "permissionDenied", "rateLimited"].includes(error.reportStatus) &&
+          typeof error.message === "string" && error.message) throw error.message
+      throw "Could not load OpenRouter usage. Check Settings and try again."
+    }
   }
 
   globalThis.__openusage_plugin = { id: "openrouter", probe,

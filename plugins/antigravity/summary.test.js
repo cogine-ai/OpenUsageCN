@@ -92,6 +92,13 @@ describe("Antigravity summary quota identity and cadence", () => {
     expect(ctx.host.ls.discover).not.toHaveBeenCalled()
     expect(ctx.host.log.error).toHaveBeenCalled()
   })
+  it("throws subscription failures as controlled strings for the native quota host", () => {
+    const refused = () => reply({ error: { details: [{ reason: "SUBSCRIPTION_REQUIRED" }], message: "PRIVATE_RESPONSE" } }, 403)
+    const { ctx, plugin } = setup(refused, refused)
+    let caught
+    try { plugin.probe(ctx) } catch (error) { caught = error }
+    expect(caught).toBe("Google reports no Antigravity quota subscription for this project.")
+  })
   it("keeps token refusal distinct from subscription failure and does not probe another LS account", () => {
     const refused = () => reply({}, 401)
     const { ctx, plugin } = setup(refused, refused)

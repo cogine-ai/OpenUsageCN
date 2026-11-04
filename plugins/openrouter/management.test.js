@@ -65,6 +65,23 @@ describe("OpenRouter management key quota", () => {
     expect(line(result, "Key Status").text).toBe("Key Usage Unavailable")
     expect(line(result, "Listed Keys Monthly Spend")).toBeUndefined()
   })
+  it("throws controlled pagination text to the native quota host", () => {
+    const { ctx, routes, plugin } = setup()
+    routes["/keys?include_disabled=true&include_expired=true&offset=0"] = response({ data: Array.from({ length: 100 }, (_, i) => keyRow(i)) })
+    routes["/keys?include_disabled=true&include_expired=true&offset=100"] = response({ data: [keyRow(0)] })
+    let caught
+    try { plugin.probe(ctx) } catch (error) { caught = error }
+    expect(caught).toBe("Key list pagination is incomplete. Try again later.")
+    expect(ctx.host.log.error).toHaveBeenCalledWith("OpenRouter quota refresh failed")
+  })
+  it("does not forward unknown exception details to the native quota host", () => {
+    const { ctx, plugin } = setup()
+    ctx.host.http.normalizeHttpsBaseUrl.mockImplementation(() => { throw new Error("PRIVATE_EXCEPTION") })
+    let caught
+    try { plugin.probe(ctx) } catch (error) { caught = error }
+    expect(caught).toBe("Could not load OpenRouter usage. Check Settings and try again.")
+    expect(JSON.stringify(ctx.host.log.error.mock.calls)).not.toContain("PRIVATE_EXCEPTION")
+  })
   it("does not invent a BYOK total when one key omitted its counter", () => {
     const { ctx, routes, plugin } = setup()
     routes["/keys?include_disabled=true&include_expired=true&offset=0"] = response({ data: [keyRow(1), keyRow(2, { byok_usage_daily: null })] })
