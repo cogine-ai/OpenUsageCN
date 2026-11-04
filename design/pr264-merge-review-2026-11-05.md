@@ -42,12 +42,41 @@ Home/tray and individual connections retain their existing refresh schedules and
 times. This review does not change the global manual-refresh cooldown or promise live cross-page
 synchronization. This is separate from the verified account-isolation guarantees.
 
-## Validation Evidence
+## Follow-up Review And Interaction Design
+
+The fresh automated review on `f3f68ba` identified two backend corrections: clear the
+mutex poison marker after recovering its existing pending state, and retain a valid Ollama
+projection after a runtime panic while still invalidating an unreadable account store.
+
+Keep report invalidation on quota refresh. Removing the refresh state and timestamp from
+the report key conflicts with the existing report-isolation rule in `docs/usage-history.md`:
+refresh clears loaded reports and cancels pending responses even when quota refresh fails.
+Credential revision alone also does not detect the upstream identity-change rejection.
+
+Interaction design for the manually found managed-account gap: when the app starts refreshing
+the primary connection, its open detail view clears loaded reports, cancels pending reports,
+and disables Load Reports until that refresh finishes. Failure leaves reports cleared and
+allows an explicit new load. Viewing a different connection is unaffected. Keep the existing
+layout, labels and disabled-button appearance; pass the app's refresh state into this existing
+behavior rather than introducing another control.
+
+Implemented and verified with production-page regressions: loaded and pending primary reports
+are invalidated across failed app refreshes, while other connections' loaded and pending reports
+remain available. Two new tests failed before the fix. The backend poison and valid-panic-cache
+regressions also failed before their fixes. Browser before/after evidence is linked in the
+[evidence index](evidence/ollama-multi-account/README.md).
+
+## Final Validation
 
 Regression coverage includes queued removal/replacement, friendly string versus unsafe object
 failures, account/report isolation, preserved original configuration and countdown updates.
 Final local test/build results are recorded in the PR description; CI must be checked on the
 exact final head before merge.
+
+After the follow-up fixes, local validation passed: 2,195 JavaScript tests in 155 files,
+667 Rust tests with 3 existing ignored tests, the production frontend build, Rust binary
+checks and changed Rust formatting using the repository's 2024 edition. Browser checks for
+primary-refresh report clearing passed. These checks use synthetic data only.
 
 The [failure-message comparison](evidence/ollama-multi-account/merge-review/after-verification-error.png)
 uses the actual production key form and CSS with synthetic IPC. Its

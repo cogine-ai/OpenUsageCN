@@ -37,3 +37,12 @@ backend rejection behind a generic message. The [after](merge-review/after-verif
 form displays the same synthetic backend's specific invalid-key explanation. Both use production
 components and CSS at 400×700, with no provider requests or raw exception logging.
 See the [manual merge review](../../pr264-merge-review-2026-11-05.md) for scope and dispositions.
+
+## Merge Review: Primary Refresh Report Isolation
+
+During the same synthetic app-level primary quota refresh, the
+[before](merge-review/before-primary-refresh.png) production detail page from `f3f68ba` keeps
+the old report and its refresh button available. The
+[after](merge-review/after-primary-refresh.png) page clears it and disables Load Reports.
+Both use production components and CSS at 400×700 with synthetic IPC. Chromium 143.0.7499.4
+assertions passed without overflow, framework overlays, page errors or external requests.

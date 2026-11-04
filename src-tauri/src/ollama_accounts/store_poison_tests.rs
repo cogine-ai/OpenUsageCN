@@ -30,15 +30,27 @@ fn recovering_a_poisoned_store_preserves_pending_verification() {
     assert!(panicked.is_err());
 
     {
-        let mut guard = lock().expect("poisoned account state must remain usable");
+        let guard = lock().expect("poisoned account state must remain usable");
+        assert!(
+            !transient_state().is_poisoned(),
+            "recovery must clear the poison marker"
+        );
         let pending = guard
             .pending
-            .remove(&verification_id)
+            .get(&verification_id)
             .expect("recovery must retain the pending verification");
         assert_eq!(pending.api_key, "synthetic-pending-key");
         assert_eq!(pending.target, Some(("synthetic-connection".into(), 7)));
         assert_eq!(pending.probe.identity.fingerprint, "a".repeat(64));
         assert_eq!(pending.created, created);
+    }
+    {
+        let mut guard = lock().expect("subsequent acquisitions must remain healthy");
+        assert!(!transient_state().is_poisoned());
+        assert_eq!(
+            guard.pending.remove(&verification_id).unwrap().api_key,
+            "synthetic-pending-key"
+        );
     }
     TEST_PATH.with(|value| *value.borrow_mut() = previous_path);
 }

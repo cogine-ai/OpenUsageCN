@@ -30,3 +30,14 @@ it("retains the last successful Ollama quota on an ordinary temporary failure", 
   expect(result.current.pluginStates.ollama.data).toEqual(success)
   expect(result.current.pluginStates.ollama.lastUpdatedAt).toBe(updatedAt)
 })
+
+it("retains Ollama quota and its timestamp after a worker panic without invalidation", () => {
+  const { result } = renderHook(() => useProbeState({}))
+  act(() => result.current.handleProbeResult(success, { manual: false }))
+  const updatedAt = result.current.pluginStates.ollama.lastUpdatedAt
+  const crashed = { ...failure, lines: [{ type: "badge" as const, label: "Error", text: "Plugin crashed" }] }
+  act(() => result.current.handleProbeResult(crashed, { manual: false }))
+  expect(result.current.pluginStates.ollama).toMatchObject({
+    data: success, lastUpdatedAt: updatedAt, loading: false, error: "Plugin crashed",
+  })
+})

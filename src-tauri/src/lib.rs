@@ -442,6 +442,22 @@ pub(crate) fn clear_ollama_projection() -> Result<(), String> {
     local_http_api::cache::replace_account_projection("ollama", None)
 }
 
+fn panic_probe_invalidates_cached_data(plugin_id: &str) -> Option<bool> {
+    if plugin_id != "ollama" {
+        return None;
+    }
+    match ollama_accounts::check_primary_projection() {
+        Ok(()) => None,
+        Err(error) => {
+            log::error!(
+                "Ollama crashed projection cleanup failed: {}",
+                plugin_engine::host_api::redact_log_message(&error)
+            );
+            Some(true)
+        }
+    }
+}
+
 fn sync_ollama_startup_projection(plugin: Option<&plugin_engine::manifest::LoadedPlugin>) {
     if plugin.is_none() {
         return;
@@ -793,11 +809,7 @@ async fn start_probe_batch(
                         }
                         Err(_) => {
                             log::error!("probe {} panicked", plugin_id);
-                            if plugin_id == "ollama" {
-                                if let Err(error) = ollama_accounts::check_primary_projection() {
-                                    log::error!("Ollama crashed projection cleanup failed: {}", plugin_engine::host_api::redact_log_message(&error));
-                                }
-                            }
+                            let invalidate_cached_data = panic_probe_invalidates_cached_data(&plugin_id);
                             let output = plugin_engine::runtime::panic_probe_output(&plugin);
                             local_http_api::record_probe_error(
                                 &plugin_id,
@@ -808,7 +820,7 @@ async fn start_probe_batch(
                                 ProbeResult {
                                     batch_id: bid.clone(),
                                     output,
-                                    invalidate_cached_data: (plugin_id == "ollama").then_some(true),
+                                    invalidate_cached_data,
                                 },
                             ) {
                                 log::error!(

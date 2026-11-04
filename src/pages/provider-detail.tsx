@@ -103,6 +103,7 @@ export function ProviderDetailPage({
       /> : undefined}
       onPrimaryChange={onAccountChangeRefresh}
       onQuotaRefresh={onRetry}
+      primaryRefreshing={plugin.loading}
       displayMode={displayMode}
       resetTimerDisplayMode={resetTimerDisplayMode}
       timeFormatMode={timeFormatMode}

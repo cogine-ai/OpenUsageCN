@@ -432,3 +432,6 @@ mod projection;
 
 #[path = "queued_probe_tests.rs"]
 mod queued_probe;
+
+#[path = "panic_probe_tests.rs"]
+mod panic_probe;

@@ -20,6 +20,7 @@ export function OllamaAccountsPage({
   onBack,
   onPrimaryChange,
   onQuotaRefresh,
+  primaryRefreshing = false,
   displayMode = "used",
   resetTimerDisplayMode = "relative",
   timeFormatMode = "auto",
@@ -30,6 +31,7 @@ export function OllamaAccountsPage({
   onBack?: () => void
   onPrimaryChange?: () => void
   onQuotaRefresh?: () => void
+  primaryRefreshing?: boolean
   displayMode?: DisplayMode
   resetTimerDisplayMode?: ResetTimerDisplayMode
   timeFormatMode?: TimeFormatMode
@@ -50,6 +52,7 @@ export function OllamaAccountsPage({
   const edited = view?.connections.find((item) => item.connectionId === editing)
   const removed = view?.connections.find((item) => item.connectionId === removing)
   const primary = view?.primary.mode === "connection" && view.primary.connectionId === selected
+  const reportSourceRefreshing = busy || (primary && primaryRefreshing)
   const connections = view?.connections ?? []
   const now = useNowTicker({
     enabled:
@@ -320,10 +323,10 @@ export function OllamaAccountsPage({
             </p>
           ) : null}
           <ServerUsageReports
-            key={`${connection.connectionId}:${connection.revision}:${connection.lastUpdatedAt}:${busy}`}
+            key={`${connection.connectionId}:${connection.revision}:${connection.lastUpdatedAt}:${reportSourceRefreshing}`}
             providerId="ollama"
             connectionId={connection.connectionId}
-            sourceRefreshing={busy}
+            sourceRefreshing={reportSourceRefreshing}
           />
         </>
       ) : (

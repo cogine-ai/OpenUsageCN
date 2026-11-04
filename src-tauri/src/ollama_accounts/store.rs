@@ -79,15 +79,19 @@ pub(super) fn acquire_refresh(id: &str, deadline: Instant) -> Result<RefreshGuar
 #[cfg(test)]
 thread_local! { pub(super) static TEST_PATH: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) }; }
 
-pub(super) fn lock() -> Result<StoreGuard<'static>, String> {
+fn transient_state() -> &'static Mutex<Transient> {
     static STATE: OnceLock<Mutex<Transient>> = OnceLock::new();
-    let state = STATE
-        .get_or_init(|| Mutex::new(Transient::default()))
-        .lock()
-        .unwrap_or_else(|poisoned| {
-            log::error!("Ollama account store lock recovered after a worker panic");
-            poisoned.into_inner()
-        });
+    STATE.get_or_init(|| Mutex::new(Transient::default()))
+}
+
+pub(super) fn lock() -> Result<StoreGuard<'static>, String> {
+    let mutex = transient_state();
+    let state = mutex.lock().unwrap_or_else(|poisoned| {
+        log::error!("Ollama account store lock recovered after a worker panic");
+        let guard = poisoned.into_inner();
+        mutex.clear_poison();
+        guard
+    });
     let file = open_lock_file()?;
     let started = Instant::now();
     loop {

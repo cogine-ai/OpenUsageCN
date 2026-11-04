@@ -249,6 +249,8 @@ On Windows, only the ten Windows MVP providers are present; the rest of this tab
   unreadable, its projection is removed rather than switching to the original connection.
   A rejected older refresh does not remove a newer primary account's cached result. Configuration
   checks and cache cleanup are protected together, including startup recovery and CLI refreshes.
+  If a refresh worker crashes, a readable account configuration keeps its previous successful
+  quota in both the app and API. An unreadable configuration clears it in both places.
 - The API has no account selector and does not expose account lists, connection metadata, or Cursor Model Usage history in version 1.
 - The single-provider endpoint (`/v1/usage/:providerId`) works for any known provider, including disabled ones.
 - The limits collection follows the same enabled-provider selection. `providers` is an object, so consumers must not rely on key order. Its single-provider route also works for disabled providers.
