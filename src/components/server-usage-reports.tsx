@@ -15,13 +15,13 @@ const SCOPE_NOTES: Record<string, string> = {
   ollama: "当前 API Key 的个人模型统计；账号共享额度与余额请查看额度卡片。",
 }
 
-export function ServerUsageReports({ providerId }: { providerId: string }) {
+export function ServerUsageReports({ providerId, sourceRefreshing = false }: { providerId: string; sourceRefreshing?: boolean }) {
   const { snapshot, loading, error, load } = useProviderReports(providerId)
   return (
     <section aria-label="Server Reports" className="mt-4 space-y-3 rounded-lg border border-border bg-background p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold">Server Reports</h3>
-        <Button type="button" size="sm" variant="outline" disabled={loading} onClick={() => void load()}>
+        <Button type="button" size="sm" variant="outline" disabled={loading || sourceRefreshing} onClick={() => void load()}>
           <RefreshCw className={loading ? "size-4 animate-spin" : "size-4"} />
           {loading ? "Loading…" : snapshot ? "Refresh Reports" : "Load Reports"}
         </Button>

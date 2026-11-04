@@ -861,7 +861,7 @@ fn redact_http_response_body(url: &str, body: &str) -> String {
 fn redact_plugin_http_response_body(plugin_id: &str, url: &str, body: &str) -> String {
     let path = url.split(['?', '#']).next().unwrap_or(url);
     if let Some(redacted) = usage_redaction::response_body(plugin_id, path, body) {
-        return redacted;
+        return redact_http_response_body(url, &redacted);
     }
     if plugin_id == "opencode" && path == "https://opencode.ai/_server" {
         // Server-function bodies mix serialized JavaScript with private workspace data.

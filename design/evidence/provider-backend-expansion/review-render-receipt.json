@@ -1,0 +1,19 @@
+{
+  "result": "PASS",
+  "beforeHead": "6cb1f7b",
+  "browser": "143.0.7499.4",
+  "checks": [
+    "Loaded account A report cleared at quota refresh start",
+    "Load Reports disabled while quota refresh runs",
+    "New account B quota cannot retain account A report",
+    "Manual reload reads account B",
+    "No external requests or page errors"
+  ],
+  "scope": "Production page, report component and hook; synthetic quota inputs and mocked IPC. Not a real-login or installed-app acceptance.",
+  "screenshots": [
+    "after-report-account-reload.png",
+    "after-report-account-switch.png",
+    "after-report-quota-refresh.png",
+    "before-report-account-switch.png"
+  ]
+}

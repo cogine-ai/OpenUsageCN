@@ -198,3 +198,39 @@ describe("Codex server reports", () => {
   })
 
 })
+
+describe("Codex report model limits", () => {
+  it("caps optional models by stable name while retaining all daily totals and negative credits", () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-11-04T00:05:00Z"))
+    try {
+      const { ctx, response, plugin } = setup("team")
+      const models = Array.from({ length: 300 }, (_, i) => ({
+        model: "model-" + String(i).padStart(3, "0"), turns: 1, text_total_tokens: 1, on_demand_credits: -1,
+      })).reverse()
+      response.counts.data = Array.from({ length: 30 }, (_, i) => ({
+        date: new Date(Date.UTC(2026, 9, 6 + i)).toISOString().slice(0, 10),
+        totals: { turns: i === 29 ? 300 : 0, text_total_tokens: i === 29 ? 300 : 0 },
+        ...(i === 29 ? { models } : {}),
+      }))
+      response.credits = { data: [{ date: "2026-11-04", premium_usage_values: { credit_usage_credits: { cli: -300 } }, models }] }
+      const result = plugin.probeReports(ctx)
+      expect(result.lines.length).toBeLessThanOrEqual(512)
+      expect(result.reports.every((report) => report.status === "partial")).toBe(true)
+      expect(result.reports.every((report) => /100.*models/.test(report.message))).toBe(true)
+      expect(result.reports[0].coverage.missingDates).toEqual([])
+      expect(result.lines).toContainEqual(expect.objectContaining({ label: "Reported Tokens", value: "300 tokens" }))
+      expect(result.lines).toContainEqual(expect.objectContaining({ label: "Reported Turns", value: "300 turns" }))
+      expect(result.lines).toContainEqual(expect.objectContaining({ label: "Reported Credits", value: "-300 credits" }))
+      expect(result.lines).toContainEqual(expect.objectContaining({ label: "2026-11-04 Charged Credits", value: "-300 credits" }))
+      const modelLines = result.lines.filter((line) => line.label.startsWith("Model "))
+      expect(modelLines).toHaveLength(300)
+      expect(modelLines[0].label).toContain("model-000")
+      expect(modelLines.some((line) => line.label.endsWith("model-099"))).toBe(true)
+      expect(modelLines.some((line) => line.label.endsWith("model-100"))).toBe(false)
+      const first = modelLines
+      response.counts.data[29].models.reverse()
+      expect(plugin.probeReports(ctx).lines.filter((line) => line.label.startsWith("Model "))).toEqual(first)
+    } finally { vi.useRealTimers() }
+  })
+})

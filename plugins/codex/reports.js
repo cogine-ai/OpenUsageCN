@@ -213,10 +213,15 @@
         }
       }
     }
-    for (const key of Object.keys(totals).sort()) {
-      const [name, metric] = JSON.parse(key)
-      lines.push(ctx.line.text({ label: "Model " + metric + ": " + name, value: String(totals[key]) + " " + metric.toLowerCase(), subtitle: "Reported model attribution only" }))
+    const names = Array.from(new Set(Object.keys(totals).map((key) => JSON.parse(key)[0]))).sort()
+    for (const name of names.slice(0, 100)) {
+      for (const metric of ["Credits", "Tokens", "Turns"]) {
+        const key = JSON.stringify([name, metric])
+        if (!Object.prototype.hasOwnProperty.call(totals, key)) continue
+        lines.push(ctx.line.text({ label: "Model " + metric + ": " + name, value: String(totals[key]) + " " + metric.toLowerCase(), subtitle: "Reported model attribution only" }))
+      }
     }
+    return names.length > 100
   }
   function readReport(ctx, session, window, path, suffix, id, label, parse, names, credits, now) {
     const query = "?start_date=" + window.fromDate + "&end_date=" + window.toDate + suffix
@@ -228,7 +233,10 @@
         result.report.coverage = coverage(window, days)
         if (result.report.coverage.missingDates.length) result.report.status = "partial"
         addLines(ctx, lines, days, names, credits)
-        addModelLines(ctx, lines, days)
+        if (addModelLines(ctx, lines, days)) {
+          result.report.status = "partial"
+          result.report.message = "Only the first 100 reported models by name are shown. Daily totals are unchanged."
+        }
       } catch (error) {
         ctx.host.log.error("Codex server report response rejected: " + id)
         result.report.status = "error"; result.report.message = "Report data is invalid or incomplete. Try again later."

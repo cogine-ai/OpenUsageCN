@@ -96,6 +96,9 @@
         const parsed = parseActivity(h.get(ctx, config, path, deadline), range, h.readNumber, h.failure)
         lines.push(ctx.line.text({ label: "Activity Scope", value: workspace ? "Workspace Activity" : "Account Activity",
           subtitle: "Last 30 completed UTC days. Separate from Listed Keys Spend." }))
+        const modelNames = Object.keys(parsed.models).sort((a, b) =>
+          parsed.models[b].spend - parsed.models[a].spend || (a < b ? -1 : a > b ? 1 : 0))
+        const truncatedModels = modelNames.length > 100
         if (range.reportedDates.length) {
           lines.push(ctx.line.barChart({ label: "Daily Activity Spend", points: range.reportedDates.map((date) => ({
             label: date, value: parsed.days[date], valueLabel: h.money(parsed.days[date])
@@ -104,15 +107,18 @@
           lines.push(ctx.line.text({ label: "Activity Requests", value: String(parsed.requests) }))
           lines.push(ctx.line.text({ label: "Activity Tokens", value: String(parsed.tokens) }))
           if (parsed.hasByok) lines.push(ctx.line.text({ label: "Activity BYOK Spend", value: h.money(parsed.byok) }))
-          for (const model of Object.keys(parsed.models).sort()) {
+          for (const model of modelNames.slice(0, 100)) {
             const value = parsed.models[model]
             lines.push(ctx.line.text({ label: model, value: h.money(value.spend),
               subtitle: value.requests + " requests · " + value.tokens + " tokens" }))
           }
         }
-        report.status = range.missingDates.length ? "partial" : "ready"
-        if (!range.reportedDates.length) report.message = "No activity rows were reported for this window."
-        else if (range.missingDates.length) report.message = "Some dates have no reported activity. They are not counted as zero."
+        report.status = range.missingDates.length || truncatedModels ? "partial" : "ready"
+        const messages = []
+        if (truncatedModels) messages.push("Only the top 100 models by platform spend are shown. Totals include all models.")
+        if (!range.reportedDates.length) messages.push("No activity rows were reported for this window.")
+        else if (range.missingDates.length) messages.push("Some dates have no reported activity. They are not counted as zero.")
+        if (messages.length) report.message = messages.join(" ")
       }
     } catch (error) {
       report.status = error.reportStatus || "error"

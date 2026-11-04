@@ -76,7 +76,12 @@ Reports use the current connection and are not added to local log estimates or C
 They show each report's access status, UTC date coverage and missing dates. A missing day is not
 treated as zero; one denied report does not hide another readable report. Refresh replaces the
 displayed result. Closing the page, changing connection settings or starting a new request
-invalidates an older pending result. Reports are not saved as long-term history.
+invalidates an older pending result. Starting a main quota refresh also clears loaded reports and
+cancels pending reports, so new quota cannot retain a previous login's report. Load Reports stays
+disabled during the quota refresh; load it again afterward, even if the quota refresh failed.
+Reports are not saved as long-term history.
+Displayed reports are snapshots from their shown update time. External login changes are not
+watched automatically; refresh the main quota and load reports again after switching a login.
 
 - Codex reads the current ChatGPT user's daily tokens/turns and supported workspace charged credits.
   Negative credit adjustments retain their sign. Charged credits are not dollars. It does not

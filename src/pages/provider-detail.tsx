@@ -68,7 +68,11 @@ export function ProviderDetailPage({
         onResetTimerDisplayModeToggle={onResetTimerDisplayModeToggle}
       />
       {plugin.meta.id === "codex" ? <LocalUsageHistory providerId="codex" /> : null}
-      {["codex", "openrouter", "ollama"].includes(plugin.meta.id) ? <ServerUsageReports key={plugin.meta.id} providerId={plugin.meta.id} /> : null}
+      {["codex", "openrouter", "ollama"].includes(plugin.meta.id) ? <ServerUsageReports
+        key={`${plugin.meta.id}:${plugin.loading}:${plugin.lastUpdatedAt}`}
+        providerId={plugin.meta.id}
+        sourceRefreshing={plugin.loading}
+      /> : null}
       {plugin.meta.accountSupport ? (
         <ProviderAccountControls
           key={plugin.meta.id}

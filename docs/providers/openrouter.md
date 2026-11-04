@@ -63,7 +63,10 @@ uses OpenRouter's account-level response. It never replaces Listed Keys Spend.
 
 Reports show daily platform spending, requests, tokens, model totals, and separate
 BYOK spending when supplied. Tokens are prompt plus completion tokens; cached and
-reasoning tokens are already included and are not added again.
+reasoning tokens are already included and are not added again. Model details show
+at most the top 100 models by platform spend, with model-name ordering for ties.
+If more models are reported, the report is marked partial and explains the display
+limit. Spending totals, requests, tokens, and date coverage still include all models.
 
 Only reported dates appear in the chart. Missing dates are listed as missing,
 not assumed to have zero spending. An empty response, incomplete coverage,

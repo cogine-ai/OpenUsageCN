@@ -207,7 +207,7 @@ On Windows, only the ten Windows MVP providers are present; the rest of this tab
 | `alibaba-coding-plan` | `session`, `weekly`, `monthly` |
 | `alibaba-token-plan` | `tokenQuota` |
 | `amp` | `free`, `other`, `orb` |
-| `antigravity` | `geminiPro`, `geminiFlash`, `claude` |
+| `antigravity` | `geminiPro`, `geminiFlash`, `claude`, `geminiSession`, `geminiWeekly`, `claudeWeekly`, `argonWeekly` |
 | `bigmodel-cn` | `session`, `weekly`, `webSearches` |
 | `claude` | `session`, `weekly`, `sonnet`, `claudeDesign`, `extraUsage` |
 | `codex` | `session`, `weekly`, `spark`, `sparkWeekly`, `codeReview` |
@@ -222,14 +222,14 @@ On Windows, only the ten Windows MVP providers are present; the rest of this tab
 | `jetbrains-ai-assistant` | `quota` |
 | `kimi` | `session`, `weekly` |
 | `kiro` | `credits`, `bonusCredits` |
-| `minimax` | `session` |
+| `minimax` | `session`, `weekly` |
 | `moonshot` | None; balance is text in `/v1/usage` |
-| `ollama` | `monthly`, `session`, `weekly` when shown on the account settings page |
+| `ollama` | `monthly`, `session`, `weekly` when returned by the selected Cookie or API Key source |
 | `openai-api` | `credits` |
 | `opencode-go` | `session`, `weekly`, `monthly` |
 | `opencode` | `session`, `weekly` |
 | `openrouter` | `credits`, `keyLimit` |
-| `perplexity` | `apiCredits` |
+| `perplexity` | `apiCredits`, `subscriptionCredits`, `purchasedCredits`, `promotionalCredits`, `organizationCredits` |
 | `synthetic` | `fiveHour`, `mana`, `subscription`, `freeToolCalls`, `search` |
 | `xai` | None; billing balance and spend are text in `/v1/usage` |
 | `zai` | `session`, `weekly`, `webSearches` |

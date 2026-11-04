@@ -18,6 +18,12 @@ Antigravity 的周额度偏好采用 Gemini Weekly；只返回 Claude/Argon 的�
 金额、credits、tokens、turns 和 requests 使用各自单位；缺失日期与已报告零值分别处理。
 截图使用合成账号和生产组件，修改前后保持相同视口；截图不等于真实账号验收。
 
+### 合并前审查：主额度刷新与报告失效
+
+外部 Codex 登录可能在报告加载后改变。主额度一旦开始刷新，立即清空旧服务端报告并取消尚未完成的报告；主额度刷新期间禁用 Load Reports，刷新成功或失败后均需手动重新加载报告。以现有主额度的 loading 与 lastUpdatedAt 作为组件重建边界，避免新账号额度旁保留旧账号报告，不新增认证或轮询接口。报告布局和文案保持当前设计。
+
+实施前先补页面集成回归，覆盖已加载 A 报告、主额度刷新、B 额度成功/失败和晚到 A 响应；补充刷新前后的合成截图。行为文档更新 `docs/usage-history.md` 与 `docs/providers/codex.md`，并修正 `docs/local-http-api.md` 的资源键清单；日志与 OpenRouter 展示修复另更新 `docs/capture-logs.md`、`docs/providers/openrouter.md`。
+
 ## 六组功能与验收
 
 | 顺序 | 功能 | 连接与数据含义 | 展示 |
@@ -90,3 +96,5 @@ MiniMax 的秒/毫秒、Boost 与旧模型别名已按上游样本修正。新�
 最终只读需求审查无未覆盖项；规范复核发现的主额度 Error 对象丢失具体提示已修复，并补先失败、后通过的真实 VM 回归。CI 结果以 [PR #262](https://github.com/cogine-ai/OpenUsageCN/pull/262) 为准。
 Windows CI 首次暴露了报表合成 fixture 仅提供 Mac 默认路径的问题；测试现显式覆盖 Windows/Mac 两条真实默认路径及读取失败，未更改产品凭据优先级。
 修改前后截图与状态检查见 [渲染证据](evidence/provider-backend-expansion/README.md)。所有协议输入与账号为合成数据；真实服务账号、原生安装和账单对照尚未验收。
+
+合并前的新一轮手工审查及修复见 [PR #262 审查记录](pr262-merge-review-2026-11-04.md)。最新本地验证为全量 JS 2,158 项、完整串行 Rust 629 项通过（3 项设备测试忽略）、前端构建与 29 个插件打包通过；新增 4 张切号回归截图。最终 CI 与合并状态以 PR 实时记录为准。

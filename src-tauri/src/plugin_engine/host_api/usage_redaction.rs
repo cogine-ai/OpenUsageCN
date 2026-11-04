@@ -169,4 +169,30 @@ mod tests {
         let request = super::super::redact_body(r#"{"project":"private-project-1234567890"}"#);
         assert!(!request.contains("private-project-1234567890"));
     }
+
+    #[test]
+    fn endpoint_redaction_keeps_generic_secret_protection_and_numeric_usage() {
+        let body = r#"{"data":[{"hash":"private-key-hash","api_key":"synthetic-api-key-private","access_token":"synthetic-token-private","email":"private-reader@example.invalid","usage":42.5,"requests":12}]}"#;
+        for endpoint in ["keys", "activity"] {
+            let logged = redact_plugin_http_response_body(
+                "openrouter",
+                &format!("https://openrouter.ai/api/v1/{endpoint}"),
+                body,
+            );
+            for secret in [
+                "private-key-hash",
+                "synthetic-api-key-private",
+                "synthetic-token-private",
+                "private-reader@example.invalid",
+            ] {
+                assert!(
+                    !logged.contains(secret),
+                    "{endpoint} leaked {secret}: {logged}"
+                );
+            }
+            let parsed: serde_json::Value = serde_json::from_str(&logged).unwrap();
+            assert_eq!(parsed["data"][0]["usage"], 42.5);
+            assert_eq!(parsed["data"][0]["requests"], 12);
+        }
+    }
 }

@@ -122,6 +122,26 @@ describe("OpenRouter independent Activity reports", () => {
     expect(line(result, "Daily Activity Spend").points).toHaveLength(1)
     expect(ctx.host.http.request.mock.calls).toHaveLength(2)
   })
+  it("bounds optional model rows while preserving complete activity totals and coverage", () => {
+    const { ctx, routes, plugin } = setup()
+    const rows = Array.from({ length: 507 }, (_, i) => activity({ model: "model/" + String(i).padStart(3, "0"),
+      date: new Date(Date.parse("2026-10-05T00:00:00Z") + (i % 30) * 86400000).toISOString().slice(0, 10), usage: 1 }))
+    rows[506].usage = 2
+    routes["/activity"] = response({ data: rows })
+    const result = plugin.probeReports(ctx)
+    expect(result.lines.length).toBeLessThanOrEqual(512)
+    expect(result.lines.filter((item) => item.label.startsWith("model/"))).toHaveLength(100)
+    expect(result.lines.filter((item) => item.label.startsWith("model/"))[0].label).toBe("model/506")
+    expect(result.lines.filter((item) => item.label.startsWith("model/"))[1].label).toBe("model/000")
+    expect(line(result, "Activity Spend").value).toBe("$508.00")
+    expect(line(result, "Activity Requests").value).toBe("1014")
+    expect(line(result, "Activity Tokens").value).toBe("60840")
+    expect(line(result, "Activity BYOK Spend").value).toBe("$126.75")
+    expect(result.reports[0].coverage.reportedDates).toHaveLength(30)
+    expect(result.reports[0].coverage.missingDates).toEqual([])
+    expect(result.reports[0].status).toBe("partial")
+    expect(result.reports[0].message).toContain("top 100")
+  })
   it("uses only a validated server workspace to scope requests and scope identity", () => {
     const { ctx, routes, plugin } = setup({ is_management_key: true, workspace_id: WS, organization_id: "synthetic-org" })
     routes["/activity?workspace_id=" + WS] = response({ data: [activity()] })

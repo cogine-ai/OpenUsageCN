@@ -208,6 +208,10 @@ Open Codex details and choose **Load Reports** to read the latest 30 UTC calenda
 including today. This is separate from **Local History** and does not run ccusage or estimate API costs.
 Tokens, turns and charged credits keep their own units. Credits are never converted to dollars.
 
+Refreshing the main quota clears loaded reports and cancels pending reports, so an old login's
+report cannot remain beside newly refreshed quota. Load Reports is disabled during that refresh;
+load reports again after it finishes, including after a failed quota refresh.
+
 Reports use the current local ChatGPT login and its workspace. API keys and logins without a
 complete user/workspace identity cannot load these reports. Each read stays on the same credential
 source. Only a missing local file permits trying the next source; an existing file that cannot
@@ -223,7 +227,9 @@ No report data is added to the quota bars or the local cost estimate.
 Token and turn reports show only dates and measures the server reports. An absent date is not zero;
 an explicitly reported zero remains visible. The coverage note shows the number of unreported days. Daily charts
 use UTC. Available model attribution is shown separately and may cover fewer turns or tokens than
-the daily total.
+the daily total. Each report shows at most 100 models, sorted by name; a larger model breakdown
+is marked **Partial**. This limit affects optional model rows only: all reported daily totals,
+coverage dates and signed credit adjustments are retained.
 
 Personal plans read token and turn counts. Supported Team/Business/Enterprise/Edu plan types can
 also provide a separate charged-credit report. Unknown plan types do not guess a credit source.

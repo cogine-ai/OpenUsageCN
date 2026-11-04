@@ -43,3 +43,17 @@ Vite harness. Raw harness, screenshots, capture script and receipts remain under
 `/tmp/openusage-provider-expansion-qa-20261104`; no browser automation dependency was added.
 The dark harness applies the application's background color to its host canvas as well as the components.
 The harness is removed from the working tree before the PR.
+
+## Merge Review: Account Isolation
+
+The additional comparison uses production detail-page code from `6cb1f7b` as Before and the
+review fix as After. Synthetic account A reports are loaded first, followed by a quota refresh
+to account B. [Before](before-report-account-switch.png) retains A's report beside B's quota;
+[After](after-report-account-switch.png) clears it and requires a new report load.
+[During Quota Refresh](after-report-quota-refresh.png), Load Reports is disabled.
+[After Reload](after-report-account-reload.png), only account B's report appears.
+
+These four images use the same production components, CSS and mocked IPC boundaries as above;
+there are no real accounts or external requests. Page assertions and console checks passed.
+See [the additional receipt](review-render-receipt.json). The temporary harness, script and raw
+screenshots remain in `/tmp/openusage-pr262-review-qa`; the harness is removed from the checkout.
