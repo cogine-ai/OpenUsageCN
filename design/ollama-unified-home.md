@@ -99,7 +99,13 @@ digests are excluded from IPC. The selected runtime override uses existing `apiK
 fields covered by host redaction; saved and resolved environment secrets register with the existing
 redactor. Legacy view/storage and existing Ollama log-redaction regressions cover this audit.
 
-Final local validation: 2,221 JavaScript tests in 158 files; 689 Rust tests with 3 existing ignored;
+Automated review additionally identified a zero-remaining-shell-budget launch and synchronous
+report preparation on the async worker. Both are fixed: exhausted shell budgets stop before
+spawning, and report capture/validation runs on the blocking worker with the original deadline.
+Expired report preparation does not resolve settings, and store-lock waiting consumes only the
+remaining budget. Independent re-review found no new concrete blockers in this follow-up.
+
+Final local validation: 2,221 JavaScript tests in 158 files; 691 Rust tests with 3 existing ignored;
 production frontend build; Rust binary checks; changed Rust formatting and diff checks.
 [Production component browser evidence](evidence/ollama-unified-home/README.md) records 32 checks,
 before/after screenshots, light/dark modes and 320/400/600px widths. No installed application or

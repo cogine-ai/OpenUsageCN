@@ -258,7 +258,7 @@ fn explicit_legacy_report_ignores_primary_selection_but_rejects_source_change() 
     let p = legacy_plugin();
     set_configuration("apiKey", "apiKey", "synthetic-original-key");
     let view = add(&f.0, &p, "synthetic-managed-key", "Work", None, false);
-    let captured = report_legacy_connection(&p).unwrap();
+    let captured = report_legacy_connection(&p, Instant::now() + Duration::from_secs(1)).unwrap();
     assert!(!captured.uses_primary && captured.connection_id.is_none());
     assert_eq!(
         captured.configuration.as_ref().unwrap()["apiKey"],
@@ -273,13 +273,18 @@ fn explicit_legacy_report_ignores_primary_selection_but_rejects_source_change() 
         },
     )
     .unwrap();
-    assert!(report_connection_unchanged(&p, &captured).is_ok());
+    assert!(
+        report_connection_unchanged(&p, &captured, Instant::now() + Duration::from_secs(1)).is_ok()
+    );
     with_legacy_configuration_change(|| {
         set_configuration("apiKey", "apiKey", "synthetic-replaced-original-key");
         Ok(())
     })
     .unwrap();
-    assert!(report_connection_unchanged(&p, &captured).is_err());
+    assert!(
+        report_connection_unchanged(&p, &captured, Instant::now() + Duration::from_secs(1))
+            .is_err()
+    );
 }
 
 #[test]
@@ -305,13 +310,14 @@ fn default_legacy_report_stamp_uses_the_same_environment_snapshot_as_its_request
             });
         }))
     });
-    let captured = report_connection(&p, None).unwrap();
+    let captured = report_connection(&p, None, Instant::now() + Duration::from_secs(1)).unwrap();
     assert_eq!(
         captured.configuration.as_ref().unwrap()["apiKey"],
         "synthetic-env-a"
     );
     assert!(
-        report_connection_unchanged(&p, &captured).is_err(),
+        report_connection_unchanged(&p, &captured, Instant::now() + Duration::from_secs(1))
+            .is_err(),
         "an A request must not be accepted under a B stamp"
     );
 }
@@ -391,4 +397,46 @@ fn native_legacy_refresh_masks_its_result_without_resolving_configuration_again(
         2,
         "only capture and pre-commit validation may resolve configuration"
     );
+}
+
+#[test]
+#[serial_test::serial]
+fn elapsed_report_budget_rejects_capture_and_validation_before_resolving_configuration() {
+    let f = LegacyFixture::new();
+    let p = legacy_plugin();
+    set_configuration("apiKey", "apiKey", "synthetic-original-key");
+    store::write_to(&f.0.path, &StoredAccounts::default()).unwrap();
+    let captured = report_legacy_connection(&p, Instant::now() + Duration::from_secs(1)).unwrap();
+    legacy::AFTER_CONFIGURATION.with(|hook| {
+        *hook.borrow_mut() = Some(Box::new(|| {
+            panic!("an expired report must not resolve configuration or environment sources");
+        }))
+    });
+    let deadline = Instant::now() - Duration::from_millis(1);
+    for result in [
+        report_connection(&p, None, deadline).map(|_| ()),
+        report_legacy_connection(&p, deadline).map(|_| ()),
+        report_connection_unchanged(&p, &captured, deadline),
+    ] {
+        assert_eq!(result.unwrap_err(), "报告读取已超时，请稍后重试。");
+    }
+}
+
+#[test]
+#[serial_test::serial]
+fn report_connection_waits_only_for_the_original_remaining_lock_budget() {
+    let f = LegacyFixture::new();
+    let p = legacy_plugin();
+    let path = f.0.path.clone();
+    let held = store::lock().unwrap();
+    let worker = std::thread::spawn(move || {
+        store::TEST_PATH.with(|value| *value.borrow_mut() = Some(path));
+        let started = Instant::now();
+        let failed = report_connection(&p, None, started + Duration::from_millis(25)).is_err();
+        (failed, started.elapsed())
+    });
+    let (failed, elapsed) = worker.join().unwrap();
+    drop(held);
+    assert!(failed);
+    assert!(elapsed < Duration::from_millis(500));
 }

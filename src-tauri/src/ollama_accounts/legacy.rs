@@ -34,6 +34,7 @@ thread_local! {
     pub(super) static AFTER_CONFIGURATION: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const { std::cell::RefCell::new(None) };
 }
 
+#[cfg(test)]
 pub(super) fn configuration(plugin: &LoadedPlugin) -> Configuration {
     configuration_before(plugin, Instant::now() + Duration::from_secs(5))
 }

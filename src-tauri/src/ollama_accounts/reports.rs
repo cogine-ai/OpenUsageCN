@@ -1,4 +1,13 @@
 use super::*;
+use std::time::Instant;
+
+fn ensure_report_time(deadline: Instant) -> Result<(), String> {
+    if Instant::now() >= deadline {
+        log::warn!("Ollama report connection time limit reached");
+        return Err("报告读取已超时，请稍后重试。".into());
+    }
+    Ok(())
+}
 
 pub(crate) struct ReportConnection {
     pub configuration: Option<std::collections::HashMap<String, serde_json::Value>>,
@@ -10,10 +19,13 @@ pub(crate) struct ReportConnection {
 pub(crate) fn report_connection(
     plugin: &LoadedPlugin,
     id: Option<&str>,
+    deadline: Instant,
 ) -> Result<ReportConnection, String> {
+    ensure_report_time(deadline)?;
     let id_is_primary_request = id.is_none();
-    let _guard = store::lock()?;
+    let _guard = store::lock_until(deadline)?;
     let stored = store::read()?;
+    ensure_report_time(deadline)?;
     let id = match (id, &stored.primary) {
         (Some(id), _) => Some(id),
         (None, Primary::Connection { connection_id }) => Some(connection_id.as_str()),
@@ -33,7 +45,7 @@ pub(crate) fn report_connection(
                 r.revision,
                 r.api_key,
                 if uses_primary {
-                    Some(generation(plugin, &stored)?)
+                    Some(generation_before(plugin, &stored, deadline)?)
                 } else {
                     None
                 }
@@ -53,7 +65,8 @@ pub(crate) fn report_connection(
             uses_primary,
         })
     } else {
-        let configuration = legacy::configuration(plugin);
+        let configuration = legacy::configuration_before(plugin, deadline);
+        ensure_report_time(deadline)?;
         if !legacy::still_current(plugin, &configuration) {
             return Err(store::changed());
         }
@@ -80,9 +93,11 @@ pub(crate) fn report_connection(
 pub(crate) fn report_connection_unchanged(
     plugin: &LoadedPlugin,
     captured: &ReportConnection,
+    deadline: Instant,
 ) -> Result<(), String> {
+    ensure_report_time(deadline)?;
     if !captured.uses_primary && captured.connection_id.is_none() {
-        return if report_legacy_connection(plugin)?.stamp == captured.stamp {
+        return if report_legacy_connection(plugin, deadline)?.stamp == captured.stamp {
             Ok(())
         } else {
             Err(store::changed())
@@ -95,6 +110,7 @@ pub(crate) fn report_connection_unchanged(
         } else {
             captured.connection_id.as_deref()
         },
+        deadline,
     )?;
     if current.stamp != captured.stamp {
         return Err(store::changed());
@@ -102,12 +118,18 @@ pub(crate) fn report_connection_unchanged(
     Ok(())
 }
 
-pub(crate) fn report_legacy_connection(plugin: &LoadedPlugin) -> Result<ReportConnection, String> {
-    let configuration = legacy::configuration(plugin);
+pub(crate) fn report_legacy_connection(
+    plugin: &LoadedPlugin,
+    deadline: Instant,
+) -> Result<ReportConnection, String> {
+    ensure_report_time(deadline)?;
+    let configuration = legacy::configuration_before(plugin, deadline);
+    ensure_report_time(deadline)?;
     if let Some(error) = configuration.error {
         return Err(error.message);
     }
-    let _guard = store::lock()?;
+    let _guard = store::lock_until(deadline)?;
+    ensure_report_time(deadline)?;
     if !legacy::still_current(plugin, &configuration) {
         return Err(store::changed());
     }

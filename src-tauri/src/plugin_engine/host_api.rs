@@ -519,6 +519,7 @@ fn resolve_env_values_using_shells_before(
             .map(|remaining| {
                 remaining.min(Duration::from_secs(5).saturating_sub(started.elapsed()))
             })
+            .filter(|remaining| !remaining.is_zero())
         else {
             log::error!("provider startup shell lookup exceeded its time limit");
             break;

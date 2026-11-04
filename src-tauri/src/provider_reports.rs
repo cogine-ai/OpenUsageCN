@@ -200,23 +200,29 @@ pub(crate) async fn refresh_provider_reports(
         .as_ref()
         .map(|config| config.fields.clone())
         .unwrap_or_default();
-    let expected_config = configuration_fingerprint(crate::provider_config::resolved_values(
-        &provider_id,
-        &config_fields,
-    ))?;
     let worker_cancelled = Arc::clone(&cancelled);
-    let ollama_connection = if provider_id == "ollama" {
-        Some(if use_legacy {
-            crate::ollama_accounts::report_legacy_connection(&plugin)?
-        } else {
-            crate::ollama_accounts::report_connection(&plugin, connection_id.as_deref())?
-        })
-    } else {
-        None
-    };
     let output = tauri::async_runtime::spawn_blocking(move || {
+        if worker_cancelled.load(Ordering::Acquire) {
+            return Err("Server reports request was replaced or cancelled.".to_string());
+        }
+        if Instant::now() >= deadline {
+            return Err("Server reports timed out. Try again.".to_string());
+        }
+        let ollama_connection = if plugin.manifest.id == "ollama" {
+            Some(if use_legacy {
+                crate::ollama_accounts::report_legacy_connection(&plugin, deadline)?
+            } else {
+                crate::ollama_accounts::report_connection(
+                    &plugin,
+                    connection_id.as_deref(),
+                    deadline,
+                )?
+            })
+        } else {
+            None
+        };
         if let Some(connection) = ollama_connection {
-            crate::ollama_accounts::report_connection_unchanged(&plugin, &connection)?;
+            crate::ollama_accounts::report_connection_unchanged(&plugin, &connection, deadline)?;
             let result = runtime::run_reports_with_configuration(
                 &plugin,
                 &app_data_dir,
@@ -225,9 +231,13 @@ pub(crate) async fn refresh_provider_reports(
                 worker_cancelled,
                 connection.configuration.as_ref(),
             );
-            crate::ollama_accounts::report_connection_unchanged(&plugin, &connection)?;
+            crate::ollama_accounts::report_connection_unchanged(&plugin, &connection, deadline)?;
             return result;
         }
+        let expected_config = configuration_fingerprint(crate::provider_config::resolved_values(
+            &plugin.manifest.id,
+            &config_fields,
+        ))?;
         with_configuration_guard(
             &expected_config,
             || crate::provider_config::resolved_values(&plugin.manifest.id, &config_fields),
