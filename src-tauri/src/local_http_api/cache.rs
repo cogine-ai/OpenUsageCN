@@ -7,8 +7,10 @@ use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 mod account_projection;
+#[cfg(test)]
+pub(crate) use account_projection::replace_cached_account_projection;
 pub(crate) use account_projection::{
-    replace_account_projection, replace_cached_account_projection,
+    replace_account_projection, replace_cached_account_projection_before,
 };
 #[cfg(test)]
 #[path = "cache_account_projection_tests.rs"]

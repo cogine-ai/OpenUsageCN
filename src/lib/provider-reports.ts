@@ -27,8 +27,8 @@ export type ProviderReportsSnapshot = {
   reports: ProviderReportSection[]
 }
 
-export function refreshProviderReports(providerId: string, requestId: string, connectionId?: string) {
-  return invoke<ProviderReportsSnapshot>("refresh_provider_reports", { providerId, requestId, ...(connectionId ? { connectionId } : {}) })
+export function refreshProviderReports(providerId: string, requestId: string, connectionId?: string, useLegacy = false) {
+  return invoke<ProviderReportsSnapshot>("refresh_provider_reports", { providerId, requestId, ...(connectionId ? { connectionId } : {}), ...(useLegacy ? { useLegacy: true } : {}) })
 }
 
 export function cancelProviderReports(providerId: string, requestId: string) {

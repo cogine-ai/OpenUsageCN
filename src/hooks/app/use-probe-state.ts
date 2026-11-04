@@ -117,6 +117,30 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
     [onProbeResult, updatePluginStates]
   )
 
+  /** Copy the selected account's stored quota without another request or a new success time. */
+  const syncOllamaProjection = useCallback((
+    projection: { data?: PluginOutput | null; error: string | null; lastUpdatedAt?: number | null },
+    preserveProbeError = false,
+  ) => {
+    updatePluginStates((previous) => {
+      const current = previous.ollama
+      const error = projection.error ?? (preserveProbeError ? current?.error ?? null : null)
+      return {
+        ...previous,
+        ollama: {
+          data: current?.data ?? null,
+          loading: current?.loading ?? false,
+          lastManualRefreshAt: current?.lastManualRefreshAt ?? null,
+          lastUpdatedAt: current?.lastUpdatedAt ?? null,
+          ...projection,
+          error,
+          lastErrorAt: error ? Date.now() : null,
+        },
+      }
+    })
+    onProbeResult?.()
+  }, [onProbeResult, updatePluginStates])
+
   return {
     pluginStates,
     pluginStatesRef,
@@ -124,5 +148,6 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
     setAccountTransitionForPlugins,
     setErrorForPlugins,
     handleProbeResult,
+    syncOllamaProjection,
   }
 }

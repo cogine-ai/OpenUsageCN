@@ -301,8 +301,18 @@ fn reports_bind_exact_connection_and_revision_without_changing_primary() {
         },
     )
     .unwrap();
-    let explicit = report_connection(&p, Some(&b)).unwrap();
-    let primary = report_connection(&p, None).unwrap();
+    let explicit = report_connection(
+        &p,
+        Some(&b),
+        std::time::Instant::now() + std::time::Duration::from_secs(1),
+    )
+    .unwrap();
+    let primary = report_connection(
+        &p,
+        None,
+        std::time::Instant::now() + std::time::Duration::from_secs(1),
+    )
+    .unwrap();
     assert_eq!(
         explicit.configuration.as_ref().unwrap()["apiKey"],
         "synthetic-key-two"
@@ -317,10 +327,31 @@ fn reports_bind_exact_connection_and_revision_without_changing_primary() {
         },
     )
     .unwrap();
-    assert!(report_connection_unchanged(&p, &primary).is_err());
-    assert!(report_connection_unchanged(&p, &explicit).is_ok());
+    assert!(
+        report_connection_unchanged(
+            &p,
+            &primary,
+            std::time::Instant::now() + std::time::Duration::from_secs(1)
+        )
+        .is_err()
+    );
+    assert!(
+        report_connection_unchanged(
+            &p,
+            &explicit,
+            std::time::Instant::now() + std::time::Duration::from_secs(1)
+        )
+        .is_ok()
+    );
     add(&f, &p, "synthetic-new-key", "Work", Some(b), false);
-    assert!(report_connection_unchanged(&p, &explicit).is_err());
+    assert!(
+        report_connection_unchanged(
+            &p,
+            &explicit,
+            std::time::Instant::now() + std::time::Duration::from_secs(1)
+        )
+        .is_err()
+    );
 }
 
 #[test]
@@ -435,3 +466,12 @@ mod queued_probe;
 
 #[path = "panic_probe_tests.rs"]
 mod panic_probe;
+
+#[path = "legacy_tests.rs"]
+mod legacy_usage;
+
+#[path = "batch_tests.rs"]
+mod batch_usage;
+
+#[path = "deadline_tests.rs"]
+mod deadlines;

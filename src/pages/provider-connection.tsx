@@ -68,11 +68,6 @@ export function ProviderConnectionPage({ plugin, error, onCheck, onAccountChange
       initialScreen="keys"
       onBack={closeConnection}
       onPrimaryChange={() => onAccountChangeRefresh("ollama")}
-      onQuotaRefresh={() => {
-        void onCheck("ollama").catch(() => {
-          console.error("Failed to refresh the Ollama primary connection")
-        })
-      }}
       legacyConfiguration={plugin.config ? <ProviderConfigFields
         pluginId="ollama"
         fields={plugin.config.fields}

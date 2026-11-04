@@ -1,4 +1,5 @@
 import { useAppUiStore } from "@/stores/app-ui-store"
+import { OllamaOverview } from "@/components/ollama-overview"
 import { ProviderCard } from "@/components/provider-card"
 import type { MetricLine, ManifestLine, PluginDisplayState } from "@/lib/plugin-types"
 import type { DisplayMode, ResetTimerDisplayMode, TimeFormatMode } from "@/lib/settings"
@@ -47,7 +48,9 @@ export function OverviewPage({
 
   return (
     <div>
-      {plugins.map((plugin, index) => (
+      {plugins.map((plugin, index) => plugin.meta.id === "ollama" ? (
+        <OllamaOverview key="ollama" refreshing={plugin.loading} showSeparator={index < plugins.length - 1} displayMode={displayMode} resetTimerDisplayMode={resetTimerDisplayMode} timeFormatMode={timeFormatMode} onResetTimerDisplayModeToggle={onResetTimerDisplayModeToggle} />
+      ) : (
         <ProviderCard
           key={plugin.meta.id}
           capabilities={plugin.meta}

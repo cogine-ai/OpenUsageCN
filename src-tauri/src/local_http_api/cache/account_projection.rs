@@ -3,6 +3,7 @@ use crate::plugin_engine::runtime::PluginOutput;
 use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 #[cfg(test)]
 pub(super) fn save_cache(
@@ -17,6 +18,15 @@ pub(super) fn save_cache_with_forced_providers(
     snapshots: &HashMap<String, CachedPluginSnapshot>,
     forced_projections: &HashMap<String, Option<CachedPluginSnapshot>>,
 ) -> Result<(), String> {
+    save_cache_before(app_data_dir, snapshots, forced_projections, None)
+}
+
+fn save_cache_before(
+    app_data_dir: &Path,
+    snapshots: &HashMap<String, CachedPluginSnapshot>,
+    forced_projections: &HashMap<String, Option<CachedPluginSnapshot>>,
+    deadline: Option<Instant>,
+) -> Result<(), String> {
     std::fs::create_dir_all(app_data_dir)
         .map_err(|e| format!("failed to create app data directory: {e}"))?;
     let lock_file = OpenOptions::new()
@@ -25,7 +35,22 @@ pub(super) fn save_cache_with_forced_providers(
         .write(true)
         .open(app_data_dir.join(super::CACHE_LOCK_FILE_NAME))
         .map_err(|e| format!("failed to open usage cache lock: {e}"))?;
-    super::lock_cache_file(&lock_file)?;
+    if let Some(deadline) = deadline {
+        loop {
+            match lock_file.try_lock() {
+                Ok(()) => break,
+                Err(std::fs::TryLockError::WouldBlock) if Instant::now() < deadline => {
+                    std::thread::sleep(Duration::from_millis(5))
+                }
+                Err(_) => {
+                    log::error!("Ollama usage cache file lock timed out or failed");
+                    return Err("用量缓存正在被其他进程使用，请稍后重试。".into());
+                }
+            }
+        }
+    } else {
+        super::lock_cache_file(&lock_file)?;
+    }
 
     let mut merged_snapshots = super::load_cache(app_data_dir);
     for (incoming_id, incoming) in snapshots {
@@ -77,15 +102,45 @@ pub(crate) fn replace_cached_account_projection(
     provider_id: &str,
     projection: Option<CachedPluginSnapshot>,
 ) -> Result<(), String> {
+    replace_projection_before(provider_id, projection, None)
+}
+
+pub(crate) fn replace_cached_account_projection_before(
+    provider_id: &str,
+    projection: Option<CachedPluginSnapshot>,
+    deadline: Instant,
+) -> Result<(), String> {
+    replace_projection_before(provider_id, projection, Some(deadline))
+}
+
+fn replace_projection_before(
+    provider_id: &str,
+    projection: Option<CachedPluginSnapshot>,
+    deadline: Option<Instant>,
+) -> Result<(), String> {
     if projection
         .as_ref()
         .is_some_and(|snapshot| snapshot.provider_id != provider_id)
     {
         return Err("account projection provider does not match".to_string());
     }
-    let _write_guard = super::cache_write_lock()
-        .lock()
-        .expect("cache write lock poisoned");
+    let mutex = super::cache_write_lock();
+    let _write_guard = if let Some(deadline) = deadline {
+        loop {
+            match mutex.try_lock() {
+                Ok(guard) => break guard,
+                Err(std::sync::TryLockError::WouldBlock) if Instant::now() < deadline => {
+                    std::thread::sleep(Duration::from_millis(5))
+                }
+                Err(_) => {
+                    log::error!("Ollama usage cache write lock timed out or failed");
+                    return Err("用量缓存正在被其他操作使用，请稍后重试。".into());
+                }
+            }
+        }
+    } else {
+        mutex.lock().expect("cache write lock poisoned")
+    };
     let (generation, app_data_dir, snapshots, forced_projections) = {
         let mut state = super::cache_state().lock().expect("cache state poisoned");
         match &projection {
@@ -110,7 +165,7 @@ pub(crate) fn replace_cached_account_projection(
             state.forced_projections.clone(),
         )
     };
-    let result = save_cache_with_forced_providers(&app_data_dir, &snapshots, &forced_projections);
+    let result = save_cache_before(&app_data_dir, &snapshots, &forced_projections, deadline);
     if result.is_ok() {
         super::flush::mark_cache_flushed(generation);
     } else {

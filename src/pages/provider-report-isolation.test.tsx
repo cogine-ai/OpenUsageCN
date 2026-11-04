@@ -20,19 +20,20 @@ function page(plugin: PluginDisplayState) {
 }
 function report(args: { providerId: string; requestId: string }, account = "A") {
   return { ...args, scopeKey: account.toLowerCase().repeat(64), fetchedAt: "2026-11-04T00:00:00Z",
-    lines: [{ type: "text", label: "Reported Tokens", value: account + " Report" }],
-    reports: [{ id: "counts", label: "Tokens And Turns", status: "ready" }] }
+    lines: [{ type: "text", label: args.providerId === "ollama" ? "7D Requests" : "Reported Tokens", value: account + " Report" }],
+    reports: [{ id: args.providerId === "ollama" ? "7d" : "counts", label: "Tokens And Turns", status: "ready" }] }
 }
 
 describe("provider report account isolation during quota refresh", () => {
   beforeEach(() => {
     tauri.invoke.mockReset()
     tauri.listen.mockResolvedValue(vi.fn())
-    tauri.invoke.mockImplementation((command, args) => Promise.resolve(command === "get_ollama_accounts" ? { revision: 0, primary: { mode: "legacy" }, connections: [] } : command === "refresh_provider_reports" ? report(args) : null))
+    tauri.invoke.mockImplementation((command, args) => Promise.resolve(command === "get_ollama_accounts" ? { revision: 0, primary: { mode: "legacy" }, connections: [], legacy: { source: "apiKey", configured: true, revision: 0 } } : command === "refresh_provider_reports" ? report(args) : null))
   })
 
   it.each(["codex", "ollama", "openrouter"])("clears loaded %s reports when quota refresh starts and requires a new load", async (providerId) => {
     const { rerender } = render(page(state(providerId)))
+    if (providerId === "ollama") fireEvent.click(await screen.findByRole("button", { name: "查看原有连接用量" }))
     fireEvent.click(await screen.findByRole("button", { name: "Load Reports" }))
     expect(await screen.findByText("A Report")).toBeVisible()
     rerender(page(state(providerId, { loading: true })))

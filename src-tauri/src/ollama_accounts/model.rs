@@ -50,6 +50,8 @@ pub(super) struct StoredAccounts {
     pub revision: u64,
     #[serde(default)]
     pub projection_revision: u64,
+    #[serde(default)]
+    pub legacy: LegacyRecord,
     pub primary: Primary,
     pub connections: Vec<Record>,
 }
@@ -60,6 +62,7 @@ impl Default for StoredAccounts {
             version: 1,
             revision: 0,
             projection_revision: 0,
+            legacy: LegacyRecord::default(),
             primary: Primary::Legacy,
             connections: Vec::new(),
         }
@@ -71,6 +74,35 @@ impl Default for StoredAccounts {
 pub(crate) struct AccountError {
     pub code: String,
     pub message: String,
+}
+
+/// Independent old-connection usage. Credentials remain in providers.json or the environment.
+#[derive(Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct LegacyRecord {
+    pub revision: u64,
+    #[serde(default)]
+    pub source: String,
+    #[serde(default)]
+    pub configured: bool,
+    pub configuration_generation: Option<String>,
+    pub snapshot: Option<PluginOutput>,
+    pub last_updated_at: Option<String>,
+    pub error: Option<AccountError>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct LegacyView {
+    pub source: String,
+    pub configured: bool,
+    pub revision: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub snapshot: Option<PluginOutput>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_updated_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<AccountError>,
 }
 
 #[derive(Serialize)]
@@ -97,6 +129,7 @@ pub(crate) struct AccountsView {
     pub revision: u64,
     pub primary: Primary,
     pub connections: Vec<ConnectionView>,
+    pub legacy: LegacyView,
 }
 
 #[derive(Debug, Serialize)]
@@ -119,6 +152,7 @@ pub(crate) enum Operation {
         connection_id: String,
     },
     UseLegacy,
+    RefreshLegacy,
     Rename {
         #[serde(rename = "connectionId")]
         connection_id: String,
@@ -160,6 +194,18 @@ impl StoredAccounts {
         AccountsView {
             revision: self.revision,
             primary: self.primary.clone(),
+            legacy: LegacyView {
+                source: if self.legacy.source.is_empty() {
+                    "cookie".into()
+                } else {
+                    self.legacy.source.clone()
+                },
+                configured: self.legacy.configured,
+                revision: self.legacy.revision,
+                snapshot: self.legacy.snapshot.clone(),
+                last_updated_at: self.legacy.last_updated_at.clone(),
+                error: self.legacy.error.clone(),
+            },
             connections: self
                 .connections
                 .iter()

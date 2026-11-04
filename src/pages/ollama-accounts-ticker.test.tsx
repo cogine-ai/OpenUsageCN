@@ -17,6 +17,7 @@ it("updates the viewed account's reset countdown without refreshing its quota", 
   tauri.listen.mockResolvedValue(vi.fn())
   tauri.invoke.mockResolvedValue({
     revision: 1,
+    legacy: { source: "cookie", configured: false, revision: 0 },
     primary: { mode: "connection", connectionId: "home" },
     connections: [
       {

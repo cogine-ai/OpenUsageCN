@@ -4,20 +4,25 @@ Tracks your cloud account usage. Local model execution does not count toward the
 
 ## Multiple Accounts And Keys
 
-Open **Ollama Cloud → Manage Keys** to add independently named API Key connections. Each
+Open **Ollama Cloud → Manage Accounts** to add independently named API Key connections. Each
 connection shows the verified account, a masked key hint and its own quota update status.
 Select a connection to view its quota, purchased credits and personal model reports.
-Browsing a connection does not change the account shown on the home page or menu bar.
+The home page shows all named connections and the configured original connection in one list.
+Each has its own quota, balance, status and update time. Browsing a connection does not change
+the primary used by the menu bar, local HTTP API and CLI.
 Reset countdowns update while the detail page is visible without requesting new quota data.
 
 1. Choose **Add Key**, enter a name and an Ollama API Key, then verify it.
 2. Check the returned account identity before confirming the save.
-3. Use **Set As Primary** explicitly to show that connection on the home page and menu bar.
+3. Use **Set As Primary** explicitly to choose the default for the menu bar, local HTTP API and CLI.
+   All connections remain visible on the home page regardless of this choice.
 
 Adding a key does not replace or select the original connection automatically. The original
-Cookie, single saved API Key and environment variables remain unchanged. **Other Connection
-Methods** opens those existing settings; explicitly return to the original connection to use
-them for the home page and menu bar again.
+Cookie, single saved API Key and environment variables remain unchanged. **Original Connection**
+appears in the same management list and opens the existing settings. Once configured, its usage
+appears alongside named connections even when another account is primary. If it is unconfigured,
+it stays in management without replacing healthy home-page accounts with a missing-credential alert.
+If its configuration cannot be read, the app shows that error rather than treating it as empty.
 
 Updating a key verifies it before replacing the saved credential. A key belonging to a different
 account must be confirmed as a new connection instead; it cannot overwrite the existing account.
@@ -26,7 +31,8 @@ interface in full. Renaming a connection does not change its identity or quota.
 
 Removing a connection only removes it from OpenUsageCN; it does not revoke the key at Ollama.
 Removing the primary connection leaves no primary selected. Choose another connection or return
-to the original connection explicitly; the app does not switch accounts on its own.
+to the original connection explicitly for the menu bar and API; the app does not switch accounts
+on its own. Other connections remain visible on the home page.
 
 Each connection has its own last successful quota and update time. A temporary network failure,
 rate limit or permission error is shown separately and does not replace that connection's
@@ -36,6 +42,12 @@ If a refresh worker crashes, the app keeps the last successful quota while the a
 configuration remains readable. An unreadable account configuration clears the old quota.
 Refreshes waiting to run check the connection again before sending requests. Removing or
 replacing a key prevents an older waiting refresh from starting a request with that key.
+Refreshing one connection updates only its quota. **Refresh All** and scheduled app refreshes
+check named connections and the configured original connection with a bounded refresh time.
+One account's failure does not replace another account's data. Refreshes that cannot finish
+within the time limit show a failure and retain their previous successful reading when valid.
+Changing the original connection's source or credentials clears its old reading, including when
+another account is primary. Its credentials remain in their existing storage or environment.
 
 Ollama reports account usage, not spending attributable to an individual API Key. Multiple keys
 for the same user may read the same balances; team members can also share balances. Connection
@@ -75,7 +87,8 @@ If the balance request succeeds but account plan details are denied, unavailable
 
 For a named API Key connection, open that account's detail view and load **Server Reports** for
 **7D** and **30D** model statistics. The original connection also offers these reports when its
-API Key source is selected. Loading reports does not change the primary account. Cookie
+API Key source is selected, even when a different named account is primary. Loading reports uses
+the connection whose detail page is open and does not change the primary account. Cookie
 connections do not provide these reports.
 
 Reports cover the signed-in user’s own usage (`scope=self`), while team members may share the balances shown in quota. Reports show requests, input tokens, cached input tokens, output tokens, usage value and daily request charts where supplied. Cached input is already included in input tokens; do not add it again. Usage value is the service's reported dollar value, not proof of an additional billed charge. Model rows show the same units and are capped at the top 100 by reported requests, with an explicit partial result when truncated.

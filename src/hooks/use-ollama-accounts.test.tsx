@@ -11,7 +11,7 @@ function view(
   revision = 1,
   primary: OllamaAccountsView["primary"] = { mode: "connection", connectionId: "home" }
 ): OllamaAccountsView {
-  return { revision, primary, connections: [] }
+  return { revision, primary, connections: [], legacy: { source: "cookie", configured: false, revision: 0 } }
 }
 
 describe("Ollama connection state", () => {
@@ -39,16 +39,13 @@ describe("Ollama connection state", () => {
     expect(result.current.view?.primary.connectionId).toBe("work")
   })
 
-  it("routes unchanged-primary refresh separately from an actual primary transition", async () => {
-    const changed = vi.fn(),
-      refreshed = vi.fn()
-    const { result } = renderHook(() => useOllamaAccounts(changed, refreshed))
+  it("does not treat quota refreshes as primary transitions", async () => {
+    const changed = vi.fn()
+    const { result } = renderHook(() => useOllamaAccounts(changed))
     await waitFor(() => expect(result.current.loading).toBe(false))
     await act(() => result.current.operate({ kind: "refresh", connectionId: "work" }))
     expect(changed).not.toHaveBeenCalled()
-    expect(refreshed).not.toHaveBeenCalled()
     await act(() => result.current.operate({ kind: "refresh", connectionId: "home" }))
-    expect(refreshed).toHaveBeenCalledOnce()
     expect(changed).not.toHaveBeenCalled()
     await act(() => result.current.operate({ kind: "remove", connectionId: "home" }))
     expect(changed).toHaveBeenCalledOnce()
@@ -109,6 +106,16 @@ describe("Ollama connection state", () => {
     await waitFor(() => expect(result.current.loading).toBe(false))
     await act(() => result.current.operate({ kind: "refresh" }))
     expect(result.current.error).toBe("账号操作未完成，请重新读取连接状态后重试。")
+  })
+
+  it("clears a recovered list-read error after retry without replacing operation errors", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    tauri.invoke.mockRejectedValueOnce(new Error("synthetic read failure")).mockResolvedValue(view())
+    const { result } = renderHook(() => useOllamaAccounts())
+    await waitFor(() => expect(result.current.error).toBe("无法读取账号连接，请重试。"))
+    await act(() => result.current.reload())
+    expect(result.current.view).toEqual(view())
+    expect(result.current.error).toBeNull()
   })
 
   it("unsubscribes and ignores an operation that finishes after leaving the page", async () => {
