@@ -87,18 +87,31 @@ fn reports_have_a_deadline_and_do_not_run_quota_or_local_history() {
     );
 }
 
-#[test]
-fn actual_codex_supporting_script_runs_in_quickjs_with_synthetic_auth_and_http() {
+fn codex_report_fixture(platform: &str, auth_path: &str, failure: &str) -> LoadedPlugin {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../plugins");
     let mut plugin = manifest::load_plugins_from_dir(&root)
         .into_iter()
-        .find(|p| p.manifest.id == "codex")
+        .find(|plugin| plugin.manifest.id == "codex")
         .unwrap();
     let setup = r#"
+    __openusage_ctx.app.platform='__PLATFORM__';
+    const fixtureAuthPath='__AUTH_PATH__';
+    const fixtureFailure='__FAILURE__';
+    let fixtureStrictPath=null;
     const syntheticAuth=JSON.stringify({tokens:{access_token:'header.eyJzdWIiOiJmdWxsLXN5bnRoZXRpYy11c2VyIn0.signature',account_id:'workspace-synthetic'}});
-    __openusage_ctx.host.fs.exists=path=>path==='~/.config/codex/auth.json';
-    __openusage_ctx.host.fs.existsStrict=__openusage_ctx.host.fs.exists;
-    __openusage_ctx.host.fs.readText=()=>syntheticAuth;
+    __openusage_ctx.host.fs.exists=()=>{throw 'reports must use strict existence checks'};
+    __openusage_ctx.host.fs.existsStrict=path=>{
+      if(path!==fixtureAuthPath)throw 'unexpected auth path for the selected platform';
+      if(fixtureFailure==='exists')throw 'synthetic metadata permission denied';
+      fixtureStrictPath=path;
+      return true;
+    };
+    __openusage_ctx.host.fs.readText=path=>{
+      if(path!==fixtureAuthPath||fixtureStrictPath!==path)throw 'read requires the actual platform path checked with existsStrict';
+      if(fixtureFailure==='read')throw 'synthetic read permission denied';
+      if(fixtureFailure==='json')return '{broken';
+      return syntheticAuth;
+    };
     __openusage_ctx.host.env.get=()=>null;
     __openusage_ctx.host.keychain.readGenericPassword=()=>{throw 'must not read real keychain'};
     __openusage_ctx.host.fs.writeText=()=>{throw 'reports must not write auth'};
@@ -110,27 +123,49 @@ fn actual_codex_supporting_script_runs_in_quickjs_with_synthetic_auth_and_http()
         opts.url.includes('token-usage-breakdown')?{data:[{date,premium_usage_values:{credit_usage_credits:{cli:-1.5}}}]}:{plan_type:'team'};
       return {status:200,headers:{},bodyText:JSON.stringify(body)};
     };
-    "#;
+    "#
+    .replace("__PLATFORM__", platform)
+    .replace("__AUTH_PATH__", auth_path)
+    .replace("__FAILURE__", failure);
     plugin.entry_script = format!("{setup}\n{}", plugin.entry_script);
-    let output = run(&plugin).unwrap();
-    assert_eq!(output.scope_key.len(), 64);
-    assert!(
-        output
-            .lines
-            .iter()
-            .any(|line| matches!(line, MetricLine::Text {value,..} if value == "-1.5 credits"))
-    );
-    assert!(
-        output
-            .lines
-            .iter()
-            .any(|line| matches!(line, MetricLine::BarChart {label,..} if label == "Daily Tokens"))
-    );
-    assert_eq!(output.reports.len(), 2);
-    assert!(matches!(
-        output.reports[0].status,
-        crate::provider_reports::ReportStatus::Partial
-    ));
+    plugin
+}
+
+#[test]
+fn actual_codex_supporting_script_runs_in_quickjs_with_synthetic_auth_and_http() {
+    for (platform, auth_path) in [
+        ("windows", "~/.codex/auth.json"),
+        ("macos", "~/.config/codex/auth.json"),
+    ] {
+        let output = run(&codex_report_fixture(platform, auth_path, ""))
+            .unwrap_or_else(|error| panic!("{platform} actual source {auth_path}: {error}"));
+        assert_eq!(output.scope_key.len(), 64);
+        assert!(output.lines.iter().any(|line| matches!(line,
+            MetricLine::Text {value,..} if value == "-1.5 credits")));
+        assert!(output.lines.iter().any(|line| matches!(line,
+            MetricLine::BarChart {label,..} if label == "Daily Tokens")));
+        assert_eq!(output.reports.len(), 2);
+        assert!(matches!(
+            output.reports[0].status,
+            crate::provider_reports::ReportStatus::Partial
+        ));
+    }
+}
+
+#[test]
+fn codex_report_platform_paths_reject_strict_metadata_read_and_json_failures() {
+    for (platform, auth_path) in [
+        ("windows", "~/.codex/auth.json"),
+        ("macos", "~/.config/codex/auth.json"),
+    ] {
+        for failure in ["exists", "read", "json"] {
+            let error = run(&codex_report_fixture(platform, auth_path, failure)).unwrap_err();
+            assert!(
+                error.contains("invalid or unreadable"),
+                "{platform} {auth_path} {failure}: {error}"
+            );
+        }
+    }
 }
 
 #[test]
