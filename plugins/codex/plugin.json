@@ -4,6 +4,7 @@
   "name": "Codex",
   "version": "0.0.1",
   "entry": "plugin.js",
+  "supportingScripts": ["reports.js"],
   "icon": "icon.svg",
   "brandColor": "#74AA9C",
   "statusPage": {

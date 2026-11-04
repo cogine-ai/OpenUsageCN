@@ -44,12 +44,12 @@ Windows MVP 启用和展示 **Codex、BigModel CN、OpenAI API、OpenRouter、Z.
 - [**Alibaba Coding Plan**](docs/providers/alibaba-coding-plan.md)：5 小时、weekly、monthly coding plan quota
 - [**Alibaba Token Plan**](docs/providers/alibaba-token-plan.md)：token plan quota、remaining、expires
 - [**Amp**](docs/providers/amp.md)：免费额度、付费 Other/Orb 额度、奖励额度、credits
-- [**Antigravity**](docs/providers/antigravity.md)：全部模型用量
+- [**Antigravity**](docs/providers/antigravity.md)：Gemini、Claude 五小时与周额度、独立 Argon 周池
 - [**BigModel CN**](docs/providers/bigmodel-cn.md)：token/credit 计划的 session、weekly、web searches、设置页 API Key
 - [**Claude**](docs/providers/claude.md)：session、weekly、extra usage、按需加载本地 token 用量（ccusage）、可验证的 Team 席位、本机账号的浏览器连接补充
-- [**Codex**](docs/providers/codex.md)：5 小时、每周、代码审查、点数、手动重置及最近到期时间
+- [**Codex**](docs/providers/codex.md)：5 小时、每周、代码审查、点数、手动重置、独立的 ChatGPT 服务端日报与本地日志历史
 - [**Copilot**](docs/providers/copilot.md)：premium、chat、completions
-- [**Cursor**](docs/providers/cursor.md)：credits、总用量、Cursor 3.27+ 加密登录读取、Desktop/CLI/Chrome/Arc 多账号与完整身份隔离、旧套餐月度双池或新套餐共享周额度、独立 Grok Bot 额度、按模型用量和 CSV 导出
+- [**Cursor**](docs/providers/cursor.md)：credits、总用量、Cursor 3.27+ 加密登录读取、Desktop/CLI/Chrome/Arc 多账号与完整身份隔离、月度或共享周额度、Grok Bot、按模型用量、已知按量扣费、事件数和 CSV 导出
 - [**DeepSeek**](docs/providers/deepseek.md)：按人民币或美元显示 API 余额、赠额和充值额
 - [**Doubao**](docs/providers/doubao.md)：火山引擎 Ark Coding Plan 与 Agent Plan 配额
 - [**Factory / Droid**](docs/providers/factory.md)：standard、premium tokens
@@ -58,14 +58,14 @@ Windows MVP 启用和展示 **Codex、BigModel CN、OpenAI API、OpenRouter、Z.
 - [**JetBrains AI Assistant**](docs/providers/jetbrains-ai-assistant.md)：quota、remaining
 - [**Kiro**](docs/providers/kiro.md)：credits、bonus credits、overages
 - [**Kimi Code**](docs/providers/kimi.md)：session、weekly
-- [**MiniMax**](docs/providers/minimax.md)：coding plan session
+- [**MiniMax**](docs/providers/minimax.md)：API Key session、China Web 的 session/weekly、Boost 与 Unlimited
 - [**Moonshot / Kimi Open Platform**](docs/providers/moonshot.md)：中国站与国际站 API 余额、现金和代金券
-- [**Ollama Cloud**](docs/providers/ollama.md)：云端月度额度与旧套餐返回的短期额度
+- [**Ollama Cloud**](docs/providers/ollama.md)：Cookie 或 API Key 额度、购买余额、按需加载 7/30 天模型统计
 - [**OpenAI API**](docs/providers/openai-api.md)：organization spend、requests、tokens、legacy credits
 - [**OpenCode**](docs/providers/opencode.md)：opencode.ai session、weekly subscription usage
 - [**OpenCode Go**](docs/providers/opencode-go.md)：账号级 5h、weekly、monthly 额度百分比及官方重置时间，优先读取当前有效的 CLI 登录
-- [**OpenRouter**](docs/providers/openrouter.md)：credits、balance、key usage
-- [**Perplexity**](docs/providers/perplexity.md)：balance、usage analytics、本地 app session
+- [**OpenRouter**](docs/providers/openrouter.md)：余额、单 Key 预算、管理 Key 多 Key 消费、BYOK 分列与独立 Activity 报告
+- [**Perplexity**](docs/providers/perplexity.md)：本地 app API credits，或网站个人/组织订阅 credits 与成员上限
 - [**Synthetic**](docs/providers/synthetic.md)：subscription、search、weekly token、5h limits
 - [**xAI**](docs/providers/xai.md)：Management API 预付余额及最近 30 天消费
 - [**Devin**](docs/providers/devin.md)：weekly quota、extra usage

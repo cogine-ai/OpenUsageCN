@@ -13,8 +13,10 @@
         "type": "secret",
         "label": "API Key",
         "placeholder": "sk-or-v1-...",
-        "help": "留空则使用 OPENROUTER_API_KEY 环境变量",
-        "environmentVariables": ["OPENROUTER_API_KEY"],
+        "help": "\u7559\u7a7a\u5219\u4f7f\u7528 OPENROUTER_API_KEY \u73af\u5883\u53d8\u91cf",
+        "environmentVariables": [
+          "OPENROUTER_API_KEY"
+        ],
         "defaultSource": true
       },
       {
@@ -22,18 +24,101 @@
         "type": "text",
         "label": "API URL",
         "placeholder": "https://openrouter.ai/api/v1",
-        "help": "可选。留空则使用 OPENROUTER_API_URL 或官方地址",
-        "environmentVariables": ["OPENROUTER_API_URL"],
+        "help": "\u53ef\u9009\u3002\u7559\u7a7a\u5219\u4f7f\u7528 OPENROUTER_API_URL \u6216\u5b98\u65b9\u5730\u5740",
+        "environmentVariables": [
+          "OPENROUTER_API_URL"
+        ],
         "defaultSource": true
       }
     ]
   },
   "lines": [
-    { "type": "progress", "label": "Credits", "scope": "overview", "limitResource": { "key": "credits" } },
-    { "type": "text", "label": "Balance", "scope": "overview" },
-    { "type": "progress", "label": "Key Limit", "scope": "detail", "primaryOrder": 1, "limitResource": { "key": "keyLimit" } },
-    { "type": "text", "label": "Daily Spend", "scope": "detail" },
-    { "type": "text", "label": "Weekly Spend", "scope": "detail" },
-    { "type": "text", "label": "Monthly Spend", "scope": "detail" }
+    {
+      "type": "progress",
+      "label": "Credits",
+      "scope": "overview",
+      "limitResource": {
+        "key": "credits"
+      },
+      "primaryOrder": 2
+    },
+    {
+      "type": "text",
+      "label": "Balance",
+      "scope": "overview"
+    },
+    {
+      "type": "progress",
+      "label": "Key Limit",
+      "scope": "detail",
+      "primaryOrder": 1,
+      "limitResource": {
+        "key": "keyLimit"
+      }
+    },
+    {
+      "type": "text",
+      "label": "Daily Spend",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Weekly Spend",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Monthly Spend",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Key Scope",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Listed Keys Daily Spend",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Listed Keys Weekly Spend",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Listed Keys Monthly Spend",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "BYOK Daily Spend",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "BYOK Weekly Spend",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "BYOK Monthly Spend",
+      "scope": "detail"
+    },
+    {
+      "type": "badge",
+      "label": "Balance Status",
+      "scope": "detail"
+    },
+    {
+      "type": "badge",
+      "label": "Key Status",
+      "scope": "detail"
+    }
+  ],
+  "supportingScripts": [
+    "common.js",
+    "reports.js"
   ]
 }

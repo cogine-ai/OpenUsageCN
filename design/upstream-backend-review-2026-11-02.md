@@ -209,3 +209,6 @@ Perplexity 本地 `fetchRestState/probe` 展示 API credits。上游 [79438e43](
 第一批已随 v0.6.45 发布。下一批先处理 Cursor：共享周额度、403 权限分类和 Grok Bot 固定周周期。
 指标与显示契约先记录在 [Cursor 周额度设计](cursor-weekly-quota-followup.md)，实现与验证状态以该批次提交为准。
 Ollama、OpenRouter、Antigravity 和独立日报仍是后续设计范围，不能将本批完成视为所有上游能力已同步。
+
+2026-11-04：上述六组后续范围已按用户授权集中实施，包含 Antigravity、OpenRouter、Ollama、ChatGPT 日报、Cursor 收费分类，以及 MiniMax/Perplexity 新来源。
+当前行为、验证范围和合成渲染证据见 [本批设计与实施记录](provider-backend-expansion-2026-11-04.md)；不代表所有上游新增 Provider 或真实账号验收已完成。

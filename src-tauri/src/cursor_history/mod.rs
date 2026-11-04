@@ -1,5 +1,6 @@
 mod aggregate;
 mod auth_session;
+mod billing;
 pub(crate) mod commands;
 mod credential;
 mod export;
@@ -13,9 +14,9 @@ mod transport;
 mod window;
 
 pub(crate) use model::{
-    CompleteHistory, HistoryCoverage, HistoryError, HistoryScope, HistoryTotals, ListCostCoverage,
-    MeteredCoverage, ModelUsageBucket, RawNumber, ScriptedEvent, ScriptedHistory, ScriptedPage,
-    ScriptedTokenUsage,
+    CompleteHistory, EventBilling, HistoryBillingTotals, HistoryCoverage, HistoryError,
+    HistoryScope, HistoryTotals, ListCostCoverage, MeteredCoverage, ModelUsageBucket, RawNumber,
+    ScriptedEvent, ScriptedHistory, ScriptedPage, ScriptedTokenUsage,
 };
 
 pub(crate) use credential::{
@@ -67,6 +68,8 @@ pub(crate) fn aggregate_scripted_history(
 
 #[cfg(test)]
 mod aggregate_tests;
+#[cfg(test)]
+mod billing_tests;
 #[cfg(test)]
 mod budget_tests;
 #[cfg(test)]

@@ -399,6 +399,9 @@
   }
 
   function probe(ctx) {
+    const source = ctx.host.config.get("source") || "apiKey"
+    if (source === "webChina") return globalThis.__openusage_minimax_web(ctx)
+    if (source !== "apiKey") throw "Minimax source is invalid. Check Settings."
     const attempts = endpointAttempts(ctx)
     let lastError = null
     let parsed = null

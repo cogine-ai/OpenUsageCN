@@ -32,6 +32,7 @@ pub(super) fn complete_history(account_id: &str, fetched_at_ms: i64) -> Complete
         totals: HistoryTotals {
             metered_charged_usd: Some(0.5),
             metered_coverage: MeteredCoverage::Complete,
+            billing: None,
         },
     }
 }

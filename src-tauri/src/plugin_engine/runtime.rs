@@ -7,9 +7,21 @@ use std::time::{Duration, Instant};
 
 const PROBE_TIMEOUT_SECS: u64 = 30;
 
+#[path = "runtime_reports.rs"]
+mod reports;
+pub(crate) use reports::run_reports;
+
+#[cfg(test)]
+#[path = "runtime_report_tests.rs"]
+mod report_tests;
+
 #[cfg(test)]
 #[path = "runtime_history_tests.rs"]
 mod history_tests;
+
+#[cfg(test)]
+#[path = "runtime_provider_expansion_tests.rs"]
+mod provider_expansion_tests;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
@@ -832,6 +844,7 @@ mod tests {
                 name: "Test".to_string(),
                 version: "0.0.0".to_string(),
                 entry: "plugin.js".to_string(),
+                supporting_scripts: vec![],
                 icon: "icon.svg".to_string(),
                 brand_color: None,
                 lines: vec![],

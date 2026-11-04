@@ -86,6 +86,7 @@ Bundled plugins live under `src-tauri/resources/bundled_plugins/<id>/`.
 | `name`          | string | Yes      | Display name shown in UI                   |
 | `version`       | string | Yes      | Semver version                             |
 | `entry`         | string | Yes      | Relative path to JS entry file             |
+| `supportingScripts` | string[] | No | Ordered classic JS files evaluated before entry; distinct files within the plugin directory |
 | `icon`          | string | Yes      | Relative path to SVG icon file             |
 | `links`         | array  | No       | Optional quick links shown on detail page  |
 | `statusPage`    | object | No       | Optional provider outage status source     |

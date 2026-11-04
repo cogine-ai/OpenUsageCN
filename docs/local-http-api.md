@@ -55,6 +55,18 @@ Example:
 
 The Windows MVP reports ten known providers: Codex, BigModel CN, OpenAI API, OpenRouter, Z.ai, DeepSeek, Moonshot, Ollama Cloud, Doubao, and xAI.
 
+New Antigravity quota pools remain separate numeric resources: `geminiSession`, `geminiWeekly`,
+`claude` (the existing Claude session key), `claudeWeekly` and `argonWeekly`. Only confirmed
+recurring buckets expose their five-hour or weekly duration; legacy unknown periods do not claim one.
+MiniMax China Web may return `session` and `weekly`; an Unlimited lane is display text, not zero usage.
+Perplexity website subscription resources (`subscriptionCredits`, `purchasedCredits`,
+`promotionalCredits`, `organizationCredits`) are distinct from desktop/API credits.
+They retain the service's credit units; a member cap is not an organization balance.
+
+Server Reports are separate on-demand data and are not exposed by these cached quota routes.
+OpenRouter's displayed management-Key aggregates and BYOK text are not silently converted into a
+single Key budget. Cursor charge-classification history remains in Model Usage/CSV, not `/v1/limits`.
+
 ### `GET /v1/usage`
 
 Returns an array of cached usage snapshots for all **enabled** providers, ordered by your plugin settings.
@@ -195,7 +207,7 @@ On Windows, only the ten Windows MVP providers are present; the rest of this tab
 | `alibaba-coding-plan` | `session`, `weekly`, `monthly` |
 | `alibaba-token-plan` | `tokenQuota` |
 | `amp` | `free`, `other`, `orb` |
-| `antigravity` | `geminiPro`, `geminiFlash`, `claude` |
+| `antigravity` | `geminiPro`, `geminiFlash`, `claude`, `geminiSession`, `geminiWeekly`, `claudeWeekly`, `argonWeekly` |
 | `bigmodel-cn` | `session`, `weekly`, `webSearches` |
 | `claude` | `session`, `weekly`, `sonnet`, `claudeDesign`, `extraUsage` |
 | `codex` | `session`, `weekly`, `spark`, `sparkWeekly`, `codeReview` |
@@ -210,14 +222,14 @@ On Windows, only the ten Windows MVP providers are present; the rest of this tab
 | `jetbrains-ai-assistant` | `quota` |
 | `kimi` | `session`, `weekly` |
 | `kiro` | `credits`, `bonusCredits` |
-| `minimax` | `session` |
+| `minimax` | `session`, `weekly` |
 | `moonshot` | None; balance is text in `/v1/usage` |
-| `ollama` | `monthly`, `session`, `weekly` when shown on the account settings page |
+| `ollama` | `monthly`, `session`, `weekly` when returned by the selected Cookie or API Key source |
 | `openai-api` | `credits` |
 | `opencode-go` | `session`, `weekly`, `monthly` |
 | `opencode` | `session`, `weekly` |
 | `openrouter` | `credits`, `keyLimit` |
-| `perplexity` | `apiCredits` |
+| `perplexity` | `apiCredits`, `subscriptionCredits`, `purchasedCredits`, `promotionalCredits`, `organizationCredits` |
 | `synthetic` | `fiveHour`, `mana`, `subscription`, `freeToolCalls`, `search` |
 | `xai` | None; billing balance and spend are text in `/v1/usage` |
 | `zai` | `session`, `weekly`, `webSearches` |

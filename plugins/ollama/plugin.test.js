@@ -1,16 +1,14 @@
 import { beforeEach, describe, expect, it } from "vitest"
 import { makeCtx } from "../test-helpers.js"
+import { loadTestPlugin } from "../load-test-plugin.js"
 
 const SETTINGS_URL = "https://ollama.com/settings"
 const COOKIE = "__Secure-session=test-session; other=hello"
 
-async function loadPlugin() {
-  await import("./plugin.js?test=" + Math.random())
-  return globalThis.__openusage_plugin
-}
+async function loadPlugin() { return loadTestPlugin("ollama") }
 
 function withCookie(ctx, cookie = COOKIE) {
-  ctx.host.config.get.mockReturnValue(cookie)
+  ctx.host.config.get.mockImplementation((field) => field === "cookieHeader" ? cookie : null)
 }
 
 function respond(ctx, html, status = 200) {

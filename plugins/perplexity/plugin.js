@@ -390,6 +390,9 @@
   }
 
   function probe(ctx) {
+    const source = ctx.host.config.get("source") || "desktopApi"
+    if (source === "webSubscription") return globalThis.__openusage_perplexity_subscription(ctx)
+    if (source !== "desktopApi") throw "Perplexity source is invalid. Check Settings."
     const session = loadLocalSession(ctx)
     if (!session) throw "Not logged in. Sign in via Perplexity app."
     if (session.sourcePath) ctx.host.log.info("using cache db: " + session.sourcePath)

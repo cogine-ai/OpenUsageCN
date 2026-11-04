@@ -7,10 +7,126 @@
   "icon": "icon.svg",
   "brandColor": "#20808D",
   "lines": [
-    { "type": "progress", "label": "API credits", "scope": "overview", "primaryOrder": 1, "limitResource": { "key": "apiCredits" } },
-    { "type": "text", "label": "Queries", "scope": "overview" },
-    { "type": "text", "label": "Deep Research", "scope": "overview" },
-    { "type": "text", "label": "Labs", "scope": "detail" },
-    { "type": "text", "label": "Agentic Research", "scope": "detail" }
-  ]
+    {
+      "type": "progress",
+      "label": "API credits",
+      "scope": "overview",
+      "primaryOrder": 1,
+      "limitResource": {
+        "key": "apiCredits"
+      }
+    },
+    {
+      "type": "text",
+      "label": "Queries",
+      "scope": "overview"
+    },
+    {
+      "type": "text",
+      "label": "Deep Research",
+      "scope": "overview"
+    },
+    {
+      "type": "text",
+      "label": "Labs",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Agentic Research",
+      "scope": "detail"
+    },
+    {
+      "type": "progress",
+      "label": "Subscription Credits",
+      "scope": "overview",
+      "limitResource": {
+        "key": "subscriptionCredits",
+        "countUnit": "credits"
+      },
+      "primaryOrder": 2
+    },
+    {
+      "type": "progress",
+      "label": "Purchased Credits",
+      "scope": "detail",
+      "limitResource": {
+        "key": "purchasedCredits",
+        "countUnit": "credits"
+      },
+      "primaryOrder": 3
+    },
+    {
+      "type": "progress",
+      "label": "Promotional Credits",
+      "scope": "detail",
+      "limitResource": {
+        "key": "promotionalCredits",
+        "countUnit": "credits"
+      },
+      "primaryOrder": 4
+    },
+    {
+      "type": "progress",
+      "label": "Organization Credits",
+      "scope": "detail",
+      "limitResource": {
+        "key": "organizationCredits",
+        "countUnit": "credits"
+      },
+      "primaryOrder": 5
+    },
+    {
+      "type": "text",
+      "label": "Member Cap Remaining",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Subscription Credits",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Organization Credits",
+      "scope": "detail"
+    }
+  ],
+  "supportingScripts": [
+    "subscription.js"
+  ],
+  "config": {
+    "fields": [
+      {
+        "id": "source",
+        "type": "select",
+        "label": "Source",
+        "default": "desktopApi",
+        "options": [
+          {
+            "value": "desktopApi",
+            "label": "Desktop API"
+          },
+          {
+            "value": "webSubscription",
+            "label": "Web Subscription"
+          }
+        ]
+      },
+      {
+        "id": "webCookie",
+        "type": "secret",
+        "label": "Cookie Header",
+        "required": true,
+        "placeholder": "__Secure-authjs.session-token=...",
+        "help": "Copy the Cookie header from a signed-in perplexity.ai/account/usage request.",
+        "visibleWhen": {
+          "field": "source",
+          "values": [
+            "webSubscription"
+          ]
+        }
+      }
+    ]
+  }
 }

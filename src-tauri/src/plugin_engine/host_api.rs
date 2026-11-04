@@ -16,7 +16,7 @@ use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-const WHITELISTED_ENV_VARS: [&str; 44] = [
+const WHITELISTED_ENV_VARS: [&str; 45] = [
     "CODEX_HOME",
     "XDG_DATA_HOME",
     "OPENCODE_DB",
@@ -56,6 +56,7 @@ const WHITELISTED_ENV_VARS: [&str; 44] = [
     "MOONSHOT_API_KEY",
     "MOONSHOT_REGION",
     "OLLAMA_CLOUD_COOKIE",
+    "OLLAMA_API_KEY",
     "VOLCENGINE_ACCESS_KEY_ID",
     "VOLCENGINE_SECRET_ACCESS_KEY",
     "VOLCENGINE_REGION",
@@ -114,7 +115,7 @@ pub(crate) fn is_env_var_allowed_for_plugin(plugin_id: &str, name: &str) -> bool
         "opencode" => matches!(name, "OPENCODE_COOKIE" | "OPENCODE_WORKSPACE_ID"),
         "deepseek" => matches!(name, "DEEPSEEK_API_KEY"),
         "moonshot" => matches!(name, "MOONSHOT_API_KEY" | "MOONSHOT_REGION"),
-        "ollama" => matches!(name, "OLLAMA_CLOUD_COOKIE"),
+        "ollama" => matches!(name, "OLLAMA_CLOUD_COOKIE" | "OLLAMA_API_KEY"),
         "doubao" => matches!(
             name,
             "VOLCENGINE_ACCESS_KEY_ID" | "VOLCENGINE_SECRET_ACCESS_KEY" | "VOLCENGINE_REGION"
@@ -628,6 +629,11 @@ fn redact_url(url: &str) -> String {
         "account_id",
         "accountid",
         "project_ids",
+        "workspace_id",
+        "workspaceid",
+        "organization_id",
+        "organizationid",
+        "api_key_hash",
         "profilearn",
         "profile_arn",
         "profilekey",
@@ -684,6 +690,7 @@ fn redact_url(url: &str) -> String {
 }
 
 mod provider_redaction;
+mod usage_redaction;
 
 /// Redact sensitive patterns in response body for logging
 fn redact_body(body: &str) -> String {
@@ -738,6 +745,7 @@ fn redact_body(body: &str) -> String {
         "cookie",
         "cookieHeader",
         "cookie_header",
+        "webCookie",
         "setCookie",
         "set_cookie",
         "candidateId",
@@ -760,6 +768,7 @@ fn redact_body(body: &str) -> String {
         "owning_user",
         "owningTeam",
         "owning_team",
+        "project",
         "credentialGeneration",
         "credential_generation",
         "auth_token",
@@ -824,7 +833,13 @@ fn redact_body(body: &str) -> String {
 
 fn redact_http_response_body(url: &str, body: &str) -> String {
     let path = url.split('?').next().unwrap_or(url);
-    if path == "https://ollama.com/api/usage" || path == "https://ollama.com/settings" {
+    if matches!(
+        path,
+        "https://ollama.com/api/usage"
+            | "https://ollama.com/api/me"
+            | "https://ollama.com/api/balance"
+            | "https://ollama.com/settings"
+    ) {
         return "[REDACTED OLLAMA ACCOUNT RESPONSE]".to_string();
     }
     if path.ends_with("/api/auth/me") {
@@ -845,14 +860,21 @@ fn redact_http_response_body(url: &str, body: &str) -> String {
 /// Produces an endpoint-scoped log copy with provider identities hidden; plugin responses stay raw.
 fn redact_plugin_http_response_body(plugin_id: &str, url: &str, body: &str) -> String {
     let path = url.split(['?', '#']).next().unwrap_or(url);
+    if let Some(redacted) = usage_redaction::response_body(plugin_id, path, body) {
+        return redact_http_response_body(url, &redacted);
+    }
     if plugin_id == "opencode" && path == "https://opencode.ai/_server" {
         // Server-function bodies mix serialized JavaScript with private workspace data.
         return "[REDACTED OPENCODE SERVER RESPONSE]".to_string();
     }
     let body = if plugin_id == "openrouter" && path.ends_with("/key") {
         provider_redaction::openrouter_key_body(body)
-    } else if plugin_id == "gemini"
-        && path == "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
+    } else if matches!(plugin_id, "gemini" | "antigravity")
+        && matches!(
+            path,
+            "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
+                | "https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
+        )
     {
         provider_redaction::gemini_assist_body(body)
     } else if plugin_id == "doubao" && path == "https://open.volcengineapi.com/" {

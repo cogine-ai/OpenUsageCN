@@ -103,7 +103,7 @@ fn provider_env_names(id: &str) -> &'static [&'static str] {
     match id {
         "deepseek" => &["DEEPSEEK_API_KEY"],
         "moonshot" => &["MOONSHOT_API_KEY", "MOONSHOT_REGION"],
-        "ollama" => &["OLLAMA_CLOUD_COOKIE"],
+        "ollama" => &["OLLAMA_CLOUD_COOKIE", "OLLAMA_API_KEY"],
         "doubao" => &[
             "VOLCENGINE_ACCESS_KEY_ID",
             "VOLCENGINE_SECRET_ACCESS_KEY",
@@ -157,8 +157,13 @@ where
                 || (read_env("MOONSHOT_API_KEY").is_some()
                     && env_region.as_deref().unwrap_or("international") == region)
         }
-        "ollama" => setting(values, "cookieHeader", "OLLAMA_CLOUD_COOKIE", read_env)
-            .is_some_and(|cookie| has_ollama_session_cookie(&cookie)),
+        "ollama" => match configured(values, "source").as_deref().unwrap_or("cookie") {
+            "cookie" => setting(values, "cookieHeader", "OLLAMA_CLOUD_COOKIE", read_env)
+                .is_some_and(|cookie| has_ollama_session_cookie(&cookie)),
+            "apiKey" => setting(values, "apiKey", "OLLAMA_API_KEY", read_env)
+                .is_some_and(|key| !key.chars().any(|c| c.is_control() || c.is_whitespace())),
+            _ => false,
+        },
         "doubao" => {
             let region = setting(values, "region", "VOLCENGINE_REGION", read_env)
                 .unwrap_or_else(|| "cn-beijing".to_string());
@@ -237,6 +242,38 @@ fn has_ollama_session_cookie(raw: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ollama_detection_uses_only_the_explicitly_selected_source() {
+        let env = |name: &str| match name {
+            "OLLAMA_API_KEY" => Some("ollama-synthetic-key".to_string()),
+            _ => None,
+        };
+        assert!(has_credentials(
+            "ollama",
+            &values(&[("source", "apiKey")]),
+            &env
+        ));
+        assert!(!has_credentials("ollama", &values(&[]), &env));
+        assert!(!has_credentials(
+            "ollama",
+            &values(&[("source", "unknown")]),
+            &env
+        ));
+        assert!(!has_credentials(
+            "ollama",
+            &values(&[
+                ("source", "apiKey"),
+                ("cookieHeader", "session=old-account")
+            ]),
+            &|_| None
+        ));
+        assert!(!has_credentials(
+            "ollama",
+            &values(&[("source", "apiKey"), ("apiKey", "invalid key")]),
+            &|_| None
+        ));
+    }
 
     fn values(entries: &[(&str, &str)]) -> HashMap<String, Value> {
         entries

@@ -8,7 +8,7 @@ The current automatic checks cover DeepSeek, Moonshot, Ollama Cloud, Doubao, and
 | --- | --- |
 | DeepSeek | API key |
 | Moonshot | Key for the selected China Mainland or International region |
-| Ollama Cloud | Explicit Cookie header containing an Ollama session cookie |
+| Ollama Cloud | A session Cookie for the Cookie source, or a key for the explicitly selected API Key source |
 | Doubao | Volcengine Access Key ID and Secret Access Key |
 | xAI | Management API key and valid Team ID |
 

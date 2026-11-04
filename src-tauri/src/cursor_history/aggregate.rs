@@ -35,6 +35,7 @@ pub(super) fn aggregate_events(
     let mut buckets = BTreeMap::<(String, String), BucketAccumulator>::new();
     let mut metered_cents = 0.0;
     let mut metered_complete = true;
+    let mut billing = super::billing::BillingAccumulator::default();
 
     for event in events {
         let Some(timestamp_ms) = integer_timestamp(&event.timestamp_ms) else {
@@ -43,6 +44,7 @@ pub(super) fn aggregate_events(
         if timestamp_ms < from_ms || timestamp_ms >= to_ms {
             continue;
         }
+        billing.add(&event)?;
 
         match valid_cents(&event.charged_cents) {
             Some(cents) if metered_complete => {
@@ -102,15 +104,18 @@ pub(super) fn aggregate_events(
             }
         })
         .collect();
+    let billing = Some(billing.finish());
     let totals = if metered_complete {
         HistoryTotals {
             metered_charged_usd: Some(metered_cents / 100.0),
             metered_coverage: MeteredCoverage::Complete,
+            billing,
         }
     } else {
         HistoryTotals {
             metered_charged_usd: None,
             metered_coverage: MeteredCoverage::Incomplete,
+            billing,
         }
     };
     Ok((buckets, totals))

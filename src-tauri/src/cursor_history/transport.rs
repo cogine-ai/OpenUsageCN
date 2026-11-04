@@ -156,6 +156,8 @@ struct WireEvent {
     model: Option<String>,
     token_usage: Option<WireTokenUsage>,
     charged_cents: Option<Value>,
+    kind: Option<Value>,
+    is_chargeable: Option<Value>,
     owning_user: Option<Value>,
     owning_team: Option<Value>,
 }
@@ -167,6 +169,7 @@ impl WireEvent {
             model_name: self.model.unwrap_or_default(),
             token_usage: self.token_usage.map(WireTokenUsage::into_scripted),
             charged_cents: wire_number(self.charged_cents),
+            billing: super::billing::classify(self.kind.as_ref(), self.is_chargeable.as_ref()),
             owning_user: ownership_key(self.owning_user)?,
             owning_team: ownership_key(self.owning_team)?,
         })

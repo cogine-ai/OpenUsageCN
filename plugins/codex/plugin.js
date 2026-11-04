@@ -1126,5 +1126,21 @@
     throw isWindows(ctx) ? ERR_WINDOWS_FILE_AUTH : ERR_NOT_LOGGED_IN
   }
 
-  globalThis.__openusage_plugin = { id: "codex", probe, probeHistory }
+  function probeReports(ctx) {
+    const reports = globalThis.__openusage_codex_reports
+    const read = () => reports.selectSource(ctx, resolveAuthPaths(ctx), !isWindows(ctx),
+      (raw) => tryParseAuthJson(ctx, raw), KEYCHAIN_SERVICE)
+    const selected = read()
+    if (!selected) throw "Not logged in. Refresh Codex usage or sign in before loading reports."
+    const reread = () => {
+      try {
+        const current = read()
+        if (current && current.source === selected.source && current.authPath === selected.authPath) return current
+      } catch (_) { /* A changed or unreadable source must invalidate the captured result. */ }
+      throw "Codex credentials changed. Refresh usage and load reports again."
+    }
+    return reports.probe(ctx, selected, reread)
+  }
+
+  globalThis.__openusage_plugin = { id: "codex", probe, probeHistory, probeReports }
 })()
