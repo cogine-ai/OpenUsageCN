@@ -114,6 +114,9 @@
   }
 
   function probe(ctx) {
+    const source = globalThis.__openusage_ollama_api.source(ctx)
+    if (source === "apiKey") return globalThis.__openusage_ollama_api.quota(ctx)
+    if (source !== "cookie") throw "Ollama source is invalid. Check Settings."
     const cookie = loadCookie(ctx)
     let response
     try {
@@ -166,5 +169,5 @@
     return { lines }
   }
 
-  globalThis.__openusage_plugin = { id: "ollama", probe }
+  globalThis.__openusage_plugin = { id: "ollama", probe, probeReports: (ctx) => globalThis.__openusage_ollama_reports(ctx) }
 })()

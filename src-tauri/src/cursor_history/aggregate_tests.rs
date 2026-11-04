@@ -24,6 +24,7 @@ fn token_event(
             total_cents,
         }),
         charged_cents,
+        billing: super::EventBilling::Unknown,
         owning_user: None,
         owning_team: None,
     }
@@ -35,6 +36,7 @@ fn non_token_event(timestamp_ms: i128, charged_cents: RawNumber) -> ScriptedEven
         model_name: "ignored-without-tokens".to_string(),
         token_usage: None,
         charged_cents,
+        billing: super::EventBilling::Unknown,
         owning_user: None,
         owning_team: None,
     }
@@ -110,6 +112,7 @@ fn aggregates_four_token_classes_by_local_date_and_raw_model() {
                         total_cents: RawNumber::Decimal(125.0),
                     }),
                     charged_cents: RawNumber::Decimal(50.0),
+                    billing: super::EventBilling::Unknown,
                     owning_user: None,
                     owning_team: None,
                 },
@@ -124,6 +127,7 @@ fn aggregates_four_token_classes_by_local_date_and_raw_model() {
                         total_cents: RawNumber::Decimal(75.0),
                     }),
                     charged_cents: RawNumber::Decimal(25.0),
+                    billing: super::EventBilling::Unknown,
                     owning_user: None,
                     owning_team: None,
                 },
@@ -149,10 +153,14 @@ fn aggregates_four_token_classes_by_local_date_and_raw_model() {
         }]
     );
     assert_eq!(
-        result.totals,
+        HistoryTotals {
+            billing: None,
+            ..result.totals
+        },
         HistoryTotals {
             metered_charged_usd: Some(0.75),
             metered_coverage: MeteredCoverage::Complete,
+            billing: None,
         }
     );
 }
@@ -247,10 +255,14 @@ fn metered_total_includes_valid_non_token_events() {
 
     assert_eq!(history.buckets[0].request_count, 1);
     assert_eq!(
-        history.totals,
+        HistoryTotals {
+            billing: None,
+            ..history.totals
+        },
         HistoryTotals {
             metered_charged_usd: Some(0.75),
             metered_coverage: MeteredCoverage::Complete,
+            billing: None,
         }
     );
 }
@@ -265,10 +277,14 @@ fn any_unpriced_valid_event_makes_the_whole_window_metered_total_incomplete() {
     ]);
 
     assert_eq!(
-        history.totals,
+        HistoryTotals {
+            billing: None,
+            ..history.totals
+        },
         HistoryTotals {
             metered_charged_usd: None,
             metered_coverage: MeteredCoverage::Incomplete,
+            billing: None,
         }
     );
 }

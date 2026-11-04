@@ -3,6 +3,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
+#[path = "manifest_scripts.rs"]
+mod scripts;
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ManifestLine {
@@ -127,6 +130,8 @@ pub struct PluginManifest {
     pub name: String,
     pub version: String,
     pub entry: String,
+    #[serde(default)]
+    pub supporting_scripts: Vec<String>,
     pub icon: String,
     pub brand_color: Option<String>,
     pub lines: Vec<ManifestLine>,
@@ -164,8 +169,9 @@ pub fn load_plugins_from_dir(plugins_dir: &std::path::Path) -> Vec<LoadedPlugin>
         if !manifest_path.exists() {
             continue;
         }
-        if let Ok(p) = load_single_plugin(&path) {
-            plugins.push(p);
+        match load_single_plugin(&path) {
+            Ok(plugin) => plugins.push(plugin),
+            Err(error) => log::error!("plugin load failed: {error}"),
         }
     }
 
@@ -194,24 +200,7 @@ fn load_single_plugin(
 
     validate_manifest_lines(&manifest)?;
 
-    if manifest.entry.trim().is_empty() {
-        return Err("plugin entry field cannot be empty".into());
-    }
-    if Path::new(&manifest.entry).is_absolute() {
-        return Err("plugin entry must be a relative path".into());
-    }
-
-    let entry_path = plugin_dir.join(&manifest.entry);
-    let canonical_plugin_dir = plugin_dir.canonicalize()?;
-    let canonical_entry_path = entry_path.canonicalize()?;
-    if !canonical_entry_path.starts_with(&canonical_plugin_dir) {
-        return Err("plugin entry must remain within plugin directory".into());
-    }
-    if !canonical_entry_path.is_file() {
-        return Err("plugin entry must be a file".into());
-    }
-
-    let entry_script = std::fs::read_to_string(&canonical_entry_path)?;
+    let entry_script = scripts::read_bundle(plugin_dir, &manifest)?;
 
     let icon_file = plugin_dir.join(&manifest.icon);
     let icon_bytes = std::fs::read(&icon_file)?;

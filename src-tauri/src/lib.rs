@@ -27,6 +27,7 @@ mod provider_accounts;
 mod provider_config;
 mod provider_config_sources;
 mod provider_detection;
+mod provider_reports;
 mod provider_status;
 mod safe_file;
 mod tray;
@@ -1264,6 +1265,8 @@ pub fn run() {
             cursor_history::commands::export_cursor_history_csv,
             refresh_cursor_history,
             local_history::refresh_local_history,
+            provider_reports::refresh_provider_reports,
+            provider_reports::cancel_provider_reports,
             platform_capabilities::get_platform_capabilities,
             windows_autostart::repair_windows_autostart_command,
             provider_status::get_provider_status,
@@ -1358,6 +1361,7 @@ pub fn run() {
                 Arc::clone(&provider_accounts) as Arc<dyn cursor_history::CredentialLeasePort>;
             app.manage(CursorHistoryState::new(&app_data_dir, history_credentials));
             app.manage(BrowserDiscoveryState::new(browser_broker));
+            app.manage(provider_reports::ProviderReportsState::default());
             app.manage(provider_accounts);
             app.manage(Mutex::new(AppState {
                 plugins,

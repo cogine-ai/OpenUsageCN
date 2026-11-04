@@ -124,6 +124,10 @@ pub(super) fn history_csv(history: &CompleteHistory) -> Result<String, HistoryEr
             "List-Price Coverage",
             "Metered Usage USD",
             "Metered Coverage",
+            "Usage Events",
+            "Known On-Demand Charges USD",
+            "On-Demand Coverage",
+            "Unclassified Events",
         ]
         .map(str::to_string),
     );
@@ -145,6 +149,27 @@ pub(super) fn history_csv(history: &CompleteHistory) -> Result<String, HistoryEr
         }
         .to_string(),
     );
+    let billing = history.totals.billing.as_ref();
+    summary.extend([
+        billing
+            .map(|value| value.usage_event_count.to_string())
+            .unwrap_or_default(),
+        billing
+            .map(|value| value.known_on_demand_charged_usd.to_string())
+            .unwrap_or_default(),
+        billing
+            .map(|value| {
+                match value.on_demand_coverage {
+                    MeteredCoverage::Complete => "Complete",
+                    MeteredCoverage::Incomplete => "Incomplete",
+                }
+                .to_string()
+            })
+            .unwrap_or_else(|| "Unavailable".to_string()),
+        billing
+            .map(|value| value.unclassified_event_count.to_string())
+            .unwrap_or_default(),
+    ]);
     append_row(&mut csv, &summary);
 
     for bucket in &history.buckets {
@@ -168,6 +193,10 @@ pub(super) fn history_csv(history: &CompleteHistory) -> Result<String, HistoryEr
                 ListCostCoverage::Invalid => "Invalid",
             }
             .to_string(),
+            String::new(),
+            String::new(),
+            String::new(),
+            String::new(),
             String::new(),
             String::new(),
         ]);

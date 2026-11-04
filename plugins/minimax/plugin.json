@@ -7,6 +7,81 @@
   "icon": "icon.svg",
   "brandColor": "#F5433C",
   "lines": [
-    { "type": "progress", "label": "Session", "scope": "overview", "primaryOrder": 1, "limitResource": { "key": "session", "countUnit": "prompts" } }
-  ]
+    {
+      "type": "progress",
+      "label": "Session",
+      "scope": "overview",
+      "primaryOrder": 1,
+      "limitResource": {
+        "key": "session",
+        "countUnit": "prompts"
+      }
+    },
+    {
+      "type": "progress",
+      "label": "Weekly",
+      "scope": "overview",
+      "period": "weekly",
+      "limitResource": {
+        "key": "weekly"
+      }
+    },
+    {
+      "type": "text",
+      "label": "Session",
+      "scope": "overview"
+    },
+    {
+      "type": "text",
+      "label": "Weekly",
+      "scope": "overview"
+    },
+    {
+      "type": "text",
+      "label": "Session Capacity",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Weekly Capacity",
+      "scope": "detail"
+    }
+  ],
+  "supportingScripts": [
+    "web.js"
+  ],
+  "config": {
+    "fields": [
+      {
+        "id": "source",
+        "type": "select",
+        "label": "Source",
+        "default": "apiKey",
+        "options": [
+          {
+            "value": "apiKey",
+            "label": "API Key"
+          },
+          {
+            "value": "webChina",
+            "label": "China Web"
+          }
+        ]
+      },
+      {
+        "id": "webCookie",
+        "type": "secret",
+        "label": "Cookie Header",
+        "required": true,
+        "placeholder": "HERTZ-SESSION=...",
+        "help": "Copy the Cookie header from a signed-in platform.minimax.cn/console/usage request.",
+        "visibleWhen": {
+          "field": "source",
+          "values": [
+            "webChina"
+          ]
+        }
+      }
+    ]
+  }
 }

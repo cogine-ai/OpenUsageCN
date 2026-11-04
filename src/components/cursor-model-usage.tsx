@@ -152,6 +152,14 @@ function CursorModelUsageAccount({
               <dt className="text-xs text-muted-foreground">Metered Usage</dt>
               <dd>{snapshot.totals.meteredChargedUsd === null ? "Unavailable" : USD_FORMAT.format(snapshot.totals.meteredChargedUsd)}{snapshot.totals.meteredCoverage === "incomplete" ? " · Incomplete" : ""}</dd>
             </div>
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-xs text-muted-foreground">{snapshot.totals.billing?.onDemandCoverage === "incomplete" ? "Known On-Demand Charges" : "On-Demand Charges"}</dt>
+              <dd>{snapshot.totals.billing ? USD_FORMAT.format(snapshot.totals.billing.knownOnDemandChargedUsd) : "Unavailable"}{snapshot.totals.billing?.onDemandCoverage === "incomplete" ? " · Incomplete" : ""}</dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-xs text-muted-foreground">Usage Events</dt>
+              <dd>{snapshot.totals.billing ? formatCountNumber(snapshot.totals.billing.usageEventCount) : "Unavailable"}</dd>
+            </div>
           </dl>
           <p className="text-xs text-muted-foreground">金额来自会话可见记录，不是账单。</p>
           <details className="text-xs text-muted-foreground">
@@ -170,6 +178,9 @@ function CursorModelUsageAccount({
 
               <p className="text-xs text-muted-foreground">分页完整仅表示已取回所示窗口的数据，不代表完整账期；金额来自 Cursor 会话可见记录，不是账单。</p>
               <p className="text-xs text-muted-foreground">仅缓存最近一次成功结果；刷新替换缓存，不累计历史用量。</p>
+              <p className="text-xs text-muted-foreground">Metered Usage 包含套餐内扣减；On-Demand Charges 仅汇总明确标记为按量收费的记录。Usage Events 包括没有 tokens 的有效事件，Requests 保持原有定义。</p>
+              {snapshot.totals.billing?.unclassifiedEventCount ? <p className="text-xs text-muted-foreground">{formatCountNumber(snapshot.totals.billing.unclassifiedEventCount)} 条事件无法确认收费分类或金额，已知按量扣费不代表完整总额。</p> : null}
+              {!snapshot.totals.billing ? <p className="text-xs text-muted-foreground">此缓存尚无收费分类，请刷新后查看新指标。</p> : null}
             </div>
           </details>
 

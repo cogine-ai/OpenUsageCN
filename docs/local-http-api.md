@@ -55,6 +55,18 @@ Example:
 
 The Windows MVP reports ten known providers: Codex, BigModel CN, OpenAI API, OpenRouter, Z.ai, DeepSeek, Moonshot, Ollama Cloud, Doubao, and xAI.
 
+New Antigravity quota pools remain separate numeric resources: `geminiSession`, `geminiWeekly`,
+`claude` (the existing Claude session key), `claudeWeekly` and `argonWeekly`. Only confirmed
+recurring buckets expose their five-hour or weekly duration; legacy unknown periods do not claim one.
+MiniMax China Web may return `session` and `weekly`; an Unlimited lane is display text, not zero usage.
+Perplexity website subscription resources (`subscriptionCredits`, `purchasedCredits`,
+`promotionalCredits`, `organizationCredits`) are distinct from desktop/API credits.
+They retain the service's credit units; a member cap is not an organization balance.
+
+Server Reports are separate on-demand data and are not exposed by these cached quota routes.
+OpenRouter's displayed management-Key aggregates and BYOK text are not silently converted into a
+single Key budget. Cursor charge-classification history remains in Model Usage/CSV, not `/v1/limits`.
+
 ### `GET /v1/usage`
 
 Returns an array of cached usage snapshots for all **enabled** providers, ordered by your plugin settings.

@@ -25,8 +25,17 @@ pub(crate) struct ScriptedEvent {
     pub model_name: String,
     pub token_usage: Option<ScriptedTokenUsage>,
     pub charged_cents: RawNumber,
+    pub billing: EventBilling,
     pub owning_user: Option<String>,
     pub owning_team: Option<String>,
+}
+
+#[derive(Clone, Copy, PartialEq, Default)]
+pub(crate) enum EventBilling {
+    OnDemand,
+    NotCharged,
+    #[default]
+    Unknown,
 }
 
 #[derive(Clone, PartialEq)]
@@ -102,6 +111,17 @@ pub(crate) enum HistoryScope {
 pub(crate) struct HistoryTotals {
     pub metered_charged_usd: Option<f64>,
     pub metered_coverage: MeteredCoverage,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub billing: Option<HistoryBillingTotals>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct HistoryBillingTotals {
+    pub usage_event_count: u64,
+    pub known_on_demand_charged_usd: f64,
+    pub on_demand_coverage: MeteredCoverage,
+    pub unclassified_event_count: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

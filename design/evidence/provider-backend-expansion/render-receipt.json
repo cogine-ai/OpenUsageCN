@@ -1,0 +1,42 @@
+{
+  "result": "PASS",
+  "browser": "143.0.7499.4",
+  "screenshots": [
+    "after-antigravity.png",
+    "after-codex.png",
+    "after-cursor.png",
+    "after-minimax-connection.png",
+    "after-minimax.png",
+    "after-ollama-connection.png",
+    "after-ollama.png",
+    "after-openrouter.png",
+    "after-perplexity-connection.png",
+    "after-perplexity.png",
+    "after-reports-dark.png",
+    "after-reports-empty.png",
+    "after-reports-error.png",
+    "after-reports-loading.png",
+    "after-reports-narrow.png",
+    "before-antigravity.png",
+    "before-codex.png",
+    "before-cursor.png",
+    "before-minimax-connection.png",
+    "before-minimax.png",
+    "before-ollama-connection.png",
+    "before-ollama.png",
+    "before-openrouter.png",
+    "before-perplexity-connection.png",
+    "before-perplexity.png"
+  ],
+  "checks": [
+    "Production components and CSS",
+    "Independent report action",
+    "Partial permissions preserve readable lines",
+    "Negative credits retained",
+    "New source radio fields",
+    "Loading/error/empty states",
+    "Dark and 400px narrow layout",
+    "No external requests or page errors"
+  ],
+  "scope": "Synthetic presentation values and mocked IPC; not real account, native webview or installed app acceptance"
+}

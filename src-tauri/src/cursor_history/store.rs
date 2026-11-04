@@ -213,6 +213,11 @@ fn same_period(left: &CompleteHistory, right: &CompleteHistory) -> bool {
 fn valid_history(history: &CompleteHistory, account_id: &str) -> bool {
     let coverage = &history.coverage;
     history.account_id == account_id
+        && history
+            .totals
+            .billing
+            .as_ref()
+            .is_none_or(super::billing::valid_totals)
         && coverage.complete
         && coverage.from_ms > 0
         && coverage.from_ms < coverage.to_ms

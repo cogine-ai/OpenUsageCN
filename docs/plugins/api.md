@@ -2,6 +2,29 @@
 
 This document describes the host APIs available to plugins via the `ctx` object passed to `probe(ctx)`.
 
+## Supporting Scripts And Server Reports
+
+`plugin.json` may declare ordered `supportingScripts` before `entry`. All are classic scripts
+evaluated in the same fresh QuickJS context. Paths must resolve to distinct files inside the plugin
+directory. This does not add Node imports, dynamic loading, or host permissions.
+
+Codex, OpenRouter and Ollama may expose `probeReports(ctx)` for their independent **Server Reports**
+action. Return `{ scopeKey, lines, reports }`: `scopeKey` is a lowercase SHA-256 binding the selected
+source, identity/workspace and credential generation; `lines` contains only text/barChart.
+`reports` entries contain `id`, `label`, `status`, optional `message`, `retryAt` and UTC `coverage`
+(`fromDate`, `toDate`, `timeZone`, `reportedDates`, `missingDates`). Status is ready, partial,
+notSupported, permissionDenied, rateLimited, authExpired or error. Missing dates stay missing.
+Use text for negative credit adjustments; the existing barChart contract accepts nonnegative values.
+
+The host adds providerId, requestId and fetchedAt, validates the output, and limits the whole call
+to 60 seconds. New requests replace older requests for the same provider. Cancellation matches the
+exact requestId, so an old page cannot cancel a newer request. Reports never replace quota or
+local-history outputs. Check the same credential source again before returning scoped data.
+
+`OLLAMA_API_KEY` is available only to the Ollama plugin, alongside its existing Cookie variable.
+Other plugins cannot read it. Connection secrets saved in Settings use the existing local
+`providers.json` mechanism; they are masked in the UI, not stored in Keychain by this API.
+
 ## Context Object
 
 ```typescript

@@ -9,6 +9,7 @@ fn plugin(script: &str) -> LoadedPlugin {
             name: "Fixture".to_string(),
             version: "0.0.0".to_string(),
             entry: "plugin.js".to_string(),
+            supporting_scripts: vec![],
             icon: "icon.svg".to_string(),
             brand_color: None,
             lines: vec![],

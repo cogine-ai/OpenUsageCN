@@ -9,6 +9,7 @@ fn pagination_event() -> ScriptedEvent {
         model_name: String::new(),
         token_usage: None,
         charged_cents: RawNumber::Missing,
+        billing: super::EventBilling::Unknown,
         owning_user: None,
         owning_team: None,
     }
@@ -48,6 +49,12 @@ fn short_final_page_returns_complete_account_aggregate() {
             totals: HistoryTotals {
                 metered_charged_usd: Some(0.0),
                 metered_coverage: super::MeteredCoverage::Complete,
+                billing: Some(super::HistoryBillingTotals {
+                    usage_event_count: 0,
+                    known_on_demand_charged_usd: 0.0,
+                    on_demand_coverage: super::MeteredCoverage::Complete,
+                    unclassified_event_count: 0,
+                }),
             },
         }
     );

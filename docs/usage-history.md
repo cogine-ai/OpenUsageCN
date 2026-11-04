@@ -42,6 +42,13 @@ Model rows show total tokens, requests and list-price equivalents. Expand a mode
 input, output and cache counts. Metered usage and list-price equivalents have separate meanings;
 these dashboard figures are not invoices.
 
+**On-Demand Charges** includes only events explicitly marked as usage-based and chargeable.
+If classification or an amount is missing, **Known On-Demand Charges** is a subtotal marked
+**Incomplete**, with the unclassified event count in the data notes. It is never substituted for
+Metered Usage or List-Price Equivalent. **Usage Events** counts valid events in the window,
+including events without tokens; the existing Requests count still requires token usage.
+Older caches show the new fields as unavailable until refreshed.
+
 ## Export CSV
 
 The download icon (**Export CSV**) saves the currently displayed cached result to your Downloads folder. The app shows the actual
@@ -54,6 +61,32 @@ zone. The window summary contains metered usage once. Daily model rows contain t
 request counts, and known list-price equivalents with their coverage status. Missing amounts stay
 blank, and metered usage is not assigned to individual models.
 
+Four columns are appended: Usage Events, Known On-Demand Charges USD, On-Demand Coverage,
+and Unclassified Events. They belong to the window summary; model rows leave them blank.
+Unavailable legacy classification stays blank with Unavailable coverage, rather than zero.
+
 Commas, quotes, and line breaks in model names are escaped. Names that could be interpreted as
 spreadsheet formulas receive a visible `Text:` prefix followed by a space in the CSV; the cached
 result retains the original name. This avoids relying only on quote escaping when a spreadsheet saves the CSV again.
+
+## Server Reports
+
+Codex, OpenRouter and Ollama detail pages offer **Load Reports** independently of quota refresh.
+Reports use the current connection and are not added to local log estimates or Cursor caches.
+They show each report's access status, UTC date coverage and missing dates. A missing day is not
+treated as zero; one denied report does not hide another readable report. Refresh replaces the
+displayed result. Closing the page, changing connection settings or starting a new request
+invalidates an older pending result. Reports are not saved as long-term history.
+
+- Codex reads the current ChatGPT user's daily tokens/turns and supported workspace charged credits.
+  Negative credit adjustments retain their sign. Charged credits are not dollars. It does not
+  refresh or write login credentials; if access expires, refresh the existing quota connection and retry.
+- OpenRouter Activity requires a management Key and covers the previous 30 completed UTC days.
+  Account Activity can have a broader scope than Listed Keys Spend; the two totals stay separate.
+  BYOK is separate from platform spend.
+- Ollama API Key reports provide 7d and 30d server windows with model totals. The service may include
+  today's bucket as well as the preceding days. Cookie-only connections retain their existing quota
+  behavior and explain why JSON reports require the API Key source.
+
+The requests have a 60-second host limit; individual providers can use a shorter budget.
+Windows can read these server reports even though local ccusage history remains unavailable there.

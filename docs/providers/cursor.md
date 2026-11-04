@@ -139,6 +139,19 @@ metered amounts. See [Usage History](../usage-history.md) for caching and export
 If writing or saving the file fails, the export reports an error and attempts to remove the
 incomplete file. An existing file is never overwritten or removed by the export.
 
+## Usage Charge Classification
+
+Model Usage retains the existing **Metered Usage** (plan deductions from `chargedCents`) and
+**List-Price Equivalent** (known model prices). **On-Demand Charges** counts only
+`kind=USAGE_EVENT_KIND_USAGE_BASED` with `isChargeable=true` and a valid nonnegative amount.
+An explicit `isChargeable=false` is not an on-demand charge. Unknown kinds, missing/invalid flags
+or missing/invalid charge amounts leave an incomplete known subtotal; they are not assumed free.
+The data notes show the unclassified event count. These figures are session-visible records, not invoices.
+
+**Usage Events** includes valid window events without tokens. **Requests** keeps its existing
+token-bearing request definition. The new charge/event columns are added only to CSV window
+summaries, and older caches show them as unavailable until refreshed. See [Usage History](../usage-history.md).
+
 ## Grok Bot Allowance
 
 Desktop/CLI reads `POST https://api2.cursor.sh/aiserver.v1.DashboardService/GetSandUsageStatus`

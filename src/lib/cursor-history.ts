@@ -27,6 +27,12 @@ export type CursorHistoryCoverage = {
 export type CursorHistoryTotals = {
   meteredChargedUsd: number | null
   meteredCoverage: "complete" | "incomplete"
+  billing?: {
+    usageEventCount: number
+    knownOnDemandChargedUsd: number
+    onDemandCoverage: "complete" | "incomplete"
+    unclassifiedEventCount: number
+  }
 }
 
 export type CompleteHistory = {

@@ -100,7 +100,18 @@ fn bundled_provider_limit_resource_keys_are_stable() {
         ("alibaba-coding-plan", &["monthly", "session", "weekly"][..]),
         ("alibaba-token-plan", &["tokenQuota"][..]),
         ("amp", &["free", "orb", "other"][..]),
-        ("antigravity", &["claude", "geminiFlash", "geminiPro"][..]),
+        (
+            "antigravity",
+            &[
+                "argonWeekly",
+                "claude",
+                "claudeWeekly",
+                "geminiFlash",
+                "geminiPro",
+                "geminiSession",
+                "geminiWeekly",
+            ][..],
+        ),
         ("bigmodel-cn", &["session", "webSearches", "weekly"][..]),
         (
             "claude",
@@ -143,14 +154,23 @@ fn bundled_provider_limit_resource_keys_are_stable() {
         ("jetbrains-ai-assistant", &["quota"][..]),
         ("kimi", &["session", "weekly"][..]),
         ("kiro", &["bonusCredits", "credits"][..]),
-        ("minimax", &["session"][..]),
+        ("minimax", &["session", "weekly"][..]),
         ("moonshot", &[][..]),
         ("ollama", &["monthly", "session", "weekly"][..]),
         ("openai-api", &["credits"][..]),
         ("opencode-go", &["monthly", "session", "weekly"][..]),
         ("opencode", &["session", "weekly"][..]),
         ("openrouter", &["credits", "keyLimit"][..]),
-        ("perplexity", &["apiCredits"][..]),
+        (
+            "perplexity",
+            &[
+                "apiCredits",
+                "organizationCredits",
+                "promotionalCredits",
+                "purchasedCredits",
+                "subscriptionCredits",
+            ][..],
+        ),
         (
             "synthetic",
             &[

@@ -7,8 +7,73 @@
   "icon": "icon.svg",
   "brandColor": "#4285F4",
   "lines": [
-    { "type": "progress", "label": "Gemini Pro", "scope": "overview", "primaryOrder": 1, "limitResource": { "key": "geminiPro" } },
-    { "type": "progress", "label": "Gemini Flash", "scope": "overview", "limitResource": { "key": "geminiFlash" } },
-    { "type": "progress", "label": "Claude", "scope": "overview", "limitResource": { "key": "claude" } }
+    {
+      "type": "progress",
+      "label": "Gemini Pro",
+      "scope": "overview",
+      "primaryOrder": 1,
+      "limitResource": {
+        "key": "geminiPro"
+      }
+    },
+    {
+      "type": "progress",
+      "label": "Gemini Flash",
+      "scope": "overview",
+      "limitResource": {
+        "key": "geminiFlash"
+      }
+    },
+    {
+      "type": "progress",
+      "label": "Claude",
+      "scope": "overview",
+      "limitResource": {
+        "key": "claude"
+      },
+      "primaryOrder": 4
+    },
+    {
+      "type": "progress",
+      "label": "Gemini",
+      "scope": "overview",
+      "limitResource": {
+        "key": "geminiSession"
+      },
+      "primaryOrder": 2
+    },
+    {
+      "type": "progress",
+      "label": "Gemini Weekly",
+      "scope": "overview",
+      "limitResource": {
+        "key": "geminiWeekly"
+      },
+      "primaryOrder": 3,
+      "period": "weekly"
+    },
+    {
+      "type": "progress",
+      "label": "Claude Weekly",
+      "scope": "overview",
+      "limitResource": {
+        "key": "claudeWeekly"
+      },
+      "primaryOrder": 5
+    },
+    {
+      "type": "progress",
+      "label": "Argon Weekly",
+      "scope": "overview",
+      "limitResource": {
+        "key": "argonWeekly"
+      },
+      "primaryOrder": 6
+    }
+  ],
+  "supportingScripts": [
+    "auth.js",
+    "quota.js",
+    "summary.js"
   ]
 }

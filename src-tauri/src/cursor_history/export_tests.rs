@@ -20,8 +20,8 @@ fn csv_carries_exact_coverage_and_keeps_cost_meanings_separate() {
     assert!(rows[0].contains("\"Coverage From UTC\""));
     assert!(rows[1].contains("https://cursor.com/api/dashboard/get-filtered-usage-events"));
     assert!(rows[1].contains("Current Result Only; Not An Invoice"));
-    assert!(rows[1].ends_with("\"0.5\",\"Complete\""));
-    assert!(rows[2].ends_with("\"0.25\",\"Complete\",\"\",\"\""));
+    assert!(rows[1].contains("\"0.5\",\"Complete\","));
+    assert!(rows[2].contains("\"0.25\",\"Complete\",\"\",\"\""));
     assert!(csv.ends_with("\r\n"));
 }
 

@@ -68,7 +68,7 @@ pub(super) fn openrouter_key_body(body: &str) -> String {
             }
         }
     }
-    payload.to_string()
+    super::usage_redaction::openrouter_body(&payload.to_string())
 }
 
 /// Hides Gemini project identity in a log copy while keeping tier metadata.

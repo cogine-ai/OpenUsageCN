@@ -95,6 +95,7 @@ impl HistoryTransport for BudgetTransport {
                         model_name: "model".into(),
                         token_usage: None,
                         charged_cents: RawNumber::Integer(0),
+                        billing: super::EventBilling::Unknown,
                         owning_user: None,
                         owning_team: None,
                     };

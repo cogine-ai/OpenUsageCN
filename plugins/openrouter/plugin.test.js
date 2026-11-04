@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { makeCtx } from "../test-helpers.js"
 
 const loadPlugin = async () => {
+  await import("./common.js")
+  await import("./reports.js")
   await import("./plugin.js")
   return globalThis.__openusage_plugin
 }
@@ -23,16 +25,16 @@ describe("openrouter plugin", () => {
     const manifest = JSON.parse(readFileSync("plugins/openrouter/plugin.json", "utf8"))
     expect(manifest.id).toBe("openrouter")
     expect(manifest.name).toBe("OpenRouter")
-    expect(manifest.lines.map((line) => line.label)).toEqual([
+    expect(manifest.lines.map((line) => line.label)).toEqual(expect.arrayContaining([
       "Credits",
       "Balance",
       "Key Limit",
       "Daily Spend",
       "Weekly Spend",
       "Monthly Spend",
-    ])
+    ]))
     expect(manifest.lines.find((line) => line.label === "Key Limit").primaryOrder).toBe(1)
-    expect(manifest.lines.find((line) => line.label === "Credits").primaryOrder).toBeUndefined()
+    expect(manifest.lines.find((line) => line.label === "Credits").primaryOrder).toBe(2)
   })
 
   it("throws when no API key is configured", async () => {
@@ -62,7 +64,7 @@ describe("openrouter plugin", () => {
         return null
       })
       setEnv(ctx, {})
-      ctx.host.http.request.mockReturnValue({ status: 200, bodyText: JSON.stringify({ data: {} }) })
+      ctx.host.http.request.mockImplementation((opts) => ({ status: 200, bodyText: JSON.stringify({ data: opts.url.endsWith("/credits") ? { total_credits: 0, total_usage: 0 } : {} }) }))
 
       expect(() => plugin.probe(ctx)).toThrow("OpenRouter API URL must be a valid HTTPS base URL")
       expect(ctx.host.http.request).not.toHaveBeenCalled()
@@ -90,13 +92,13 @@ describe("openrouter plugin", () => {
         return null
       })
       setEnv(ctx, {})
-      ctx.host.http.request.mockReturnValue({ status: 200, bodyText: JSON.stringify({ data: {} }) })
+      ctx.host.http.request.mockImplementation((opts) => ({ status: 200, bodyText: JSON.stringify({ data: opts.url.endsWith("/credits") ? { total_credits: 0, total_usage: 0 } : {} }) }))
 
       plugin.probe(ctx)
 
       expect(ctx.host.http.request.mock.calls.map(([opts]) => opts.url)).toEqual([
-        expectedBase + "/credits",
         expectedBase + "/key",
+        expectedBase + "/credits",
       ])
     }
   })

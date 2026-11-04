@@ -200,3 +200,38 @@ grant_type=refresh_token
 ```
 
 Response returns new `access_token`, and optionally new `refresh_token` and `id_token`.
+
+
+## Server Reports
+
+Open Codex details and choose **Load Server Reports** to read the latest 30 UTC calendar days,
+including today. This is separate from **Local History** and does not run ccusage or estimate API costs.
+Tokens, turns and charged credits keep their own units. Credits are never converted to dollars.
+
+Reports use the current local ChatGPT login and its workspace. API keys and logins without a
+complete user/workspace identity cannot load these reports. Each read stays on the same credential
+source. Only a missing local file permits trying the next source; an existing file that cannot
+be read or contains invalid credentials reports an error instead of loading another account.
+Changing the login, workspace or saved credentials while it runs rejects the result;
+starting another read or closing the report view cancels the old request.
+
+The read has a 60-second total budget, including time waiting for a worker; individual HTTP requests
+use at most 15 seconds and the remaining budget. Reports do not refresh or write OAuth tokens.
+If the login expires, refresh Codex usage through the existing control, then load reports again.
+No report data is added to the quota bars or the local cost estimate.
+
+Token and turn reports show only dates and measures the server reports. An absent date is not zero;
+an explicitly reported zero remains visible. The coverage note lists missing dates. Daily charts
+use UTC. Available model attribution is shown separately and may cover fewer turns or tokens than
+the daily total.
+
+Personal plans read token and turn counts. Supported Team/Business/Enterprise/Edu plan types can
+also provide a separate charged-credit report. Unknown plan types do not guess a credit source.
+A refused, rate-limited or damaged credit report leaves readable token/turn data visible, with an
+explicit status. Negative credit adjustments retain their sign and appear as text because the
+existing usage charts display nonnegative values only.
+
+These reports use the ChatGPT client's WHAM report endpoints with the current Bearer token and
+`ChatGPT-Account-Id`. They are not the administrator Analytics API or an invoice. Availability
+still depends on the account and workspace permissions. Responses with unread-page markers are
+rejected rather than presented as a complete total. No server-report history is persisted locally.

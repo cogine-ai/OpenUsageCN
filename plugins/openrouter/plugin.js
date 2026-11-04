@@ -1,96 +1,12 @@
 (function () {
-  const DEFAULT_API_URL = "https://openrouter.ai/api/v1"
-
-  function readString(value) {
-    if (typeof value !== "string") return null
-    const trimmed = value.trim()
-    return trimmed ? trimmed : null
-  }
-
-  function readNumber(value) {
-    if (typeof value === "number") return Number.isFinite(value) ? value : null
-    if (typeof value !== "string" || !value.trim()) return null
-    const n = Number(value.trim())
-    return Number.isFinite(n) ? n : null
-  }
-
-  function getConfig(ctx, key) {
-    try {
-      return ctx.host.config && ctx.host.config.get ? readString(ctx.host.config.get(key)) : null
-    } catch (e) {
-      ctx.host.log.warn("config read failed for " + key + ": " + String(e))
-      return null
-    }
-  }
-
-  function getEnv(ctx, key) {
-    try {
-      return ctx.host.env && ctx.host.env.get ? readString(ctx.host.env.get(key)) : null
-    } catch (e) {
-      ctx.host.log.warn("env read failed for " + key + ": " + String(e))
-      return null
-    }
-  }
-
-  function loadApiKey(ctx) {
-    return getConfig(ctx, "apiKey") || getEnv(ctx, "OPENROUTER_API_KEY")
-  }
-
-  function normalizeApiUrl(ctx, value) {
-    const raw = readString(value) || DEFAULT_API_URL
-    const withScheme = raw.indexOf("://") === -1 ? "https://" + raw : raw
-    return ctx.host.http.normalizeHttpsBaseUrl(withScheme)
-  }
-
-  function requestJson(ctx, opts) {
-    let resp
-    try {
-      resp = ctx.util.request(opts)
-    } catch (e) {
-      ctx.host.log.error("request exception: " + String(e))
-      throw "Usage request failed. Check your connection."
-    }
-    if (ctx.util.isAuthStatus(resp.status)) {
-      throw "AUTH"
-    }
-    if (resp.status < 200 || resp.status >= 300) {
-      throw "Usage request failed (HTTP " + String(resp.status) + "). Try again later."
-    }
-    const data = ctx.util.tryParseJson(resp.bodyText)
-    if (!data || typeof data !== "object") {
-      throw "Usage response invalid. Try again later."
-    }
-    return data
-  }
-
-  function tryRequestJson(ctx, opts) {
-    try {
-      return { ok: true, data: requestJson(ctx, opts) }
-    } catch (e) {
-      return { ok: false, error: String(e) }
-    }
-  }
-
-  function money(value) {
-    return "$" + ((readNumber(value) || 0).toFixed(2))
-  }
-
-  function headers(ctx, apiKey) {
-    const h = {
-      Authorization: "Bearer " + apiKey,
-      Accept: "application/json",
-    }
-    const referer = getEnv(ctx, "OPENROUTER_HTTP_REFERER")
-    const title = getEnv(ctx, "OPENROUTER_X_TITLE")
-    if (referer) h["HTTP-Referer"] = referer
-    if (title) h["X-Title"] = title
-    return h
-  }
-
+  const { readNumber, money, failure, settings, get } = globalThis.__openrouterCommon
   function pushCreditsLine(ctx, lines, credits) {
     const total = readNumber(credits && credits.total_credits)
     const usage = readNumber(credits && credits.total_usage)
-    if (total !== null && total >= 0 && usage !== null) {
+    if (total === null || total < 0 || usage === null || usage < 0) {
+      throw failure("error", "Account credits response invalid. Try again later.")
+    }
+    if (total >= 0) {
       if (total > 0) {
         lines.push(ctx.line.progress({
           label: "Credits",
@@ -136,46 +52,87 @@
     }
   }
 
-  function probe(ctx) {
-    const apiKey = loadApiKey(ctx)
-    if (!apiKey) {
-      throw "No OpenRouter API key found. Add it in Settings or set OPENROUTER_API_KEY."
-    }
-    const apiUrl = normalizeApiUrl(ctx, getConfig(ctx, "apiUrl") || getEnv(ctx, "OPENROUTER_API_URL"))
-    if (!apiUrl) {
-      throw "OpenRouter API URL must be a valid HTTPS base URL without embedded credentials."
-    }
 
-    const requestHeaders = headers(ctx, apiKey)
-    const creditsResult = tryRequestJson(ctx, {
-      method: "GET",
-      url: apiUrl + "/credits",
-      headers: requestHeaders,
-      timeoutMs: 15000,
-    })
-    const keyResult = tryRequestJson(ctx, {
-      method: "GET",
-      url: apiUrl + "/key",
-      headers: requestHeaders,
-      timeoutMs: 15000,
-    })
-
-    if (!creditsResult.ok && !keyResult.ok) {
-      if (creditsResult.error === "AUTH" || keyResult.error === "AUTH") {
-        throw "OpenRouter API key invalid. Check your OpenRouter API key."
+  function listedSpend(ctx, config, deadline) {
+    const totals = { daily: 0, weekly: 0, monthly: 0 }
+    const byok = { daily: 0, weekly: 0, monthly: 0 }
+    const hasByok = { daily: true, weekly: true, monthly: true }
+    const seen = Object.create(null)
+    for (let page = 0, offset = 0; page < 50; page++) {
+      const data = get(ctx, config, "/keys?include_disabled=true&include_expired=true&offset=" + offset, deadline)
+      if (!Array.isArray(data.data)) throw failure("error", "Key list response invalid. Try again later.")
+      for (const key of data.data) {
+        if (!key || typeof key.hash !== "string" || !key.hash || seen[key.hash]) {
+          throw failure("error", "Key list pagination is incomplete. Try again later.")
+        }
+        seen[key.hash] = true
+        for (const period of Object.keys(totals)) {
+          const value = readNumber(key["usage_" + period])
+          if (value === null || value < 0) throw failure("error", "Key usage response invalid. Try again later.")
+          totals[period] += value
+          const extra = readNumber(key["byok_usage_" + period])
+          if (extra === null) hasByok[period] = false
+          else if (extra < 0) throw failure("error", "BYOK usage response invalid. Try again later.")
+          else byok[period] += extra
+          if (!Number.isFinite(totals[period]) || !Number.isFinite(byok[period])) {
+            throw failure("error", "Key usage response invalid. Try again later.")
+          }
+        }
       }
-      throw creditsResult.error || keyResult.error
+      // The upstream API returns pages of 100. A short page is terminal.
+      if (data.data.length < 100) return { totals, byok, hasByok }
+      offset += data.data.length
     }
-
-    const lines = []
-    if (creditsResult.ok) pushCreditsLine(ctx, lines, creditsResult.data && creditsResult.data.data)
-    if (keyResult.ok) pushKeyLines(ctx, lines, keyResult.data && keyResult.data.data)
-    if (lines.length === 0) {
-      lines.push(ctx.line.badge({ label: "Status", text: "No usage data", color: "#a3a3a3" }))
-    }
-
-    return { plan: keyResult.ok && keyResult.data && keyResult.data.data && keyResult.data.data.is_free_tier ? "Free Tier" : null, lines }
+    throw failure("error", "Key list pagination is incomplete. Try again later.")
   }
 
-  globalThis.__openusage_plugin = { id: "openrouter", probe }
+  function probe(ctx) {
+    const config = settings(ctx)
+    const deadline = Date.now() + 25000
+    let keyResponse
+    try { keyResponse = get(ctx, config, "/key", deadline) } catch (error) {
+      ctx.host.log.error("OpenRouter key metadata unavailable: " + (error.reportStatus || "error"))
+      const available = []
+      try { pushCreditsLine(ctx, available, get(ctx, config, "/credits", deadline).data) } catch (_) { throw error }
+      if (!available.length) throw error
+      available.push(ctx.line.badge({ label: "Key Status", text: "Key Usage Unavailable", color: "#a3a3a3" }))
+      return { plan: null, lines: available }
+    }
+    const key = keyResponse.data
+    if (!key || typeof key !== "object" || Array.isArray(key)) {
+      throw failure("error", "Key usage response invalid. Try again later.")
+    }
+    const lines = []
+    if (key.is_management_key === true) {
+      if (key.workspace_id != null && (typeof key.workspace_id !== "string" ||
+          !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(key.workspace_id))) {
+        throw failure("error", "Key workspace response invalid. Try again later.")
+      }
+      const spend = listedSpend(ctx, config, deadline)
+      lines.push(ctx.line.text({ label: "Key Scope", value: key.workspace_id ? "Workspace Keys" : "Default Workspace Keys", subtitle: "Management Key. Listed keys only; Activity reports have their own scope." }))
+      for (const period of ["daily", "weekly", "monthly"]) {
+        const title = period.charAt(0).toUpperCase() + period.slice(1)
+        lines.push(ctx.line.text({ label: "Listed Keys " + title + " Spend", value: money(spend.totals[period]) }))
+        if (spend.hasByok[period]) lines.push(ctx.line.text({ label: "BYOK " + title + " Spend", value: money(spend.byok[period]) }))
+      }
+    } else {
+      if (key.is_management_key !== undefined && key.is_management_key !== false) {
+        throw failure("error", "Key type response invalid. Try again later.")
+      }
+      pushKeyLines(ctx, lines, key)
+    }
+    try {
+      const credits = get(ctx, config, "/credits", deadline)
+      pushCreditsLine(ctx, lines, credits.data)
+    } catch (error) {
+      ctx.host.log.warn("OpenRouter balance unavailable: " + (error.reportStatus || "error"))
+      lines.push(ctx.line.badge({ label: "Balance Status", text: "Balance Unavailable", color: "#a3a3a3" }))
+      if (lines.length === 1) throw error
+    }
+    if (!lines.length) lines.push(ctx.line.badge({ label: "Status", text: "No usage data", color: "#a3a3a3" }))
+    return { plan: key.is_free_tier ? "Free Tier" : null, lines }
+  }
+
+  globalThis.__openusage_plugin = { id: "openrouter", probe,
+    probeReports: function (ctx) { return globalThis.__openrouterReports(ctx) } }
 })()

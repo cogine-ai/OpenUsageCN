@@ -97,6 +97,7 @@ impl HistoryTransport for SuccessfulPageTransport {
                     total_cents: RawNumber::Decimal(25.0),
                 }),
                 charged_cents: RawNumber::Decimal(50.0),
+                billing: super::EventBilling::Unknown,
                 owning_user: Some("must-not-persist".to_string()),
                 owning_team: Some("must-not-persist".to_string()),
             }],
