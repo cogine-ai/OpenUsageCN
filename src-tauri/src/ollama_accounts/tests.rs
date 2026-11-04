@@ -429,3 +429,6 @@ mod concurrency;
 
 #[path = "projection_tests.rs"]
 mod projection;
+
+#[path = "queued_probe_tests.rs"]
+mod queued_probe;

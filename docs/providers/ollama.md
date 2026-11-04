@@ -8,6 +8,7 @@ Open **Ollama Cloud → Manage Keys** to add independently named API Key connect
 connection shows the verified account, a masked key hint and its own quota update status.
 Select a connection to view its quota, purchased credits and personal model reports.
 Browsing a connection does not change the account shown on the home page or menu bar.
+Reset countdowns update while the detail page is visible without requesting new quota data.
 
 1. Choose **Add Key**, enter a name and an Ollama API Key, then verify it.
 2. Check the returned account identity before confirming the save.
@@ -31,6 +32,8 @@ Each connection has its own last successful quota and update time. A temporary n
 rate limit or permission error is shown separately and does not replace that connection's
 successful data with zero or another account's quota. Changing a key or account invalidates
 results still loading with the previous credential.
+Refreshes waiting to run check the connection again before sending requests. Removing or
+replacing a key prevents an older waiting refresh from starting a request with that key.
 
 Ollama reports account usage, not spending attributable to an individual API Key. Multiple keys
 for the same user may read the same balances; team members can also share balances. Connection
@@ -93,8 +96,12 @@ or rewritten when adding a named connection. Keys are masked in the interface an
 request and response logs.
 
 - Missing credential: add the credential for the selected source.
+- Expired verification: enter and verify the key again before confirming the save.
 - API Key 401: check or replace the key. API Key 403: access was denied; check account permissions.
 - Cookie redirect, 401 or 403: sign in again and copy a fresh Cookie header.
 - Report permissions, rate limits and parse failures are shown separately. Error messages and plugin logs do not include raw account responses or credentials.
+  Key verification and account operations retain the backend's friendly explanation, such as
+  an expired confirmation or a partially completed refresh. Unexpected client errors use a
+  generic message and are not displayed or logged with their raw contents.
 
 Ollama documents the [balance endpoint](https://docs.ollama.com/api/balance) and [cloud usage reports](https://docs.ollama.com/api/cloud-usage). Plan information uses `/api/me`, following [OpenUsage's fixed implementation](https://github.com/robinebers/openusage/tree/c5a2f410280ef2be7931929f0c5c03a0a2a5726f/Sources/OpenUsage/Providers/Ollama).

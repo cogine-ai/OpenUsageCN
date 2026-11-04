@@ -83,6 +83,34 @@ describe("Ollama connection state", () => {
     expect(log).toHaveBeenCalledWith("Failed to update Ollama account connection")
   })
 
+  it.each([
+    "验证结果已过期，请重新验证 Key。",
+    "批量刷新已超时，未完成的连接保留原数据，请分别刷新。",
+  ])("shows the owned command's actionable message: %s", async (message) => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {})
+    tauri.invoke.mockImplementation((command) =>
+      command === "get_ollama_accounts" ? Promise.resolve(view()) : Promise.reject(message)
+    )
+    const { result } = renderHook(() => useOllamaAccounts())
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    await act(() => result.current.operate({ kind: "refresh" }))
+    expect(result.current.error).toBe(message)
+    expect(result.current.busy).toBe(false)
+    expect(tauri.invoke.mock.calls.filter(([command]) => command === "get_ollama_accounts")).toHaveLength(2)
+    expect(log).toHaveBeenCalledExactlyOnceWith("Failed to update Ollama account connection")
+  })
+
+  it.each(["", {}, null])("keeps a friendly fallback for an unexpected IPC failure: %j", async (reason) => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    tauri.invoke.mockImplementation((command) =>
+      command === "get_ollama_accounts" ? Promise.resolve(view()) : Promise.reject(reason)
+    )
+    const { result } = renderHook(() => useOllamaAccounts())
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    await act(() => result.current.operate({ kind: "refresh" }))
+    expect(result.current.error).toBe("账号操作未完成，请重新读取连接状态后重试。")
+  })
+
   it("unsubscribes and ignores an operation that finishes after leaving the page", async () => {
     let finish: (value: unknown) => void = () => {}
     const stop = vi.fn(),

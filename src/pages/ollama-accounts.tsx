@@ -7,6 +7,7 @@ import { ServerUsageReports } from "@/components/server-usage-reports"
 import { OllamaAccountList, OllamaPrimaryBadge } from "@/components/ollama-account-list"
 import { OllamaKeyForm } from "@/components/ollama-key-form"
 import { useOllamaAccounts } from "@/hooks/use-ollama-accounts"
+import { useNowTicker } from "@/hooks/use-now-ticker"
 import { ollamaIdentityLabel, type OllamaVerification } from "@/lib/ollama-accounts"
 import type { DisplayMode, ResetTimerDisplayMode, TimeFormatMode } from "@/lib/settings"
 
@@ -50,6 +51,12 @@ export function OllamaAccountsPage({
   const removed = view?.connections.find((item) => item.connectionId === removing)
   const primary = view?.primary.mode === "connection" && view.primary.connectionId === selected
   const connections = view?.connections ?? []
+  const now = useNowTicker({
+    enabled:
+      screen === "detail" &&
+      Boolean(connection?.snapshot?.lines.some((line) => line.type === "progress" && line.resetsAt)),
+    intervalMs: 30_000,
+  })
   useEffect(() => {
     if (!removed) return
     removalRef.current?.focus()
@@ -292,7 +299,7 @@ export function OllamaAccountsPage({
                   displayMode={displayMode}
                   resetTimerDisplayMode={resetTimerDisplayMode}
                   timeFormatMode={timeFormatMode}
-                  now={Date.now()}
+                  now={now}
                   refreshing={busy}
                   stale={Boolean(connection.error)}
                   lastUpdatedAt={

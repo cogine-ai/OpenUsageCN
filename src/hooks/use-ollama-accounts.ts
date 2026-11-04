@@ -77,10 +77,14 @@ export function useOllamaAccounts(onPrimaryChange?: () => void, onQuotaRefresh?:
         if (projection === "primary") onPrimaryChange?.()
         if (projection === "refresh") onQuotaRefresh?.()
         return next
-      } catch {
+      } catch (reason) {
         console.error("Failed to update Ollama account connection")
         if (mounted.current && operationRevision.current === revision) {
-          setError("账号操作未完成，请重新读取连接状态后重试。")
+          setError(
+            typeof reason === "string" && reason.trim()
+              ? reason
+              : "账号操作未完成，请重新读取连接状态后重试。"
+          )
           await reload()
         }
         return null

@@ -47,10 +47,14 @@ export function OllamaKeyForm({
       setVerified(result)
       setApiKey("")
       setVisible(false)
-    } catch {
+    } catch (reason) {
       console.error("Failed to verify Ollama API key")
       if (revision.current === current)
-        setError("无法验证 Key，请检查 Key、网络和账号权限后重试。原有连接保持不变。")
+        setError(
+          typeof reason === "string" && reason.trim()
+            ? reason
+            : "无法验证 Key，请检查 Key、网络和账号权限后重试。原有连接保持不变。"
+        )
     } finally {
       if (revision.current === current) setChecking(false)
     }

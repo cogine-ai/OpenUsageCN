@@ -13,6 +13,13 @@ use std::{collections::BTreeMap, path::PathBuf};
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+thread_local! {
+    static PRIMARY_PROBE_PREPARED: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const {
+        std::cell::RefCell::new(None)
+    };
+}
+
 pub(super) fn now() -> String {
     time::OffsetDateTime::now_utc()
         .format(&time::format_description::well_known::Rfc3339)
@@ -214,10 +221,18 @@ pub(crate) fn run_primary_probe(
         Ok(None) => return crate::plugin_engine::runtime::run_probe(plugin, dir, version),
         Err(error) => return fail(error),
     };
+    #[cfg(test)]
+    if let Some(prepared) = PRIMARY_PROBE_PREPARED.with(|hook| hook.borrow_mut().take()) {
+        prepared();
+    }
     let _connection_guard = match store::acquire_refresh(&record.connection_id, deadline) {
         Ok(guard) => guard,
         Err(e) => return fail(e),
     };
+    // A queued refresh must not use a key removed or replaced while another process held the lock.
+    if let Err(error) = with_projection_guard(plugin, Some(&stamp), || ()) {
+        return fail(error);
+    }
     let result = runtime::probe_with_deadline(
         plugin,
         dir,

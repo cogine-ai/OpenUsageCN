@@ -29,3 +29,11 @@ native-webview, installed-app, real-login or real-service acceptance.
 Environment: Chromium 143.0.7499.4, existing Python Playwright, zh-CN locale, Asia/Taipei time zone.
 The Browser plugin was unavailable. The capture script, mock transport and baseline source copies
 remain outside the repository; no browser dependency or test credential was added to the app.
+
+## Merge Review: Friendly Verification Errors
+
+The [before](merge-review/before-verification-error.png) key form from `e8522e9` masks a curated
+backend rejection behind a generic message. The [after](merge-review/after-verification-error.png)
+form displays the same synthetic backend's specific invalid-key explanation. Both use production
+components and CSS at 400×700, with no provider requests or raw exception logging.
+See the [manual merge review](../../pr264-merge-review-2026-11-05.md) for scope and dispositions.
