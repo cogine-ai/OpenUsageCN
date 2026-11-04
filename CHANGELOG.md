@@ -4,6 +4,31 @@
 
 暂无。
 
+## v0.6.48
+
+### New Features
+
+- Ollama Cloud 支持多个账号和命名 API Key，按连接分别查看额度、余额及 7/30 天模型报告；同一账号的多个 Key 可能共享额度，额度不会相加。 ([#264](https://github.com/cogine-ai/OpenUsageCN/pull/264)) by @lc708
+- 浏览账号与首页／菜单栏主账号分开，需明确选择主账号；保留原有 Cookie、单 Key 和环境变量配置。 ([#264](https://github.com/cogine-ai/OpenUsageCN/pull/264)) by @lc708
+
+### Bug Fixes
+
+- 验证账号身份后才保存 Key；过期验证、跨用户替换、晚到结果和等待中的刷新不会覆盖旧凭据或混用账号。 ([#264](https://github.com/cogine-ai/OpenUsageCN/pull/264)) by @lc708
+- 主账号切换、移除和损坏配置的缓存清理保持同步；恢复异常锁时保留待确认数据，刷新崩溃时保留仍有效的旧用量。 ([#264](https://github.com/cogine-ai/OpenUsageCN/pull/264)) by @lc708
+- 自动刷新主账号时清除旧报告并取消待完成报告，其他账号不受影响；补齐具体错误提示与详情倒计时更新。 ([#264](https://github.com/cogine-ai/OpenUsageCN/pull/264)) by @lc708
+
+### Chores
+
+- 补齐账号隔离回归测试、使用文档、人工审查和界面前后截图。 ([#264](https://github.com/cogine-ai/OpenUsageCN/pull/264)) by @lc708
+
+---
+
+### Changelog
+
+**Full Changelog**: [v0.6.47...v0.6.48](https://github.com/cogine-ai/OpenUsageCN/compare/v0.6.47...v0.6.48)
+
+- [85b0508](https://github.com/cogine-ai/OpenUsageCN/commit/85b0508495508236d4a6138b1f7f9541edd5cd92) Merge pull request #264: Ollama Cloud 多账号与多 API Key by @lc708
+
 ## v0.6.47
 
 ### New Features
