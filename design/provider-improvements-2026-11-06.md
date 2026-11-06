@@ -98,3 +98,5 @@ Session / Weekly / Web Searches 继续在前。详情新增只读 text：`5h Res
 证据位于 `design/evidence/provider-improvements/`。旧五家插件从基线 `674950b` 冻结，以内存 host 执行后给真实 ProviderDetailPage / ProviderCard；40 个 before 场景通过。新插件也执行真实 probe 生成合成输出，实际组件首轮 93 场景通过；Claude / Kiro 后续收口后，受影响部分复验 45 场景通过。另有 13 项针对 Kiro 登录截图、设计中未知主池和奖励到期的核验。收据分别保留源码 SHA256，便于对应具体版本；没有以设计原型冒充产品组件。
 
 全部浏览器数据、凭据、账号和 IPC 均为合成；没有真实认证、Keychain 或系统剪贴板操作。实际 API 访问、安装后验收、HMAC Keychain 总超时和原生 source-scoped 缓存由主任务独立验证。
+
+验证交付补充：两个批次分成依次审核的 PR。CI 原先只监听 main，后续 PR 目标为第一批分支时不会触发；移除目标分支过滤以覆盖所有 PR，保持原有测试、构建与只读权限。应用代码的既有验证可复用，GitHub 检查需确认实际触发。

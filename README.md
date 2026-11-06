@@ -80,7 +80,7 @@ Windows MVP 启用和展示 **Codex、BigModel CN、OpenAI API、OpenRouter、Z.
 
 ## 参与项目
 
-OpenUsageCN 的服务商通过插件接入。新增或调整服务商时，优先查看 [Plugin API](docs/plugins/api.md)，并保持改动聚焦。
+OpenUsageCN 的服务商通过插件接入。新增或调整服务商时，优先查看 [Plugin API](docs/plugins/api.md)，并保持改动聚焦。PR 的测试与构建检查覆盖所有目标分支，分批提交的后续 PR 也会接受检查。
 
 - **新增服务商。** 参考现有插件和 [Plugin API](docs/plugins/api.md)。
 - **修复问题。** 尽量说明问题原因，并在适合时补充回归测试。
