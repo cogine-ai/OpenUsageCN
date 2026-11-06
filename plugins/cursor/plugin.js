@@ -709,7 +709,7 @@
     )
   }
 
-  function probe(ctx, connectionTarget) {
+  function probeCurrent(ctx, connectionTarget, captureToken) {
     const authState = loadAuthStateForConnection(ctx, connectionTarget)
     const isScopedProbe = connectionTarget !== undefined && connectionTarget !== null
     let leaseGeneration = isScopedProbe ? connectionTarget.credentialGeneration : null
@@ -830,6 +830,7 @@
 
     ctx.host.log.info("usage fetch succeeded")
 
+    captureToken(accessToken)
     const usage = ctx.util.tryParseJson(usageResp.bodyText)
     if (usage === null || typeof usage !== "object" || Array.isArray(usage) ||
         Object.prototype.hasOwnProperty.call(usage, "error") ||
@@ -917,6 +918,15 @@
     if (usage.enabled === false || !usage.planUsage) {
       if (usage.enabled === true && allowance && allowance.limitResourceKey === "weekly") {
         return buildUnknownRequestBasedResult(ctx, accessToken, planName, allowance, usage.spendLimitUsage)
+      }
+      if (usage.enabled === true) {
+        const spend = usage.spendLimitUsage
+        if (spend != null && (typeof spend !== "object" || Array.isArray(spend) ||
+          ["individualLimit", "individualRemaining", "pooledLimit", "pooledRemaining"].some((key) =>
+            spend[key] != null && (typeof spend[key] !== "number" || !Number.isFinite(spend[key]) || spend[key] < 0)))) {
+          throw "Usage response invalid. Try again later."
+        }
+        return { plan: formatCursorPlan(ctx, planName), lines: [], requiresMonthlyUsage: true }
       }
       throw "No active Cursor subscription."
     }
@@ -1051,6 +1061,14 @@
     if (onDemand) lines.push(onDemand)
 
     return { plan: plan, lines: lines }
+  }
+
+  function probe(ctx, connectionTarget) {
+    let selectedToken
+    const { requiresMonthlyUsage, ...output } = probeCurrent(ctx, connectionTarget, (token) => { selectedToken = token })
+    const enriched = __openusage_cursor_unified.enrich(ctx, output, buildSessionToken(ctx, selectedToken))
+    if (requiresMonthlyUsage && enriched.lines.length === 0) throw "No active Cursor subscription."
+    return enriched
   }
 
   globalThis.__openusage_plugin = {

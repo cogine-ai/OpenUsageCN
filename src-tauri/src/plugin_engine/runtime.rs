@@ -1145,3 +1145,11 @@ mod tests {
 #[cfg(test)]
 #[path = "runtime_new_providers_tests.rs"]
 mod new_providers_tests;
+
+#[cfg(test)]
+#[path = "runtime_kiro_zai_tests.rs"]
+mod kiro_zai_tests;
+
+#[cfg(test)]
+#[path = "runtime_provider_improvements_tests.rs"]
+mod provider_improvements_tests;

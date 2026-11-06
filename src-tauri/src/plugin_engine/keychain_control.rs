@@ -3,8 +3,7 @@ use super::host_api::ProbeDeadline;
 use std::{
     collections::{HashMap, HashSet},
     ffi::OsString,
-    io::Read,
-    process::{Command, Stdio},
+    process::Command,
     sync::{Arc, Condvar, Mutex, OnceLock, Weak},
     time::{Duration, Instant},
 };
@@ -237,91 +236,23 @@ fn run_security(args: &[OsString], deadline: ProbeDeadline) -> ReadResult {
     run_command("/usr/bin/security", args, remaining(deadline)?)
 }
 fn run_command(program: &str, args: &[OsString], budget: Duration) -> ReadResult {
-    let mut command = Command::new(program);
-    command
-        .args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        command.process_group(0);
-    }
-    let mut child = command
-        .spawn()
-        .map_err(|_| "failed: Keychain process could not start.")?;
-    let stdout = child.stdout.take().unwrap();
-    let stderr = child.stderr.take().unwrap();
-    let read = |stream: Box<dyn Read + Send>| {
-        std::thread::spawn(move || {
-            let mut bytes = Vec::new();
-            stream.take(65537).read_to_end(&mut bytes).map(|_| bytes)
-        })
-    };
-    let out = read(Box::new(stdout));
-    let err = read(Box::new(stderr));
-    let started = Instant::now();
-    loop {
-        if started.elapsed() >= budget {
-            #[cfg(unix)]
-            unsafe {
-                libc::kill(-(child.id() as i32), libc::SIGKILL);
-            }
-            let _ = child.kill();
-            let _ = child.wait();
-            let _ = out.join();
-            let _ = err.join();
-            return Err(timeout());
+    let output = crate::bounded_process::run(Command::new(program).args(args), None, Instant::now() + budget, 65536)
+        .map_err(|error| match error.kind() {
+            std::io::ErrorKind::TimedOut => timeout(),
+            std::io::ErrorKind::InvalidData => "failed: Keychain output exceeded its limit.".into(),
+            _ => "failed: Keychain process could not complete.".into(),
+        })?;
+    let mut stdout = output.stdout;
+    let result = if output.status.success() {
+        match String::from_utf8(std::mem::take(&mut stdout)) {
+            Ok(mut value) => { if value.ends_with('\n') { value.pop(); } Ok(value) }
+            Err(error) => { let mut bytes = error.into_bytes(); bytes.fill(0); Err("failed: Keychain value is not UTF-8.".into()) }
         }
-        match child.try_wait() {
-            Ok(Some(status)) if out.is_finished() && err.is_finished() => {
-                let mut stdout = out
-                    .join()
-                    .map_err(|_| "failed: Keychain output unavailable.")?
-                    .map_err(|_| "failed: Keychain output unavailable.")?;
-                let stderr = err
-                    .join()
-                    .map_err(|_| "failed: Keychain output unavailable.")?
-                    .map_err(|_| "failed: Keychain output unavailable.")?;
-                let result = if stdout.len() > 65536 || stderr.len() > 65536 {
-                    Err("failed: Keychain output exceeded its limit.".into())
-                } else if status.success() {
-                    match String::from_utf8(std::mem::take(&mut stdout)) {
-                        Ok(mut value) => {
-                            // security appends one newline; spaces and any original newline are password bytes.
-                            if value.ends_with('\n') {
-                                value.pop();
-                            }
-                            Ok(value)
-                        }
-                        Err(error) => {
-                            let mut bytes = error.into_bytes();
-                            bytes.fill(0);
-                            Err("failed: Keychain value is not UTF-8.".into())
-                        }
-                    }
-                } else {
-                    Err(classify(&stderr))
-                };
-                stdout.fill(0);
-                return result;
-            }
-            Err(_) => {
-                #[cfg(unix)]
-                unsafe {
-                    libc::kill(-(child.id() as i32), libc::SIGKILL);
-                }
-                let _ = child.kill();
-                let _ = child.wait();
-                let _ = out.join();
-                let _ = err.join();
-                return Err("failed: Keychain process could not be observed.".into());
-            }
-            _ => std::thread::sleep(Duration::from_millis(5)),
-        }
-    }
+    } else { Err(classify(&output.stderr)) };
+    stdout.fill(0);
+    result
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;

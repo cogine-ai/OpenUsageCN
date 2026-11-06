@@ -209,7 +209,7 @@ On Windows, only the ten Windows MVP providers are present; the rest of this tab
 | `amp` | `free`, `other`, `orb` |
 | `antigravity` | `geminiPro`, `geminiFlash`, `claude`, `geminiSession`, `geminiWeekly`, `claudeWeekly`, `argonWeekly` |
 | `bigmodel-cn` | `session`, `weekly`, `webSearches` |
-| `claude` | `session`, `weekly`, `sonnet`, `claudeDesign`, `extraUsage` |
+| `claude` | `session`, `weekly`, `sonnet`, `claudeDesign`, `extraUsage`, `fable` |
 | `codex` | `session`, `weekly`, `spark`, `sparkWeekly`, `codeReview` |
 | `copilot` | `premiumCredits`, `chat`, `completions` |
 | `cursor` | `credits`, `totalUsage`, `weekly`, `requests`, `autoUsage`, `apiUsage`, `grokBotUsage`, `onDemand` |
@@ -221,7 +221,7 @@ On Windows, only the ten Windows MVP providers are present; the rest of this tab
 | `grok` | `creditsUsed` |
 | `jetbrains-ai-assistant` | `quota` |
 | `kimi` | `session`, `weekly` |
-| `kiro` | `credits`, `bonusCredits` |
+| `kiro` | `credits`, `bonusCredits`, `overageCredits` |
 | `minimax` | `session`, `weekly` |
 | `moonshot` | None; balance is text in `/v1/usage` |
 | `ollama` | `monthly`, `session`, `weekly` when returned by the selected Cookie or API Key source |
@@ -230,7 +230,7 @@ On Windows, only the ten Windows MVP providers are present; the rest of this tab
 | `opencode` | `session`, `weekly` |
 | `openrouter` | `credits`, `keyLimit` |
 | `perplexity` | `apiCredits`, `subscriptionCredits`, `purchasedCredits`, `promotionalCredits`, `organizationCredits` |
-| `synthetic` | `fiveHour`, `mana`, `subscription`, `freeToolCalls`, `search` |
+| `synthetic` | `fiveHour`, `mana`, `subscription`, `freeToolCalls`, `search`, `planWeekly` |
 | `xai` | None; billing balance and spend are text in `/v1/usage` |
 | `zai` | `session`, `weekly`, `webSearches` |
 
@@ -319,3 +319,8 @@ OpenUsageCN rejects non-loopback `Host` headers and only grants browser CORS rea
 
 
 Claude Platform、WorkBuddy、Trae CN、LiteLLM、SiliconFlow 和 Muse Code 的缓存只用于产生该次结果的连接。更换配置或环境来源后，旧账号读数不会作为新连接的结果；需要重新刷新。无法确认来源的旧缓存同样需要刷新，不按零额度处理。修改 shell 环境变量后请重启应用。
+
+
+Kiro exports independent `credits`, `overageCredits` and `bonusCredits` resources when those quantities are verified. They are not added together. Bonus expiry is display text, not a refill/reset. Kiro cache entries follow the selected desktop/CLI source; changing that source requires a fresh result.
+
+Synthetic's new `planWeekly` percentage replaces its retired windows when the new plan is present. Partial regeneration does not export a full-reset time. Claude can export the separate `fable` model window; non-USD extra spend remains labeled display text and is not exported as a USD resource. Cursor's current-user monthly additional spend uses the existing `onDemand` USD resource and never includes model-history charges. Z.ai reset coupons are read-only detail text, not numeric token resources or consumable actions.

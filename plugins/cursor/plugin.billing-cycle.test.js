@@ -1,3 +1,4 @@
+import "./unified-usage.js"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { makeCtx } from "../test-helpers.js"
 

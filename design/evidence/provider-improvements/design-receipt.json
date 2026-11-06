@@ -1,0 +1,494 @@
+{
+  "type": "Design Prototype Only; Not Production Or Real Account Acceptance",
+  "browser": "143.0.7499.4",
+  "cases": [
+    {
+      "provider": "cursor",
+      "state": "ready",
+      "width": 320,
+      "light": false
+    },
+    {
+      "provider": "cursor",
+      "state": "ready",
+      "width": 320,
+      "light": true
+    },
+    {
+      "provider": "cursor",
+      "state": "ready",
+      "width": 400,
+      "light": false
+    },
+    {
+      "provider": "cursor",
+      "state": "ready",
+      "width": 400,
+      "light": true
+    },
+    {
+      "provider": "cursor",
+      "state": "partial",
+      "width": 320,
+      "light": false
+    },
+    {
+      "provider": "cursor",
+      "state": "partial",
+      "width": 320,
+      "light": true
+    },
+    {
+      "provider": "cursor",
+      "state": "partial",
+      "width": 400,
+      "light": false
+    },
+    {
+      "provider": "cursor",
+      "state": "partial",
+      "width": 400,
+      "light": true
+    },
+    {
+      "provider": "cursor",
+      "state": "zero",
+      "width": 320,
+      "light": false
+    },
+    {
+      "provider": "cursor",
+      "state": "zero",
+      "width": 320,
+      "light": true
+    },
+    {
+      "provider": "cursor",
+      "state": "zero",
+      "width": 400,
+      "light": false
+    },
+    {
+      "provider": "cursor",
+      "state": "zero",
+      "width": 400,
+      "light": true
+    },
+    {
+      "provider": "cursor",
+      "state": "expired",
+      "width": 320,
+      "light": false
+    },
+    {
+      "provider": "cursor",
+      "state": "expired",
+      "width": 320,
+      "light": true
+    },
+    {
+      "provider": "cursor",
+      "state": "expired",
+      "width": 400,
+      "light": false
+    },
+    {
+      "provider": "cursor",
+      "state": "expired",
+      "width": 400,
+      "light": true
+    },
+    {
+      "provider": "claude",
+      "state": "ready",
+      "width": 320,
+      "light": false
+    },
+    {
+      "provider": "claude",
+      "state": "ready",
+      "width": 320,
+      "light": true
+    },
+    {
+      "provider": "claude",
+      "state": "ready",
+      "width": 400,
+      "light": false
+    },
+    {
+      "provider": "claude",
+      "state": "ready",
+      "width": 400,
+      "light": true
+    },
+    {
+      "provider": "claude",
+      "state": "partial",
+      "width": 320,
+      "light": false
+    },
+    {
+      "provider": "claude",
+      "state": "partial",
+      "width": 320,
+      "light": true
+    },
+    {
+      "provider": "claude",
+      "state": "partial",
+      "width": 400,
+      "light": false
+    },
+    {
+      "provider": "claude",
+      "state": "partial",
+      "width": 400,
+      "light": true
+    },
+    {
+      "provider": "claude",
+      "state": "zero",
+      "width": 320,
+      "light": false
+    },
+    {
+      "provider": "claude",
+      "state": "zero",
+      "width": 320,
+      "light": true
+    },
+    {
+      "provider": "claude",
+      "state": "zero",
+      "width": 400,
+      "light": false
+    },
+    {
+      "provider": "claude",
+      "state": "zero",
+      "width": 400,
+      "light": true
+    },
+    {
+      "provider": "claude",
+      "state": "expired",
+      "width": 320,
+      "light": false
+    },
+    {
+      "provider": "claude",
+      "state": "expired",
+      "width": 320,
+      "light": true
+    },
+    {
+      "provider": "claude",
+      "state": "expired",
+      "width": 400,
+      "light": false
+    },
+    {
+      "provider": "claude",
+      "state": "expired",
+      "width": 400,
+      "light": true
+    },
+    {
+      "provider": "synthetic",
+      "state": "ready",
+      "width": 320,
+      "light": false
+    },
+    {
+      "provider": "synthetic",
+      "state": "ready",
+      "width": 320,
+      "light": true
+    },
+    {
+      "provider": "synthetic",
+      "state": "ready",
+      "width": 400,
+      "light": false
+    },
+    {
+      "provider": "synthetic",
+      "state": "ready",
+      "width": 400,
+      "light": true
+    },
+    {
+      "provider": "synthetic",
+      "state": "partial",
+      "width": 320,
+      "light": false
+    },
+    {
+      "provider": "synthetic",
+      "state": "partial",
+      "width": 320,
+      "light": true
+    },
+    {
+      "provider": "synthetic",
+      "state": "partial",
+      "width": 400,
+      "light": false
+    },
+    {
+      "provider": "synthetic",
+      "state": "partial",
+      "width": 400,
+      "light": true
+    },
+    {
+      "provider": "synthetic",
+      "state": "zero",
+      "width": 320,
+      "light": false
+    },
+    {
+      "provider": "synthetic",
+      "state": "zero",
+      "width": 320,
+      "light": true
+    },
+    {
+      "provider": "synthetic",
+      "state": "zero",
+      "width": 400,
+      "light": false
+    },
+    {
+      "provider": "synthetic",
+      "state": "zero",
+      "width": 400,
+      "light": true
+    },
+    {
+      "provider": "synthetic",
+      "state": "expired",
+      "width": 320,
+      "light": false
+    },
+    {
+      "provider": "synthetic",
+      "state": "expired",
+      "width": 320,
+      "light": true
+    },
+    {
+      "provider": "synthetic",
+      "state": "expired",
+      "width": 400,
+      "light": false
+    },
+    {
+      "provider": "synthetic",
+      "state": "expired",
+      "width": 400,
+      "light": true
+    },
+    {
+      "provider": "kiro",
+      "state": "ready",
+      "width": 320,
+      "light": false
+    },
+    {
+      "provider": "kiro",
+      "state": "ready",
+      "width": 320,
+      "light": true
+    },
+    {
+      "provider": "kiro",
+      "state": "ready",
+      "width": 400,
+      "light": false
+    },
+    {
+      "provider": "kiro",
+      "state": "ready",
+      "width": 400,
+      "light": true
+    },
+    {
+      "provider": "kiro",
+      "state": "partial",
+      "width": 320,
+      "light": false
+    },
+    {
+      "provider": "kiro",
+      "state": "partial",
+      "width": 320,
+      "light": true
+    },
+    {
+      "provider": "kiro",
+      "state": "partial",
+      "width": 400,
+      "light": false
+    },
+    {
+      "provider": "kiro",
+      "state": "partial",
+      "width": 400,
+      "light": true
+    },
+    {
+      "provider": "kiro",
+      "state": "zero",
+      "width": 320,
+      "light": false
+    },
+    {
+      "provider": "kiro",
+      "state": "zero",
+      "width": 320,
+      "light": true
+    },
+    {
+      "provider": "kiro",
+      "state": "zero",
+      "width": 400,
+      "light": false
+    },
+    {
+      "provider": "kiro",
+      "state": "zero",
+      "width": 400,
+      "light": true
+    },
+    {
+      "provider": "kiro",
+      "state": "expired",
+      "width": 320,
+      "light": false
+    },
+    {
+      "provider": "kiro",
+      "state": "expired",
+      "width": 320,
+      "light": true
+    },
+    {
+      "provider": "kiro",
+      "state": "expired",
+      "width": 400,
+      "light": false
+    },
+    {
+      "provider": "kiro",
+      "state": "expired",
+      "width": 400,
+      "light": true
+    },
+    {
+      "provider": "zai",
+      "state": "ready",
+      "width": 320,
+      "light": false
+    },
+    {
+      "provider": "zai",
+      "state": "ready",
+      "width": 320,
+      "light": true
+    },
+    {
+      "provider": "zai",
+      "state": "ready",
+      "width": 400,
+      "light": false
+    },
+    {
+      "provider": "zai",
+      "state": "ready",
+      "width": 400,
+      "light": true
+    },
+    {
+      "provider": "zai",
+      "state": "partial",
+      "width": 320,
+      "light": false
+    },
+    {
+      "provider": "zai",
+      "state": "partial",
+      "width": 320,
+      "light": true
+    },
+    {
+      "provider": "zai",
+      "state": "partial",
+      "width": 400,
+      "light": false
+    },
+    {
+      "provider": "zai",
+      "state": "partial",
+      "width": 400,
+      "light": true
+    },
+    {
+      "provider": "zai",
+      "state": "zero",
+      "width": 320,
+      "light": false
+    },
+    {
+      "provider": "zai",
+      "state": "zero",
+      "width": 320,
+      "light": true
+    },
+    {
+      "provider": "zai",
+      "state": "zero",
+      "width": 400,
+      "light": false
+    },
+    {
+      "provider": "zai",
+      "state": "zero",
+      "width": 400,
+      "light": true
+    },
+    {
+      "provider": "zai",
+      "state": "expired",
+      "width": 320,
+      "light": false
+    },
+    {
+      "provider": "zai",
+      "state": "expired",
+      "width": 320,
+      "light": true
+    },
+    {
+      "provider": "zai",
+      "state": "expired",
+      "width": 400,
+      "light": false
+    },
+    {
+      "provider": "zai",
+      "state": "expired",
+      "width": 400,
+      "light": true
+    }
+  ],
+  "errors": [],
+  "checks": [
+    "80 State/Width/Theme Combinations Without Horizontal Panel Overflow",
+    "JPY BHD USD Amount Examples",
+    "Kiro Expired Recovery Prototype Action",
+    "Z.ai Read-Only With Explicit Timezone",
+    "Synthetic Regen Separate From Reset And No Legacy 5h In New Protocol"
+  ]
+}

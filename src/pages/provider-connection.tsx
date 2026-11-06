@@ -8,6 +8,7 @@ import { useAppUiStore } from "@/stores/app-ui-store"
 import type { SettingsPluginConfig } from "@/components/settings-plugin-item"
 import { MuseConnection } from "@/components/muse-connection"
 import { OllamaAccountsPage } from "@/pages/ollama-accounts"
+import { isKiroCliLoginError } from "@/lib/plugin-recovery"
 import { checkOllamaLegacyConnection, getOllamaAccounts } from "@/lib/ollama-accounts"
 
 const LOCAL_STEPS: Record<string, { command?: string; step: string }> = {
@@ -35,7 +36,9 @@ function LocalConnection({ plugin, error, onCheck }: { plugin: SettingsPluginCon
   const accountPermission = !localPermission && /subscription|HTTP\s*403|forbidden|access denied/i.test(error ?? "")
   const accountLink = plugin.links?.find((link) => /^https:\/\//.test(link.url) && /billing|usage|account|console|dashboard/i.test(link.url))
   const fileStorage = plugin.id === "codex" && /Windows requires Codex file storage/i.test(error ?? "")
-  const steps = LOCAL_STEPS[plugin.id]
+  const steps = plugin.id === "kiro" && isKiroCliLoginError(error ?? "")
+    ? { command: "kiro-cli login", step: "在终端完成 Kiro CLI 登录，然后重新检查连接。" }
+    : LOCAL_STEPS[plugin.id]
   /** Reports a connection only after the supplied verification completes. */
   const check = async () => {
     setPhase("checking"); setFailure(null)

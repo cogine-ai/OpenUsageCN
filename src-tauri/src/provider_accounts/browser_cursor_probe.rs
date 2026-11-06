@@ -46,6 +46,7 @@ impl FixedBrowserCursorProbe {
         }
         let grok_body = super::browser_cursor_grok::fetch_grok_usage(&self.client, cookie_header);
         let now = time::OffsetDateTime::now_utc();
+        let unified = super::browser_cursor_unified::fetch(&self.client, &summary_body, cookie_header, now, correlation_id);
         let weekly = grok_body.as_ref().ok().and_then(|body| {
             super::browser_cursor_weekly::decode_shared_weekly(body, now)
                 .map_err(|reason| {
@@ -82,28 +83,27 @@ impl FixedBrowserCursorProbe {
                 );
                 match legacy {
                     Ok(output) => Ok(output),
-                    Err(error) => weekly
-                        .as_ref()
-                        .and_then(|_| {
+                    Err(error) => (weekly.is_some() || unified.is_some())
+                        .then(|| {
                             super::browser_cursor_weekly::recover_summary_without_quota(
                                 &summary_body,
                                 &legacy_body,
                                 display_name,
                                 icon_url,
                             )
-                        })
+                        }).flatten()
                         .ok_or_else(|| decode_error_message(error)),
                 }
             }
             Err(error) => Err(decode_error_message(error)),
         }?;
-        Ok(super::browser_cursor_weekly::finish_with_allowance(
+        Ok(super::browser_cursor_unified::apply(super::browser_cursor_weekly::finish_with_allowance(
             output,
             weekly,
             grok_body,
             now,
             correlation_id,
-        ))
+        ), unified))
     }
 
     pub(super) fn get_json(

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { makeCtx } from "../test-helpers.js"
 
 const loadPlugin = async () => {
+  await import("./resets.js")
   await import("./plugin.js")
   return globalThis.__openusage_plugin
 }

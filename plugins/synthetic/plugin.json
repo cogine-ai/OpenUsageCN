@@ -7,6 +7,9 @@
   "icon": "icon.svg",
   "brandColor": "#000000",
   "lines": [
+    { "type": "progress", "label": "Weekly", "scope": "overview", "primaryOrder": 1, "period": "weekly", "limitResource": { "key": "planWeekly" } },
+    { "type": "text", "label": "Next Regen", "scope": "detail" },
+    { "type": "text", "label": "Regen Percent", "scope": "detail" },
     { "type": "progress", "label": "5h Rate Limit", "scope": "overview", "primaryOrder": 1, "limitResource": { "key": "fiveHour", "countUnit": "requests" } },
     { "type": "progress", "label": "Mana Bar", "scope": "overview", "limitResource": { "key": "mana" } },
     { "type": "badge", "label": "Rate Limited", "scope": "detail" },

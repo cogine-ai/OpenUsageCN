@@ -367,11 +367,12 @@ describe("synthetic plugin", () => {
       expect(() => plugin.probe(ctx)).toThrow("HTTP 500");
     });
 
-    it("uses nested API error messages when the error payload is structured", () => {
+    it("keeps private structured API error messages out of user errors", () => {
       var ctx = makeCtx();
       setPiAuth(ctx, "syn_testkey");
       mockHttp(ctx, { error: { message: "Credits required for this feature." } }, 429);
-      expect(() => plugin.probe(ctx)).toThrow("Credits required for this feature.");
+      expect(() => plugin.probe(ctx)).toThrow("Synthetic request failed (HTTP 429)");
+      expect(JSON.stringify(ctx.host.log.error.mock.calls)).not.toContain("Credits required for this feature.");
     });
 
     it("throws on unparseable JSON", () => {

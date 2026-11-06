@@ -166,6 +166,7 @@ fn rejects_values_that_are_not_exactly_32_encoded_bytes() {
 fn separates_an_unavailable_security_tool_from_other_io_failures() {
     for (kind, expected) in [
         (io::ErrorKind::NotFound, InstallationKeyError::Unavailable),
+        (io::ErrorKind::TimedOut, InstallationKeyError::Timeout),
         (io::ErrorKind::PermissionDenied, InstallationKeyError::Io),
     ] {
         let runner = ScriptedRunner::with_responses(vec![Err(io::Error::from(kind))]);
@@ -191,9 +192,9 @@ fn reports_an_unclassified_security_failure_as_unavailable() {
 fn unsupported_platform_neither_reads_nor_generates_a_key() {
     let store = SystemInstallationKeyStore::new();
 
-    assert_eq!(store.read().err(), Some(InstallationKeyError::Unsupported));
+    assert_eq!(store.read(Instant::now() + std::time::Duration::from_secs(1)).err(), Some(InstallationKeyError::Unsupported));
     assert_eq!(
-        store.create().err(),
+        store.create(Instant::now() + std::time::Duration::from_secs(1)).err(),
         Some(InstallationKeyError::Unsupported)
     );
 }

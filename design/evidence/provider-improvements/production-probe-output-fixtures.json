@@ -1,0 +1,1396 @@
+{
+  "outputs": {
+    "claude": {
+      "providerId": "claude",
+      "displayName": "Claude",
+      "iconUrl": "",
+      "plan": "Pro",
+      "lines": [
+        {
+          "type": "progress",
+          "label": "Session",
+          "used": 25,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-06T18:45:00.000Z",
+          "periodDurationMs": 18000000
+        },
+        {
+          "type": "progress",
+          "label": "Weekly",
+          "used": 40,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-13T13:45:00.000Z",
+          "periodDurationMs": 604800000
+        },
+        {
+          "type": "progress",
+          "label": "Sonnet",
+          "used": 12,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-13T13:45:00.000Z",
+          "periodDurationMs": 604800000
+        },
+        {
+          "type": "progress",
+          "label": "Fable Weekly",
+          "used": 18,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "limitResourceKey": "fable",
+          "resetsAt": "2026-11-13T13:45:00.000Z",
+          "periodDurationMs": 604800000
+        },
+        {
+          "type": "progress",
+          "label": "Future Research Model Weekly",
+          "used": 22,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-13T13:45:00.000Z",
+          "periodDurationMs": 604800000
+        },
+        {
+          "type": "text",
+          "label": "Extra Spent",
+          "value": "BHD 1.234"
+        },
+        {
+          "type": "text",
+          "label": "Extra Limit",
+          "value": "BHD 10.000"
+        }
+      ]
+    },
+    "cursor": {
+      "providerId": "cursor",
+      "displayName": "Cursor",
+      "iconUrl": "",
+      "plan": "Pro",
+      "lines": [
+        {
+          "type": "progress",
+          "label": "Shared Weekly Usage",
+          "used": 36,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "limitResourceKey": "weekly",
+          "resetsAt": "2026-11-13T13:45:00.000Z",
+          "periodDurationMs": 604800000
+        },
+        {
+          "type": "progress",
+          "label": "On-demand",
+          "used": 12,
+          "limit": 50,
+          "format": {
+            "kind": "dollars"
+          },
+          "limitResourceKey": "onDemand",
+          "resetsAt": "2026-12-01T00:00:00Z",
+          "periodDurationMs": 2592000000
+        },
+        {
+          "type": "text",
+          "label": "Billing Scope",
+          "value": "Current User"
+        }
+      ]
+    },
+    "synthetic": {
+      "providerId": "synthetic",
+      "displayName": "Synthetic",
+      "iconUrl": "",
+      "lines": [
+        {
+          "type": "progress",
+          "label": "Weekly",
+          "used": 60,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          }
+        },
+        {
+          "type": "text",
+          "label": "Next Regen",
+          "value": "2026-11-06T16:30:00.000Z",
+          "subtitle": "UTC · Partial Regeneration, Not A Full Reset"
+        },
+        {
+          "type": "text",
+          "label": "Regen Percent",
+          "value": "2%"
+        },
+        {
+          "type": "progress",
+          "label": "Search",
+          "used": 18,
+          "limit": 250,
+          "format": {
+            "kind": "count",
+            "suffix": "requests"
+          },
+          "resetsAt": "2026-11-06T18:45:00.000Z",
+          "periodDurationMs": 3600000
+        }
+      ]
+    },
+    "kiro": {
+      "providerId": "kiro",
+      "displayName": "Kiro",
+      "iconUrl": "",
+      "plan": "Kiro Pro",
+      "lines": [
+        {
+          "type": "progress",
+          "label": "Credits",
+          "used": 100,
+          "limit": 100,
+          "format": {
+            "kind": "count",
+            "suffix": "credits"
+          },
+          "resetsAt": "2026-11-13T13:45:00.000Z"
+        },
+        {
+          "type": "progress",
+          "label": "Overage Credits",
+          "used": 20,
+          "limit": 50,
+          "format": {
+            "kind": "count",
+            "suffix": "credits"
+          },
+          "resetsAt": "2026-11-13T13:45:00.000Z"
+        },
+        {
+          "type": "badge",
+          "label": "Overages",
+          "text": "Enabled"
+        }
+      ]
+    },
+    "zai": {
+      "providerId": "zai",
+      "displayName": "Z.ai",
+      "iconUrl": "",
+      "plan": "GLM Coding Pro",
+      "lines": [
+        {
+          "type": "progress",
+          "label": "Session",
+          "used": 65,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-06T18:45:00.000Z",
+          "periodDurationMs": 18000000
+        },
+        {
+          "type": "progress",
+          "label": "Weekly",
+          "used": 40,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-13T13:45:00.000Z",
+          "periodDurationMs": 604800000
+        },
+        {
+          "type": "text",
+          "label": "5h Reset Coupons",
+          "value": "3"
+        },
+        {
+          "type": "text",
+          "label": "Weekly Reset Coupons",
+          "value": "1"
+        },
+        {
+          "type": "text",
+          "label": "Coupon Expiry",
+          "value": "2026-11-07 00:30",
+          "subtitle": "UTC+08:00"
+        }
+      ]
+    },
+    "claude-jpy": {
+      "providerId": "claude",
+      "displayName": "Claude",
+      "iconUrl": "",
+      "plan": "Pro",
+      "lines": [
+        {
+          "type": "progress",
+          "label": "Session",
+          "used": 25,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-06T18:45:00.000Z",
+          "periodDurationMs": 18000000
+        },
+        {
+          "type": "progress",
+          "label": "Weekly",
+          "used": 40,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-13T13:45:00.000Z",
+          "periodDurationMs": 604800000
+        },
+        {
+          "type": "progress",
+          "label": "Sonnet",
+          "used": 12,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-13T13:45:00.000Z",
+          "periodDurationMs": 604800000
+        },
+        {
+          "type": "progress",
+          "label": "Fable Weekly",
+          "used": 18,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "limitResourceKey": "fable",
+          "resetsAt": "2026-11-13T13:45:00.000Z",
+          "periodDurationMs": 604800000
+        },
+        {
+          "type": "progress",
+          "label": "Future Research Model Weekly",
+          "used": 22,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-13T13:45:00.000Z",
+          "periodDurationMs": 604800000
+        },
+        {
+          "type": "text",
+          "label": "Extra Spent",
+          "value": "JPY 500"
+        },
+        {
+          "type": "text",
+          "label": "Extra Limit",
+          "value": "JPY 1000"
+        }
+      ]
+    },
+    "claude-usd": {
+      "providerId": "claude",
+      "displayName": "Claude",
+      "iconUrl": "",
+      "plan": "Pro",
+      "lines": [
+        {
+          "type": "progress",
+          "label": "Session",
+          "used": 25,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-06T18:45:00.000Z",
+          "periodDurationMs": 18000000
+        },
+        {
+          "type": "progress",
+          "label": "Weekly",
+          "used": 40,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-13T13:45:00.000Z",
+          "periodDurationMs": 604800000
+        },
+        {
+          "type": "progress",
+          "label": "Sonnet",
+          "used": 12,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-13T13:45:00.000Z",
+          "periodDurationMs": 604800000
+        },
+        {
+          "type": "progress",
+          "label": "Fable Weekly",
+          "used": 18,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "limitResourceKey": "fable",
+          "resetsAt": "2026-11-13T13:45:00.000Z",
+          "periodDurationMs": 604800000
+        },
+        {
+          "type": "progress",
+          "label": "Future Research Model Weekly",
+          "used": 22,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-13T13:45:00.000Z",
+          "periodDurationMs": 604800000
+        },
+        {
+          "type": "progress",
+          "label": "Extra usage spent",
+          "used": 5,
+          "limit": 100,
+          "format": {
+            "kind": "dollars"
+          }
+        }
+      ]
+    },
+    "claude-long": {
+      "providerId": "claude",
+      "displayName": "Claude",
+      "iconUrl": "",
+      "plan": "Pro",
+      "lines": [
+        {
+          "type": "progress",
+          "label": "Session",
+          "used": 25,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-06T18:45:00.000Z",
+          "periodDurationMs": 18000000
+        },
+        {
+          "type": "progress",
+          "label": "Weekly",
+          "used": 40,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-13T13:45:00.000Z",
+          "periodDurationMs": 604800000
+        },
+        {
+          "type": "progress",
+          "label": "Sonnet",
+          "used": 12,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-13T13:45:00.000Z",
+          "periodDurationMs": 604800000
+        },
+        {
+          "type": "progress",
+          "label": "Fable Weekly",
+          "used": 18,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "limitResourceKey": "fable",
+          "resetsAt": "2026-11-13T13:45:00.000Z",
+          "periodDurationMs": 604800000
+        },
+        {
+          "type": "progress",
+          "label": "IndependentResearchModelIndependentResearchModelIndependentResearchModelIndepend Weekly",
+          "used": 22,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-13T13:45:00.000Z",
+          "periodDurationMs": 604800000
+        },
+        {
+          "type": "text",
+          "label": "Extra Spent",
+          "value": "BHD 1.234"
+        },
+        {
+          "type": "text",
+          "label": "Extra Limit",
+          "value": "BHD 10.000"
+        }
+      ]
+    },
+    "synthetic-partial": {
+      "providerId": "synthetic",
+      "displayName": "Synthetic",
+      "iconUrl": "",
+      "lines": [
+        {
+          "type": "progress",
+          "label": "Weekly",
+          "used": 60,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          }
+        },
+        {
+          "type": "text",
+          "label": "Next Regen",
+          "value": "Unavailable",
+          "subtitle": "UTC · Partial Regeneration, Not A Full Reset"
+        },
+        {
+          "type": "text",
+          "label": "Regen Percent",
+          "value": "Unavailable"
+        },
+        {
+          "type": "progress",
+          "label": "Search",
+          "used": 18,
+          "limit": 250,
+          "format": {
+            "kind": "count",
+            "suffix": "requests"
+          },
+          "resetsAt": "2026-11-06T18:45:00.000Z",
+          "periodDurationMs": 3600000
+        }
+      ]
+    },
+    "kiro-bonus": {
+      "providerId": "kiro",
+      "displayName": "Kiro",
+      "iconUrl": "",
+      "plan": "Kiro Pro",
+      "lines": [
+        {
+          "type": "badge",
+          "label": "Credits",
+          "text": "Usage unavailable",
+          "color": "#f59e0b"
+        },
+        {
+          "type": "progress",
+          "label": "Overage Credits",
+          "used": 20,
+          "limit": 50,
+          "format": {
+            "kind": "count",
+            "suffix": "credits"
+          },
+          "resetsAt": "2026-11-13T13:45:00.000Z"
+        },
+        {
+          "type": "progress",
+          "label": "Bonus Credits",
+          "used": 30,
+          "limit": 50,
+          "format": {
+            "kind": "count",
+            "suffix": "credits"
+          }
+        },
+        {
+          "type": "text",
+          "label": "Bonus Expiry",
+          "value": "2026-11-07T00:30:00.000Z"
+        },
+        {
+          "type": "badge",
+          "label": "Overages",
+          "text": "Enabled"
+        }
+      ]
+    },
+    "zai-partial": {
+      "providerId": "zai",
+      "displayName": "Z.ai",
+      "iconUrl": "",
+      "plan": "GLM Coding Pro",
+      "lines": [
+        {
+          "type": "progress",
+          "label": "Session",
+          "used": 65,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-06T18:45:00.000Z",
+          "periodDurationMs": 18000000
+        },
+        {
+          "type": "progress",
+          "label": "Weekly",
+          "used": 40,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-13T13:45:00.000Z",
+          "periodDurationMs": 604800000
+        },
+        {
+          "type": "text",
+          "label": "5h Reset Coupons",
+          "value": "Unavailable"
+        },
+        {
+          "type": "text",
+          "label": "Weekly Reset Coupons",
+          "value": "Unavailable"
+        },
+        {
+          "type": "text",
+          "label": "Coupon Expiry",
+          "value": "Unavailable"
+        }
+      ]
+    },
+    "zai-zero": {
+      "providerId": "zai",
+      "displayName": "Z.ai",
+      "iconUrl": "",
+      "plan": "GLM Coding Pro",
+      "lines": [
+        {
+          "type": "progress",
+          "label": "Session",
+          "used": 65,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-06T18:45:00.000Z",
+          "periodDurationMs": 18000000
+        },
+        {
+          "type": "progress",
+          "label": "Weekly",
+          "used": 40,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-13T13:45:00.000Z",
+          "periodDurationMs": 604800000
+        },
+        {
+          "type": "text",
+          "label": "5h Reset Coupons",
+          "value": "0"
+        },
+        {
+          "type": "text",
+          "label": "Weekly Reset Coupons",
+          "value": "0"
+        },
+        {
+          "type": "text",
+          "label": "Coupon Expiry",
+          "value": "None"
+        }
+      ]
+    },
+    "cursor-zero": {
+      "providerId": "cursor",
+      "displayName": "Cursor",
+      "iconUrl": "",
+      "plan": "Pro",
+      "lines": [
+        {
+          "type": "progress",
+          "label": "Shared Weekly Usage",
+          "used": 36,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "limitResourceKey": "weekly",
+          "resetsAt": "2026-11-13T13:45:00.000Z",
+          "periodDurationMs": 604800000
+        },
+        {
+          "type": "progress",
+          "label": "On-demand",
+          "used": 0,
+          "limit": 50,
+          "format": {
+            "kind": "dollars"
+          },
+          "limitResourceKey": "onDemand",
+          "resetsAt": "2026-12-01T00:00:00Z",
+          "periodDurationMs": 2592000000
+        },
+        {
+          "type": "text",
+          "label": "Billing Scope",
+          "value": "Current User"
+        }
+      ]
+    },
+    "cursor-nocap": {
+      "providerId": "cursor",
+      "displayName": "Cursor",
+      "iconUrl": "",
+      "plan": "Pro",
+      "lines": [
+        {
+          "type": "progress",
+          "label": "Shared Weekly Usage",
+          "used": 36,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "limitResourceKey": "weekly",
+          "resetsAt": "2026-11-13T13:45:00.000Z",
+          "periodDurationMs": 604800000
+        },
+        {
+          "type": "text",
+          "label": "On-demand",
+          "value": "USD 12.00",
+          "subtitle": "No Positive Spending Cap Reported"
+        },
+        {
+          "type": "text",
+          "label": "Billing Scope",
+          "value": "Current User"
+        }
+      ]
+    },
+    "cursor-other": {
+      "providerId": "cursor",
+      "displayName": "Cursor",
+      "iconUrl": "",
+      "plan": "Pro",
+      "lines": [
+        {
+          "type": "progress",
+          "label": "Shared Weekly Usage",
+          "used": 36,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "limitResourceKey": "weekly",
+          "resetsAt": "2026-11-13T13:45:00.000Z",
+          "periodDurationMs": 604800000
+        },
+        {
+          "type": "progress",
+          "label": "On-demand",
+          "used": 9.3,
+          "limit": 50,
+          "format": {
+            "kind": "dollars"
+          },
+          "limitResourceKey": "onDemand",
+          "resetsAt": "2026-12-01T00:00:00Z",
+          "periodDurationMs": 2592000000
+        },
+        {
+          "type": "text",
+          "label": "Billing Scope",
+          "value": "Current User"
+        }
+      ]
+    }
+  },
+  "metas": {
+    "claude": {
+      "schemaVersion": 1,
+      "id": "claude",
+      "name": "Claude",
+      "version": "0.0.1",
+      "entry": "plugin.js",
+      "supportingScripts": [
+        "usage-mapping.js"
+      ],
+      "icon": "icon.svg",
+      "brandColor": "#DE7356",
+      "accountSupport": {
+        "localDiscovery": true,
+        "browserBinding": true
+      },
+      "links": [
+        {
+          "label": "Status",
+          "url": "https://status.claude.com/"
+        },
+        {
+          "label": "Console",
+          "url": "https://console.anthropic.com/"
+        }
+      ],
+      "lines": [
+        {
+          "type": "progress",
+          "label": "Session",
+          "scope": "overview",
+          "primaryOrder": 1,
+          "limitResource": {
+            "key": "session"
+          }
+        },
+        {
+          "type": "progress",
+          "label": "Weekly",
+          "scope": "overview",
+          "period": "weekly",
+          "primaryOrder": 2,
+          "limitResource": {
+            "key": "weekly"
+          }
+        },
+        {
+          "type": "progress",
+          "label": "Sonnet",
+          "scope": "detail",
+          "limitResource": {
+            "key": "sonnet"
+          }
+        },
+        {
+          "type": "progress",
+          "label": "Claude Design",
+          "scope": "detail",
+          "limitResource": {
+            "key": "claudeDesign"
+          }
+        },
+        {
+          "type": "progress",
+          "label": "Extra usage spent",
+          "scope": "overview",
+          "primaryOrder": 3,
+          "limitResource": {
+            "key": "extraUsage"
+          }
+        },
+        {
+          "type": "progress",
+          "label": "Fable Weekly",
+          "scope": "detail",
+          "limitResource": {
+            "key": "fable"
+          }
+        },
+        {
+          "type": "text",
+          "label": "Extra Spent",
+          "scope": "detail"
+        },
+        {
+          "type": "text",
+          "label": "Extra Limit",
+          "scope": "detail"
+        }
+      ],
+      "iconUrl": ""
+    },
+    "cursor": {
+      "schemaVersion": 1,
+      "id": "cursor",
+      "name": "Cursor",
+      "version": "0.0.1",
+      "entry": "plugin.js",
+      "supportingScripts": [
+        "unified-usage.js"
+      ],
+      "icon": "icon.svg",
+      "brandColor": "#000000",
+      "accountSupport": {
+        "localDiscovery": true,
+        "browserBinding": true,
+        "modelHistory": true
+      },
+      "links": [
+        {
+          "label": "Status",
+          "url": "https://status.cursor.com/"
+        },
+        {
+          "label": "Dashboard",
+          "url": "https://www.cursor.com/dashboard"
+        }
+      ],
+      "lines": [
+        {
+          "type": "progress",
+          "label": "Credits",
+          "scope": "overview",
+          "primaryOrder": 1,
+          "limitResource": {
+            "key": "credits"
+          }
+        },
+        {
+          "type": "progress",
+          "label": "Total usage",
+          "scope": "overview",
+          "primaryOrder": 2,
+          "limitResource": {
+            "key": "totalUsage"
+          }
+        },
+        {
+          "type": "progress",
+          "label": "Shared Weekly Usage",
+          "scope": "overview",
+          "primaryOrder": 2,
+          "period": "weekly",
+          "limitResource": {
+            "key": "weekly"
+          }
+        },
+        {
+          "type": "progress",
+          "label": "Requests",
+          "scope": "overview",
+          "primaryOrder": 3,
+          "limitResource": {
+            "key": "requests",
+            "countUnit": "requests"
+          }
+        },
+        {
+          "type": "progress",
+          "label": "Cursor Models",
+          "scope": "overview",
+          "limitResource": {
+            "key": "autoUsage"
+          }
+        },
+        {
+          "type": "progress",
+          "label": "Other Models",
+          "scope": "overview",
+          "limitResource": {
+            "key": "apiUsage"
+          }
+        },
+        {
+          "type": "progress",
+          "label": "Grok Bot",
+          "scope": "overview",
+          "limitResource": {
+            "key": "grokBotUsage"
+          }
+        },
+        {
+          "type": "progress",
+          "label": "On-demand",
+          "scope": "detail",
+          "limitResource": {
+            "key": "onDemand"
+          }
+        },
+        {
+          "type": "text",
+          "label": "On-demand",
+          "scope": "detail"
+        },
+        {
+          "type": "text",
+          "label": "Billing Scope",
+          "scope": "detail"
+        }
+      ],
+      "iconUrl": ""
+    },
+    "synthetic": {
+      "schemaVersion": 1,
+      "id": "synthetic",
+      "name": "Synthetic",
+      "version": "0.0.1",
+      "entry": "plugin.js",
+      "icon": "icon.svg",
+      "brandColor": "#000000",
+      "lines": [
+        {
+          "type": "progress",
+          "label": "Weekly",
+          "scope": "overview",
+          "primaryOrder": 1,
+          "period": "weekly",
+          "limitResource": {
+            "key": "planWeekly"
+          }
+        },
+        {
+          "type": "text",
+          "label": "Next Regen",
+          "scope": "detail"
+        },
+        {
+          "type": "text",
+          "label": "Regen Percent",
+          "scope": "detail"
+        },
+        {
+          "type": "progress",
+          "label": "5h Rate Limit",
+          "scope": "overview",
+          "primaryOrder": 1,
+          "limitResource": {
+            "key": "fiveHour",
+            "countUnit": "requests"
+          }
+        },
+        {
+          "type": "progress",
+          "label": "Mana Bar",
+          "scope": "overview",
+          "limitResource": {
+            "key": "mana"
+          }
+        },
+        {
+          "type": "badge",
+          "label": "Rate Limited",
+          "scope": "detail"
+        },
+        {
+          "type": "progress",
+          "label": "Subscription",
+          "scope": "overview",
+          "primaryOrder": 2,
+          "limitResource": {
+            "key": "subscription",
+            "countUnit": "requests"
+          }
+        },
+        {
+          "type": "progress",
+          "label": "Free Tool Calls",
+          "scope": "detail",
+          "limitResource": {
+            "key": "freeToolCalls",
+            "countUnit": "requests"
+          }
+        },
+        {
+          "type": "progress",
+          "label": "Search",
+          "scope": "detail",
+          "limitResource": {
+            "key": "search",
+            "countUnit": "requests"
+          }
+        }
+      ],
+      "links": [
+        {
+          "label": "Dashboard",
+          "url": "https://synthetic.new/billing"
+        }
+      ],
+      "iconUrl": ""
+    },
+    "kiro": {
+      "schemaVersion": 1,
+      "id": "kiro",
+      "name": "Kiro",
+      "version": "0.0.1",
+      "entry": "plugin.js",
+      "icon": "icon.svg",
+      "brandColor": "#C09CFF",
+      "lines": [
+        {
+          "type": "progress",
+          "label": "Credits",
+          "scope": "overview",
+          "primaryOrder": 1,
+          "limitResource": {
+            "key": "credits",
+            "countUnit": "credits"
+          }
+        },
+        {
+          "type": "badge",
+          "label": "Credits",
+          "scope": "overview"
+        },
+        {
+          "type": "text",
+          "label": "Credits",
+          "scope": "overview"
+        },
+        {
+          "type": "progress",
+          "label": "Bonus Credits",
+          "scope": "overview",
+          "limitResource": {
+            "key": "bonusCredits",
+            "countUnit": "credits"
+          }
+        },
+        {
+          "type": "badge",
+          "label": "Overages",
+          "scope": "detail"
+        },
+        {
+          "type": "progress",
+          "label": "Overage Credits",
+          "scope": "detail",
+          "limitResource": {
+            "key": "overageCredits",
+            "countUnit": "credits"
+          }
+        },
+        {
+          "type": "text",
+          "label": "Overage Credits",
+          "scope": "detail"
+        },
+        {
+          "type": "text",
+          "label": "Bonus Expiry",
+          "scope": "detail"
+        }
+      ],
+      "supportingScripts": [
+        "cli.js"
+      ],
+      "iconUrl": ""
+    },
+    "zai": {
+      "schemaVersion": 1,
+      "id": "zai",
+      "name": "Z.ai",
+      "version": "0.0.1",
+      "entry": "plugin.js",
+      "icon": "icon.svg",
+      "brandColor": "#2D2D2D",
+      "config": {
+        "fields": [
+          {
+            "id": "apiKey",
+            "type": "secret",
+            "label": "API Key",
+            "placeholder": "key.secret",
+            "help": "留空则使用 ZAI_API_KEY 或 GLM_API_KEY 环境变量",
+            "environmentVariables": [
+              "ZAI_API_KEY",
+              "GLM_API_KEY"
+            ],
+            "defaultSource": true
+          }
+        ]
+      },
+      "lines": [
+        {
+          "type": "progress",
+          "label": "Session",
+          "scope": "overview",
+          "primaryOrder": 1,
+          "limitResource": {
+            "key": "session"
+          }
+        },
+        {
+          "type": "progress",
+          "label": "Weekly",
+          "scope": "overview",
+          "period": "weekly",
+          "limitResource": {
+            "key": "weekly"
+          }
+        },
+        {
+          "type": "progress",
+          "label": "Web Searches",
+          "scope": "overview",
+          "limitResource": {
+            "key": "webSearches",
+            "countUnit": "searches"
+          }
+        },
+        {
+          "type": "badge",
+          "label": "Quota",
+          "scope": "overview"
+        },
+        {
+          "type": "text",
+          "label": "5h Reset Coupons",
+          "scope": "detail"
+        },
+        {
+          "type": "text",
+          "label": "Weekly Reset Coupons",
+          "scope": "detail"
+        },
+        {
+          "type": "text",
+          "label": "Coupon Expiry",
+          "scope": "detail"
+        }
+      ],
+      "supportingScripts": [
+        "resets.js"
+      ],
+      "iconUrl": ""
+    }
+  },
+  "sources": {
+    "plugins/claude/usage-mapping.js": "ed04e70562e9bd92db7150608568e62a6772a477c55f43d5e94e19db6a8cdee2",
+    "plugins/claude/plugin.js": "2e9c5c73d13f3570d2afad2fa2777d317762fd76b2b4735fc021f9096b20bc06",
+    "plugins/cursor/unified-usage.js": "eb6d0ab225d50c4d92dea7a053ec8f4b1bbceff9c5d4c3a67b99e4db50ce68e7",
+    "plugins/cursor/plugin.js": "b410b061ade78dc06d623ceb9008d212014ca65e6c1854a16e90ce8f6733fb27",
+    "plugins/synthetic/plugin.js": "8739cc938a5bcd9bebde28696db7854f29378baf8695c02771e992beb7f25acf",
+    "plugins/kiro/cli.js": "0fb8de0807ef3ab3aaac7caa62caae83e06edc9b7a98379887e7fdebc6205437",
+    "plugins/kiro/plugin.js": "755a9b59c186bf8ea721a8a1e81bc79b0d4f55c80a70ea88c56a6e64529b9d06",
+    "plugins/zai/resets.js": "ed145dd1e88c5df1c7cccd5231bfc752610d124fe262d369f442bd1dbc59d460",
+    "plugins/zai/plugin.js": "37e2054854954eaa6a6b7234c69634708e0e8a390267546ca214b4fec4ea8d53"
+  },
+  "requests": {
+    "claude": [
+      {
+        "method": "GET",
+        "url": "https://api.anthropic.com/api/oauth/usage"
+      }
+    ],
+    "cursor": [
+      {
+        "method": "POST",
+        "url": "https://api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage"
+      },
+      {
+        "method": "POST",
+        "url": "https://api2.cursor.sh/aiserver.v1.DashboardService/GetPlanInfo"
+      },
+      {
+        "method": "POST",
+        "url": "https://api2.cursor.sh/aiserver.v1.DashboardService/GetSandUsageStatus"
+      },
+      {
+        "method": "POST",
+        "url": "https://api2.cursor.sh/aiserver.v1.DashboardService/GetCreditGrantsBalance"
+      },
+      {
+        "method": "GET",
+        "url": "https://cursor.com/api/auth/stripe"
+      },
+      {
+        "method": "GET",
+        "url": "https://cursor.com/api/usage-summary"
+      },
+      {
+        "method": "GET",
+        "url": "https://cursor.com/api/dashboard/v2/usage-status?scope=user"
+      }
+    ],
+    "synthetic": [
+      {
+        "method": "GET",
+        "url": "https://api.synthetic.new/v2/quotas"
+      }
+    ],
+    "kiro": [
+      {
+        "method": "POST",
+        "url": "https://codewhisperer.us-east-1.amazonaws.com/"
+      }
+    ],
+    "zai": [
+      {
+        "method": "GET",
+        "url": "https://api.z.ai/api/biz/subscription/list"
+      },
+      {
+        "method": "GET",
+        "url": "https://api.z.ai/api/monitor/usage/quota/limit"
+      },
+      {
+        "method": "GET",
+        "url": "https://api.z.ai/api/biz/customer-package-reset/list?targetType=PERSONAL"
+      }
+    ],
+    "claude-jpy": [
+      {
+        "method": "GET",
+        "url": "https://api.anthropic.com/api/oauth/usage"
+      }
+    ],
+    "claude-usd": [
+      {
+        "method": "GET",
+        "url": "https://api.anthropic.com/api/oauth/usage"
+      }
+    ],
+    "claude-long": [
+      {
+        "method": "GET",
+        "url": "https://api.anthropic.com/api/oauth/usage"
+      }
+    ],
+    "synthetic-partial": [
+      {
+        "method": "GET",
+        "url": "https://api.synthetic.new/v2/quotas"
+      }
+    ],
+    "kiro-bonus": [
+      {
+        "method": "POST",
+        "url": "https://codewhisperer.us-east-1.amazonaws.com/"
+      }
+    ],
+    "zai-partial": [
+      {
+        "method": "GET",
+        "url": "https://api.z.ai/api/biz/subscription/list"
+      },
+      {
+        "method": "GET",
+        "url": "https://api.z.ai/api/monitor/usage/quota/limit"
+      },
+      {
+        "method": "GET",
+        "url": "https://api.z.ai/api/biz/customer-package-reset/list?targetType=PERSONAL"
+      }
+    ],
+    "zai-zero": [
+      {
+        "method": "GET",
+        "url": "https://api.z.ai/api/biz/subscription/list"
+      },
+      {
+        "method": "GET",
+        "url": "https://api.z.ai/api/monitor/usage/quota/limit"
+      },
+      {
+        "method": "GET",
+        "url": "https://api.z.ai/api/biz/customer-package-reset/list?targetType=PERSONAL"
+      }
+    ],
+    "cursor-zero": [
+      {
+        "method": "POST",
+        "url": "https://api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage"
+      },
+      {
+        "method": "POST",
+        "url": "https://api2.cursor.sh/aiserver.v1.DashboardService/GetPlanInfo"
+      },
+      {
+        "method": "POST",
+        "url": "https://api2.cursor.sh/aiserver.v1.DashboardService/GetSandUsageStatus"
+      },
+      {
+        "method": "POST",
+        "url": "https://api2.cursor.sh/aiserver.v1.DashboardService/GetCreditGrantsBalance"
+      },
+      {
+        "method": "GET",
+        "url": "https://cursor.com/api/auth/stripe"
+      },
+      {
+        "method": "GET",
+        "url": "https://cursor.com/api/usage-summary"
+      },
+      {
+        "method": "GET",
+        "url": "https://cursor.com/api/dashboard/v2/usage-status?scope=user"
+      }
+    ],
+    "cursor-nocap": [
+      {
+        "method": "POST",
+        "url": "https://api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage"
+      },
+      {
+        "method": "POST",
+        "url": "https://api2.cursor.sh/aiserver.v1.DashboardService/GetPlanInfo"
+      },
+      {
+        "method": "POST",
+        "url": "https://api2.cursor.sh/aiserver.v1.DashboardService/GetSandUsageStatus"
+      },
+      {
+        "method": "POST",
+        "url": "https://api2.cursor.sh/aiserver.v1.DashboardService/GetCreditGrantsBalance"
+      },
+      {
+        "method": "GET",
+        "url": "https://cursor.com/api/auth/stripe"
+      },
+      {
+        "method": "GET",
+        "url": "https://cursor.com/api/usage-summary"
+      },
+      {
+        "method": "GET",
+        "url": "https://cursor.com/api/dashboard/v2/usage-status?scope=user"
+      }
+    ],
+    "cursor-other": [
+      {
+        "method": "POST",
+        "url": "https://api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage"
+      },
+      {
+        "method": "POST",
+        "url": "https://api2.cursor.sh/aiserver.v1.DashboardService/GetPlanInfo"
+      },
+      {
+        "method": "POST",
+        "url": "https://api2.cursor.sh/aiserver.v1.DashboardService/GetSandUsageStatus"
+      },
+      {
+        "method": "POST",
+        "url": "https://api2.cursor.sh/aiserver.v1.DashboardService/GetCreditGrantsBalance"
+      },
+      {
+        "method": "GET",
+        "url": "https://cursor.com/api/auth/stripe"
+      },
+      {
+        "method": "GET",
+        "url": "https://cursor.com/api/usage-summary"
+      },
+      {
+        "method": "GET",
+        "url": "https://cursor.com/api/dashboard/v2/usage-status?scope=user"
+      }
+    ]
+  }
+}

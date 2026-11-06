@@ -124,6 +124,7 @@
   }
 
   function probe(ctx) {
+    const optionalDeadline = Date.now() + 25000
     const apiKey = loadApiKey(ctx)
     if (!apiKey) {
       throw "No Z.ai API key found. Add it in Settings or set ZAI_API_KEY/GLM_API_KEY."
@@ -143,6 +144,7 @@
     }
     if (limits.length === 0) {
       lines.push(ctx.line.badge({ label: "Session", text: "No usage data", color: "#a3a3a3" }))
+      globalThis.__openusage_zai_resets.append(ctx, apiKey, lines, optionalDeadline)
       return { plan, lines }
     }
 
@@ -212,6 +214,7 @@
       ctx.host.log.error("Quota response has no supported, valid usage limits")
       throw "Quota data is incomplete or invalid. Try again later."
     }
+    globalThis.__openusage_zai_resets.append(ctx, apiKey, lines, optionalDeadline)
     return { plan, lines }
   }
 

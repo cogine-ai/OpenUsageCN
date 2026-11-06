@@ -1,3 +1,4 @@
+import "./unified-usage.js"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import fixtures from "./fixtures/shared-weekly.json"
 import { makeCtx } from "../test-helpers.js"

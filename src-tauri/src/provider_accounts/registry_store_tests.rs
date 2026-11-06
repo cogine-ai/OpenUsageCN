@@ -177,11 +177,11 @@ struct MissingKeyStore {
 }
 
 impl InstallationKeyStore for MissingKeyStore {
-    fn read(&self) -> Result<InstallationKey, InstallationKeyError> {
+    fn read(&self, _deadline: std::time::Instant) -> Result<InstallationKey, InstallationKeyError> {
         Err(InstallationKeyError::Missing)
     }
 
-    fn create(&self) -> Result<InstallationKey, InstallationKeyError> {
+    fn create(&self, _deadline: std::time::Instant) -> Result<InstallationKey, InstallationKeyError> {
         self.create_calls.fetch_add(1, Ordering::SeqCst);
         Ok(InstallationKey::from_bytes([29_u8; 32]))
     }

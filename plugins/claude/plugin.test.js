@@ -1,3 +1,4 @@
+import "./usage-mapping.js"
 import crypto from "node:crypto"
 import { readFileSync } from "node:fs"
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
@@ -738,7 +739,7 @@ describe("claude plugin", () => {
     expect(result.lines.find((l) => l.label === "Claude Design")).toBeUndefined()
   })
 
-  it("omits extra usage line when used credits are zero and no limit exists", async () => {
+  it("preserves explicit zero extra spending without inventing a limit", async () => {
     const ctx = makeCtx()
     ctx.host.fs.readText = () =>
       JSON.stringify({ claudeAiOauth: { accessToken: "token", subscriptionType: "pro" } })
@@ -752,7 +753,7 @@ describe("claude plugin", () => {
     })
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    expect(result.lines.find((line) => line.label === "Extra usage spent")).toBeUndefined()
+    expect(result.lines.find((line) => line.label === "Extra usage spent")).toEqual({ type: "text", label: "Extra usage spent", value: "USD 0.00" })
   })
 
   it("uses keychain credentials when value is hex-encoded JSON", async () => {

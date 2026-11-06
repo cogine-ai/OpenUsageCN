@@ -1,3 +1,5 @@
+mod kiro_sources;
+mod bounded_process;
 #[cfg(target_os = "macos")]
 mod app_nap;
 mod app_paths;
@@ -397,6 +399,7 @@ fn publish_probe_output_with_invalidation(
     started_at: time::OffsetDateTime,
     invalidate_cached_data: bool,
 ) {
+    let invalidate_cached_data = invalidate_cached_data || configured_providers::invalidate_failed_output(&output);
     if let Some(message) = plugin_engine::runtime::probe_error_message(&output) {
         log::warn!("probe {} completed with error", plugin_id);
         local_http_api::record_probe_error(

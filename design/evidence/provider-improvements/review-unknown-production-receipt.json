@@ -1,0 +1,436 @@
+{
+  "type": "Targeted Actual Production ProviderDetailPage; Real probe Output From Synthetic In-Memory Host",
+  "browser": "143.0.7499.4",
+  "cases": [
+    {
+      "scenario": "kiro-missing",
+      "panelWidth": 320,
+      "theme": "light",
+      "result": "passed"
+    },
+    {
+      "scenario": "kiro-zero",
+      "panelWidth": 320,
+      "theme": "light",
+      "result": "passed"
+    },
+    {
+      "scenario": "zai-missing",
+      "panelWidth": 320,
+      "theme": "light",
+      "result": "passed"
+    },
+    {
+      "scenario": "zai-null",
+      "panelWidth": 320,
+      "theme": "light",
+      "result": "passed"
+    },
+    {
+      "scenario": "zai-string",
+      "panelWidth": 320,
+      "theme": "light",
+      "result": "passed"
+    },
+    {
+      "scenario": "zai-false",
+      "panelWidth": 320,
+      "theme": "light",
+      "result": "passed"
+    },
+    {
+      "scenario": "zai-true",
+      "panelWidth": 320,
+      "theme": "light",
+      "result": "passed"
+    }
+  ],
+  "errors": [],
+  "externalRequests": [],
+  "pluginSha256": {
+    "plugins/kiro/cli.js": "0fb8de0807ef3ab3aaac7caa62caae83e06edc9b7a98379887e7fdebc6205437",
+    "plugins/kiro/plugin.js": "fa52a15ab1836737a9535ce006b6801679f9ad75ce9704b8e352fc25cefb6a35",
+    "plugins/zai/resets.js": "bddd165ea8b1aa338638a468773cb669d2d03f58edd8385c0337f7899d037ac5",
+    "plugins/zai/plugin.js": "37e2054854954eaa6a6b7234c69634708e0e8a390267546ca214b4fec4ea8d53"
+  },
+  "frontendSha256": {
+    "src/pages/provider-detail.tsx": "a84f034280a0042c3dec2041384a9da5eb1725d5f159c06252d9c1cc12e345e4",
+    "src/components/provider-card.tsx": "deb541105060f7c140835750e9437437d4d70032bd1ef6e9039b1f12fa96ff7a",
+    "src/components/provider-metric.tsx": "694f646721c5491322d02c2e6884c1b295e40a0582b76b5da3c1dccd35dc60b5",
+    "src/components/quota-metric.tsx": "8fca6f14ac2db3c1cff3431355240f6204534df44c641307bd7824788b8a4ff0"
+  },
+  "normalOutputComparison": {
+    "kiro": "Exact Serialized Output Equal To Previous Valid Fixture",
+    "zai": "Exact Serialized Output Equal To Previous Valid Fixture"
+  },
+  "boundary": "Conservative Local Unknown-Value Rules, Not Upstream Guarantees; No Real Account/Keychain; Original93/45BrowserMatricesNotRepeated",
+  "outputs": {
+    "kiro-valid-unchanged": {
+      "providerId": "kiro",
+      "displayName": "Kiro",
+      "iconUrl": "",
+      "plan": "Kiro Pro",
+      "lines": [
+        {
+          "type": "progress",
+          "label": "Credits",
+          "used": 100,
+          "limit": 100,
+          "format": {
+            "kind": "count",
+            "suffix": "credits"
+          },
+          "resetsAt": "2026-11-13T13:45:00.000Z"
+        },
+        {
+          "type": "progress",
+          "label": "Overage Credits",
+          "used": 20,
+          "limit": 50,
+          "format": {
+            "kind": "count",
+            "suffix": "credits"
+          },
+          "resetsAt": "2026-11-13T13:45:00.000Z"
+        },
+        {
+          "type": "badge",
+          "label": "Overages",
+          "text": "Enabled"
+        }
+      ]
+    },
+    "zai-valid-unchanged": {
+      "providerId": "zai",
+      "displayName": "Z.ai",
+      "iconUrl": "",
+      "plan": "GLM Coding Pro",
+      "lines": [
+        {
+          "type": "progress",
+          "label": "Session",
+          "used": 65,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-06T18:45:00.000Z",
+          "periodDurationMs": 18000000
+        },
+        {
+          "type": "progress",
+          "label": "Weekly",
+          "used": 40,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-13T13:45:00.000Z",
+          "periodDurationMs": 604800000
+        },
+        {
+          "type": "text",
+          "label": "5h Reset Coupons",
+          "value": "3"
+        },
+        {
+          "type": "text",
+          "label": "Weekly Reset Coupons",
+          "value": "1"
+        },
+        {
+          "type": "text",
+          "label": "Coupon Expiry",
+          "value": "2026-11-07 00:30",
+          "subtitle": "UTC+08:00"
+        }
+      ]
+    },
+    "kiro-missing": {
+      "providerId": "kiro",
+      "displayName": "Kiro",
+      "iconUrl": "",
+      "plan": "Kiro Pro",
+      "lines": [
+        {
+          "type": "badge",
+          "label": "Credits",
+          "text": "Usage unavailable",
+          "color": "#f59e0b"
+        },
+        {
+          "type": "text",
+          "label": "Overage Credits",
+          "value": "Unavailable"
+        },
+        {
+          "type": "badge",
+          "label": "Overages",
+          "text": "Enabled"
+        }
+      ]
+    },
+    "kiro-zero": {
+      "providerId": "kiro",
+      "displayName": "Kiro",
+      "iconUrl": "",
+      "plan": "Kiro Pro",
+      "lines": [
+        {
+          "type": "progress",
+          "label": "Credits",
+          "used": 50,
+          "limit": 100,
+          "format": {
+            "kind": "count",
+            "suffix": "credits"
+          },
+          "resetsAt": "2026-11-13T13:45:00.000Z"
+        },
+        {
+          "type": "progress",
+          "label": "Overage Credits",
+          "used": 0,
+          "limit": 50,
+          "format": {
+            "kind": "count",
+            "suffix": "credits"
+          },
+          "resetsAt": "2026-11-13T13:45:00.000Z"
+        },
+        {
+          "type": "badge",
+          "label": "Overages",
+          "text": "Enabled"
+        }
+      ]
+    },
+    "zai-missing": {
+      "providerId": "zai",
+      "displayName": "Z.ai",
+      "iconUrl": "",
+      "plan": "GLM Coding Pro",
+      "lines": [
+        {
+          "type": "progress",
+          "label": "Session",
+          "used": 65,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-06T18:45:00.000Z",
+          "periodDurationMs": 18000000
+        },
+        {
+          "type": "progress",
+          "label": "Weekly",
+          "used": 40,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-13T13:45:00.000Z",
+          "periodDurationMs": 604800000
+        },
+        {
+          "type": "text",
+          "label": "5h Reset Coupons",
+          "value": "Unavailable"
+        },
+        {
+          "type": "text",
+          "label": "Weekly Reset Coupons",
+          "value": "1"
+        },
+        {
+          "type": "text",
+          "label": "Coupon Expiry",
+          "value": "Unavailable"
+        }
+      ]
+    },
+    "zai-null": {
+      "providerId": "zai",
+      "displayName": "Z.ai",
+      "iconUrl": "",
+      "plan": "GLM Coding Pro",
+      "lines": [
+        {
+          "type": "progress",
+          "label": "Session",
+          "used": 65,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-06T18:45:00.000Z",
+          "periodDurationMs": 18000000
+        },
+        {
+          "type": "progress",
+          "label": "Weekly",
+          "used": 40,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-13T13:45:00.000Z",
+          "periodDurationMs": 604800000
+        },
+        {
+          "type": "text",
+          "label": "5h Reset Coupons",
+          "value": "Unavailable"
+        },
+        {
+          "type": "text",
+          "label": "Weekly Reset Coupons",
+          "value": "1"
+        },
+        {
+          "type": "text",
+          "label": "Coupon Expiry",
+          "value": "Unavailable"
+        }
+      ]
+    },
+    "zai-string": {
+      "providerId": "zai",
+      "displayName": "Z.ai",
+      "iconUrl": "",
+      "plan": "GLM Coding Pro",
+      "lines": [
+        {
+          "type": "progress",
+          "label": "Session",
+          "used": 65,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-06T18:45:00.000Z",
+          "periodDurationMs": 18000000
+        },
+        {
+          "type": "progress",
+          "label": "Weekly",
+          "used": 40,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-13T13:45:00.000Z",
+          "periodDurationMs": 604800000
+        },
+        {
+          "type": "text",
+          "label": "5h Reset Coupons",
+          "value": "Unavailable"
+        },
+        {
+          "type": "text",
+          "label": "Weekly Reset Coupons",
+          "value": "1"
+        },
+        {
+          "type": "text",
+          "label": "Coupon Expiry",
+          "value": "Unavailable"
+        }
+      ]
+    },
+    "zai-false": {
+      "providerId": "zai",
+      "displayName": "Z.ai",
+      "iconUrl": "",
+      "plan": "GLM Coding Pro",
+      "lines": [
+        {
+          "type": "progress",
+          "label": "Session",
+          "used": 65,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-06T18:45:00.000Z",
+          "periodDurationMs": 18000000
+        },
+        {
+          "type": "progress",
+          "label": "Weekly",
+          "used": 40,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-13T13:45:00.000Z",
+          "periodDurationMs": 604800000
+        },
+        {
+          "type": "text",
+          "label": "5h Reset Coupons",
+          "value": "0"
+        },
+        {
+          "type": "text",
+          "label": "Weekly Reset Coupons",
+          "value": "1"
+        },
+        {
+          "type": "text",
+          "label": "Coupon Expiry",
+          "value": "2026-11-08 00:30",
+          "subtitle": "UTC+08:00"
+        }
+      ]
+    },
+    "zai-true": {
+      "providerId": "zai",
+      "displayName": "Z.ai",
+      "iconUrl": "",
+      "plan": "GLM Coding Pro",
+      "lines": [
+        {
+          "type": "progress",
+          "label": "Session",
+          "used": 65,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-06T18:45:00.000Z",
+          "periodDurationMs": 18000000
+        },
+        {
+          "type": "progress",
+          "label": "Weekly",
+          "used": 40,
+          "limit": 100,
+          "format": {
+            "kind": "percent"
+          },
+          "resetsAt": "2026-11-13T13:45:00.000Z",
+          "periodDurationMs": 604800000
+        },
+        {
+          "type": "text",
+          "label": "5h Reset Coupons",
+          "value": "1"
+        },
+        {
+          "type": "text",
+          "label": "Weekly Reset Coupons",
+          "value": "1"
+        },
+        {
+          "type": "text",
+          "label": "Coupon Expiry",
+          "value": "2026-11-07 00:30",
+          "subtitle": "UTC+08:00"
+        }
+      ]
+    }
+  }
+}

@@ -4,6 +4,19 @@ pub(super) fn response_body(plugin: &str, path: &str, body: &str) -> Option<Stri
     if matches!(plugin, "claude-platform" | "litellm" | "siliconflow" | "workbuddy" | "trae-cn" | "muse") {
         return Some("[REDACTED PROVIDER BILLING RESPONSE]".into());
     }
+    let endpoint = path.split('?').next().unwrap_or(path);
+    if plugin == "kiro" && endpoint == "https://prod.us-east-1.auth.desktop.kiro.dev/refreshToken" {
+        return Some("[REDACTED PROVIDER AUTH RESPONSE]".into());
+    }
+    let private_usage = match plugin {
+        "cursor" => endpoint.ends_with("/api/usage-summary") || endpoint.ends_with("/api/dashboard/v2/usage-status"),
+        "claude" => endpoint.ends_with("/api/oauth/usage"),
+        "synthetic" => endpoint == "https://api.synthetic.new/v2/quotas",
+        "zai" => endpoint == "https://api.z.ai/api/biz/customer-package-reset/list",
+        "kiro" => endpoint == "https://codewhisperer.us-east-1.amazonaws.com/" || endpoint == "https://q.eu-central-1.amazonaws.com/" || endpoint.ends_with("/getUsageLimits"),
+        _ => false,
+    };
+    if private_usage { return Some("[REDACTED PROVIDER USAGE RESPONSE]".into()); }
     if plugin == "codex"
         && (path.ends_with("/wham/analytics/daily-workspace-usage-counts")
             || path.ends_with("/wham/usage/daily-workspace-user-token-usage-breakdown")
@@ -74,6 +87,79 @@ mod tests {
         is_env_var_allowed_for_plugin, redact_plugin_http_response_body, redact_url,
     };
 
+    #[test]
+    fn improved_provider_responses_hide_new_identity_and_coupon_fields_even_when_malformed() {
+        for (provider, url) in [
+            ("cursor", "https://cursor.com/api/usage-summary"),
+            ("cursor", "https://cursor.com/api/dashboard/v2/usage-status?scope=user"),
+            ("claude", "https://api.anthropic.com/api/oauth/usage"),
+            ("synthetic", "https://api.synthetic.new/v2/quotas"),
+            ("kiro", "https://codewhisperer.us-east-1.amazonaws.com/"),
+            ("kiro", "https://q.eu-central-1.amazonaws.com/"),
+            ("zai", "https://api.z.ai/api/biz/customer-package-reset/list?targetType=PERSONAL"),
+        ] {
+            for body in [r#"{"recordId":123,"userInfo":{"email":"private@example.invalid"},"scope":{"model":{"id":"private-model"}}}"#, "malformed private-token-private@example.invalid"] {
+                assert_eq!(redact_plugin_http_response_body(provider, url, body), "[REDACTED PROVIDER USAGE RESPONSE]");
+            }
+        }
+        assert!(is_env_var_allowed_for_plugin("kiro", "KIRO_DATA_DIR"));
+        assert!(is_env_var_allowed_for_plugin("kiro", "XDG_DATA_HOME"));
+        assert!(!is_env_var_allowed_for_plugin("cursor", "KIRO_DATA_DIR"));
+        assert!(!is_env_var_allowed_for_plugin("zai", "KIRO_DATA_DIR"));
+    }
+
+    #[test]
+    fn desktop_kiro_usage_request_and_response_hide_profile_identity_and_credentials() {
+        let arn = "arn:aws:codewhisperer:us-east-1:123456789012:profile/synthetic-private-profile";
+        let mut url = reqwest::Url::parse("https://q.us-east-1.amazonaws.com/getUsageLimits").unwrap();
+        url.query_pairs_mut()
+            .append_pair("origin", "AI_EDITOR")
+            .append_pair("profileArn", arn)
+            .append_pair("resourceType", "AGENTIC_REQUEST");
+        let request_log = format!("[plugin:kiro] HTTP GET {}", redact_url(url.as_str()));
+        for private in [arn, "123456789012", "synthetic-private-profile"] {
+            assert!(!request_log.contains(private), "{request_log}");
+        }
+        assert!(request_log.contains("/getUsageLimits?origin=AI_EDITOR"));
+        assert!(request_log.contains("resourceType=AGENTIC_REQUEST"));
+
+        for body in [
+            r#"{"profileArn":"private-profile","userInfo":{"email":"private@example.invalid","userId":"private-user"},"accessToken":"synthetic-private-access","refreshToken":"synthetic-private-refresh","usageBreakdownList":[{"currentUsageWithPrecision":42.5}]}"#,
+            "malformed private-profile private@example.invalid synthetic-private-access",
+        ] {
+            assert_eq!(
+                redact_plugin_http_response_body("kiro", url.as_str(), body),
+                "[REDACTED PROVIDER USAGE RESPONSE]"
+            );
+        }
+    }
+
+    #[test]
+    fn desktop_kiro_refresh_responses_are_hidden_without_parsing_credentials() {
+        let url = "https://prod.us-east-1.auth.desktop.kiro.dev/refreshToken";
+        for body in [
+            r#"{"accessToken":"synthetic-private-access","refreshToken":"synthetic-private-refresh","profileArn":"private-profile","futureCredential":"unknown-private-token"}"#,
+            r#"{"accessToken":"synthetic-private-access","refreshToken":"synthetic-private-refresh","profileArn":"private-profile","futureCredential":"unknown-private-token""#,
+            "malformed synthetic-private-access synthetic-private-refresh private-profile unknown-private-token",
+        ] {
+            assert_eq!(
+                redact_plugin_http_response_body("kiro", url, body),
+                "[REDACTED PROVIDER AUTH RESPONSE]"
+            );
+        }
+    }
+
+    #[test]
+    fn desktop_kiro_refresh_rule_does_not_capture_other_providers_or_paths() {
+        let url = "https://prod.us-east-1.auth.desktop.kiro.dev/refreshToken";
+        assert!(super::response_body("cursor", url, "unrelated response").is_none());
+        for url in [
+            "https://prod.us-east-1.auth.desktop.kiro.dev/refreshTokenExtra",
+            "https://example.invalid/refreshToken",
+        ] {
+            assert!(super::response_body("kiro", url, "unrelated response").is_none());
+        }
+    }
     #[test]
     fn new_provider_request_identifiers_are_not_logged() {
         let logged = redact_url("https://platform.claude.com/api/organizations/private-org/prepaid/credits");

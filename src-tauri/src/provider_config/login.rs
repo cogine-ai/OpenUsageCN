@@ -2,6 +2,9 @@ use super::*;
 use std::io::Write;
 
 pub(crate) fn configuration_fingerprint(plugin: &str) -> Result<String, String> {
+    if plugin == "kiro" {
+        return Ok(crate::kiro_sources::snapshot()?.fingerprint);
+    }
     let fields = crate::configured_providers::config_fields(plugin)?;
     let values = resolved_values_from_disk(plugin, &fields)?;
     let names = crate::configured_providers::required_environment(&fields, &values);

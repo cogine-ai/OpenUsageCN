@@ -1,84 +1,33 @@
 # Kiro
 
-> Reverse-engineered from the shipped Kiro extension, local Kiro state, and local Kiro logs. The live API is not publicly documented and may change without notice.
+> Reverse-engineered from the shipped Kiro extension and its usage API. The live API is not publicly documented and may change without notice.
 
 ## Overview
 
 - **Product:** [Kiro](https://kiro.dev/)
 - **Runtime service:** AWS CodeWhisperer Runtime (`https://q.<region>.amazonaws.com`)
-- **Primary local state:** `~/Library/Application Support/Kiro/User/globalStorage/state.vscdb`
-- **Primary local metadata fallback:** `~/Library/Application Support/Kiro/logs/*/window*/exthost/kiro.kiroAgent/q-client.log`
 - **Auth token file:** `~/.aws/sso/cache/kiro-auth-token.json`
 - **Profile fallback:** `~/Library/Application Support/Kiro/User/globalStorage/kiro.kiroagent/profile.json`
 
-OpenUsageCN uses Kiro's local normalized usage cache first, enriches it from Kiro's own runtime logs when available, and only falls back to the live refresh/API path when the local picture is missing or stale.
+OpenUsageCN requests usage with the selected desktop or CLI sign-in on every refresh. Kiro's local usage cache and runtime logs are not used as current account usage because they cannot be reliably tied to the selected account.
 
 ## Plugin Metrics
 
 | Metric | Source | Scope | Format | Notes |
 | --- | --- | --- | --- | --- |
-| Credits | `usageBreakdowns[*]` | overview | count | Monthly included Kiro plan credits |
-| Bonus Credits | `freeTrialUsage` or active `bonuses[0]` | overview | count | Free-trial / bonus credit pool when present |
+| Credits | `usageBreakdownList[*]` | overview | count | Monthly included Kiro plan credits |
+| Overage Credits | `currentOveragesWithPrecision` / `overageCapWithPrecision` | detail | count | Separate paid overage pool; never added to plan or bonus credits |
+| Bonus Credits | Active `freeTrialInfo` / `freeTrialUsage` or `bonuses[*]` | overview | count | Free-trial / bonus credit pool when present |
 | Overages | `overageConfiguration.overageStatus` | detail | badge | `Enabled` / `Disabled` |
 
-The plan label comes from `subscriptionInfo.subscriptionTitle` when a recent `GetUsageLimits` response is available from logs or the live API.
+The plan label comes from `subscriptionInfo.subscriptionTitle` in the current live `GetUsageLimits` response.
 
-## Local Sources
+## Usage Source
 
-### 1) SQLite usage cache
-
-Path: `~/Library/Application Support/Kiro/User/globalStorage/state.vscdb`
-
-Key:
-
-- `kiro.kiroAgent`
-
-That JSON currently contains a nested key:
-
-- `kiro.resourceNotifications.usageState`
-
-Observed shape:
-
-```json
-{
-  "usageBreakdowns": [
-    {
-      "type": "CREDIT",
-      "currentUsage": 0,
-      "usageLimit": 50,
-      "resetDate": "2026-05-01T00:00:00.000Z",
-      "displayName": "Credit",
-      "displayNamePlural": "Credits",
-      "freeTrialUsage": {
-        "currentUsage": 106.11,
-        "usageLimit": 500,
-        "expiryDate": "2026-05-03T15:09:55.196Z",
-        "daysRemaining": 27
-      }
-    }
-  ],
-  "timestamp": 1775500185544
-}
-```
-
-This is the cleanest local source for the numeric usage lines.
-
-### 2) q-client runtime logs
-
-Path pattern:
-
-```text
-~/Library/Application Support/Kiro/logs/<session>/window*/exthost/kiro.kiroAgent/q-client.log
-```
-
-Kiro logs the full `GetUsageLimitsCommand` request/response. That response includes the fields missing from the SQLite cache, especially:
-
-- `subscriptionInfo.subscriptionTitle`
-- `subscriptionInfo.type`
-- `overageConfiguration.overageStatus`
-- full `usageBreakdownList`
-
-OpenUsageCN uses the latest logged response to recover plan metadata without needing network access.
+Desktop usage comes only from a successful live request with the selected token and profile.
+A failed request never falls back to Kiro's unbound local usage cache or logs, even if they
+look recent. OpenUsageCN may retain its own previously verified snapshot for the same sign-in
+source, with its original update time. Changing the source clears incompatible readings.
 
 ## Authentication
 
@@ -161,8 +110,64 @@ Observed response fields:
 
 ## Provider Strategy in OpenUsageCN
 
-1. Require Kiro auth token presence so stale post-logout cache data is not shown as an active account.
-2. Read `state.vscdb` for the normalized numeric usage view.
-3. Read the latest `q-client.log` `GetUsageLimitsCommand` response for plan and overage metadata.
-4. If the local cache is missing, incomplete, or older than the app's staleness threshold, call the live refresh/API path.
-5. If live fetch fails but the local cache is usable, keep showing the last local snapshot.
+1. Prefer the existing desktop sign-in. Only use CLI sign-in when the desktop token file is absent; unreadable or expired desktop credentials do not switch accounts.
+2. Request desktop usage with the selected token and profile on every refresh. Keep the existing desktop token renewal path when needed.
+3. Save a renewed desktop token only if the original token file still matches. A changed file stops the request and preserves the replacement sign-in; a save error is reported instead of using an unsaved token. This guard does not promise atomicity against every external file replacement.
+4. Read CLI credentials and request their usage without renewing or writing those credentials.
+5. On failure, keep only OpenUsageCN's own verified snapshot for the same source. Never promote Kiro's local usage cache or logs to a fresh account reading.
+
+## Kiro CLI Sign-In
+
+If the desktop token file is absent, OpenUsageCN can read the existing Kiro CLI sign-in.
+Run `kiro-cli login` if this connection is missing or expired. The connection recovery page
+can copy this command for you; it never executes the command or starts a CLI login automatically.
+The app never renews, rewrites,
+or deletes CLI credentials. An existing desktop sign-in remains preferred, including when it
+is unreadable or expired; a failed request never switches to another account.
+
+The default macOS database is `~/Library/Application Support/kiro-cli/data.sqlite3`.
+`KIRO_DATA_DIR` can select its directory. Outside macOS the default is
+`$XDG_DATA_HOME/kiro-cli/data.sqlite3`, or `~/.local/share/kiro-cli/data.sqlite3`.
+The database is opened read-only, without an immutable fallback to stale WAL state.
+
+The CLI's `auth_kv` token and `state` profile stay together. A Builder ID sign-in without a
+profile uses the fixed US endpoint. A present but invalid profile or unsupported region is
+rejected. US and Frankfurt profiles use their verified AWS endpoints; credentials are never
+sent to a hostname constructed from arbitrary profile text.
+
+CLI usage comes from its own read-only `GetUsageLimits` API request, not desktop logs or caches.
+If the token, profile, database location, or preferred sign-in source changes while reading,
+the older response is rejected. The API uses POST to retrieve usage; it does not send a model prompt.
+
+## Separate Credit Pools
+
+API total usage includes overage. For total usage 120, plan limit 100, and overage 20 with a
+50-credit cap, the app shows **Credits 100 / 100** and **Overage Credits 20 / 50**.
+The `credits`, `bonusCredits`, and `overageCredits` API resources remain separate.
+Overage above its cap keeps the reported amount rather than being clamped.
+
+Bonus usage can be included in the API total without a precise plan split. In that case the
+plan meter shows **Usage unavailable**, while valid bonus and overage pools remain visible.
+A valid active free-trial pool follows the same rule: it stays separate, and the main meter
+is unavailable when its usage cannot be isolated. A zero plan allowance does not discard valid
+bonus or free-trial pools. **Bonus Expiry** is displayed as a separate UTC timestamp; it is not a quota reset or a prediction that the bonus will refill.
+Bonus progress does not export that expiry as a resource reset. Missing overage is not
+shown as zero. If overage is enabled but its usage amount is missing, both the overage pool
+and API-derived main pool are unavailable: the total cannot establish a precise plan-only amount.
+This also applies when total usage exceeds the plan limit: the plan label and other available
+information remain visible. This exception requires an explicitly enabled overage status and
+no reported amount. An explicit zero is a known amount; it allows the plan meter to load only
+when the remaining usage fits the plan. CLI responses with invalid or inconsistent amounts
+are rejected.
+An unknown enabled/disabled status is not labeled disabled.
+
+The CLI protocol and pool separation follow the fixed
+[CodexBar implementation](https://github.com/steipete/CodexBar/blob/197025e12e41c451899b66aa897423b550e06344/Sources/CodexBarCore/Providers/Kiro/KiroUsageLimitsAPI.swift).
+The private API may change. Synthetic tests do not establish real-account acceptance.
+
+
+### 来源变化与旧用量
+
+用量缓存会检查所选桌面/CLI 登录来源。来源变化后，旧结果不作为新登录的额度；新来源失败时会移除不匹配的旧读数，同一来源的失败仍可保留上次结果。旧版没有来源记录的缓存需要重新刷新。
+
+为避免猜测两个令牌属于同一账号，桌面端正常续期更新令牌后，第一次结果也可能提示连接已变化，重新刷新即可。CLI 数据库或 WAL 变更会保守地让旧结果失效。来源检查本身只读文件。桌面续期仅在原令牌文件仍匹配时保存，文件已被其他登录替换则停止，保留新登录；CLI 凭据始终只读。

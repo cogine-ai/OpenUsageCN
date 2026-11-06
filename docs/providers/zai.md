@@ -208,3 +208,31 @@ An explicitly empty quota list still shows **No usage data**.
 
 - [Z.ai credit allowance and reset rules](https://docs.z.ai/devpack/overview)
 - [CodexBar quota format and window mapping](https://github.com/steipete/CodexBar/blob/4f760cfc9b5e1b9540ba35fbe976e15d24c3b5ae/Sources/CodexBarCore/Resources/Plugins/zai.js)
+
+## Read-Only Reset Coupons
+
+The detail view shows **5h Reset Coupons** and **Weekly Reset Coupons** separately.
+These are stored refill coupons, not extra tokens or extra quota. **Coupon Expiry** shows the
+nearest expiry across the two reported lists, with an explicit `UTC+08:00` label.
+It is not the Session or Weekly quota reset time.
+
+Only available, unexpired coupons count. A successfully read empty list displays **0**;
+an unavailable, malformed, or unreported list displays **Unavailable** while valid quota
+meters continue loading. A coupon without an explicit boolean availability also makes its
+window unavailable; a missing or malformed flag is not interpreted as a spent coupon.
+If either list is unavailable, the overall nearest expiry is also
+unavailable. When both lists are known and no coupons remain, expiry displays **None**.
+
+The app only reads
+`GET https://api.z.ai/api/biz/customer-package-reset/list?targetType=PERSONAL`
+with the same selected API key. The optional request has at most five seconds and is skipped
+when its local request budget is exhausted. The host's overall refresh timeout still applies;
+a primary quota request that itself exceeds that timeout can still fail the refresh.
+
+There is no claim button, spending request, automatic refill, or credential change.
+Coupon identifiers and grant metadata do not appear in usage output. BigModel CN is unchanged;
+this interface has only been verified against the Z.ai upstream contract.
+
+The provider writes `expireTime` as `yyyy-MM-dd HH:mm:ss` in UTC+8. Dates are checked strictly;
+records sharing an expiry remain separate coupons. Protocol reference:
+[OpenUsage reset mapping](https://github.com/robinebers/openusage/blob/0a3813a964f030c50f8c3f1ed13c2781c1f207e3/Sources/OpenUsage/Providers/ZAI/ZAIResets.swift).

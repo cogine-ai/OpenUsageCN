@@ -1,0 +1,391 @@
+[
+  {
+    "name": "current personal monthly cents",
+    "now": "2026-10-20T00:00:00Z",
+    "summary": {
+      "membershipType": "unified_ultra",
+      "limitType": "user"
+    },
+    "payload": {
+      "availability": "available",
+      "monthlyUsage": {
+        "usedCents": 93,
+        "limitCents": 1000,
+        "creditsUsedCents": 125,
+        "periodStart": "2026-10-01T00:00:00Z",
+        "resetsAt": "2026-11-01T00:00:00Z"
+      }
+    },
+    "expected": {
+      "used": 0.93,
+      "limit": 10.0,
+      "periodStart": "2026-10-01T00:00:00Z",
+      "resetsAt": "2026-11-01T00:00:00Z"
+    }
+  },
+  {
+    "name": "zero does not add creditsUsedCents",
+    "now": "2026-10-20T00:00:00Z",
+    "summary": {
+      "membershipType": "unified_ultra",
+      "limitType": "user"
+    },
+    "payload": {
+      "availability": "available",
+      "monthlyUsage": {
+        "usedCents": 0,
+        "limitCents": 1000,
+        "creditsUsedCents": 125,
+        "periodStart": "2026-10-01T00:00:00Z",
+        "resetsAt": "2026-11-01T00:00:00Z"
+      }
+    },
+    "expected": {
+      "used": 0.0,
+      "limit": 10.0,
+      "periodStart": "2026-10-01T00:00:00Z",
+      "resetsAt": "2026-11-01T00:00:00Z"
+    }
+  },
+  {
+    "name": "spent beyond cap",
+    "now": "2026-10-20T00:00:00Z",
+    "summary": {
+      "membershipType": "unified_ultra",
+      "limitType": "user"
+    },
+    "payload": {
+      "availability": "available",
+      "monthlyUsage": {
+        "usedCents": 1200,
+        "limitCents": 1000,
+        "creditsUsedCents": 125,
+        "periodStart": "2026-10-01T00:00:00Z",
+        "resetsAt": "2026-11-01T00:00:00Z"
+      }
+    },
+    "expected": {
+      "used": 12.0,
+      "limit": 10.0,
+      "periodStart": "2026-10-01T00:00:00Z",
+      "resetsAt": "2026-11-01T00:00:00Z"
+    }
+  },
+  {
+    "name": "zero cap remains a valid spend-only reading",
+    "now": "2026-10-20T00:00:00Z",
+    "summary": {
+      "membershipType": "unified_ultra",
+      "limitType": "user"
+    },
+    "payload": {
+      "availability": "available",
+      "monthlyUsage": {
+        "usedCents": 93,
+        "limitCents": 0,
+        "creditsUsedCents": 125,
+        "periodStart": "2026-10-01T00:00:00Z",
+        "resetsAt": "2026-11-01T00:00:00Z"
+      }
+    },
+    "expected": {
+      "used": 0.93,
+      "limit": 0.0,
+      "periodStart": "2026-10-01T00:00:00Z",
+      "resetsAt": "2026-11-01T00:00:00Z"
+    }
+  },
+  {
+    "name": "case insensitive explicit scope",
+    "now": "2026-10-20T00:00:00Z",
+    "summary": {
+      "membershipType": "UNIFIED_ULTRA",
+      "limitType": "USER"
+    },
+    "payload": {
+      "availability": "available",
+      "monthlyUsage": {
+        "usedCents": 93,
+        "limitCents": 1000,
+        "creditsUsedCents": 125,
+        "periodStart": "2026-10-01T00:00:00Z",
+        "resetsAt": "2026-11-01T00:00:00Z"
+      }
+    },
+    "expected": {
+      "used": 0.93,
+      "limit": 10.0,
+      "periodStart": "2026-10-01T00:00:00Z",
+      "resetsAt": "2026-11-01T00:00:00Z"
+    }
+  },
+  {
+    "name": "team scope",
+    "now": "2026-10-20T00:00:00Z",
+    "summary": {
+      "membershipType": "unified_ultra",
+      "limitType": "team"
+    },
+    "payload": {
+      "availability": "available",
+      "monthlyUsage": {
+        "usedCents": 93,
+        "limitCents": 1000,
+        "creditsUsedCents": 125,
+        "periodStart": "2026-10-01T00:00:00Z",
+        "resetsAt": "2026-11-01T00:00:00Z"
+      }
+    },
+    "expected": null
+  },
+  {
+    "name": "missing scope",
+    "now": "2026-10-20T00:00:00Z",
+    "summary": {
+      "membershipType": "unified_ultra"
+    },
+    "payload": {
+      "availability": "available",
+      "monthlyUsage": {
+        "usedCents": 93,
+        "limitCents": 1000,
+        "creditsUsedCents": 125,
+        "periodStart": "2026-10-01T00:00:00Z",
+        "resetsAt": "2026-11-01T00:00:00Z"
+      }
+    },
+    "expected": null
+  },
+  {
+    "name": "legacy plan",
+    "now": "2026-10-20T00:00:00Z",
+    "summary": {
+      "membershipType": "pro",
+      "limitType": "user"
+    },
+    "payload": {
+      "availability": "available",
+      "monthlyUsage": {
+        "usedCents": 93,
+        "limitCents": 1000,
+        "creditsUsedCents": 125,
+        "periodStart": "2026-10-01T00:00:00Z",
+        "resetsAt": "2026-11-01T00:00:00Z"
+      }
+    },
+    "expected": null
+  },
+  {
+    "name": "identity unlinked",
+    "now": "2026-10-20T00:00:00Z",
+    "summary": {
+      "membershipType": "unified_ultra",
+      "limitType": "user"
+    },
+    "payload": {
+      "availability": "identity_unlinked",
+      "monthlyUsage": {
+        "usedCents": 93,
+        "limitCents": 1000,
+        "creditsUsedCents": 125,
+        "periodStart": "2026-10-01T00:00:00Z",
+        "resetsAt": "2026-11-01T00:00:00Z"
+      }
+    },
+    "expected": null
+  },
+  {
+    "name": "negative used",
+    "now": "2026-10-20T00:00:00Z",
+    "summary": {
+      "membershipType": "unified_ultra",
+      "limitType": "user"
+    },
+    "payload": {
+      "availability": "available",
+      "monthlyUsage": {
+        "usedCents": -1,
+        "limitCents": 1000,
+        "creditsUsedCents": 125,
+        "periodStart": "2026-10-01T00:00:00Z",
+        "resetsAt": "2026-11-01T00:00:00Z"
+      }
+    },
+    "expected": null
+  },
+  {
+    "name": "negative cap",
+    "now": "2026-10-20T00:00:00Z",
+    "summary": {
+      "membershipType": "unified_ultra",
+      "limitType": "user"
+    },
+    "payload": {
+      "availability": "available",
+      "monthlyUsage": {
+        "usedCents": 93,
+        "limitCents": -1,
+        "creditsUsedCents": 125,
+        "periodStart": "2026-10-01T00:00:00Z",
+        "resetsAt": "2026-11-01T00:00:00Z"
+      }
+    },
+    "expected": null
+  },
+  {
+    "name": "string used",
+    "now": "2026-10-20T00:00:00Z",
+    "summary": {
+      "membershipType": "unified_ultra",
+      "limitType": "user"
+    },
+    "payload": {
+      "availability": "available",
+      "monthlyUsage": {
+        "usedCents": "93",
+        "limitCents": 1000,
+        "creditsUsedCents": 125,
+        "periodStart": "2026-10-01T00:00:00Z",
+        "resetsAt": "2026-11-01T00:00:00Z"
+      }
+    },
+    "expected": null
+  },
+  {
+    "name": "bad reset",
+    "now": "2026-10-20T00:00:00Z",
+    "summary": {
+      "membershipType": "unified_ultra",
+      "limitType": "user"
+    },
+    "payload": {
+      "availability": "available",
+      "monthlyUsage": {
+        "usedCents": 93,
+        "limitCents": 1000,
+        "creditsUsedCents": 125,
+        "periodStart": "2026-10-01T00:00:00Z",
+        "resetsAt": "bad"
+      }
+    },
+    "expected": null
+  },
+  {
+    "name": "future period",
+    "now": "2026-10-20T00:00:00Z",
+    "summary": {
+      "membershipType": "unified_ultra",
+      "limitType": "user"
+    },
+    "payload": {
+      "availability": "available",
+      "monthlyUsage": {
+        "usedCents": 93,
+        "limitCents": 1000,
+        "creditsUsedCents": 125,
+        "periodStart": "2026-12-01T00:00:00Z",
+        "resetsAt": "2026-11-01T00:00:00Z"
+      }
+    },
+    "expected": null
+  },
+  {
+    "name": "missing used",
+    "now": "2026-10-20T00:00:00Z",
+    "summary": {
+      "membershipType": "unified_ultra",
+      "limitType": "user"
+    },
+    "payload": {
+      "availability": "available",
+      "monthlyUsage": {
+        "limitCents": 1000,
+        "creditsUsedCents": 125,
+        "periodStart": "2026-10-01T00:00:00Z",
+        "resetsAt": "2026-11-01T00:00:00Z"
+      }
+    },
+    "expected": null
+  },
+  {
+    "name": "reset boundary excluded",
+    "now": "2026-11-01T00:00:00Z",
+    "summary": {
+      "membershipType": "unified_ultra",
+      "limitType": "user"
+    },
+    "payload": {
+      "availability": "available",
+      "monthlyUsage": {
+        "usedCents": 93,
+        "limitCents": 1000,
+        "creditsUsedCents": 125,
+        "periodStart": "2026-10-01T00:00:00Z",
+        "resetsAt": "2026-11-01T00:00:00Z"
+      }
+    },
+    "expected": null
+  },
+  {
+    "name": "start boundary included",
+    "now": "2026-10-01T00:00:00Z",
+    "summary": {
+      "membershipType": "unified_ultra",
+      "limitType": "user"
+    },
+    "payload": {
+      "availability": "available",
+      "monthlyUsage": {
+        "usedCents": 93,
+        "limitCents": 1000,
+        "creditsUsedCents": 125,
+        "periodStart": "2026-10-01T00:00:00Z",
+        "resetsAt": "2026-11-01T00:00:00Z"
+      }
+    },
+    "expected": {
+      "used": 0.93,
+      "limit": 10.0,
+      "periodStart": "2026-10-01T00:00:00Z",
+      "resetsAt": "2026-11-01T00:00:00Z"
+    }
+  },
+  {
+    "name": "missing timezone",
+    "now": "2026-10-20T00:00:00Z",
+    "summary": {
+      "membershipType": "unified_ultra",
+      "limitType": "user"
+    },
+    "payload": {
+      "availability": "available",
+      "monthlyUsage": {
+        "usedCents": 93,
+        "limitCents": 1000,
+        "creditsUsedCents": 125,
+        "periodStart": "2026-10-01T00:00:00Z",
+        "resetsAt": "2026-11-01T00:00:00"
+      }
+    },
+    "expected": null
+  },
+  {
+    "name": "invalid calendar day",
+    "now": "2026-10-20T00:00:00Z",
+    "summary": {
+      "membershipType": "unified_ultra",
+      "limitType": "user"
+    },
+    "payload": {
+      "availability": "available",
+      "monthlyUsage": {
+        "usedCents": 93,
+        "limitCents": 1000,
+        "creditsUsedCents": 125,
+        "periodStart": "2026-02-30T00:00:00Z",
+        "resetsAt": "2026-11-01T00:00:00Z"
+      }
+    },
+    "expected": null
+  }
+]
