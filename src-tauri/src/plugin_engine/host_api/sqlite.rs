@@ -2,12 +2,16 @@
 use super::*;
 use std::process::{Command, Output};
 
-fn sqlite_command(path: &str, sql: &str, readonly: bool) -> Command {
+fn sqlite_command(path: &str, readonly: bool) -> Command {
     let mut command = Command::new("sqlite3");
     if readonly {
         command.args(["-readonly", "-json"]);
     }
-    command.arg("--").arg(path).arg(sql);
+    command.arg(if path.starts_with('-') {
+        format!("./{path}")
+    } else {
+        path.to_owned()
+    });
     command
 }
 fn execute(
@@ -17,8 +21,8 @@ fn execute(
     deadline: Instant,
 ) -> Result<Output, &'static str> {
     crate::bounded_process::run(
-        &mut sqlite_command(path, sql, readonly),
-        None,
+        &mut sqlite_command(path, readonly),
+        Some(sql.as_bytes().to_vec()),
         deadline,
         8 * 1024 * 1024,
     )

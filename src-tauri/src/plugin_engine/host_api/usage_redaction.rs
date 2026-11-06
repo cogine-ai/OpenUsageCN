@@ -5,6 +5,9 @@ pub(super) fn response_body(plugin: &str, path: &str, body: &str) -> Option<Stri
         return Some("[REDACTED PROVIDER BILLING RESPONSE]".into());
     }
     let endpoint = path.split('?').next().unwrap_or(path);
+    if plugin == "kiro" && endpoint == "https://prod.us-east-1.auth.desktop.kiro.dev/refreshToken" {
+        return Some("[REDACTED PROVIDER AUTH RESPONSE]".into());
+    }
     let private_usage = match plugin {
         "cursor" => endpoint.ends_with("/api/usage-summary") || endpoint.ends_with("/api/dashboard/v2/usage-status"),
         "claude" => endpoint.ends_with("/api/oauth/usage"),
@@ -128,6 +131,33 @@ mod tests {
                 redact_plugin_http_response_body("kiro", url.as_str(), body),
                 "[REDACTED PROVIDER USAGE RESPONSE]"
             );
+        }
+    }
+
+    #[test]
+    fn desktop_kiro_refresh_responses_are_hidden_without_parsing_credentials() {
+        let url = "https://prod.us-east-1.auth.desktop.kiro.dev/refreshToken";
+        for body in [
+            r#"{"accessToken":"synthetic-private-access","refreshToken":"synthetic-private-refresh","profileArn":"private-profile","futureCredential":"unknown-private-token"}"#,
+            r#"{"accessToken":"synthetic-private-access","refreshToken":"synthetic-private-refresh","profileArn":"private-profile","futureCredential":"unknown-private-token""#,
+            "malformed synthetic-private-access synthetic-private-refresh private-profile unknown-private-token",
+        ] {
+            assert_eq!(
+                redact_plugin_http_response_body("kiro", url, body),
+                "[REDACTED PROVIDER AUTH RESPONSE]"
+            );
+        }
+    }
+
+    #[test]
+    fn desktop_kiro_refresh_rule_does_not_capture_other_providers_or_paths() {
+        let url = "https://prod.us-east-1.auth.desktop.kiro.dev/refreshToken";
+        assert!(super::response_body("cursor", url, "unrelated response").is_none());
+        for url in [
+            "https://prod.us-east-1.auth.desktop.kiro.dev/refreshTokenExtra",
+            "https://example.invalid/refreshToken",
+        ] {
+            assert!(super::response_body("kiro", url, "unrelated response").is_none());
         }
     }
     #[test]

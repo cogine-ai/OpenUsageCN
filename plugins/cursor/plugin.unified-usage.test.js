@@ -12,7 +12,7 @@ function context(options = {}) {
   const desktopToken = options.unselectedSource && options.connectionKey === "cursor-cli" ? otherToken : token
   ctx.host.sqlite.query.mockImplementation((_db, sql) => String(sql).includes("cursorAuth/accessToken") ? JSON.stringify([{ value: desktopToken }]) : "[]")
   if (options.connectionKey === "cursor-cli" || options.unselectedSource) ctx.host.keychain.readGenericPassword.mockImplementation((service) => service === "cursor-access-token" ? options.connectionKey === "cursor-cli" ? token : otherToken : null)
-  ctx.host.http.request.mockImplementation(({ url, headers }) => {
+  ctx.host.http.request.mockImplementation(({ url }) => {
     const ok = (data) => ({ status: 200, bodyText: JSON.stringify(data) })
     if (url.endsWith("GetCurrentPeriodUsage")) return { status: options.usageStatus ?? 200, bodyText: options.usageRaw ?? JSON.stringify(options.usage ?? { enabled: true, planUsage: { limit: 2000, totalSpend: 500, totalPercentUsed: 25 }, spendLimitUsage: { individualLimit: 1000, individualRemaining: 750 } }) }
     if (url.endsWith("GetPlanInfo")) return ok({ planInfo: { planName: options.plan ?? "Pro" } })
@@ -20,7 +20,6 @@ function context(options = {}) {
     if (url.endsWith("GetSandUsageStatus")) return ok(options.sand ?? {})
     if (url.includes("/api/usage?")) return ok(options.legacy ?? {})
     if (url.endsWith("/api/usage-summary") || url.includes("/usage-status?")) {
-      expect(headers.Cookie).toBe("WorkosCursorSessionToken=" + subject.split("|").at(-1) + "%3A%3A" + token)
       if (url.endsWith("/api/usage-summary")) return ok(options.summary ?? fixtures[0].summary)
       if (options.status) return { status: options.status, bodyText: "PRIVATE_RESPONSE" }
       return ok(options.payload ?? fixtures[0].payload)
@@ -35,7 +34,18 @@ async function probe(options) {
   const plugin = globalThis.__openusage_plugin
   const target = options?.connectionKey ? { connectionKey: options.connectionKey } : undefined
   if (target) target.credentialGeneration = options.invalidGeneration ? "0".repeat(64) : plugin.credentialGeneration(ctx, target)
-  return { ctx, output: plugin.probe(ctx, target) }
+  try {
+    return { ctx, output: plugin.probe(ctx, target) }
+  } finally {
+    const subject = options?.subject ?? "auth0|selected-user"
+    const token = "a." + Buffer.from(JSON.stringify({ sub: subject, exp: 9999999999 })).toString("base64") + ".c"
+    const expectedCookie = "WorkosCursorSessionToken=" + subject.split("|").at(-1) + "%3A%3A" + token
+    for (const [request] of ctx.host.http.request.mock.calls) {
+      if (request.url.endsWith("/api/usage-summary") || request.url.includes("/usage-status?")) {
+        expect(request.headers.Cookie).toBe(expectedCookie)
+      }
+    }
+  }
 }
 
 describe("Cursor Unified Monthly Additional Spend", () => {

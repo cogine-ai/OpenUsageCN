@@ -396,7 +396,7 @@ Kiro alone can read `KIRO_DATA_DIR` and `XDG_DATA_HOME` to locate its CLI databa
 
 ## SQLite
 
-All SQLite methods treat `dbPath` as a database filename, including names beginning with `-`; it is never parsed as a command-line option.
+All SQLite methods treat `dbPath` as a database filename. A leading `-` is protected with a relative-path prefix, and SQL is sent through stdin rather than command-line arguments. This also works with older SQLite CLIs that do not support `--`.
 
 ### Query (Read-Only)
 
