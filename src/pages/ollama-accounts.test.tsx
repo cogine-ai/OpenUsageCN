@@ -410,6 +410,37 @@ describe("Ollama multi-account management", () => {
     expect(changed).not.toHaveBeenCalled()
   })
 
+  it.each(["legacy", "connection"] as const)("clears the previous confirmation before a failed switch to %s", async (destination) => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    let current = accountView(), operations = 0
+    let fail!: (reason: string) => void
+    const firstValue = destination === "legacy" ? "connection:work" : "legacy"
+    tauri.invoke.mockImplementation((command) => {
+      if (command === "get_ollama_accounts") return Promise.resolve(current)
+      if (++operations === 1) {
+        current = { ...current, revision: 2, primary: destination === "legacy"
+          ? { mode: "connection", connectionId: "work" } : { mode: "legacy" } }
+        return Promise.resolve(current)
+      }
+      return new Promise((_, reject) => { fail = reject })
+    })
+    const changed = vi.fn()
+    render(<OllamaAccountsPage initialScreen="keys" onPrimaryChange={changed} />)
+    const select = await screen.findByRole("combobox", { name: "菜单栏 / API 默认账号" })
+    await userEvent.selectOptions(select, firstValue)
+    await waitFor(() => expect(select).toHaveValue(firstValue))
+    expect(await screen.findByRole("status")).toBeVisible()
+    await userEvent.selectOptions(select, destination === "legacy" ? "legacy" : "connection:work")
+    expect(select).toBeDisabled()
+    expect(screen.queryByRole("status")).not.toBeInTheDocument()
+    await act(async () => { fail("默认账号切换失败，请重试。") })
+    expect(await screen.findByRole("alert")).toHaveTextContent("默认账号切换失败")
+    await waitFor(() => expect(select).toBeEnabled())
+    expect(select).toHaveValue(firstValue)
+    expect(screen.queryByRole("status")).not.toBeInTheDocument()
+    expect(changed).toHaveBeenCalledOnce()
+  })
+
   it.each([
     ["connection", "authExpired"], ["legacy", "authExpired"], ["legacy", "identityChanged"],
   ])("disables a configured %s default with %s without changing the primary", async (source, code) => {

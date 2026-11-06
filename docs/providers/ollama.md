@@ -20,8 +20,9 @@ Reset countdowns update while the detail page is visible without requesting new 
 The selector shows the current choice, including the original connection or **未设置** after a
 primary is removed. Opening management does not select anything. The shared-quota explanation
 is available under **额度说明** when adding a key; quota cards stay focused on account usage.
-Switching to the original connection updates the confirmation to match that choice. A failed
-switch keeps the last confirmed default and shows an error without announcing success.
+Starting a default-account change clears the previous confirmation. Switching to the original
+connection updates the confirmation to match that choice. A failed switch keeps the last
+confirmed default and shows an error without announcing success.
 
 Adding a key does not replace or select the original connection automatically. The original
 Cookie, single saved API Key and environment variables remain unchanged. **Original Connection**

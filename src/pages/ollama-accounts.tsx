@@ -94,10 +94,12 @@ export function OllamaAccountsPage({
     }
   }
   const selectPrimary = async (id: string) => {
+    setNotice("")
     if (await operate({ kind: "selectPrimary", connectionId: id }))
       setNotice("已设为主账号，菜单栏和本地 API 将使用此连接。")
   }
   const selectLegacy = async () => {
+    setNotice("")
     if (await operate({ kind: "useLegacy" })) setNotice("默认账号已改用原有连接。")
   }
   const saveKey = async (verified: OllamaVerification, label: string) => {

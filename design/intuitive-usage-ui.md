@@ -25,6 +25,7 @@ The visual specification is [intuitive-usage-ui.html](./intuitive-usage-ui.html)
 Keep the same layout. If disabling an account option loses keyboard focus during a pending
 switch, return focus after the option is re-enabled on success or failure; respect focus the
 user has moved to another control. Keep the previous fixed selection when a switch fails.
-All original-connection default actions replace the previous notice only after success.
+Default-account changes clear the previous notice when they start and show a new confirmation
+only after success; other operations keep their existing notification behavior.
 Regressions cover delayed operations, simulated browser blur, and adding a key before switching
 to the original default. Provider docs describe these behaviors; no new rules paragraph is added.
