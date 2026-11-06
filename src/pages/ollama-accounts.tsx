@@ -3,6 +3,7 @@ import { ArrowLeft, LoaderCircle, Pencil, Plus, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { OllamaAccountDetail } from "@/components/ollama-account-detail"
 import { OllamaAccountList } from "@/components/ollama-account-list"
+import { OllamaDefaultAccount } from "@/components/ollama-default-account"
 import { OllamaKeyForm } from "@/components/ollama-key-form"
 import { useOllamaAccounts } from "@/hooks/use-ollama-accounts"
 import { type OllamaAccountSelection, type OllamaVerification } from "@/lib/ollama-accounts"
@@ -284,9 +285,9 @@ export function OllamaAccountsPage({
                   {connections.length + 1} 个连接
                 </span>
               </div>
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                每个 Key 单独命名，验证后显示账号归属。已有 Key 只显示尾号。
-              </p>
+              {view ? <OllamaDefaultAccount view={view} busy={busy}
+                onSelect={(id) => void selectPrimary(id)}
+                onLegacy={() => void operate({ kind: "useLegacy" })} /> : null}
             </>
           ) : visibleCount ? (
             <p className="text-xs text-muted-foreground">账户用量 · {visibleCount} 个连接</p>
@@ -362,20 +363,6 @@ export function OllamaAccountsPage({
                 </Button>
               </div>
             </div>
-          ) : null}
-          {view?.primary.mode === "none" ? (
-            <p className="text-xs text-muted-foreground">
-              尚未设置主账号。菜单栏和本地 API 不会自动切换到其他账号；首页仍展示所有连接。
-            </p>
-          ) : view?.primary.mode === "legacy" && connections.length ? (
-            <p className="text-xs text-muted-foreground">
-              主账号仍使用原有连接，仅影响菜单栏和本地 API。
-            </p>
-          ) : null}
-          {connections.length ? (
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              各连接显示其可读取的账户用量，不计算总额。同一用户的多个 Key 可能共享额度。
-            </p>
           ) : null}
         </>
       )}

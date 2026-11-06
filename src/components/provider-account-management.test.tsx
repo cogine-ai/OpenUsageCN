@@ -14,14 +14,14 @@ const view: ProviderAccountView = {
 const receipt = (next = view, status = "succeeded") => ({ operationId: "op", status, sourceOutcomes: [], view: next })
 describe("Account Management", () => {
   beforeEach(() => { tauri.invoke.mockReset(); tauri.listen.mockResolvedValue(vi.fn()) })
-  it("keeps the account selected and management controls visible after a standalone refresh", async () => {
+  it("keeps automatic selection and management controls visible after a standalone refresh", async () => {
     tauri.invoke.mockResolvedValueOnce(view).mockResolvedValueOnce(receipt())
     const user = userEvent.setup()
     render(<ProviderAccountControls providerId="cursor" standalone />)
-    expect(await screen.findByRole("radio", { name: "Work" })).toHaveAttribute("aria-checked", "true")
+    expect(await screen.findByRole("radio", { name: "Work" })).toHaveAttribute("aria-checked", "false")
     await user.click(screen.getByRole("button", { name: "刷新账号" }))
     expect(screen.getByRole("radio", { name: "Work" })).toBeVisible()
-    expect(screen.getByRole("radio", { name: "Work" })).toHaveAttribute("aria-checked", "true")
+    expect(screen.getByRole("radio", { name: "Work" })).toHaveAttribute("aria-checked", "false")
   })
   it("shows stale and unavailable states while collapsed", async () => {
     tauri.invoke.mockResolvedValue({ ...view, accounts: [{ ...view.accounts[0], stale: true, connections: [{ ...view.accounts[0].connections[0], available: false }] }] })

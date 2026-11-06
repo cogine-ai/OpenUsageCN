@@ -95,13 +95,15 @@ On macOS, OpenUsageCN discovers Cursor Desktop and Cursor CLI sessions independe
 with the same complete JWT subject become two connections to one account; different subjects stay
 as separate accounts. Accounts are never merged by email or by the suffix after `|`.
 
-The account selector supports two modes:
+The account selector presents one choice at a time:
 
 - **Auto** keeps the previous Cursor preference: Desktop normally wins, except a different CLI
   account wins when the Desktop account appears to be Free.
-- Selecting an account pins it until **Auto** is chosen again.
+- Selecting a fixed account pins it until **跟随本机** is chosen again.
 
-If the pinned account is no longer active, **跟随本机** remains available to return to the local default. Turning it off requires an active account to pin.
+Only **跟随本机** is selected in Auto mode, even when it resolves to a saved account below it.
+The current account is shown separately from the selected mode. Choose a saved account to pin it,
+or **跟随本机** to return to the local default, including when a pinned account is unavailable.
 
 Only the selected account is published to the overview, tray, notifications, CLI, and Local HTTP
 API. Switching to an account without a snapshot shows loading instead of relabeling another
@@ -138,7 +140,12 @@ A newer refresh for the same account and session replaces an earlier in-progress
 including when newly available billing dates change its window. Only the latest successful result
 is cached locally for each account.
 
-The view groups complete results by local date and raw model name and shows input, output, cache
+The view separates **调用**, **扣减记录**, and **标价估算**. Requests and tokens appear together;
+Metered Usage and On-Demand Charges keep separate rows, and List-Price Equivalent stays in its
+own estimate group. These amounts are not added together. **会话记录** and **非账单** identify the
+source; expand **数据来源** for event counts, coverage, update time, time zone and cache details.
+
+Model details group complete results by local date and raw model name and show input, output, cache
 write, and cache read tokens plus request counts. Local dates use the selected IANA time zone's
 rules at each event, including daylight-saving changes inside the window. The UI sends only that
 time zone, while the backend chooses the current time once for the refresh. Missing
@@ -147,7 +154,9 @@ complete result. A blank model name is displayed as `Unknown` but is not rewritt
 
 `List-Price Equivalent` sums event-level model prices when present. `Metered Usage` is a separate
 whole-window value and is shown only when every in-window event has a valid charged amount. These
-figures describe dashboard data, not an invoice. If pagination, identity, numeric validation, or
+figures describe dashboard data, not an invoice. Incomplete coverage is marked beside the affected
+amount, including a model's partial list-price estimate. Missing amounts stay unavailable; valid
+zeroes stay zero. If pagination, identity, numeric validation, or
 account ownership cannot be proven, the previous complete aggregate remains visible as stale and
 the incomplete result is not saved. Raw events and ownership fields are not persisted.
 
@@ -175,7 +184,7 @@ Model Usage retains the existing **Metered Usage** (plan deductions from `charge
 `kind=USAGE_EVENT_KIND_USAGE_BASED` with `isChargeable=true` and a valid nonnegative amount.
 An explicit `isChargeable=false` is not an on-demand charge. Unknown kinds, missing/invalid flags
 or missing/invalid charge amounts leave an incomplete known subtotal; they are not assumed free.
-The data notes show the unclassified event count. These figures are session-visible records, not invoices.
+**数据来源** shows the unclassified event count. These figures are session-visible records, not invoices.
 
 **Usage Events** includes valid window events without tokens. **Requests** keeps its existing
 token-bearing request definition. The new charge/event columns are added only to CSV window

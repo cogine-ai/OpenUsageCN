@@ -1,0 +1,135 @@
+{
+  "baselineCommit": "00ad7e1492c1f50fef8723046ffc8d6642d95390",
+  "synthetic": true,
+  "native": false,
+  "reviewed": true,
+  "captureTool": "cua_repl in-app browser",
+  "screenshots": [
+    {
+      "path": "design/evidence/intuitive-usage-ui/after/accounts.jpg",
+      "bytes": 23416,
+      "sha256": "3abde7d065163c7117b451b8069f5a51df6a964e2caaaeaa6184e54aae7e1c05",
+      "dimensions": [
+        1280,
+        720
+      ]
+    },
+    {
+      "path": "design/evidence/intuitive-usage-ui/after/cursor-default.jpg",
+      "bytes": 27279,
+      "sha256": "e7360e0817ac7ff45f3bf971d29d4c31576e626422bd36271505c4298150e1c0",
+      "dimensions": [
+        1280,
+        720
+      ]
+    },
+    {
+      "path": "design/evidence/intuitive-usage-ui/after/cursor-expanded-full.jpg",
+      "bytes": 44041,
+      "sha256": "c36113f5f9761f3102ad43406005150bff91245e4937aee39b1c6f6aab103150",
+      "dimensions": [
+        1280,
+        824
+      ]
+    },
+    {
+      "path": "design/evidence/intuitive-usage-ui/after/history-local.jpg",
+      "bytes": 11382,
+      "sha256": "19b8cd9a1a85e510a86290847f2c17e4183f03ff6101b53398ef82d532a4213d",
+      "dimensions": [
+        440,
+        460
+      ]
+    },
+    {
+      "path": "design/evidence/intuitive-usage-ui/after/history-missing-date.jpg",
+      "bytes": 23229,
+      "sha256": "ccdc74e19bf9736ccc19ce10713ac97022ab6fd39255a11301acef89600331db",
+      "dimensions": [
+        1280,
+        720
+      ]
+    },
+    {
+      "path": "design/evidence/intuitive-usage-ui/after/history.jpg",
+      "bytes": 15912,
+      "sha256": "055417a18a63fcdc62eaa651a2a5c93bf3ee8afa07f9a9c075cd7513fd8eaa03",
+      "dimensions": [
+        1280,
+        720
+      ]
+    },
+    {
+      "path": "design/evidence/intuitive-usage-ui/after/ollama-management.jpg",
+      "bytes": 25899,
+      "sha256": "677249900e61b50e54ac38bf60c0337c233eab6df1e40842770ea5081ef3a102",
+      "dimensions": [
+        1280,
+        720
+      ]
+    },
+    {
+      "path": "design/evidence/intuitive-usage-ui/after/ollama.jpg",
+      "bytes": 29714,
+      "sha256": "7fc7cffa8102697ece4585bc44433b2aa9d0a34485b2c6cf58c2c7886dc44496",
+      "dimensions": [
+        1280,
+        720
+      ]
+    },
+    {
+      "path": "design/evidence/intuitive-usage-ui/before/accounts.jpg",
+      "bytes": 21837,
+      "sha256": "ce0a245fcac816a5a3f0b8dc7f6494bf958ec074b11136b88843aa70a4461ece",
+      "dimensions": [
+        1280,
+        720
+      ]
+    },
+    {
+      "path": "design/evidence/intuitive-usage-ui/before/cursor-default.jpg",
+      "bytes": 26378,
+      "sha256": "4720f79c1f46456b6b5d0e2379991c7a9abce29f84a4a62a37da03b75bb211c9",
+      "dimensions": [
+        1280,
+        720
+      ]
+    },
+    {
+      "path": "design/evidence/intuitive-usage-ui/before/cursor.jpg",
+      "bytes": 36167,
+      "sha256": "a65ba543edc66ce441edb40ac7b4c817ee200602db399723f7456e73ece0d531",
+      "dimensions": [
+        440,
+        720
+      ]
+    },
+    {
+      "path": "design/evidence/intuitive-usage-ui/before/history.jpg",
+      "bytes": 26334,
+      "sha256": "485c56adcfcd394894aac9a2e7d1583e8d38590a0623fd7e8f5349b9940b63f7",
+      "dimensions": [
+        1280,
+        720
+      ]
+    },
+    {
+      "path": "design/evidence/intuitive-usage-ui/before/ollama.jpg",
+      "bytes": 35178,
+      "sha256": "5feae2c57f3e55a1808d480b2b14218ed6206a878b8a753b1c51d0946244ca33",
+      "dimensions": [
+        1280,
+        767
+      ]
+    },
+    {
+      "path": "design/evidence/intuitive-usage-ui/design.jpg",
+      "bytes": 70316,
+      "sha256": "586d2ae32ad4b3b16580b13d75dbfbee39d7b34bae7f502918fff6e6dea66cd0",
+      "dimensions": [
+        1280,
+        1250
+      ]
+    }
+  ]
+}

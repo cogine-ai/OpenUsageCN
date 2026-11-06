@@ -18,7 +18,7 @@ older local windows.
 Fetches cover the current billing cycle, capped to the latest 30 days. Without reliable billing
 dates, they cover a bounded 30-day interval. Actual coverage dates appear beside the export icon;
 receiving all requested pages does not mean a full billing cycle or a complete invoice.
-The data notes include the update time and time zone.
+Expand **数据来源** for the update time, time zone and cache details.
 
 Each refresh has a 60-second budget, including time waiting for another history refresh.
 Identity checks and page requests use only the time left, with at most 30 seconds per request.
@@ -38,15 +38,21 @@ replaces the file with a single cached result. Earlier windows cannot be selecte
 Damaged recognized files are preserved with an `.invalid` suffix and an error is reported.
 Unsupported or unreadable files remain in place with an error until the problem is resolved.
 
+Model Usage separates **调用**, **扣减记录**, and **标价估算**. Requests and tokens appear together;
+Metered Usage and On-Demand Charges stay in separate deduction rows, while List-Price Equivalent
+has its own estimate group. No combined amount is shown. Source badges identify **会话记录** and
+**非账单**. Missing amounts remain unavailable; valid zeroes remain zero. Incomplete coverage is
+marked beside the affected amount.
+
 Model rows show total tokens, requests and list-price equivalents. Expand a model to see its
-input, output and cache counts. Metered usage and list-price equivalents have separate meanings;
-these dashboard figures are not invoices.
+input, output and cache counts. Partial model estimates are marked on their own row.
 
 **On-Demand Charges** includes only events explicitly marked as usage-based and chargeable.
 If classification or an amount is missing, **Known On-Demand Charges** is a subtotal marked
-**Incomplete**, with the unclassified event count in the data notes. It is never substituted for
+**Incomplete**, with the unclassified event count under **数据来源**. It is never substituted for
 Metered Usage or List-Price Equivalent. **Usage Events** counts valid events in the window,
-including events without tokens; the existing Requests count still requires token usage.
+including events without tokens; it also appears under **数据来源**. The existing Requests count
+still requires token usage.
 Older caches show the new fields as unavailable until refreshed.
 
 ## Export CSV
@@ -71,10 +77,19 @@ result retains the original name. This avoids relying only on quote escaping whe
 
 ## Server Reports
 
-Codex, OpenRouter and Ollama detail pages offer **Load Reports** independently of quota refresh.
+Codex details groups its sources under **用量历史**. **官方统计** is selected initially; choose
+**加载官方统计** to load it. On macOS, **本机估算** offers **加载本机估算** for the latest
+31 local calendar days. Opening or switching tabs never starts a read. Switching sources clears
+the previous display and cancels or discards its pending result; returning requires a new load.
+Refreshing quota clears official reports, but leaves a currently displayed local estimate alone.
+Windows offers only official statistics. Source explanations are available under **数据来源**.
+
+OpenRouter and Ollama detail pages retain **Load Reports** independently of quota refresh.
 Reports use the current connection and are not added to local log estimates or Cursor caches.
-They show each report's access status, UTC date coverage and missing dates. A missing day is not
-treated as zero; one denied report does not hide another readable report. Refresh replaces the
+They show each report's access status, UTC date coverage and missing dates. Recognized daily
+charts keep their report's calendar slots, with striped slots for unreported values; hovering or
+focusing a slot shows **未报告**. A reported zero is a short solid bar with a zero readout.
+A missing day is not treated as zero; one denied report does not hide another readable report. Refresh replaces the
 displayed result. Closing the page, changing connection settings or starting a new request
 invalidates an older pending result. Starting a main quota refresh also clears loaded reports and
 cancels pending reports, so new quota cannot retain a previous login's report. Load Reports stays

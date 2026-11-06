@@ -63,6 +63,8 @@ it("shows both named account quotas when the original primary has no credential"
   expect(screen.queryByText("$32.00")).not.toBeInTheDocument()
   expect(screen.queryByText("缺少连接凭据")).not.toBeInTheDocument()
   expect(screen.queryByRole("button", { name: "查看原有连接用量" })).not.toBeInTheDocument()
+  expect(screen.queryByText(/各连接显示其可读取的账户用量/)).not.toBeInTheDocument()
+  expect(screen.queryByText(/主账号用于菜单栏和本地 API/)).not.toBeInTheDocument()
   expect(screen.getAllByRole("heading", { name: "Ollama Cloud", exact: true })).toHaveLength(1)
 })
 

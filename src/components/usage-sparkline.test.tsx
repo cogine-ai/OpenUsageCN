@@ -55,6 +55,34 @@ describe("UsageSparkline", () => {
     expect(container).toBeEmptyDOMElement()
   })
 
+  it("keeps missing calendar days separate from an explicitly reported zero", async () => {
+    const user = userEvent.setup()
+    const { container } = render(<UsageSparkline label="Daily Tokens" points={[
+      { label: "2026-11-01", value: 0, valueLabel: "0 tokens" },
+      { label: "2026-11-03", value: 20, valueLabel: "20 tokens" },
+    ]} dateRange={{ fromDate: "2026-11-01", toDate: "2026-11-03" }} />)
+    const row = screen.getByRole("button", { name: /Daily Tokens/ })
+    expect(row).toHaveAccessibleName(/共 3 天，1 天未报告/)
+    expect(container.querySelector('[data-date="2026-11-02"]')).toHaveAttribute("data-missing", "true")
+    expect(container.querySelector('[data-date="2026-11-01"]')).not.toHaveAttribute("data-missing")
+    await user.hover(row)
+    expect(await screen.findByRole("button", { name: "2026-11-01: 0 tokens" })).toBeInTheDocument()
+    const missing = screen.getByRole("button", { name: "2026-11-02: 未报告" })
+    fireEvent.focus(missing)
+    expect(screen.getByText("2026-11-02 · 未报告")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "2026-11-02: 0" })).not.toBeInTheDocument()
+  })
+
+  it("can show an entirely unreported range without inventing a peak or zero", async () => {
+    const user = userEvent.setup()
+    render(<UsageSparkline label="Daily Tokens" points={[]} dateRange={{ fromDate: "2026-11-01", toDate: "2026-11-02" }} />)
+    const row = screen.getByRole("button", { name: /共 2 天，2 天未报告，暂无已报告数据/ })
+    await user.hover(row)
+    expect(await screen.findByText("暂无已报告数据")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "2026-11-01: 未报告" })).toBeInTheDocument()
+    expect(screen.queryByText(/峰值/)).not.toBeInTheDocument()
+  })
+
   it("renders an inline usage sparkline row inside a ProviderCard", () => {
     render(
       <ProviderCard

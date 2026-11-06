@@ -58,9 +58,9 @@ describe("ProviderAccountControls", () => {
     render(<ProviderAccountControls providerId="cursor" />)
 
     expect(screen.getByText("正在读取账号…")).toBeInTheDocument()
-    expect(await screen.findByRole("switch", { name: "跟随本机" })).toBeInTheDocument()
-    expect(screen.getByRole("switch", { name: "跟随本机" })).toBeChecked()
-    expect(screen.getByRole("radio", { name: /Work/i })).toBeChecked()
+    expect(await screen.findByRole("radio", { name: "跟随本机" })).toBeInTheDocument()
+    expect(screen.getByRole("radio", { name: "跟随本机" })).toBeChecked()
+    expect(screen.getByRole("radio", { name: /Work/i })).not.toBeChecked()
     expect(screen.getByText("Desktop · CLI")).toBeInTheDocument()
     expect(screen.getByText("数据可能已过期")).toBeInTheDocument()
   })
@@ -99,7 +99,7 @@ describe("ProviderAccountControls", () => {
     await user.click(account)
 
     expect(account).toBeChecked()
-    expect(screen.getByRole("switch", { name: "跟随本机" })).not.toBeChecked()
+    expect(screen.getByRole("radio", { name: "跟随本机" })).not.toBeChecked()
   })
 
   it("keeps a partial refresh result visible", async () => {
@@ -351,7 +351,7 @@ describe("ProviderAccountControls", () => {
         />
       )
 
-      expect(await screen.findByRole("switch", { name: "跟随本机" })).toBeInTheDocument()
+      expect(await screen.findByRole("radio", { name: "跟随本机" })).toBeInTheDocument()
       expect(
         screen.queryByRole("button", { name: "添加账号" })
       ).not.toBeInTheDocument()
@@ -418,7 +418,7 @@ describe("ProviderAccountControls", () => {
 
       render(<ProviderAccountControls providerId={providerId} modelHistory />)
 
-      expect(await screen.findByRole("switch", { name: "跟随本机" })).toBeInTheDocument()
+      expect(await screen.findByRole("radio", { name: "跟随本机" })).toBeInTheDocument()
       expect(screen.queryByRole("heading", { name: "Model Usage" })).not.toBeInTheDocument()
       expect(tauri.invoke).not.toHaveBeenCalledWith(
         "get_cursor_history_snapshot",
@@ -433,7 +433,7 @@ describe("ProviderAccountControls", () => {
     testingRender(<ProviderAccountControls providerId="cursor" onOpenConnections={onOpenConnections} />)
     await userEvent.setup().click(screen.getByRole("button", { name: "账号" }))
     expect(onOpenConnections).toHaveBeenCalledOnce()
-    expect(screen.queryByRole("switch", { name: "跟随本机" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("radio", { name: "跟随本机" })).not.toBeInTheDocument()
   })
 
   it("shows the actual account and verified identity while following the local default", async () => {
@@ -442,10 +442,10 @@ describe("ProviderAccountControls", () => {
       { accountId: "other", label: "Other", connectionKinds: ["desktop"], connections: [], selected: false, stale: false },
     ] })
     testingRender(<ProviderAccountControls standalone providerId="cursor" />)
-    expect(await screen.findByRole("switch", { name: "跟随本机" })).toBeChecked()
-    expect(screen.getByRole("radio", { name: /verified@example.com/ })).toBeChecked()
+    expect(await screen.findByRole("radio", { name: "跟随本机" })).toBeChecked()
+    expect(screen.getByRole("radio", { name: /verified@example.com/ })).not.toBeChecked()
     expect(screen.getByRole("radio", { name: /Other/ })).not.toBeChecked()
-    expect(screen.getByText("verified@example.com")).toBeInTheDocument()
+    expect(screen.getAllByText("verified@example.com")).toHaveLength(2)
     expect(screen.getByLabelText("当前账号")).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "账号" })).not.toBeInTheDocument()
   })

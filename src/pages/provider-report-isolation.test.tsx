@@ -34,16 +34,16 @@ describe("provider report account isolation during quota refresh", () => {
   it.each(["codex", "ollama", "openrouter"])("clears loaded %s reports when quota refresh starts and requires a new load", async (providerId) => {
     const { rerender } = render(page(state(providerId)))
     if (providerId === "ollama") fireEvent.click(await screen.findByRole("button", { name: "查看原有连接用量" }))
-    fireEvent.click(await screen.findByRole("button", { name: "Load Reports" }))
+    fireEvent.click(await screen.findByRole("button", { name: /Load Reports|加载官方统计/ }))
     expect(await screen.findByText("A Report")).toBeVisible()
     rerender(page(state(providerId, { loading: true })))
     expect(screen.queryByText("A Report")).not.toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Load Reports" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: /Load Reports|加载官方统计/ })).toBeDisabled()
     rerender(page(state(providerId, { lastUpdatedAt: 2 })))
     expect(screen.queryByText("A Report")).not.toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Load Reports" })).toBeEnabled()
+    expect(screen.getByRole("button", { name: /Load Reports|加载官方统计/ })).toBeEnabled()
     tauri.invoke.mockImplementation((command, args) => Promise.resolve(command === "refresh_provider_reports" ? report(args, "B") : null))
-    fireEvent.click(screen.getByRole("button", { name: "Load Reports" }))
+    fireEvent.click(screen.getByRole("button", { name: /Load Reports|加载官方统计/ }))
     expect(await screen.findByText("B Report")).toBeVisible()
   })
 
@@ -51,19 +51,19 @@ describe("provider report account isolation during quota refresh", () => {
     let finish: (value: unknown) => void = () => {}
     tauri.invoke.mockImplementation((command) => command === "refresh_provider_reports" ? new Promise((resolve) => { finish = resolve }) : Promise.resolve(null))
     const { rerender } = render(page(state()))
-    fireEvent.click(screen.getByRole("button", { name: "Load Reports" }))
+    fireEvent.click(screen.getByRole("button", { name: /Load Reports|加载官方统计/ }))
     const args = tauri.invoke.mock.calls.find(([command]) => command === "refresh_provider_reports")![1]
     rerender(page(state("codex", { loading: true })))
     expect(tauri.invoke).toHaveBeenCalledWith("cancel_provider_reports", args)
     rerender(page(state("codex", { lastUpdatedAt: 2 })))
     await act(async () => { finish(report(args)) })
     expect(screen.queryByText("A Report")).not.toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Load Reports" })).toBeEnabled()
+    expect(screen.getByRole("button", { name: /Load Reports|加载官方统计/ })).toBeEnabled()
   })
 
   it("invalidates a loaded report when a new quota result arrives without a loading render", async () => {
     const { rerender } = render(page(state()))
-    fireEvent.click(screen.getByRole("button", { name: "Load Reports" }))
+    fireEvent.click(screen.getByRole("button", { name: /Load Reports|加载官方统计/ }))
     await screen.findByText("A Report")
     rerender(page(state("codex", { lastUpdatedAt: 2 })))
     expect(screen.queryByText("A Report")).not.toBeInTheDocument()
@@ -71,11 +71,11 @@ describe("provider report account isolation during quota refresh", () => {
 
   it("does not restore an old report when the quota refresh fails", async () => {
     const { rerender } = render(page(state()))
-    fireEvent.click(screen.getByRole("button", { name: "Load Reports" }))
+    fireEvent.click(screen.getByRole("button", { name: /Load Reports|加载官方统计/ }))
     await screen.findByText("A Report")
     rerender(page(state("codex", { loading: true })))
     rerender(page(state("codex", { error: "Network error" })))
     expect(screen.queryByText("A Report")).not.toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Load Reports" })).toBeEnabled()
+    expect(screen.getByRole("button", { name: /Load Reports|加载官方统计/ })).toBeEnabled()
   })
 })

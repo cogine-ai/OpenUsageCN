@@ -14,8 +14,12 @@ Reset countdowns update while the detail page is visible without requesting new 
 
 1. Choose **Add Key**, enter a name and an Ollama API Key, then verify it.
 2. Check the returned account identity before confirming the save.
-3. Use **Set As Primary** explicitly to choose the default for the menu bar, local HTTP API and CLI.
+3. In account management, use **菜单栏 / API 默认账号** to choose the default for the menu bar, local HTTP API and CLI.
    All connections remain visible on the home page regardless of this choice.
+
+The selector shows the current choice, including the original connection or **未设置** after a
+primary is removed. Opening management does not select anything. The shared-quota explanation
+is available under **额度说明** when adding a key; quota cards stay focused on account usage.
 
 Adding a key does not replace or select the original connection automatically. The original
 Cookie, single saved API Key and environment variables remain unchanged. **Original Connection**

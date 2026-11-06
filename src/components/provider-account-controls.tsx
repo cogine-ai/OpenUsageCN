@@ -181,22 +181,6 @@ export function ProviderAccountControls({
           {!loading && error ? <p className="text-sm text-destructive">{error}</p> : null}
           {!loading && view ? (
             <div className="space-y-2">
-              <div className="mb-3 flex items-center justify-between rounded-lg bg-muted/50 p-3 text-sm">
-                <span className="font-medium">跟随本机</span>
-                <button type="button" role="switch" aria-label="跟随本机"
-                  aria-checked={view.selection.mode === "auto"} disabled={busy || (view.selection.mode === "auto" && !view.activeAccountId)}
-                  onClick={() => {
-                    const previousAccountId = view.activeAccountId
-                    const operation = view.selection.mode === "auto" && previousAccountId
-                      ? selectAccount(previousAccountId) : followDefault()
-                    void operation.then((nextReceipt) => {
-                      if (activeAccountChanged(previousAccountId, nextReceipt)) onAccountChangeRefresh?.()
-                    })
-                  }} className={`relative h-5 w-9 rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50 ${view.selection.mode === "auto" ? "bg-primary" : "bg-muted-foreground/30"}`}>
-                  <span className={`absolute top-0.5 size-4 rounded-full bg-background transition-transform ${view.selection.mode === "auto" ? "left-0.5 translate-x-4" : "left-0.5"}`} />
-                </button>
-              </div>
-
               <div role="radiogroup" aria-label="账号选择" className="space-y-2" onKeyDown={(event) => {
                 if (!["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"].includes(event.key)) return
                 const options = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button[role="radio"]:not(:disabled)'))
@@ -208,9 +192,27 @@ export function ProviderAccountControls({
                 next.focus()
                 next.click()
               }}>
-              {view.accounts.map((account, index) => {
+              <button type="button" role="radio" aria-label="跟随本机"
+                aria-checked={view.selection.mode === "auto"} disabled={busy}
+                tabIndex={view.selection.mode === "auto" || !view.accounts.some((account) => view.selection.mode === "pinned" && account.accountId === view.selection.accountId) ? 0 : -1}
+                className={`flex w-full items-center gap-2 rounded-lg border p-3 text-left text-sm focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50 ${view.selection.mode === "auto" ? "border-primary bg-primary/5" : "border-border"}`}
+                onClick={() => {
+                  if (view.selection.mode === "auto") return
+                  const previousAccountId = view.activeAccountId
+                  void followDefault().then((nextReceipt) => {
+                    if (activeAccountChanged(previousAccountId, nextReceipt)) onAccountChangeRefresh?.()
+                  })
+                }}>
+                <span aria-hidden="true" className="flex size-4 shrink-0 items-center justify-center rounded-full border border-current">{view.selection.mode === "auto" && <span className="size-2 rounded-full bg-current" />}</span>
+                <span className="min-w-0 flex-1"><span className="block font-medium">跟随本机</span>
+                  {view.selection.mode === "auto" && activeAccount ? <span className="block break-all text-xs text-muted-foreground">{activeAccount.identity?.email || activeAccount.identity?.name || activeAccount.label}</span> : null}
+                </span>
+                {view.selection.mode === "auto" && activeAccount ? <Check aria-label="当前账号" className="size-4 shrink-0" /> : null}
+              </button>
+              {view.accounts.map((account) => {
                 const inputId = `${providerId}-account-${account.accountId}`
                 const editing = editingAccountId === account.accountId
+                const selected = view.selection.mode === "pinned" && view.selection.accountId === account.accountId
                 const browserConnections = account.connections.filter(
                   (connection) => connection.kind === "chrome" || connection.kind === "arc"
                 )
@@ -220,16 +222,16 @@ export function ProviderAccountControls({
                 return (
                   <div
                     key={account.accountId}
-                    className={`space-y-2 rounded-lg border p-3 text-sm ${account.accountId === view.activeAccountId ? "border-primary bg-primary/5" : "border-border"}`}
+                    className={`space-y-2 rounded-lg border p-3 text-sm ${selected ? "border-primary bg-primary/5" : "border-border"}`}
                   >
                     <div className="flex flex-wrap items-center gap-2">
                       <button
                         id={inputId}
                         type="button"
                         role="radio"
-                        tabIndex={account.accountId === view.activeAccountId || (!view.activeAccountId && index === 0) ? 0 : -1}
+                        tabIndex={selected ? 0 : -1}
                         aria-label={`${account.label} ${account.identity?.email || account.identity?.name || ""}`}
-                        aria-checked={account.accountId === view.activeAccountId}
+                        aria-checked={selected}
                         className="flex min-w-0 flex-1 items-center gap-2 text-left focus-visible:outline-2 focus-visible:outline-ring"
                         disabled={busy}
                         onClick={() => {
@@ -241,6 +243,7 @@ export function ProviderAccountControls({
                           })
                         }}
                       >
+                        <span aria-hidden="true" className="flex size-4 shrink-0 items-center justify-center rounded-full border border-current">{selected && <span className="size-2 rounded-full bg-current" />}</span>
                         <span className="min-w-0 flex-1">
                         <span className="block break-all font-medium">{account.identity?.email || account.identity?.name || account.label}</span>
                         {account.identity && <span className="block text-xs text-muted-foreground">{account.label}</span>}
@@ -250,7 +253,7 @@ export function ProviderAccountControls({
                           </span>
                         ) : null}
                         </span>
-                        {account.accountId === view.activeAccountId && <Check aria-label="当前账号" className="size-4 shrink-0" />}
+                        {view.selection.mode !== "auto" && account.accountId === view.activeAccountId && <Check aria-label="当前账号" className="size-4 shrink-0" />}
                       </button>
                       {account.stale ? (
                         <span className="text-xs text-muted-foreground">数据可能已过期</span>
