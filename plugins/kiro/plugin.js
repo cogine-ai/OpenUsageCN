@@ -14,6 +14,11 @@
   const SESSION_HINT = "Kiro session expired. Open Kiro and sign in again."
   const DATA_HINT = "Kiro usage data unavailable. Open the Kiro account dashboard once and try again."
 
+  function rawDigest(ctx, text) {
+    if (!ctx.host.crypto || typeof ctx.host.crypto.sha256Hex !== "function") return null
+    return ctx.host.crypto.sha256Hex(String(text))
+  }
+
   function num(value) {
     if (typeof value === "number") return Number.isFinite(value) ? value : null
     if (typeof value !== "string" || !value.trim()) return null
@@ -60,14 +65,66 @@
     }
   }
   function loadAuthState(ctx) {
-    const parsed = readJsonFile(ctx, TOKEN_PATH, "auth token")
+    if (!ctx.host.fs.exists(TOKEN_PATH)) return null
+    let text
+    try {
+      text = ctx.host.fs.readText(TOKEN_PATH)
+    } catch (e) {
+      ctx.host.log.warn("auth token read failed: " + String(e))
+      return null
+    }
+    const parsed = ctx.util.tryParseJson(text)
     if (!parsed || typeof parsed !== "object") return null
     const token = sanitizeAuth(parsed)
-    return token && (token.refreshToken || token.accessToken) ? { path: TOKEN_PATH, token } : null
+    return token && (token.refreshToken || token.accessToken)
+      ? { path: TOKEN_PATH, token, rawDigest: rawDigest(ctx, text) }
+      : null
   }
   function saveAuthState(ctx, authState) {
+    const content = JSON.stringify(authState.token, null, 2)
     try {
-      ctx.host.fs.writeText(authState.path, JSON.stringify(authState.token, null, 2))
+      if (
+        authState.rawDigest &&
+        ctx.host.fs &&
+        typeof ctx.host.fs.writeTextIfUnchanged === "function"
+      ) {
+        const persisted = ctx.host.fs.writeTextIfUnchanged(
+          authState.path,
+          content,
+          authState.rawDigest
+        )
+        if (!persisted) {
+          ctx.host.log.warn(
+            "Kiro auth file changed mid-refresh; refusing overwrite: " + authState.path
+          )
+          return false
+        }
+        authState.rawDigest = rawDigest(ctx, content)
+        return true
+      }
+
+      if (authState.rawDigest && ctx.host.fs && typeof ctx.host.fs.readText === "function") {
+        let currentText = null
+        try {
+          currentText = ctx.host.fs.exists(authState.path)
+            ? ctx.host.fs.readText(authState.path)
+            : null
+        } catch (e) {
+          currentText = null
+        }
+        if (
+          currentText != null &&
+          rawDigest(ctx, currentText) !== authState.rawDigest
+        ) {
+          ctx.host.log.warn(
+            "Kiro auth file changed mid-refresh; refusing overwrite: " + authState.path
+          )
+          return false
+        }
+      }
+
+      ctx.host.fs.writeText(authState.path, content)
+      authState.rawDigest = rawDigest(ctx, content)
       return true
     } catch (e) {
       ctx.host.log.warn("failed to persist refreshed Kiro auth: " + String(e))
@@ -250,7 +307,9 @@
       profileArn: typeof json.profileArn === "string" && json.profileArn ? json.profileArn : authState.token.profileArn,
       expiresAt: expiresIn !== null && expiresIn > 0 ? new Date(nowMs + expiresIn * 1000).toISOString() : authState.token.expiresAt,
     })
-    saveAuthState(ctx, authState)
+    if (!saveAuthState(ctx, authState)) {
+      return null
+    }
     return authState.token.accessToken
   }
   function fetchLiveState(ctx, authState, nowMs) {

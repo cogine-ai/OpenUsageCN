@@ -233,6 +233,52 @@ describe("kiro plugin", () => {
     expect(savedToken.refreshToken).toBe("refreshed-refresh-token")
   })
 
+  it("preserves a newer auth token file when it changes mid-refresh", async () => {
+    const ctx = makeCtx()
+    const staleToken = makeToken({ accessToken: "", expiresAt: "2026-02-01T00:00:00.000Z" })
+    const newerToken = makeToken({
+      accessToken: "newer-access-token",
+      refreshToken: "newer-refresh-token",
+      expiresAt: "2026-06-01T00:00:00.000Z",
+    })
+    writeToken(ctx, staleToken)
+    writeProfile(ctx)
+    ctx.host.fs.writeText.mockClear()
+    ctx.host.fs.writeTextIfUnchanged.mockClear()
+
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("/refreshToken")) {
+        ctx.host.fs.writeText(TOKEN_PATH, JSON.stringify(newerToken, null, 2))
+        return {
+          status: 200,
+          headers: {},
+          bodyText: JSON.stringify({
+            accessToken: "openusage-rotated-access",
+            refreshToken: "openusage-rotated-refresh",
+            expiresIn: 3600,
+            profileArn: makeToken().profileArn,
+          }),
+        }
+      }
+
+      return {
+        status: 200,
+        headers: {},
+        bodyText: JSON.stringify(makeUsageOutput()),
+      }
+    })
+
+    const plugin = await loadPlugin()
+    expect(() => plugin.probe(ctx)).toThrow("Kiro session expired. Open Kiro and sign in again.")
+
+    expect(ctx.host.fs.readText(TOKEN_PATH)).toBe(JSON.stringify(newerToken, null, 2))
+    expect(ctx.host.fs.readText(TOKEN_PATH)).not.toContain("openusage-rotated-refresh")
+    expect(ctx.host.fs.writeTextIfUnchanged).toHaveBeenCalled()
+    expect(ctx.host.log.warn).toHaveBeenCalledWith(
+      expect.stringContaining("Kiro auth file changed mid-refresh"),
+    )
+  })
+
   it("adds TokenType for external IdP live requests", async () => {
     const ctx = makeCtx()
     writeToken(ctx, makeToken({
