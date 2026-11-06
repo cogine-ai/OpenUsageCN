@@ -19,3 +19,12 @@ The visual specification is [intuitive-usage-ui.html](./intuitive-usage-ui.html)
 - Docs to update: `docs/usage-history.md`, `docs/providers/cursor.md`, `docs/providers/claude.md`, `docs/providers/codex.md`, `docs/providers/ollama.md`, `docs/cli.md`, `docs/capture-logs.md`, plus `README.md` for the revised history entry. Keep design in `design/`, not in user docs.
 - Evidence: matched before/after source-component preview screenshots in `design/evidence/intuitive-usage-ui/`. All amounts and identities are synthetic; native capture unavailable. Do not claim installed-app or real-account acceptance.
 - Delivery: one focused branch and PR. No release, merge, installation, provider refresh or Keychain operation is part of this change.
+
+## Review Follow-up
+
+Keep the same layout. If disabling an account option loses keyboard focus during a pending
+switch, return focus after the option is re-enabled on success or failure; respect focus the
+user has moved to another control. Keep the previous fixed selection when a switch fails.
+All original-connection default actions replace the previous notice only after success.
+Regressions cover delayed operations, simulated browser blur, and adding a key before switching
+to the original default. Provider docs describe these behaviors; no new rules paragraph is added.

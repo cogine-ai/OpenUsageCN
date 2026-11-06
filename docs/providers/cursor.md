@@ -104,6 +104,8 @@ The account selector presents one choice at a time:
 Only **跟随本机** is selected in Auto mode, even when it resolves to a saved account below it.
 The current account is shown separately from the selected mode. Choose a saved account to pin it,
 or **跟随本机** to return to the local default, including when a pinned account is unavailable.
+Use the arrow keys to move between choices. After switching finishes or fails, focus returns to
+that choice unless you moved to another control.
 
 Only the selected account is published to the overview, tray, notifications, CLI, and Local HTTP
 API. Switching to an account without a snapshot shows loading instead of relabeling another

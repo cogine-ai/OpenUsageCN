@@ -97,6 +97,9 @@ export function OllamaAccountsPage({
     if (await operate({ kind: "selectPrimary", connectionId: id }))
       setNotice("已设为主账号，菜单栏和本地 API 将使用此连接。")
   }
+  const selectLegacy = async () => {
+    if (await operate({ kind: "useLegacy" })) setNotice("默认账号已改用原有连接。")
+  }
   const saveKey = async (verified: OllamaVerification, label: string) => {
     const next = await save(verified.verificationId, label, verified.differentAccount, editing)
     if (!next) return false
@@ -246,11 +249,7 @@ export function OllamaAccountsPage({
             variant="outline"
             className="w-full"
             disabled={busy || !view?.legacy.configured || view?.primary.mode === "legacy"}
-            onClick={() =>
-              void operate({ kind: "useLegacy" }).then((next) => {
-                if (next) setNotice("菜单栏和本地 API 已改用原有连接。")
-              })
-            }
+            onClick={() => void selectLegacy()}
           >
             将原有连接设为主账号
           </Button>
@@ -267,7 +266,7 @@ export function OllamaAccountsPage({
           refreshing={Boolean(reportSourceRefreshing)}
           onPrimary={() =>
             legacyDetail
-              ? void operate({ kind: "useLegacy" })
+              ? void selectLegacy()
               : void selectPrimary(connection!.connectionId)
           }
           onEdit={() => (legacyDetail ? navigate("legacy") : edit(connection!.connectionId))}
@@ -287,7 +286,7 @@ export function OllamaAccountsPage({
               </div>
               {view ? <OllamaDefaultAccount view={view} busy={busy}
                 onSelect={(id) => void selectPrimary(id)}
-                onLegacy={() => void operate({ kind: "useLegacy" })} /> : null}
+                onLegacy={() => void selectLegacy()} /> : null}
             </>
           ) : visibleCount ? (
             <p className="text-xs text-muted-foreground">账户用量 · {visibleCount} 个连接</p>
@@ -310,7 +309,7 @@ export function OllamaAccountsPage({
               onAdd={add}
               onLegacySelect={() => navigate("legacyDetail")}
               onLegacyEdit={() => navigate("legacy")}
-              onLegacyPrimary={() => void operate({ kind: "useLegacy" })}
+              onLegacyPrimary={() => void selectLegacy()}
               displayMode={displayMode}
               resetTimerDisplayMode={resetTimerDisplayMode}
               timeFormatMode={timeFormatMode}

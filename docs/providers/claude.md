@@ -213,5 +213,7 @@ Browser connection starts with an explicit browser and profile choice. It can en
 Not Logged In, Session Expired, Token Expired and Keychain refresh errors open the local Claude Code login steps directly. Browser connection cannot repair these local login failures.
 
 The account list presents **跟随本机** and individual accounts as one choice. Choose **跟随本机** to follow the local login, or choose an account to keep using that identity. The current-account marker identifies the account actually supplying usage, separately from the selected mode. If a pinned account becomes inactive, **跟随本机** remains available to return to the local default.
+Use the arrow keys to move between choices. After switching finishes or fails, focus returns to
+that choice unless you moved to another control.
 
 Candidate display identity comes from the verified OAuth identity and stays in memory. A candidate lasts ten minutes and is consumed when adding starts. Failed or expired candidates require another check of the same source. Email and name are redacted from logs and are not added to the persisted registry.

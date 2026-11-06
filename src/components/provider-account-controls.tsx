@@ -1,4 +1,4 @@
-import { useId, useState } from "react"
+import { useId, useLayoutEffect, useRef, useState } from "react"
 import { AlertTriangle, Check, ChevronDown, ChevronRight, Pencil, Plus, RefreshCw, Unlink } from "lucide-react"
 
 import { RemoveAccountButton } from "@/components/remove-account-button"
@@ -61,6 +61,7 @@ export function ProviderAccountControls({
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null)
   const [draftLabel, setDraftLabel] = useState("")
   const [cleanupRetry, setCleanupRetry] = useState<{ accountId: string; label: string } | null>(null)
+  const pendingFocus = useRef<HTMLButtonElement | null>(null)
   const {
     view,
     loading,
@@ -77,6 +78,13 @@ export function ProviderAccountControls({
     removeAccount,
     reconnectLocal,
   } = useProviderAccounts(providerId)
+  useLayoutEffect(() => {
+    if (busy) return
+    const target = pendingFocus.current
+    pendingFocus.current = null
+    if (target?.isConnected && !target.disabled &&
+      (document.activeElement === document.body || document.activeElement === target)) target.focus()
+  }, [busy])
   const activeAccount = view?.accounts.find((account) => account.accountId === view.activeAccountId)
   const activeSources = activeAccount?.connections.length
     ? activeAccount.connections.map((connection) =>
@@ -196,8 +204,9 @@ export function ProviderAccountControls({
                 aria-checked={view.selection.mode === "auto"} disabled={busy}
                 tabIndex={view.selection.mode === "auto" || !view.accounts.some((account) => view.selection.mode === "pinned" && account.accountId === view.selection.accountId) ? 0 : -1}
                 className={`flex w-full items-center gap-2 rounded-lg border p-3 text-left text-sm focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50 ${view.selection.mode === "auto" ? "border-primary bg-primary/5" : "border-border"}`}
-                onClick={() => {
+                onClick={(event) => {
                   if (view.selection.mode === "auto") return
+                  if (document.activeElement === event.currentTarget) pendingFocus.current = event.currentTarget
                   const previousAccountId = view.activeAccountId
                   void followDefault().then((nextReceipt) => {
                     if (activeAccountChanged(previousAccountId, nextReceipt)) onAccountChangeRefresh?.()
@@ -234,7 +243,8 @@ export function ProviderAccountControls({
                         aria-checked={selected}
                         className="flex min-w-0 flex-1 items-center gap-2 text-left focus-visible:outline-2 focus-visible:outline-ring"
                         disabled={busy}
-                        onClick={() => {
+                        onClick={(event) => {
+                          if (document.activeElement === event.currentTarget) pendingFocus.current = event.currentTarget
                           const previousAccountId = view.activeAccountId
                           void selectAccount(account.accountId).then((nextReceipt) => {
                             if (activeAccountChanged(previousAccountId, nextReceipt)) {

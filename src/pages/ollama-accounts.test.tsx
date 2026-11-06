@@ -108,6 +108,10 @@ describe("Ollama multi-account management", () => {
   })
 
   it("verifies a new key before saving and sends only its opaque verification token to save", async () => {
+    const original = tauri.invoke.getMockImplementation()!
+    tauri.invoke.mockImplementation((command, args) => command === "perform_ollama_account_operation"
+      ? Promise.resolve({ ...accountView(), revision: 3, primary: { mode: "legacy" } })
+      : original(command, args))
     render(<OllamaAccountsPage initialScreen="keys" />)
     await screen.findByText("账号连接")
     await userEvent.click(screen.getByRole("button", { name: "添加 Key" }))
@@ -128,6 +132,10 @@ describe("Ollama multi-account management", () => {
       })
     )
     expect(await screen.findByText("已添加连接，主账号未改变。")).toBeInTheDocument()
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "菜单栏 / API 默认账号" }), "legacy")
+    await waitFor(() => expect(screen.getByRole("combobox")).toHaveValue("legacy"))
+    expect(screen.getByRole("status")).toHaveTextContent("默认账号已改用原有连接。")
+    expect(screen.queryByText("已添加连接，主账号未改变。")).not.toBeInTheDocument()
   })
 
   it("does not save or expose a key when verification fails", async () => {
@@ -321,10 +329,9 @@ describe("Ollama multi-account management", () => {
   })
 
   it("selects only the requested named default and leaves every connection intact", async () => {
-    tauri.invoke.mockImplementation((command, args) => {
+    tauri.invoke.mockImplementation((command) => {
       if (command === "get_ollama_accounts") return Promise.resolve(accountView())
       if (command === "perform_ollama_account_operation") {
-        expect(args).toEqual({ operation: { kind: "selectPrimary", connectionId: "work" } })
         return Promise.resolve({ ...accountView(), revision: 2, primary: { mode: "connection", connectionId: "work" } })
       }
       throw new Error(`Unexpected IPC: ${command}`)
@@ -339,15 +346,24 @@ describe("Ollama multi-account management", () => {
     expect(screen.getByText("个人账号", { exact: true })).toBeVisible()
     expect(screen.getByText("工作账号", { exact: true })).toBeVisible()
     expect(changed).toHaveBeenCalledOnce()
+    expect(tauri.invoke).toHaveBeenCalledWith("perform_ollama_account_operation", {
+      operation: { kind: "selectPrimary", connectionId: "work" },
+    })
   })
 
   it("requires explicit selection to use the original default connection", async () => {
-    tauri.invoke.mockImplementation((command) => Promise.resolve(command === "get_ollama_accounts"
-      ? accountView() : { ...accountView(), revision: 2, primary: { mode: "legacy" } }))
+    let finish!: (view: OllamaAccountsView) => void
+    tauri.invoke.mockImplementation((command) => command === "get_ollama_accounts"
+      ? Promise.resolve(accountView()) : new Promise((resolve) => { finish = resolve }))
     render(<OllamaAccountsPage initialScreen="keys" />)
     const select = await screen.findByRole("combobox", { name: "菜单栏 / API 默认账号" })
     await userEvent.selectOptions(select, "legacy")
+    expect(select).toBeDisabled()
+    expect(select).toHaveValue("connection:home")
+    expect(screen.queryByRole("status")).not.toBeInTheDocument()
+    await act(async () => { finish({ ...accountView(), revision: 2, primary: { mode: "legacy" } }) })
     await waitFor(() => expect(select).toHaveValue("legacy"))
+    expect(screen.getByRole("status")).toHaveTextContent("默认账号已改用原有连接。")
     expect(tauri.invoke).toHaveBeenCalledWith("perform_ollama_account_operation", { operation: { kind: "useLegacy" } })
     expect(screen.getAllByRole("option")).toHaveLength(3)
   })
@@ -376,6 +392,34 @@ describe("Ollama multi-account management", () => {
     expect(await screen.findByRole("combobox", { name: "菜单栏 / API 默认账号" })).toHaveValue("")
     expect(screen.getByRole("option", { name: "工作账号 · @work" })).toBeDisabled()
     expect(screen.getByRole("option", { name: "原有连接 · 未配置" })).toBeDisabled()
+    expect(tauri.invoke).toHaveBeenCalledExactlyOnceWith("get_ollama_accounts")
+  })
+
+  it("keeps the confirmed default and shows no success notice when switching to legacy fails", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    tauri.invoke.mockImplementation((command) => command === "get_ollama_accounts"
+      ? Promise.resolve(accountView()) : Promise.reject("原有连接不可用，请检查配置。"))
+    const changed = vi.fn()
+    render(<OllamaAccountsPage initialScreen="keys" onPrimaryChange={changed} />)
+    const select = await screen.findByRole("combobox", { name: "菜单栏 / API 默认账号" })
+    await userEvent.selectOptions(select, "legacy")
+    expect(await screen.findByRole("alert")).toHaveTextContent("原有连接不可用")
+    await waitFor(() => expect(select).toBeEnabled())
+    expect(select).toHaveValue("connection:home")
+    expect(screen.queryByRole("status")).not.toBeInTheDocument()
+    expect(changed).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ["connection", "authExpired"], ["legacy", "authExpired"], ["legacy", "identityChanged"],
+  ])("disables a configured %s default with %s without changing the primary", async (source, code) => {
+    const view = accountView()
+    const failed = source === "legacy" ? view.legacy : view.connections[1]
+    failed.error = { code, message: "凭据不可用" }
+    tauri.invoke.mockResolvedValue(view)
+    render(<OllamaAccountsPage initialScreen="keys" />)
+    expect(await screen.findByRole("combobox", { name: "菜单栏 / API 默认账号" })).toHaveValue("connection:home")
+    expect(screen.getByRole("option", { name: source === "legacy" ? "原有连接" : "工作账号 · @work" })).toBeDisabled()
     expect(tauri.invoke).toHaveBeenCalledExactlyOnceWith("get_ollama_accounts")
   })
 })

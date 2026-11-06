@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { ProviderAccountOperationReceipt, ProviderAccountView } from "@/lib/plugin-types"
@@ -103,5 +103,65 @@ describe("Account Selection", () => {
     expect(screen.getAllByRole("radio").every((radio) => (radio as HTMLButtonElement).disabled)).toBe(true)
     finish(receipt(pinned("personal")))
     await waitFor(() => expect(screen.getByRole("radio", { name: /Personal/ })).toBeEnabled())
+  })
+
+  it.each([
+    { mode: "fixed", status: "succeeded" }, { mode: "fixed", status: "failed" },
+    { mode: "auto", status: "succeeded" }, { mode: "auto", status: "failed" },
+  ] as const)("restores keyboard focus after delayed $mode selection $status", async ({ mode, status }) => {
+    const initial = pinned(mode === "fixed" ? "work" : "personal")
+    const next = mode === "fixed" ? pinned("personal") : view
+    let finish!: (value: ProviderAccountOperationReceipt) => void
+    tauri.invoke.mockResolvedValueOnce(initial)
+      .mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+      .mockResolvedValueOnce(receipt(mode === "fixed" ? view : pinned("work")))
+    const user = userEvent.setup()
+    render(<ProviderAccountControls providerId="cursor" standalone />)
+    const start = await screen.findByRole("radio", { name: mode === "fixed" ? /work@example.com/ : /Personal/ })
+    start.focus()
+    await user.keyboard("{ArrowRight}")
+    const target = screen.getByRole("radio", { name: mode === "fixed" ? /Personal/ : "跟随本机" })
+    expect(target).toBeDisabled()
+    target.blur() // WebKit can drop focus when the in-flight radio becomes disabled.
+    expect(document.body).toHaveFocus()
+    await act(async () => { finish(status === "succeeded" ? receipt(next) : {
+      ...receipt(initial), status: "failed", error: { code: "selectionFailed", message: "无法切换账号" },
+    }) })
+    await waitFor(() => expect(target).toBeEnabled())
+    expect(target).toHaveFocus()
+    if (status === "failed") {
+      expect(start).toBeChecked()
+      expect(target).not.toBeChecked()
+      expect(screen.getByText("无法切换账号")).toBeVisible()
+    } else expect(target).toBeChecked()
+    await user.keyboard("{ArrowRight}")
+    const following = screen.getByRole("radio", { name: mode === "fixed" ? "跟随本机" : /work@example.com/ })
+    await waitFor(() => expect(following).toBeChecked())
+    expect(following).toHaveFocus()
+  })
+
+  it("does not reclaim focus after the user moves to another control", async () => {
+    let finish!: (value: ProviderAccountOperationReceipt) => void
+    tauri.invoke.mockResolvedValueOnce(view).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    render(<><ProviderAccountControls providerId="cursor" standalone /><button>其他操作</button></>)
+    const user = userEvent.setup()
+    const auto = await screen.findByRole("radio", { name: "跟随本机" })
+    auto.focus()
+    await user.keyboard("{ArrowRight}")
+    const elsewhere = screen.getByRole("button", { name: "其他操作" })
+    elsewhere.focus()
+    await act(async () => { finish(receipt(pinned("work"))) })
+    expect(elsewhere).toHaveFocus()
+  })
+
+  it("does not focus a radio activated without owning focus", async () => {
+    let finish!: (value: ProviderAccountOperationReceipt) => void
+    tauri.invoke.mockResolvedValueOnce(view).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    render(<ProviderAccountControls providerId="cursor" standalone />)
+    const target = await screen.findByRole("radio", { name: /Personal/ })
+    fireEvent.click(target)
+    expect(document.body).toHaveFocus()
+    await act(async () => { finish(receipt(pinned("personal"))) })
+    expect(document.body).toHaveFocus()
   })
 })
