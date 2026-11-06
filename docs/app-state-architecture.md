@@ -40,7 +40,7 @@
 - Plugin installation and successful snapshot writes use cross-process locks, so simultaneous app and CLI runs do not read partial plugin updates or overwrite newer provider data.
 - Account-aware providers reconcile local identities into stable accounts before probing. The app and CLI both publish only the selected account into the existing provider cache.
 - Account selection, labels, identity fingerprints, and account-owned snapshots use separate versioned stores. Raw identities, credentials, and browser cookies are not stored there.
-- On macOS, the generated installation key is sent to Keychain without placing its value in process arguments. Existing service and account names remain unchanged across upgrades.
+- On macOS, the generated installation key is sent to Keychain without placing its value in process arguments. Existing service and account names remain unchanged across upgrades. Reading, first creation and a duplicate-item reread share a ten-second limit, including input, process completion and output. A timeout is not a missing item and never creates a replacement key. Existing accounts remain intact when access fails.
 - Account changes are serialized per provider and persisted before the in-memory view changes. Browser attachments carry a revision so an older process cannot restore a connection that was explicitly detached.
 - Account revision events contain only a provider id and monotonic revision. The frontend fresh-reads the account view instead of receiving account data in the event.
 - Switching to an account without a readable snapshot removes the previous account's provider projection while the new probe is loading. A failed probe does not overwrite a previously successful snapshot for the same selected account. If the account registry itself is unavailable, the last projection stays readable with an error instead of being silently deleted.
@@ -85,3 +85,8 @@
 - A shortcut change registers and saves the candidate before replacing the existing binding. The existing binding still responds during saving. Recording pauses its panel action without removing registration.
 - Failed changes keep the previous binding when it can be restored. A failed system unregister requires an app restart before more changes: candidate cleanup failure leaves the untouched previous binding active, while failure to unregister the previous binding marks it inactive. Startup format errors keep the saved value visible as inactive. All failures are logged and displayed.
 - Shortcut recording reads modifier state from each keyboard event. It normally finishes after the recorded keys release; a Command combination also finishes when its last modifier releases, covering macOS events that omit the main key release. Multiple main keys remain invalid.
+
+
+## Kiro Source Changes
+
+Kiro selects the existing desktop sign-in first, or the CLI only when the desktop credential file is absent. Each refresh captures that selection; a source change rejects its late result. Cached Kiro results are tied to the selected sign-in files and CLI database/WAL state. Old cache entries without a verified source require a fresh read. Same-source errors can retain their previous values; a failed read after changing sources removes the previous source's values. CLI database changes can conservatively require another refresh. No CLI token or database is rewritten.

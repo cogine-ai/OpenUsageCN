@@ -3,9 +3,10 @@ use std::fmt;
 use std::fs::File;
 use std::io;
 #[cfg(target_os = "macos")]
-use std::io::{Read, Write};
+use std::io::Read;
 #[cfg(target_os = "macos")]
-use std::process::{Command, Stdio};
+use std::process::Command;
+use std::time::Instant;
 
 pub(crate) const INSTALLATION_KEY_SERVICE: &str = "ai.cogine.openusagecn.provider-accounts";
 pub(crate) const INSTALLATION_KEY_ACCOUNT: &str = "installation-key-v1";
@@ -33,6 +34,7 @@ impl InstallationKey {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum InstallationKeyError {
     Missing,
+    Timeout,
     Denied,
     Unavailable,
     Io,
@@ -44,6 +46,7 @@ pub(crate) enum InstallationKeyError {
 impl fmt::Display for InstallationKeyError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         let message = match self {
+            Self::Timeout => "installation key storage timed out",
             Self::Missing => "installation key is missing",
             Self::Denied => "installation key access was denied",
             Self::Unavailable => "installation key storage is unavailable",
@@ -58,8 +61,8 @@ impl fmt::Display for InstallationKeyError {
 impl std::error::Error for InstallationKeyError {}
 
 pub(crate) trait InstallationKeyStore: Send + Sync {
-    fn read(&self) -> Result<InstallationKey, InstallationKeyError>;
-    fn create(&self) -> Result<InstallationKey, InstallationKeyError>;
+    fn read(&self, deadline: Instant) -> Result<InstallationKey, InstallationKeyError>;
+    fn create(&self, deadline: Instant) -> Result<InstallationKey, InstallationKeyError>;
 }
 
 struct CommandResult {
@@ -103,31 +106,19 @@ impl<T: CommandRunner + ?Sized> CommandRunner for &T {
 }
 
 #[cfg(target_os = "macos")]
-struct SecurityCommandRunner;
+struct SecurityCommandRunner {
+    deadline: Instant,
+}
 
 #[cfg(target_os = "macos")]
 impl CommandRunner for SecurityCommandRunner {
     fn run(&self, args: &[String], stdin: Option<&[u8]>) -> io::Result<CommandResult> {
-        let mut command = Command::new(SECURITY_TOOL_PATH);
-        command.args(args);
-        let output = if let Some(input) = stdin {
-            let mut child = command
-                .stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .spawn()?;
-            let write_result = {
-                let mut child_stdin = child.stdin.take().ok_or_else(|| {
-                    io::Error::new(io::ErrorKind::BrokenPipe, "security stdin is unavailable")
-                })?;
-                child_stdin.write_all(input)
-            };
-            let output = child.wait_with_output()?;
-            write_result?;
-            output
-        } else {
-            command.output()?
-        };
+        let output = crate::bounded_process::run(
+            Command::new(SECURITY_TOOL_PATH).args(args),
+            stdin.map(<[u8]>::to_vec),
+            self.deadline,
+            65536,
+        )?;
         Ok(CommandResult {
             code: output.status.code(),
             stdout: output.stdout,
@@ -216,11 +207,13 @@ impl Default for SystemInstallationKeyStore {
 }
 
 impl InstallationKeyStore for SystemInstallationKeyStore {
-    fn read(&self) -> Result<InstallationKey, InstallationKeyError> {
+    fn read(&self, _deadline: Instant) -> Result<InstallationKey, InstallationKeyError> {
         #[cfg(target_os = "macos")]
         {
             return MacOsInstallationKeyStore::with_runner(
-                SecurityCommandRunner,
+                SecurityCommandRunner {
+                    deadline: _deadline,
+                },
                 SystemKeyGenerator,
             )
             .read();
@@ -231,11 +224,13 @@ impl InstallationKeyStore for SystemInstallationKeyStore {
         }
     }
 
-    fn create(&self) -> Result<InstallationKey, InstallationKeyError> {
+    fn create(&self, _deadline: Instant) -> Result<InstallationKey, InstallationKeyError> {
         #[cfg(target_os = "macos")]
         {
             return MacOsInstallationKeyStore::with_runner(
-                SecurityCommandRunner,
+                SecurityCommandRunner {
+                    deadline: _deadline,
+                },
                 SystemKeyGenerator,
             )
             .create();
@@ -269,7 +264,9 @@ fn add_command(encoded_key: &str) -> String {
 }
 
 fn classify_command_io(error: io::Error) -> InstallationKeyError {
-    if error.kind() == io::ErrorKind::NotFound {
+    if error.kind() == io::ErrorKind::TimedOut {
+        InstallationKeyError::Timeout
+    } else if error.kind() == io::ErrorKind::NotFound {
         InstallationKeyError::Unavailable
     } else {
         InstallationKeyError::Io
@@ -330,3 +327,7 @@ fn encode_key(key: &InstallationKey) -> String {
 #[cfg(test)]
 #[path = "keychain_tests.rs"]
 mod tests;
+
+#[cfg(all(test, unix))]
+#[path = "keychain_deadline_tests.rs"]
+mod deadline_tests;

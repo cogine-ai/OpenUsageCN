@@ -7,8 +7,61 @@
   "icon": "icon.svg",
   "brandColor": "#C09CFF",
   "lines": [
-    { "type": "progress", "label": "Credits", "scope": "overview", "primaryOrder": 1, "limitResource": { "key": "credits", "countUnit": "credits" } },
-    { "type": "progress", "label": "Bonus Credits", "scope": "overview", "limitResource": { "key": "bonusCredits", "countUnit": "credits" } },
-    { "type": "badge", "label": "Overages", "scope": "detail" }
+    {
+      "type": "progress",
+      "label": "Credits",
+      "scope": "overview",
+      "primaryOrder": 1,
+      "limitResource": {
+        "key": "credits",
+        "countUnit": "credits"
+      }
+    },
+    {
+      "type": "badge",
+      "label": "Credits",
+      "scope": "overview"
+    },
+    {
+      "type": "text",
+      "label": "Credits",
+      "scope": "overview"
+    },
+    {
+      "type": "progress",
+      "label": "Bonus Credits",
+      "scope": "overview",
+      "limitResource": {
+        "key": "bonusCredits",
+        "countUnit": "credits"
+      }
+    },
+    {
+      "type": "badge",
+      "label": "Overages",
+      "scope": "detail"
+    },
+    {
+      "type": "progress",
+      "label": "Overage Credits",
+      "scope": "detail",
+      "limitResource": {
+        "key": "overageCredits",
+        "countUnit": "credits"
+      }
+    },
+    {
+      "type": "text",
+      "label": "Overage Credits",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Bonus Expiry",
+      "scope": "detail"
+    }
+  ],
+  "supportingScripts": [
+    "cli.js"
   ]
 }

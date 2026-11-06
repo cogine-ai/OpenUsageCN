@@ -122,7 +122,7 @@ fn bundled_provider_limit_resource_keys_are_stable() {
         ("bigmodel-cn", &["session", "webSearches", "weekly"][..]),
         (
             "claude",
-            &["claudeDesign", "extraUsage", "session", "sonnet", "weekly"][..],
+            &["claudeDesign", "extraUsage", "fable", "session", "sonnet", "weekly"][..],
         ),
         (
             "codex",
@@ -160,7 +160,7 @@ fn bundled_provider_limit_resource_keys_are_stable() {
         ("grok", &["creditsUsed"][..]),
         ("jetbrains-ai-assistant", &["quota"][..]),
         ("kimi", &["session", "weekly"][..]),
-        ("kiro", &["bonusCredits", "credits"][..]),
+        ("kiro", &["bonusCredits", "credits", "overageCredits"][..]),
         ("minimax", &["session", "weekly"][..]),
         ("moonshot", &[][..]),
         ("ollama", &["monthly", "session", "weekly"][..]),
@@ -184,6 +184,7 @@ fn bundled_provider_limit_resource_keys_are_stable() {
                 "fiveHour",
                 "freeToolCalls",
                 "mana",
+                "planWeekly",
                 "search",
                 "subscription",
             ][..],

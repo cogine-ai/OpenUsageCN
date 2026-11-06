@@ -81,3 +81,5 @@ An expired reset window or old cached reading never allows work. Treat every non
 
 
 Claude Platform、WorkBuddy、Trae CN、LiteLLM、SiliconFlow 和 Muse Code 的缓存只用于产生该次结果的连接。更换配置或环境来源后，旧账号读数不会作为新连接的结果；需要重新刷新。无法确认来源的旧缓存同样需要刷新，不按零额度处理。修改 shell 环境变量后请重启应用。
+
+Kiro 的 CLI 读取同样校验桌面/CLI 登录来源；换源后旧缓存不会作为新来源的额度。读取错误时，如果没有同一来源的有效旧结果，则显示无法判断，而不是旧账号额度或零额度。

@@ -709,7 +709,7 @@
     )
   }
 
-  function probe(ctx, connectionTarget) {
+  function probeCurrent(ctx, connectionTarget, captureToken) {
     const authState = loadAuthStateForConnection(ctx, connectionTarget)
     const isScopedProbe = connectionTarget !== undefined && connectionTarget !== null
     let leaseGeneration = isScopedProbe ? connectionTarget.credentialGeneration : null
@@ -830,6 +830,7 @@
 
     ctx.host.log.info("usage fetch succeeded")
 
+    captureToken(accessToken)
     const usage = ctx.util.tryParseJson(usageResp.bodyText)
     if (usage === null || typeof usage !== "object" || Array.isArray(usage) ||
         Object.prototype.hasOwnProperty.call(usage, "error") ||
@@ -1051,6 +1052,12 @@
     if (onDemand) lines.push(onDemand)
 
     return { plan: plan, lines: lines }
+  }
+
+  function probe(ctx, connectionTarget) {
+    let selectedToken
+    const output = probeCurrent(ctx, connectionTarget, (token) => { selectedToken = token })
+    return __openusage_cursor_unified.enrich(ctx, output, buildSessionToken(ctx, selectedToken))
   }
 
   globalThis.__openusage_plugin = {

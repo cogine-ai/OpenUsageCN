@@ -13,16 +13,65 @@
         "type": "secret",
         "label": "API Key",
         "placeholder": "key.secret",
-        "help": "留空则使用 ZAI_API_KEY 或 GLM_API_KEY 环境变量",
-        "environmentVariables": ["ZAI_API_KEY", "GLM_API_KEY"],
+        "help": "\u7559\u7a7a\u5219\u4f7f\u7528 ZAI_API_KEY \u6216 GLM_API_KEY \u73af\u5883\u53d8\u91cf",
+        "environmentVariables": [
+          "ZAI_API_KEY",
+          "GLM_API_KEY"
+        ],
         "defaultSource": true
       }
     ]
   },
   "lines": [
-    { "type": "progress", "label": "Session", "scope": "overview", "primaryOrder": 1, "limitResource": { "key": "session" } },
-    { "type": "progress", "label": "Weekly", "scope": "overview", "period": "weekly", "limitResource": { "key": "weekly" } },
-    { "type": "progress", "label": "Web Searches", "scope": "overview", "limitResource": { "key": "webSearches", "countUnit": "searches" } },
-    { "type": "badge", "label": "Quota", "scope": "overview" }
+    {
+      "type": "progress",
+      "label": "Session",
+      "scope": "overview",
+      "primaryOrder": 1,
+      "limitResource": {
+        "key": "session"
+      }
+    },
+    {
+      "type": "progress",
+      "label": "Weekly",
+      "scope": "overview",
+      "period": "weekly",
+      "limitResource": {
+        "key": "weekly"
+      }
+    },
+    {
+      "type": "progress",
+      "label": "Web Searches",
+      "scope": "overview",
+      "limitResource": {
+        "key": "webSearches",
+        "countUnit": "searches"
+      }
+    },
+    {
+      "type": "badge",
+      "label": "Quota",
+      "scope": "overview"
+    },
+    {
+      "type": "text",
+      "label": "5h Reset Coupons",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Weekly Reset Coupons",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Coupon Expiry",
+      "scope": "detail"
+    }
+  ],
+  "supportingScripts": [
+    "resets.js"
   ]
 }

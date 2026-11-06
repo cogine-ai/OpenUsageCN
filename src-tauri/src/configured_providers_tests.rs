@@ -11,8 +11,8 @@ fn fingerprint_environment_names_match_each_bundled_manifest() {
         let declared: std::collections::BTreeSet<_> = plugin
             .manifest
             .config
-            .unwrap()
-            .fields
+            .map(|config| config.fields)
+            .unwrap_or_default()
             .into_iter()
             .flat_map(|f| f.environment_variables)
             .collect();

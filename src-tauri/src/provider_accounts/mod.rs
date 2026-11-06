@@ -1,5 +1,6 @@
 mod account_records_serde;
 mod browser_cursor_probe;
+mod browser_cursor_unified;
 mod browser_cursor_grok;
 mod browser_cursor_weekly;
 mod browser_operations;
@@ -67,3 +68,6 @@ mod removal_tests;
 
 #[cfg(test)]
 mod browser_cursor_grok_tests;
+
+#[cfg(test)]
+mod installation_key_deadline_tests;

@@ -46,17 +46,17 @@ Windows MVP 启用和展示 **Codex、BigModel CN、OpenAI API、OpenRouter、Z.
 - [**Amp**](docs/providers/amp.md)：免费额度、付费 Other/Orb 额度、奖励额度、credits
 - [**Antigravity**](docs/providers/antigravity.md)：Gemini、Claude 五小时与周额度、独立 Argon 周池
 - [**BigModel CN**](docs/providers/bigmodel-cn.md)：token/credit 计划的 session、weekly、web searches、设置页 API Key
-- [**Claude**](docs/providers/claude.md)：session、weekly、extra usage、按需加载本地 token 用量（ccusage）、可验证的 Team 席位、本机账号的浏览器连接补充
+- [**Claude**](docs/providers/claude.md)：session、weekly、按模型区分的周额度、原币种 extra usage、按需加载本地 token 用量（ccusage）、可验证的 Team 席位、本机账号的浏览器连接补充
 - [**Codex**](docs/providers/codex.md)：5 小时、每周、代码审查、点数、手动重置、独立的 ChatGPT 服务端日报与本地日志历史
 - [**Copilot**](docs/providers/copilot.md)：premium、chat、completions
-- [**Cursor**](docs/providers/cursor.md)：credits、总用量、Cursor 3.27+ 加密登录读取、Desktop/CLI/Chrome/Arc 多账号与完整身份隔离、月度或共享周额度、Grok Bot、按模型用量、已知按量扣费、事件数和 CSV 导出
+- [**Cursor**](docs/providers/cursor.md)：credits、总用量、Cursor 3.27+ 加密登录读取、Desktop/CLI/Chrome/Arc 多账号与完整身份隔离、月度或共享周额度、当前用户月度额外消费、Grok Bot、按模型用量、已知按量扣费、事件数和 CSV 导出
 - [**DeepSeek**](docs/providers/deepseek.md)：按人民币或美元显示 API 余额、赠额和充值额
 - [**Doubao**](docs/providers/doubao.md)：火山引擎 Ark Coding Plan 与 Agent Plan 配额
 - [**Factory / Droid**](docs/providers/factory.md)：standard、premium tokens
 - [**Gemini**](docs/providers/gemini.md)：Gemini CLI OAuth quota、Pro、Flash、Flash Lite
 - [**Grok**](docs/providers/grok.md)：credits used、plan、pay-as-you-go cap
 - [**JetBrains AI Assistant**](docs/providers/jetbrains-ai-assistant.md)：quota、remaining
-- [**Kiro**](docs/providers/kiro.md)：credits、bonus credits、overages
+- [**Kiro**](docs/providers/kiro.md)：桌面端或只读 CLI 登录、主 credits、独立 overage 与 bonus credits，奖励到期单列
 - [**Kimi Code**](docs/providers/kimi.md)：session、weekly
 - [**MiniMax**](docs/providers/minimax.md)：API Key session、China Web 的 session/weekly、Boost 与 Unlimited
 - [**Moonshot / Kimi Open Platform**](docs/providers/moonshot.md)：中国站与国际站 API 余额、现金和代金券
@@ -66,10 +66,10 @@ Windows MVP 启用和展示 **Codex、BigModel CN、OpenAI API、OpenRouter、Z.
 - [**OpenCode Go**](docs/providers/opencode-go.md)：账号级 5h、weekly、monthly 额度百分比及官方重置时间，优先读取当前有效的 CLI 登录
 - [**OpenRouter**](docs/providers/openrouter.md)：余额、单 Key 预算、管理 Key 多 Key 消费、BYOK 分列与独立 Activity 报告
 - [**Perplexity**](docs/providers/perplexity.md)：本地 app API credits，或网站个人/组织订阅 credits 与成员上限
-- [**Synthetic**](docs/providers/synthetic.md)：subscription、search、weekly token、5h limits
+- [**Synthetic**](docs/providers/synthetic.md)：新 Weekly Plan 额度与独立再生信息，兼容旧 subscription、search、weekly token、5h limits
 - [**xAI**](docs/providers/xai.md)：Management API 预付余额及最近 30 天消费
 - [**Devin**](docs/providers/devin.md)：weekly quota、extra usage
-- [**Z.ai**](docs/providers/zai.md)：token/credit 计划的 session、weekly、web searches、设置页 API Key
+- [**Z.ai**](docs/providers/zai.md)：token/credit 计划的 session、weekly、web searches、只读重置券与到期时间、设置页 API Key
 
 - [**Claude Platform**](docs/providers/claude-platform.md)：独立于 Claude Code 的 Console API 余额、赠送与购买 credit、按组织读取的当月消费
 - [**LiteLLM**](docs/providers/litellm.md)：自建代理的个人、成员和团队预算及消费，按范围分别展示

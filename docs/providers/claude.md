@@ -9,8 +9,8 @@
 - **Auth provider:** `platform.claude.com` (OAuth 2.0)
 - **Client ID:** `9d1c250a-e61b-44d9-88ed-5944d1962f5e`
 - **Beta header required:** `anthropic-beta: oauth-2025-04-20`
-- **Utilization:** integer percentage (0-100)
-- **Credits:** cents (divide by 100 for dollars)
+- **Utilization:** percentage points, including fractional values such as 0.5%
+- **Extra Usage:** original currency minor units; divide by `10^decimal_places`
 - **Timestamps:** ISO 8601 (response), unix milliseconds (credentials file)
 
 ## Endpoints
@@ -50,14 +50,49 @@ Returns rate limit windows and optional extra credits.
   },
   "extra_usage": {                  // on-demand overage credits (optional)
     "is_enabled": true,
-    "used_credits": 500,            // cents spent
-    "monthly_limit": 10000,         // cents cap (0 = unlimited)
-    "currency": "USD"
-  }
+    "used_credits": 500,
+    "monthly_limit": 10000,         // zero/missing does not establish a positive cap
+    "currency": "USD",
+    "decimal_places": 2
+  },
+  "limits": [{
+    "kind": "weekly_scoped",
+    "group": "weekly",
+    "percent": 0.5,
+    "resets_at": "2026-02-01T00:00:00Z",
+    "scope": { "model": { "id": "fable", "display_name": "Fable" } }
+  }]
 }
 ```
 
 All windows are enforced simultaneously — hitting any limit throttles the user.
+
+### Model Weekly Limits
+
+The `limits` list adds independent model weekly rows in details, including `Fable Weekly` and
+models not known in advance. Percentages are already percentage points: 0.5 means 0.5%, not 50%.
+Only `weekly_scoped` entries in the `weekly` group are shown. The all-models entry is not duplicated.
+An exact Sonnet or Claude Design scoped row replaces that model's old flat row; other model names
+stay separate. Duplicate model identities are shown once. Invalid entries do not remove valid quota.
+
+Fable has the stable Local HTTP API resource `fable`. Known Sonnet and Claude Design rows retain
+their existing resource keys. Other model rows are display-only. External model names are bounded
+plain text, and each row uses only its own supplied reset date.
+
+### Original Currency Spending
+
+An absent currency defaults to USD and an absent `decimal_places` defaults to two. Explicit invalid
+metadata is unavailable rather than guessed. Amounts must be finite, nonnegative minor-unit numbers
+no greater than JavaScript's safe integer maximum. Fractional minor-unit amounts remain readable
+and are divided without rounding first; decimal places must be an integer from zero to six. For example, JPY 500 with zero decimal
+places stays JPY 500; BHD 1234 with three decimal places becomes BHD 1.234.
+
+USD with a positive cap retains the existing `extraUsage` numeric resource. Other currencies show
+`Extra Spent` and, when positive, `Extra Limit` as currency-labelled text. They are not converted to
+USD and do not export a misleading USD limit. Zero spend remains visible; a missing or zero cap
+does not imply free or unlimited usage. Invalid spending data leaves Session and Weekly available.
+
+The two-place default follows [OpenUsage's fixed parser](https://github.com/robinebers/openusage/blob/0a3813a964f030c50f8c3f1ed13c2781c1f207e3/Sources/OpenUsage/Providers/Claude/ClaudeUsageMapper.swift), including when a currency is explicitly supplied. The endpoint is undocumented; this is implementation evidence rather than an official currency guarantee.
 
 ## Plan Labels
 

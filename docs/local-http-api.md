@@ -319,3 +319,8 @@ OpenUsageCN rejects non-loopback `Host` headers and only grants browser CORS rea
 
 
 Claude Platform、WorkBuddy、Trae CN、LiteLLM、SiliconFlow 和 Muse Code 的缓存只用于产生该次结果的连接。更换配置或环境来源后，旧账号读数不会作为新连接的结果；需要重新刷新。无法确认来源的旧缓存同样需要刷新，不按零额度处理。修改 shell 环境变量后请重启应用。
+
+
+Kiro exports independent `credits`, `overageCredits` and `bonusCredits` resources when those quantities are verified. They are not added together. Bonus expiry is display text, not a refill/reset. Kiro cache entries follow the selected desktop/CLI source; changing that source requires a fresh result.
+
+Synthetic's new `planWeekly` percentage replaces its retired windows when the new plan is present. Partial regeneration does not export a full-reset time. Claude can export the separate `fable` model window; non-USD extra spend remains labeled display text and is not exported as a USD resource. Cursor's current-user monthly additional spend uses the existing `onDemand` USD resource and never includes model-history charges. Z.ai reset coupons are read-only detail text, not numeric token resources or consumable actions.

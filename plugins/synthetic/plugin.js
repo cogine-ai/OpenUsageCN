@@ -60,25 +60,24 @@
     return value && typeof value.percentRemaining === "number";
   }
 
-  function normalizeApiErrorMessage(json, status) {
-    var fallback = "Request failed (HTTP " + status + ")";
-    if (!json || typeof json !== "object") return fallback;
-
-    var direct = typeof json.error === "string" ? json.error.trim() : "";
-    if (direct) return direct;
-
-    if (json.error && typeof json.error === "object") {
-      var nested = typeof json.error.message === "string" ? json.error.message.trim() : "";
-      if (nested) return nested;
-
-      var serialized = JSON.stringify(json.error);
-      if (serialized && serialized !== "{}") return serialized;
+  function weeklyPlan(ctx, value, lines) {
+    if (!value || typeof value !== "object" || Array.isArray(value) ||
+      typeof value.percentRemaining !== "number" || !Number.isFinite(value.percentRemaining) || value.percentRemaining < 0 || value.percentRemaining > 100) {
+      ctx.host.log.error("Synthetic weekly plan limit is invalid");
+      throw "Synthetic weekly plan usage is unavailable. Try again later.";
     }
-
-    var message = typeof json.message === "string" ? json.message.trim() : "";
-    if (message) return message;
-
-    return fallback;
+    lines.push(ctx.line.progress({ label: "Weekly", used: 100 - value.percentRemaining, limit: 100, format: { kind: "percent" } }));
+    if (value.nextRegenAt != null) {
+      var date = typeof value.nextRegenAt === "string" && /(?:Z|[+-]\d{2}:\d{2})$/.test(value.nextRegenAt) ? Date.parse(value.nextRegenAt) : NaN;
+      if (!Number.isFinite(date)) ctx.host.log.warn("Synthetic next regeneration time is unavailable");
+      lines.push(ctx.line.text({ label: "Next Regen", value: Number.isFinite(date) ? new Date(date).toISOString() : "Unavailable", subtitle: "UTC · Partial Regeneration, Not A Full Reset" }));
+    }
+    if (value.nextRegenPercent != null) {
+      var percent = value.nextRegenPercent;
+      var valid = typeof percent === "number" && Number.isFinite(percent) && percent >= 0 && percent <= 100;
+      if (!valid) ctx.host.log.warn("Synthetic next regeneration percentage is unavailable");
+      lines.push(ctx.line.text({ label: "Regen Percent", value: valid ? String(percent) + "%" : "Unavailable" }));
+    }
   }
 
   function loadApiKey(ctx) {
@@ -154,8 +153,8 @@
     }
 
     if (resp.status < 200 || resp.status >= 300) {
-      var msg = normalizeApiErrorMessage(json, resp.status);
-      throw msg;
+      ctx.host.log.error("Synthetic quota request returned HTTP " + resp.status);
+      throw "Synthetic request failed (HTTP " + resp.status + "). Try again later.";
     }
 
     if (!json) {
@@ -163,9 +162,13 @@
     }
 
     var lines = [];
+    var root = json;
+    if (json.data && typeof json.data === "object" && !Array.isArray(json.data)) json = Object.assign({}, json.data, json);
+    var hasPlan = Object.prototype.hasOwnProperty.call(root, "planWeeklyLimit") || Object.prototype.hasOwnProperty.call(json, "planWeeklyLimit");
+    if (hasPlan) weeklyPlan(ctx, Object.prototype.hasOwnProperty.call(root, "planWeeklyLimit") ? root.planWeeklyLimit : json.planWeeklyLimit, lines);
 
     // 5h Rate Limit — hero metric (immediate blocker)
-    if (hasUsableRollingFiveHourLimit(json.rollingFiveHourLimit)) {
+    if (!hasPlan && hasUsableRollingFiveHourLimit(json.rollingFiveHourLimit)) {
       var rfl = json.rollingFiveHourLimit;
       var rflUsed = Math.max(0, rfl.max - rfl.remaining);
       lines.push(ctx.line.progress({
@@ -177,9 +180,9 @@
     }
 
     // Mana Bar — longer-term weekly budget
-    if (hasUsableWeeklyTokenLimit(json.weeklyTokenLimit)) {
+    if (!hasPlan && hasUsableWeeklyTokenLimit(json.weeklyTokenLimit)) {
       var pct = json.weeklyTokenLimit.percentRemaining;
-      var manaUsed = Math.max(0, Math.round(100 - pct));
+      var manaUsed = Math.max(0, 100 - pct);
       lines.push(ctx.line.progress({
         label: "Mana Bar",
         used: manaUsed,
@@ -190,7 +193,7 @@
 
     // Rate Limited badge — only when actively limited
     if (
-      json.rollingFiveHourLimit &&
+      !hasPlan && json.rollingFiveHourLimit &&
       json.rollingFiveHourLimit.limited === true
     ) {
       lines.push(
@@ -203,7 +206,7 @@
     }
 
     // Subscription — legacy request count, only shown if NOT on v3 rate limits
-    var onV3 =
+    var onV3 = hasPlan ||
       hasUsableRollingFiveHourLimit(json.rollingFiveHourLimit) ||
       hasUsableWeeklyTokenLimit(json.weeklyTokenLimit);
     if (!onV3 && json.subscription && typeof json.subscription.limit === "number") {

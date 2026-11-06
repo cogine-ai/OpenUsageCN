@@ -1,0 +1,249 @@
+{
+  "type": "Actual Production ProviderDetailPage/ProviderCard, Frozen Baseline Plugin probe Output, Fully Synthetic Host",
+  "baselineHead": "674950b06a9432853ce25187ec2ad0e9b38ca297",
+  "browser": "143.0.7499.4",
+  "cases": [
+    {
+      "provider": "cursor",
+      "width": 320,
+      "light": false,
+      "overview": false
+    },
+    {
+      "provider": "cursor",
+      "width": 320,
+      "light": false,
+      "overview": true
+    },
+    {
+      "provider": "cursor",
+      "width": 320,
+      "light": true,
+      "overview": false
+    },
+    {
+      "provider": "cursor",
+      "width": 320,
+      "light": true,
+      "overview": true
+    },
+    {
+      "provider": "cursor",
+      "width": 400,
+      "light": false,
+      "overview": false
+    },
+    {
+      "provider": "cursor",
+      "width": 400,
+      "light": false,
+      "overview": true
+    },
+    {
+      "provider": "cursor",
+      "width": 400,
+      "light": true,
+      "overview": false
+    },
+    {
+      "provider": "cursor",
+      "width": 400,
+      "light": true,
+      "overview": true
+    },
+    {
+      "provider": "claude",
+      "width": 320,
+      "light": false,
+      "overview": false
+    },
+    {
+      "provider": "claude",
+      "width": 320,
+      "light": false,
+      "overview": true
+    },
+    {
+      "provider": "claude",
+      "width": 320,
+      "light": true,
+      "overview": false
+    },
+    {
+      "provider": "claude",
+      "width": 320,
+      "light": true,
+      "overview": true
+    },
+    {
+      "provider": "claude",
+      "width": 400,
+      "light": false,
+      "overview": false
+    },
+    {
+      "provider": "claude",
+      "width": 400,
+      "light": false,
+      "overview": true
+    },
+    {
+      "provider": "claude",
+      "width": 400,
+      "light": true,
+      "overview": false
+    },
+    {
+      "provider": "claude",
+      "width": 400,
+      "light": true,
+      "overview": true
+    },
+    {
+      "provider": "synthetic",
+      "width": 320,
+      "light": false,
+      "overview": false
+    },
+    {
+      "provider": "synthetic",
+      "width": 320,
+      "light": false,
+      "overview": true
+    },
+    {
+      "provider": "synthetic",
+      "width": 320,
+      "light": true,
+      "overview": false
+    },
+    {
+      "provider": "synthetic",
+      "width": 320,
+      "light": true,
+      "overview": true
+    },
+    {
+      "provider": "synthetic",
+      "width": 400,
+      "light": false,
+      "overview": false
+    },
+    {
+      "provider": "synthetic",
+      "width": 400,
+      "light": false,
+      "overview": true
+    },
+    {
+      "provider": "synthetic",
+      "width": 400,
+      "light": true,
+      "overview": false
+    },
+    {
+      "provider": "synthetic",
+      "width": 400,
+      "light": true,
+      "overview": true
+    },
+    {
+      "provider": "kiro",
+      "width": 320,
+      "light": false,
+      "overview": false
+    },
+    {
+      "provider": "kiro",
+      "width": 320,
+      "light": false,
+      "overview": true
+    },
+    {
+      "provider": "kiro",
+      "width": 320,
+      "light": true,
+      "overview": false
+    },
+    {
+      "provider": "kiro",
+      "width": 320,
+      "light": true,
+      "overview": true
+    },
+    {
+      "provider": "kiro",
+      "width": 400,
+      "light": false,
+      "overview": false
+    },
+    {
+      "provider": "kiro",
+      "width": 400,
+      "light": false,
+      "overview": true
+    },
+    {
+      "provider": "kiro",
+      "width": 400,
+      "light": true,
+      "overview": false
+    },
+    {
+      "provider": "kiro",
+      "width": 400,
+      "light": true,
+      "overview": true
+    },
+    {
+      "provider": "zai",
+      "width": 320,
+      "light": false,
+      "overview": false
+    },
+    {
+      "provider": "zai",
+      "width": 320,
+      "light": false,
+      "overview": true
+    },
+    {
+      "provider": "zai",
+      "width": 320,
+      "light": true,
+      "overview": false
+    },
+    {
+      "provider": "zai",
+      "width": 320,
+      "light": true,
+      "overview": true
+    },
+    {
+      "provider": "zai",
+      "width": 400,
+      "light": false,
+      "overview": false
+    },
+    {
+      "provider": "zai",
+      "width": 400,
+      "light": false,
+      "overview": true
+    },
+    {
+      "provider": "zai",
+      "width": 400,
+      "light": true,
+      "overview": false
+    },
+    {
+      "provider": "zai",
+      "width": 400,
+      "light": true,
+      "overview": true
+    }
+  ],
+  "errors": [],
+  "externalRequests": []
+}

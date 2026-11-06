@@ -1,0 +1,86 @@
+{
+  "checks": [
+    {
+      "provider": "kiro",
+      "source": "baseline",
+      "width": 320,
+      "light": false,
+      "guide": "cli"
+    },
+    {
+      "provider": "kiro",
+      "source": "current",
+      "width": 320,
+      "light": false,
+      "guide": "cli"
+    },
+    {
+      "type": "Updated Design Prototype Partial Main Unavailable",
+      "width": 320,
+      "light": false
+    },
+    {
+      "provider": "kiro",
+      "source": "baseline",
+      "width": 320,
+      "light": true,
+      "guide": "cli"
+    },
+    {
+      "provider": "kiro",
+      "source": "current",
+      "width": 320,
+      "light": true,
+      "guide": "cli"
+    },
+    {
+      "type": "Updated Design Prototype Partial Main Unavailable",
+      "width": 320,
+      "light": true
+    },
+    {
+      "provider": "kiro",
+      "source": "baseline",
+      "width": 400,
+      "light": false,
+      "guide": "cli"
+    },
+    {
+      "provider": "kiro",
+      "source": "current",
+      "width": 400,
+      "light": false,
+      "guide": "cli"
+    },
+    {
+      "type": "Updated Design Prototype Partial Main Unavailable",
+      "width": 400,
+      "light": false
+    },
+    {
+      "provider": "kiro",
+      "source": "baseline",
+      "width": 400,
+      "light": true,
+      "guide": "cli"
+    },
+    {
+      "provider": "kiro",
+      "source": "current",
+      "width": 400,
+      "light": true,
+      "guide": "cli"
+    },
+    {
+      "type": "Updated Design Prototype Partial Main Unavailable",
+      "width": 400,
+      "light": true
+    },
+    {
+      "provider": "kiro",
+      "bonusExpiry": "Separate Text, Fully Visible, Bonus Progress Has No Reset"
+    }
+  ],
+  "browser": "143.0.7499.4",
+  "boundary": "Synthetic Design/Actual Production Guide And Probe Output; No Real Login"
+}

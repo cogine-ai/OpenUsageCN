@@ -159,15 +159,54 @@
       ? { usageBreakdowns, timestampMs: first(usageState.timestamp), plan: null, overageEnabled: null }
       : null
   }
+  function normalizeApiBreakdown(ctx, raw, rawSnapshot) {
+    let value = normalizeBreakdown(ctx, raw)
+    if (!value && raw && typeof raw === "object" && first(raw.usageLimitWithPrecision, raw.usageLimit) === 0) {
+      value = { type: raw.resourceType || raw.type, currentUsage: first(raw.currentUsageWithPrecision, raw.currentUsage), usageLimit: 0, bonuses: [] }
+    }
+    if (!value) return null
+    const overage = first(raw.currentOveragesWithPrecision, raw.currentOverages)
+    if (overage !== null) {
+      if (overage < 0 || overage > value.currentUsage) {
+        ctx.host.log.error("Kiro overage exceeds total usage or is invalid")
+        value.mainUnavailable = true
+      } else {
+        value.currentUsage -= overage
+        value.overageUsage = overage
+      }
+    }
+    // API usage folds bonus spend into the total; it cannot establish an isolated plan meter.
+    if (Array.isArray(raw.bonuses) && raw.bonuses.length) {
+      ctx.host.log.warn("Kiro API plan usage includes an unseparated bonus pool")
+      value.mainUnavailable = true
+    }
+    if (value.currentUsage < 0 || value.currentUsage > value.usageLimit) {
+      ctx.host.log.warn("Kiro API plan usage cannot be separated from its reported limit")
+      value.mainUnavailable = true
+    }
+    const status = rawSnapshot.overageConfiguration && rawSnapshot.overageConfiguration.overageStatus
+    if (typeof status === "string" && status.toUpperCase() === "ENABLED") {
+      const cap = first(raw.overageCapWithPrecision, raw.overageCap)
+      if (cap !== null && cap >= 0) value.overageCap = cap
+      if (value.overageUsage === undefined) {
+        ctx.host.log.warn("Kiro overage amount was not reported")
+        value.overageUnavailable = true
+      }
+    }
+    value.resetDate = iso(ctx, raw.nextDateReset || raw.resetDate || rawSnapshot.nextDateReset)
+    return value
+  }
   function normalizeApiSnapshot(ctx, raw, timestampMs) {
     if (!raw || typeof raw !== "object") return null
     return {
       usageBreakdowns: Array.isArray(raw.usageBreakdownList)
-        ? raw.usageBreakdownList.map((item) => normalizeBreakdown(ctx, item)).filter(Boolean)
+        ? raw.usageBreakdownList.map((item) => normalizeApiBreakdown(ctx, item, raw)).filter(Boolean)
         : [],
       timestampMs: timestampMs !== null ? timestampMs : null,
       plan: title(raw.subscriptionInfo && raw.subscriptionInfo.subscriptionTitle),
-      overageEnabled: raw.overageConfiguration ? raw.overageConfiguration.overageStatus === "ENABLED" : null,
+      overageEnabled: raw.overageConfiguration && typeof raw.overageConfiguration.overageStatus === "string"
+        ? raw.overageConfiguration.overageStatus.toUpperCase() === "ENABLED" ? true : raw.overageConfiguration.overageStatus.toUpperCase() === "DISABLED" ? false : null
+        : null,
     }
   }
   function parseUsageLogText(ctx, text) {
@@ -317,7 +356,11 @@
           : loggedState && loggedState.overageEnabled !== null
             ? loggedState.overageEnabled
             : null,
-      usageBreakdowns: usageSource.usageBreakdowns,
+      usageBreakdowns: usageSource.usageBreakdowns.map((item) => {
+        const metadata = liveState || (loggedState && loggedState.timestampMs !== null && nowMs - loggedState.timestampMs <= LIVE_STALE_MS ? loggedState : null)
+        const matching = metadata && metadata.usageBreakdowns.find((candidate) => candidate.type === item.type)
+        return matching && matching !== item ? { ...item, overageUsage: matching.overageUsage, overageCap: matching.overageCap, overageUnavailable: matching.overageUnavailable } : item
+      }),
       timestampMs: usageSource.timestampMs !== null ? usageSource.timestampMs : nowMs,
     }
   }
@@ -340,7 +383,22 @@
   function buildOutput(ctx, snapshot, nowMs) {
     const primary = pickPrimaryBreakdown(snapshot.usageBreakdowns)
     if (!primary) throw DATA_HINT
-    const lines = [ctx.line.progress({ label: "Credits", used: primary.currentUsage, limit: primary.usageLimit, format: COUNT_FORMAT, resetsAt: primary.resetDate || undefined })]
+    const lines = []
+    if (primary.mainUnavailable || primary.currentUsage === null) {
+      lines.push(ctx.line.badge({ label: "Credits", text: "Usage unavailable", color: "#f59e0b" }))
+    } else if (primary.usageLimit === 0) {
+      lines.push(ctx.line.text({ label: "Credits", value: primary.currentUsage + " / 0 credits" }))
+    } else {
+      lines.push(ctx.line.progress({ label: "Credits", used: primary.currentUsage, limit: primary.usageLimit, format: COUNT_FORMAT, resetsAt: primary.resetDate || undefined }))
+    }
+    if (typeof primary.overageUsage === "number") {
+      if (typeof primary.overageCap === "number" && primary.overageCap > 0) {
+        lines.push(ctx.line.progress({ label: "Overage Credits", used: primary.overageUsage, limit: primary.overageCap, format: COUNT_FORMAT, resetsAt: primary.resetDate || undefined }))
+      } else {
+        lines.push(ctx.line.text({ label: "Overage Credits", value: primary.overageUsage + (primary.overageCap === 0 ? " / 0 credits" : " credits used; limit not reported") }))
+      }
+    }
+    if (primary.overageUnavailable) lines.push(ctx.line.text({ label: "Overage Credits", value: "Unavailable" }))
     const bonusUsage = pickBonusUsage(primary)
     if (bonusUsage) {
       lines.push(
@@ -349,15 +407,32 @@
           used: bonusUsage.currentUsage,
           limit: bonusUsage.usageLimit,
           format: COUNT_FORMAT,
-          resetsAt: bonusUsage.expiryDate || undefined,
         })
       )
+      if (bonusUsage.expiryDate) lines.push(ctx.line.text({ label: "Bonus Expiry", value: bonusUsage.expiryDate }))
     }
     if (snapshot.overageEnabled !== null) lines.push(ctx.line.badge({ label: "Overages", text: snapshot.overageEnabled ? "Enabled" : "Disabled" }))
     return { plan: snapshot.plan || undefined, lines }
   }
+  function hasDesktopAuth(ctx) {
+    try { return ctx.host.fs.existsStrict(TOKEN_PATH) }
+    catch (_) {
+      ctx.host.log.error("Kiro desktop sign-in status could not be verified")
+      throw "Could not verify Kiro desktop sign-in. Check file access and try again."
+    }
+  }
   function probe(ctx) {
     const nowMs = ctx.util.parseDateMs(ctx.nowIso) || Date.now()
+    if (!hasDesktopAuth(ctx)) {
+      const cli = globalThis.__openusage_kiro_cli.read(ctx)
+      if (cli) {
+        if (hasDesktopAuth(ctx)) {
+          ctx.host.log.warn("Kiro selected sign-in source changed during refresh")
+          throw "Kiro connection changed. Refresh usage."
+        }
+        return buildOutput(ctx, normalizeApiSnapshot(ctx, cli, nowMs), nowMs)
+      }
+    }
     const authState = loadAuthState(ctx)
     if (!authState || !authState.token || !authState.token.refreshToken) throw LOGIN_HINT
     const localState = normalizeCachedState(ctx)

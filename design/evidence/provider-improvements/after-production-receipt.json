@@ -1,0 +1,1248 @@
+{
+  "type": "Actual Production ProviderDetailPage, ProviderCard, QuotaMetric and ProviderConnectionPage; Actual probe Output With Synthetic In-Memory Host; No Real Account Or Installed-App Acceptance",
+  "browser": "143.0.7499.4",
+  "timezone": "Asia/Taipei",
+  "fixedTime": "2026-11-06T13:45:00.000Z",
+  "cases": [
+    {
+      "provider": "cursor",
+      "scenario": "cursor",
+      "width": 320,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "cursor",
+      "scenario": "cursor",
+      "width": 320,
+      "light": false,
+      "overview": true,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "cursor",
+      "scenario": "cursor",
+      "width": 320,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "cursor",
+      "scenario": "cursor",
+      "width": 320,
+      "light": true,
+      "overview": true,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "cursor",
+      "scenario": "cursor",
+      "width": 400,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "cursor",
+      "scenario": "cursor",
+      "width": 400,
+      "light": false,
+      "overview": true,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "cursor",
+      "scenario": "cursor",
+      "width": 400,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "cursor",
+      "scenario": "cursor",
+      "width": 400,
+      "light": true,
+      "overview": true,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "claude",
+      "scenario": "claude",
+      "width": 320,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "claude",
+      "scenario": "claude",
+      "width": 320,
+      "light": false,
+      "overview": true,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "claude",
+      "scenario": "claude",
+      "width": 320,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "claude",
+      "scenario": "claude",
+      "width": 320,
+      "light": true,
+      "overview": true,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "claude",
+      "scenario": "claude",
+      "width": 400,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "claude",
+      "scenario": "claude",
+      "width": 400,
+      "light": false,
+      "overview": true,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "claude",
+      "scenario": "claude",
+      "width": 400,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "claude",
+      "scenario": "claude",
+      "width": 400,
+      "light": true,
+      "overview": true,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "synthetic",
+      "scenario": "synthetic",
+      "width": 320,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "synthetic",
+      "scenario": "synthetic",
+      "width": 320,
+      "light": false,
+      "overview": true,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "synthetic",
+      "scenario": "synthetic",
+      "width": 320,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "synthetic",
+      "scenario": "synthetic",
+      "width": 320,
+      "light": true,
+      "overview": true,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "synthetic",
+      "scenario": "synthetic",
+      "width": 400,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "synthetic",
+      "scenario": "synthetic",
+      "width": 400,
+      "light": false,
+      "overview": true,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "synthetic",
+      "scenario": "synthetic",
+      "width": 400,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "synthetic",
+      "scenario": "synthetic",
+      "width": 400,
+      "light": true,
+      "overview": true,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "kiro",
+      "scenario": "kiro",
+      "width": 320,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "kiro",
+      "scenario": "kiro",
+      "width": 320,
+      "light": false,
+      "overview": true,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "kiro",
+      "scenario": "kiro",
+      "width": 320,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "kiro",
+      "scenario": "kiro",
+      "width": 320,
+      "light": true,
+      "overview": true,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "kiro",
+      "scenario": "kiro",
+      "width": 400,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "kiro",
+      "scenario": "kiro",
+      "width": 400,
+      "light": false,
+      "overview": true,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "kiro",
+      "scenario": "kiro",
+      "width": 400,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "kiro",
+      "scenario": "kiro",
+      "width": 400,
+      "light": true,
+      "overview": true,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "zai",
+      "scenario": "zai",
+      "width": 320,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "zai",
+      "scenario": "zai",
+      "width": 320,
+      "light": false,
+      "overview": true,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "zai",
+      "scenario": "zai",
+      "width": 320,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "zai",
+      "scenario": "zai",
+      "width": 320,
+      "light": true,
+      "overview": true,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "zai",
+      "scenario": "zai",
+      "width": 400,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "zai",
+      "scenario": "zai",
+      "width": 400,
+      "light": false,
+      "overview": true,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "zai",
+      "scenario": "zai",
+      "width": 400,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "zai",
+      "scenario": "zai",
+      "width": 400,
+      "light": true,
+      "overview": true,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "claude",
+      "scenario": "claude-jpy",
+      "width": 320,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "claude",
+      "scenario": "claude-jpy",
+      "width": 320,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "claude",
+      "scenario": "claude-jpy",
+      "width": 400,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "claude",
+      "scenario": "claude-jpy",
+      "width": 400,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "claude",
+      "scenario": "claude-usd",
+      "width": 320,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "claude",
+      "scenario": "claude-usd",
+      "width": 320,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "claude",
+      "scenario": "claude-usd",
+      "width": 400,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "claude",
+      "scenario": "claude-usd",
+      "width": 400,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "claude",
+      "scenario": "claude-long",
+      "width": 320,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "claude",
+      "scenario": "claude-long",
+      "width": 320,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "claude",
+      "scenario": "claude-long",
+      "width": 400,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "claude",
+      "scenario": "claude-long",
+      "width": 400,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "synthetic",
+      "scenario": "synthetic-partial",
+      "width": 320,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "synthetic",
+      "scenario": "synthetic-partial",
+      "width": 320,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "synthetic",
+      "scenario": "synthetic-partial",
+      "width": 400,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "synthetic",
+      "scenario": "synthetic-partial",
+      "width": 400,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "kiro",
+      "scenario": "kiro-bonus",
+      "width": 320,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "kiro",
+      "scenario": "kiro-bonus",
+      "width": 320,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "kiro",
+      "scenario": "kiro-bonus",
+      "width": 400,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "kiro",
+      "scenario": "kiro-bonus",
+      "width": 400,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "zai",
+      "scenario": "zai-partial",
+      "width": 320,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "zai",
+      "scenario": "zai-partial",
+      "width": 320,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "zai",
+      "scenario": "zai-partial",
+      "width": 400,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "zai",
+      "scenario": "zai-partial",
+      "width": 400,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "zai",
+      "scenario": "zai-zero",
+      "width": 320,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "zai",
+      "scenario": "zai-zero",
+      "width": 320,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "zai",
+      "scenario": "zai-zero",
+      "width": 400,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "zai",
+      "scenario": "zai-zero",
+      "width": 400,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "cursor",
+      "scenario": "cursor-zero",
+      "width": 320,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "cursor",
+      "scenario": "cursor-zero",
+      "width": 320,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "cursor",
+      "scenario": "cursor-zero",
+      "width": 400,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "cursor",
+      "scenario": "cursor-zero",
+      "width": 400,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "cursor",
+      "scenario": "cursor-nocap",
+      "width": 320,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "cursor",
+      "scenario": "cursor-nocap",
+      "width": 320,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "cursor",
+      "scenario": "cursor-nocap",
+      "width": 400,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "cursor",
+      "scenario": "cursor-nocap",
+      "width": 400,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "cursor",
+      "scenario": "cursor-other",
+      "width": 320,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "cursor",
+      "scenario": "cursor-other",
+      "width": 320,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "cursor",
+      "scenario": "cursor-other",
+      "width": 400,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "cursor",
+      "scenario": "cursor-other",
+      "width": 400,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": ""
+    },
+    {
+      "provider": "claude",
+      "scenario": "claude-long",
+      "width": 320,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "claude",
+      "scenario": "claude",
+      "width": 320,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "claude",
+      "scenario": "claude-jpy",
+      "width": 320,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "zai",
+      "scenario": "zai",
+      "width": 320,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": ""
+    },
+    {
+      "provider": "kiro",
+      "scenario": "kiro",
+      "width": 320,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": "&connection=cli&before"
+    },
+    {
+      "provider": "kiro",
+      "scenario": "kiro",
+      "width": 320,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": "&connection=cli"
+    },
+    {
+      "provider": "kiro",
+      "scenario": "kiro",
+      "width": 320,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": "&connection=cli&before"
+    },
+    {
+      "provider": "kiro",
+      "scenario": "kiro",
+      "width": 320,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": "&connection=cli"
+    },
+    {
+      "provider": "kiro",
+      "scenario": "kiro",
+      "width": 400,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": "&connection=cli&before"
+    },
+    {
+      "provider": "kiro",
+      "scenario": "kiro",
+      "width": 400,
+      "light": false,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": "&connection=cli"
+    },
+    {
+      "provider": "kiro",
+      "scenario": "kiro",
+      "width": 400,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": "&connection=cli&before"
+    },
+    {
+      "provider": "kiro",
+      "scenario": "kiro",
+      "width": 400,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 400,
+        "panel": 400,
+        "width": 400
+      },
+      "extra": "&connection=cli"
+    },
+    {
+      "provider": "kiro",
+      "scenario": "kiro",
+      "width": 320,
+      "light": true,
+      "overview": false,
+      "geometry": {
+        "document": 320,
+        "panel": 320,
+        "width": 320
+      },
+      "extra": "&connection=desktop"
+    }
+  ],
+  "errors": [],
+  "externalRequests": [],
+  "longModelAfter": {
+    "width": 320,
+    "panelScrollWidth": 320
+  },
+  "pluginSha256": {
+    "plugins/claude/usage-mapping.js": "6fc672f81c9fe661b914c1c041fe2b962f95bf4728220a162b6fb11ca495ddde",
+    "plugins/claude/plugin.js": "2e9c5c73d13f3570d2afad2fa2777d317762fd76b2b4735fc021f9096b20bc06",
+    "plugins/cursor/unified-usage.js": "eb6d0ab225d50c4d92dea7a053ec8f4b1bbceff9c5d4c3a67b99e4db50ce68e7",
+    "plugins/cursor/plugin.js": "b410b061ade78dc06d623ceb9008d212014ca65e6c1854a16e90ce8f6733fb27",
+    "plugins/synthetic/plugin.js": "8739cc938a5bcd9bebde28696db7854f29378baf8695c02771e992beb7f25acf",
+    "plugins/kiro/cli.js": "05b8b152481cf680c8f2511d7c2e2395cd31c2c838c5a68ed47a41d3b9ee4395",
+    "plugins/kiro/plugin.js": "f747b84ff64e661d856570850c3fc7269f76a1d2bdca750d3ec58787fa478dd1",
+    "plugins/zai/resets.js": "ed145dd1e88c5df1c7cccd5231bfc752610d124fe262d369f442bd1dbc59d460",
+    "plugins/zai/plugin.js": "37e2054854954eaa6a6b7234c69634708e0e8a390267546ca214b4fec4ea8d53"
+  },
+  "frontendSha256": {
+    "src/components/quota-metric.tsx": "8fca6f14ac2db3c1cff3431355240f6204534df44c641307bd7824788b8a4ff0",
+    "src/lib/plugin-recovery.ts": "2f2a6997af81bbfaae87adff825a175224de2b1cbc738656c05b0b9facf86975",
+    "src/pages/provider-connection.tsx": "e97a569e6ad4ea9e84cd9dfd37e2bda65b93b847351f81012d58dd1772fade00"
+  },
+  "checks": [
+    "USD/JPY/BHD Amounts From Real Plugin Output",
+    "Unknown Model Wraps Within 320px Scroll Container",
+    "Synthetic Regen Has No Reset Metadata Or Legacy 5h/Mana",
+    "Kiro Plan100 Overage20 And Unknown Main With Bonus",
+    "Z.ai Count3/1 Plus Nov7 00:30 UTC+08:00 And Optional Failure/Empty",
+    "Cursor User-Scoped Monthly12/50 Independent Of Weekly And History",
+    "Kiro CLI Copy Only And Explicit Check; Desktop Guide Preserved"
+  ]
+}

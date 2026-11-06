@@ -69,7 +69,7 @@ export function QuotaMetric({ line, displayMode, resetTimerDisplayMode, timeForm
   return (
     <div className="min-w-0">
       <div className="mb-1.5 flex min-w-0 items-center gap-1.5">
-        <span className="text-sm font-medium">{line.label}</span>
+        <span className="min-w-0 text-sm font-medium [overflow-wrap:anywhere]">{line.label}</span>
         {paceStatus ? (
           <Tooltip>
             <TooltipTrigger render={(props) => <span {...props} data-slot="pace-indicator" data-state={forecast.state}

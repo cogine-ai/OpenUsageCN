@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { makeCtx } from "../test-helpers.js"
 
 describe.each([
-  ["zai", () => import("./plugin.js")],
+  ["zai", async () => { await import("./resets.js"); return import("./plugin.js") }],
   ["bigmodel-cn", () => import("../bigmodel-cn/plugin.js")],
 ])("%s quota compatibility", (_providerId, loadPlugin) => {
   beforeEach(() => {
@@ -19,7 +19,10 @@ describe.each([
       bodyText: JSON.stringify(url.includes("subscription") ? { data: [] } : { data: { limits } }),
     }))
     await loadPlugin()
-    return { result: globalThis.__openusage_plugin.probe(ctx), ctx }
+    const result = globalThis.__openusage_plugin.probe(ctx)
+    // This suite compares quota compatibility; the independent coupon lines have their own suite.
+    result.lines = result.lines.filter(({ label }) => !["5h Reset Coupons", "Weekly Reset Coupons", "Coupon Expiry"].includes(label))
+    return { result, ctx }
   }
 
   it.each(["darwin", "windows"])("reads credit quota windows on %s", async (platform) => {

@@ -392,19 +392,23 @@ try {
 }
 ```
 
+Kiro alone can read `KIRO_DATA_DIR` and `XDG_DATA_HOME` to locate its CLI database. It checks the chosen sign-in again before publishing and does not write that database.
+
 ## SQLite
 
 ### Query (Read-Only)
 
 ```typescript
 host.sqlite.query(dbPath: string, sql: string): string
+host.sqlite.queryReadOnly(dbPath: string, sql: string): string
 ```
 
 Executes a read-only SQL query against a SQLite database.
 
 **Behavior:**
 
-- **Read-only**: Database is opened with `-readonly` flag
+- **Read-only**: Both query methods open with `-readonly`. `query` keeps the existing WAL-visible primary read and immutable fallback. `queryReadOnly` fails directly without an immutable fallback; use it for sign-in databases so stale WAL-free credentials are never substituted.
+- **Bounded execution**: Each call has at most ten seconds, further limited by the probe deadline. Primary and fallback share that budget; stdin, process exit and inherited output pipes cannot extend it. Each output stream is capped at 8 MiB. Errors use fixed messages and omit SQL, database contents and stderr.
 - **Returns JSON string**: Result is a JSON array of row objects (must `JSON.parse()`)
 - **Dot-commands blocked**: Commands like `.schema`, `.tables` are rejected
 - **Throws on errors**: Invalid SQL, missing database, etc.

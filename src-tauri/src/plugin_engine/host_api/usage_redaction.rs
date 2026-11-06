@@ -4,6 +4,16 @@ pub(super) fn response_body(plugin: &str, path: &str, body: &str) -> Option<Stri
     if matches!(plugin, "claude-platform" | "litellm" | "siliconflow" | "workbuddy" | "trae-cn" | "muse") {
         return Some("[REDACTED PROVIDER BILLING RESPONSE]".into());
     }
+    let endpoint = path.split('?').next().unwrap_or(path);
+    let private_usage = match plugin {
+        "cursor" => endpoint.ends_with("/api/usage-summary") || endpoint.ends_with("/api/dashboard/v2/usage-status"),
+        "claude" => endpoint.ends_with("/api/oauth/usage"),
+        "synthetic" => endpoint == "https://api.synthetic.new/v2/quotas",
+        "zai" => endpoint == "https://api.z.ai/api/biz/customer-package-reset/list",
+        "kiro" => endpoint == "https://codewhisperer.us-east-1.amazonaws.com/" || endpoint == "https://q.eu-central-1.amazonaws.com/" || endpoint.ends_with("/getUsageLimits"),
+        _ => false,
+    };
+    if private_usage { return Some("[REDACTED PROVIDER USAGE RESPONSE]".into()); }
     if plugin == "codex"
         && (path.ends_with("/wham/analytics/daily-workspace-usage-counts")
             || path.ends_with("/wham/usage/daily-workspace-user-token-usage-breakdown")
@@ -74,6 +84,26 @@ mod tests {
         is_env_var_allowed_for_plugin, redact_plugin_http_response_body, redact_url,
     };
 
+    #[test]
+    fn improved_provider_responses_hide_new_identity_and_coupon_fields_even_when_malformed() {
+        for (provider, url) in [
+            ("cursor", "https://cursor.com/api/usage-summary"),
+            ("cursor", "https://cursor.com/api/dashboard/v2/usage-status?scope=user"),
+            ("claude", "https://api.anthropic.com/api/oauth/usage"),
+            ("synthetic", "https://api.synthetic.new/v2/quotas"),
+            ("kiro", "https://codewhisperer.us-east-1.amazonaws.com/"),
+            ("kiro", "https://q.eu-central-1.amazonaws.com/"),
+            ("zai", "https://api.z.ai/api/biz/customer-package-reset/list?targetType=PERSONAL"),
+        ] {
+            for body in [r#"{"recordId":123,"userInfo":{"email":"private@example.invalid"},"scope":{"model":{"id":"private-model"}}}"#, "malformed private-token-private@example.invalid"] {
+                assert_eq!(redact_plugin_http_response_body(provider, url, body), "[REDACTED PROVIDER USAGE RESPONSE]");
+            }
+        }
+        assert!(is_env_var_allowed_for_plugin("kiro", "KIRO_DATA_DIR"));
+        assert!(is_env_var_allowed_for_plugin("kiro", "XDG_DATA_HOME"));
+        assert!(!is_env_var_allowed_for_plugin("cursor", "KIRO_DATA_DIR"));
+        assert!(!is_env_var_allowed_for_plugin("zai", "KIRO_DATA_DIR"));
+    }
     #[test]
     fn new_provider_request_identifiers_are_not_logged() {
         let logged = redact_url("https://platform.claude.com/api/organizations/private-org/prepaid/credits");

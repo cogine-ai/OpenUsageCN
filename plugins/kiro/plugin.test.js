@@ -7,6 +7,7 @@ const LOG_PATH =
   "~/Library/Application Support/Kiro/logs/20260406T235910/window1/exthost/kiro.kiroAgent/q-client.log"
 
 const loadPlugin = async () => {
+  await import("./cli.js")
   await import("./plugin.js")
   return globalThis.__openusage_plugin
 }
@@ -162,6 +163,8 @@ describe("kiro plugin", () => {
       limit: 500,
       format: { kind: "count", suffix: "credits" },
     })
+    expect(result.lines.find((line) => line.label === "Bonus Credits")).not.toHaveProperty("resetsAt")
+    expect(result.lines.find((line) => line.label === "Bonus Expiry")).toMatchObject({ type: "text", value: "2026-05-03T15:09:55.196Z" })
     expect(result.lines.find((line) => line.label === "Overages")).toMatchObject({
       type: "badge",
       text: "Disabled",

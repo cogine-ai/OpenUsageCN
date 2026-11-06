@@ -31,6 +31,15 @@ function safeDiagnostic(message: string): string {
     .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[已隐藏]")
 }
 
+/** Recognize only CLI authentication messages whose supported repair is a local login. */
+export function isKiroCliLoginError(message: string): boolean {
+  return [
+    "Run kiro-cli login, then refresh Kiro usage.",
+    "Kiro CLI session expired. Run kiro-cli login again.",
+    "Kiro CLI sign-in data is invalid. Run kiro-cli login again.",
+  ].includes(message)
+}
+
 /** Use known provider login steps; arbitrary error text cannot supply an executable command. */
 function loginAdvice(providerId?: string): string {
   switch (providerId) {
@@ -82,6 +91,10 @@ export function getPluginRecovery(message: string, providerId?: string, capabili
   }
   if (["litellm", "siliconflow"].includes(providerId ?? "") && /Add .*API key|API key is (?:invalid|expired)/i.test(message)) {
     return configure("credentials", "API Key 不可用", "请检查当前地区或代理对应的 API Key 及访问权限。", "apiKey")
+  }
+
+  if (providerId === "kiro" && isKiroCliLoginError(message)) {
+    return recovery("login", "需要 Kiro CLI 登录", "请在终端运行 `kiro-cli login`，完成后检查连接。")
   }
 
   if (providerId === "codex" && message.includes("Windows requires Codex file storage:") && message.includes("cli_auth_credentials_store")) {

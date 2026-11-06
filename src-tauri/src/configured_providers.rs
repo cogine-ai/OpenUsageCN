@@ -1,4 +1,4 @@
-//! Source snapshots for the six configurable providers, shared by GUI and CLI.
+//! Source snapshots for configurable providers and Kiro, shared by GUI and CLI.
 use crate::plugin_engine::{
     host_api,
     manifest::LoadedPlugin,
@@ -21,6 +21,7 @@ pub(crate) fn config_fields(
         "litellm" => include_str!("../../plugins/litellm/plugin.json"),
         "siliconflow" => include_str!("../../plugins/siliconflow/plugin.json"),
         "muse" => include_str!("../../plugins/muse/plugin.json"),
+        "kiro" => include_str!("../../plugins/kiro/plugin.json"),
         _ => return Err("连接来源配置不受支持。".into()),
     };
     let manifest: crate::plugin_engine::manifest::PluginManifest =
@@ -52,7 +53,7 @@ pub(crate) fn required_environment<'a>(
 pub(crate) fn supports(id: &str) -> bool {
     matches!(
         id,
-        "claude-platform" | "workbuddy" | "trae-cn" | "litellm" | "siliconflow" | "muse"
+        "claude-platform" | "workbuddy" | "trae-cn" | "litellm" | "siliconflow" | "muse" | "kiro"
     )
 }
 
@@ -111,6 +112,10 @@ impl Probe {
             .map(|c| c.fields.as_slice())
             .unwrap_or_default();
         let prepared = (|| {
+            if plugin.manifest.id == "kiro" {
+                let source = crate::kiro_sources::snapshot()?;
+                return Ok((HashMap::new(), source.environment, source.fingerprint));
+            }
             let values =
                 crate::provider_config::resolved_values_from_disk(&plugin.manifest.id, fields)?;
             let environment = environment(plugin, &values, deadline)?;
@@ -163,7 +168,12 @@ impl Probe {
         if Instant::now() >= self.deadline {
             return Err("用量读取超时，请重试。".into());
         }
-        if environment(&self.plugin, &self.values, self.deadline)? != self.environment {
+        if self.plugin.manifest.id == "kiro" {
+            let source = crate::kiro_sources::snapshot()?;
+            if source.fingerprint != self.fingerprint || source.environment != self.environment {
+                return Err("Kiro connection changed. Refresh usage.".into());
+            }
+        } else if environment(&self.plugin, &self.values, self.deadline)? != self.environment {
             return Err("连接来源已更改，请重新刷新。".into());
         }
         let fields = self
@@ -194,3 +204,14 @@ impl Probe {
 #[cfg(test)]
 #[path = "configured_providers_tests.rs"]
 mod tests;
+
+/// Preserve same-source stale values, but never show a previous Kiro login after failure.
+pub(crate) fn invalidate_failed_output(output: &PluginOutput) -> bool {
+    output.provider_id == "kiro"
+        && runtime::probe_error_message(output).is_some()
+        && crate::local_http_api::cache::snapshot_for_provider("kiro").is_none()
+}
+
+#[cfg(test)]
+#[path = "configured_provider_kiro_tests.rs"]
+mod kiro_tests;

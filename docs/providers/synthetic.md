@@ -5,7 +5,7 @@
 - **Protocol:** REST (`GET /v2/quotas`)
 - **URL:** `https://api.synthetic.new/v2/quotas`
 - **Auth:** API key discovered from Pi, Factory/Droid, OpenCode, or `SYNTHETIC_API_KEY` env var
-- **Tier:** Subscription packs ($30/month base) with rolling rate limits
+- **Quota:** Current weekly plan limit, with older response formats supported separately
 
 ## Authentication
 
@@ -86,6 +86,31 @@ Quota checks do not count against subscription limits.
 
 ### Response
 
+Current plans can return `planWeeklyLimit`, either at the response root or inside `data`:
+
+```json
+{
+  "planWeeklyLimit": {
+    "percentRemaining": 99.47981765714286,
+    "nextRegenAt": "2026-11-07T00:30:00+08:00",
+    "nextRegenPercent": 2
+  },
+  "search": { "hourly": { "limit": 250, "requests": 5 } }
+}
+```
+
+`Weekly` is the primary quota for this format, exported as `planWeekly` with percent units.
+`percentRemaining` and `nextRegenPercent` are percentage points: 0.5 means 0.5%, not 50%.
+Weekly usage keeps fractional precision. The old Subscription, Rolling 5h and Mana Bar lanes are
+not displayed alongside this new plan. Search remains independent. A present but invalid new plan
+reports an error instead of reviving retired counters.
+
+`Next Regen` shows the supplied instant in UTC, and `Regen Percent` shows the reported percentage.
+These describe partial regeneration. Neither is a full reset, and neither sets `resetsAt` or starts
+pace forecasts. Invalid optional regeneration metadata is marked unavailable while Weekly remains.
+
+Older responses remain supported when `planWeeklyLimit` is absent:
+
 ```json
 {
   "subscription": {
@@ -116,17 +141,17 @@ Quota checks do not count against subscription limits.
 
 ### Quota Systems
 
-Synthetic uses two complementary rate limiting systems:
+Older responses can contain two complementary rate limiting systems:
 
 **Rolling 5-hour limit** — burst rate control:
 - `remaining` / `max` requests in a rolling 5-hour window
-- Every ~15 minutes, 5% of `max` is restored (a "tick")
+- A reported tick is partial restoration, not a full reset
 - `limited` is `true` when `remaining` hits 0
 - `max` varies by subscription level (e.g. 400 standard, 600 founder's pack)
 
 **Weekly mana bar** — longer-term budget:
 - A single quota that scales by token costs and cache hits (cache hits discounted 80%)
-- Regenerates 2% every ~3.36 hours (full regen in one week)
+- Regeneration timing does not establish a full reset date
 - `percentRemaining` (0–100) tracks how much budget remains
 
 **Subscription** — legacy request count per billing period.
@@ -141,6 +166,9 @@ No plan name is returned by the API. The plugin does not set a plan label.
 
 | Line            | Scope    | Condition                                                 | Description                                   |
 |-----------------|----------|-----------------------------------------------------------|-----------------------------------------------|
+| Weekly          | overview | Valid `planWeeklyLimit`                                  | Current weekly plan, primary metric           |
+| Next Regen      | detail   | New plan reports `nextRegenAt`                            | UTC partial-regeneration instant              |
+| Regen Percent   | detail   | New plan reports `nextRegenPercent`                       | Reported regeneration percentage points       |
 | 5h Rate Limit   | overview | `rollingFiveHourLimit.max` and `remaining` are numeric    | Usage in 5-hour rolling window (used / limit) |
 | Mana Bar        | overview | `weeklyTokenLimit.percentRemaining` is numeric            | Weekly token budget as percentage used        |
 | Rate Limited    | detail   | `rollingFiveHourLimit.limited`                            | Red badge shown only when actively rate limited |
@@ -148,7 +176,7 @@ No plan name is returned by the API. The plugin does not set a plan label.
 | Free Tool Calls | detail   | `freeToolCalls.limit > 0` and no usable v3 quota lines exist | Legacy free tool-call quota                |
 | Search          | detail   | `search.hourly` present                                   | Hourly search request quota                   |
 
-5h Rate Limit is the primary (tray icon) metric — it's the first constraint users hit during active use.
+Weekly is primary for new plans. Older plans retain their existing primary metric selection.
 
 Progress lines include:
 - 5h Rate Limit / Mana Bar: usage fields only, with no reset metadata
@@ -161,7 +189,10 @@ Progress lines include:
 |------------------------|---------------------------------------------------------------------------|
 | No API key found       | "Synthetic API key not found. Set SYNTHETIC_API_KEY or add key to ~/.pi/agent/auth.json" |
 | 401/403                | "API key invalid or expired. Check your Synthetic API key."               |
-| Non-2xx with detail    | Error message from API response                                           |
-| Non-2xx without detail | "Request failed (HTTP {status})"                                          |
+| Other non-2xx          | "Synthetic request failed (HTTP {status}). Try again later."             |
+| Invalid new plan      | "Synthetic weekly plan usage is unavailable. Try again later."           |
 | Unparseable response   | "Could not parse usage data."                                             |
 | Network error          | "Request failed. Check your connection."                                  |
+
+Raw API error bodies are not displayed or copied into plugin logs. These new response rules are
+based on [CodexBar's fixed implementation](https://github.com/steipete/CodexBar/blob/197025e12e41c451899b66aa897423b550e06344/Sources/CodexBarCore/Resources/Plugins/synthetic.js).

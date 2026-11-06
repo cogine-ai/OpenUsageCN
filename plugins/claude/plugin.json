@@ -4,6 +4,7 @@
   "name": "Claude",
   "version": "0.0.1",
   "entry": "plugin.js",
+  "supportingScripts": ["usage-mapping.js"],
   "icon": "icon.svg",
   "brandColor": "#DE7356",
   "accountSupport": {
@@ -23,6 +24,9 @@
     { "type": "progress", "label": "Weekly", "scope": "overview", "period": "weekly", "primaryOrder": 2, "limitResource": { "key": "weekly" } },
     { "type": "progress", "label": "Sonnet", "scope": "detail", "limitResource": { "key": "sonnet" } },
     { "type": "progress", "label": "Claude Design", "scope": "detail", "limitResource": { "key": "claudeDesign" } },
-    { "type": "progress", "label": "Extra usage spent", "scope": "overview", "primaryOrder": 3, "limitResource": { "key": "extraUsage" } }
+    { "type": "progress", "label": "Extra usage spent", "scope": "overview", "primaryOrder": 3, "limitResource": { "key": "extraUsage" } },
+    { "type": "progress", "label": "Fable Weekly", "scope": "detail", "limitResource": { "key": "fable" } },
+    { "type": "text", "label": "Extra Spent", "scope": "detail" },
+    { "type": "text", "label": "Extra Limit", "scope": "detail" }
   ]
 }

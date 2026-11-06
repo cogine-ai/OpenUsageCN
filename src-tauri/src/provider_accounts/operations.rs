@@ -408,7 +408,8 @@ impl ProviderAccounts {
             .installation_key_store
             .as_ref()
             .ok_or_else(|| "provider account installation key is unavailable".to_string())?;
-        let key = match key_store.read() {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        let key = match key_store.read(deadline) {
             Ok(key) => key,
             Err(InstallationKeyError::Missing) => {
                 let registry_exists = self
@@ -427,7 +428,7 @@ impl ProviderAccounts {
                     self.record_persistence_failure(&reason);
                     return Err(reason);
                 }
-                key_store.create().map_err(|error| {
+                key_store.create(deadline).map_err(|error| {
                     let reason = installation_key_error(error);
                     self.record_persistence_failure(&reason);
                     reason
@@ -452,6 +453,7 @@ impl ProviderAccounts {
 /// Maps key-storage failures to fixed reasons without exposing operating-system error details.
 fn installation_key_error(error: InstallationKeyError) -> String {
     match error {
+        InstallationKeyError::Timeout => "provider account installation key access timed out; retry after checking Keychain access",
         InstallationKeyError::Missing => "provider account installation key is missing",
         InstallationKeyError::Denied => "provider account installation key access was denied",
         InstallationKeyError::Unavailable => {

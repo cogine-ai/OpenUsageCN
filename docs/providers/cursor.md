@@ -23,7 +23,7 @@
 | Shared Weekly Usage | Sand `isUnified` + paid `usagePercent` and future `nextResetTimestampUtc` | overview + detail | percent | Replaces the old monthly pools for a confirmed shared plan; not inferred from the plan name |
 | Grok Bot | `GetSandUsageStatus.usagePercent` | overview + detail | percent | Separate included allowance; its own reset dates, or a trial without recurring reset |
 | Requests | `/api/usage` (enterprise) | overview | count | Enterprise accounts only; unchanged from previous behavior |
-| On-demand | `spendLimitUsage` | detail | dollars | Only when individual or pooled limit > 0 |
+| On-demand | Unified personal monthly billing, otherwise `spendLimitUsage` | detail | dollars / spend-only text | One separate spending reading; no addition to included or history usage |
 
 For legacy plans, the overview shows the individual model pools and Grok Bot separately. When both model pools
 are available, their percentage Total is omitted there to avoid repeating the same information.
@@ -54,6 +54,28 @@ does not assume a 30-day duration or invent the cycle's end date from it.
 
 Billing duration is shown only when Cursor supplies valid start and end dates. A reported end
 date can still be shown on its own, but it does not prove the duration or the billing cycle start.
+
+### Unified Personal Monthly Spending
+
+For Desktop/CLI and browser connections, additional monthly spending uses the selected account's
+session. `GET https://cursor.com/api/usage-summary` must explicitly identify a `unified_` membership
+and `limitType: "user"` before the app requests
+`GET https://cursor.com/api/dashboard/v2/usage-status?scope=user`.
+Team scope, missing scope and legacy plans never borrow this personal billing reading.
+
+The new response must report `availability: "available"` and a current `monthlyUsage` with
+nonnegative finite `usedCents`, `limitCents`, `periodStart` and `resetsAt`. The current instant must
+be at or after the start and before the reset. Amounts are divided by 100. A valid zero remains
+zero, and `creditsUsedCents` is not added to it.
+
+This reading replaces the single `On-demand` row and retains its stable `onDemand` resource.
+`Billing Scope` says `Current User`. A positive cap produces a dollar progress line with its real
+monthly dates; a zero cap produces spend-only text without a numeric limit. Shared Weekly Usage
+and explicit request quotas keep their existing priority. Additional spending never changes
+Model Usage history or adds historical charged amounts to the current monthly reading.
+
+Unavailable, rejected, malformed or out-of-period optional billing leaves the verified old
+spending reading in place and logs a fixed warning. The app never changes accounts to fill it.
 
 **Team detection**: an account is treated as "team" when `planName` is `"Team"`, or `spendLimitUsage.limitType` is `"team"`, or `spendLimitUsage.pooledLimit` is greater than `0`. Team accounts display Total usage in dollars; individual accounts display it as a percentage.
 
