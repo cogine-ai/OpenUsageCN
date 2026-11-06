@@ -11,6 +11,7 @@ fn make_snapshot(id: &str, name: &str) -> CachedPluginSnapshot {
         lines: vec![],
         started_at: "2026-03-26T08:15:00Z".to_string(),
         fetched_at: "2026-03-26T08:15:30Z".to_string(),
+        config_fingerprint: None,
     }
 }
 
@@ -448,6 +449,7 @@ fn snapshot_with_progress_line_round_trips() {
         }],
         started_at: "2026-03-26T07:59:00Z".to_string(),
         fetched_at: "2026-03-26T08:00:00Z".to_string(),
+        config_fingerprint: None,
     };
 
     let json = serde_json::to_string(&snap).unwrap();

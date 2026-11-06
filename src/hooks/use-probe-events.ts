@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef } from "react"
 import { listen, type UnlistenFn } from "@tauri-apps/api/event"
 import { invoke } from "@tauri-apps/api/core"
+import { ISOLATED_CONFIG_PROVIDERS, PROVIDER_CONFIG_CHANGED } from "@/lib/provider-config"
+import { probeFailure } from "@/lib/probe-failure"
 import type { PluginOutput } from "@/lib/plugin-types"
 
 type ProbeResult = {
@@ -20,6 +22,7 @@ type ProbeBatchStarted = {
 
 type ProbeBatchMeta = {
   batchId: string
+  ordinal: number
   manual: boolean
   previous: ProbeBatchMeta | undefined
   failed: boolean
@@ -75,6 +78,11 @@ type UseProbeEventsOptions = {
 
 /** Deliver only each provider's latest check and cancel verification when its ownership changes. */
 export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOptions) {
+  const batchPrefix = useRef<string | null>(null)
+  const nextOrdinal = useRef(0)
+  const lastSuccessfulOrdinal = useRef(new Map<string, number>())
+  const invalidatedThroughOrdinal = useRef(new Map<string, number>())
+  const connectionListenerReady = useRef<Promise<void> | null>(null)
   const activeBatchIds = useRef<Set<string>>(new Set())
   const latestBatchByProvider = useRef<Map<string, ProbeBatchMeta>>(new Map())
   const startRequestTailByProvider = useRef<Map<string, Promise<void>>>(
@@ -84,6 +92,50 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
   const listenersReadyRef = useRef<Promise<void> | null>(null)
   const listenersReadyResolveRef = useRef<(() => void) | null>(null)
   const listenersReadyRejectRef = useRef<((error: unknown) => void) | null>(null)
+
+  useEffect(() => {
+    const changed = (event: Event) => {
+      const id: unknown = (event as CustomEvent).detail
+      if (typeof id !== "string" || !ISOLATED_CONFIG_PROVIDERS.has(id)) return
+      const previous = latestBatchByProvider.current.get(id)
+      lastSuccessfulOrdinal.current.delete(id)
+      latestBatchByProvider.current.delete(id)
+      previous?.onInterrupted?.(new ProbeVerificationCancelled("连接配置已更新，请重新检查。"))
+    }
+    window.addEventListener(PROVIDER_CONFIG_CHANGED, changed)
+    return () => window.removeEventListener(PROVIDER_CONFIG_CHANGED, changed)
+  }, [])
+
+  // This listener outlives the connection sheet and result-callback replacements.
+  useEffect(() => {
+    let cancelled = false
+    let unlisten: UnlistenFn | undefined
+    connectionListenerReady.current = listen<{ providerId: string; previousBatchId: string | null }>(
+      "provider:connection-committed", ({ payload }) => {
+        if (payload.providerId !== "muse") return
+        const prefix = batchPrefix.current
+        const suffix = prefix && payload.previousBatchId?.startsWith(prefix + ":")
+          ? payload.previousBatchId.slice(prefix.length + 1) : ""
+        const ordinal = /^\d+$/.test(suffix) ? Number(suffix) : 0
+        const boundary = Number.isSafeInteger(ordinal) && ordinal <= nextOrdinal.current ? ordinal : 0
+        const cutoff = Math.max(invalidatedThroughOrdinal.current.get("muse") ?? 0, boundary)
+        invalidatedThroughOrdinal.current.set("muse", cutoff)
+        const current = latestBatchByProvider.current.get("muse")
+        if (current && current.ordinal <= cutoff) {
+          latestBatchByProvider.current.delete("muse")
+          current.onInterrupted?.(new ProbeVerificationCancelled("连接配置已更新，请重新检查。"))
+        }
+        // A newer successful result remains valid even if a still-newer check is pending or failed.
+        const clearData = (lastSuccessfulOrdinal.current.get("muse") ?? 0) <= cutoff
+        if (clearData) lastSuccessfulOrdinal.current.delete("muse")
+        window.dispatchEvent(new CustomEvent(PROVIDER_CONFIG_CHANGED, { detail: {
+          providerId: "muse", clearData, preserveLoading: Boolean(current && current.ordinal > cutoff && activeBatchIds.current.has(current.batchId)),
+        } }))
+      },
+    ).then((release) => { if (cancelled) release(); else unlisten = release })
+    void connectionListenerReady.current.catch(() => console.error("Failed to initialize connection commit listener"))
+    return () => { cancelled = true; unlisten?.() }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -98,6 +150,8 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
     void listenersReadyRef.current.catch(() => {})
     /** Install result and completion listeners before allowing a native batch to start. */
     const setup = async () => {
+      await connectionListenerReady.current
+      if (cancelled) return
       const resultUnlisten = await listen<ProbeResult>("probe:result", (event) => {
         const latestBatch = latestBatchByProvider.current.get(
           event.payload.output.providerId
@@ -112,8 +166,11 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
         if (
           activeBatchIds.current.has(event.payload.batchId) &&
           eventBatch !== undefined &&
-          eventBatch === latestBatch
+          eventBatch === latestBatch &&
+          eventBatch.ordinal > (invalidatedThroughOrdinal.current.get(event.payload.output.providerId) ?? 0)
         ) {
+          if (probeFailure(event.payload.output) === null) lastSuccessfulOrdinal.current.set(event.payload.output.providerId, eventBatch.ordinal)
+          else if (event.payload.invalidateCachedData) lastSuccessfulOrdinal.current.delete(event.payload.output.providerId)
           onResult(event.payload.output, {
             manual: latestBatch.manual,
             ...(event.payload.invalidateCachedData ? { invalidateCachedData: true } : {}),
@@ -179,10 +236,10 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
     pluginIds: string[],
     options: StartBatchOptions = {}
   ) => {
-    const batchId =
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : `batch-${Date.now()}-${Math.random().toString(16).slice(2)}`
+    if (!batchPrefix.current) batchPrefix.current = typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID() : `batch-${Date.now()}-${Math.random().toString(16).slice(2)}`
+    const ordinal = ++nextOrdinal.current
+    const batchId = `${batchPrefix.current}:${ordinal}`
 
     activeBatchIds.current.add(batchId)
     const batchMetaByProvider = new Map<string, ProbeBatchMeta>()
@@ -190,6 +247,7 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
       latestBatchByProvider.current.get(pluginId)?.onInterrupted?.(new ProbeVerificationCancelled("已开始新的检查，请等待新结果。"))
       const batchMeta: ProbeBatchMeta = {
         batchId,
+        ordinal,
         manual: options.manual === true,
         previous: latestBatchByProvider.current.get(pluginId),
         failed: false,
@@ -251,7 +309,7 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
         }
 
         let previousBatch = batchMeta.previous
-        while (previousBatch?.failed) {
+        while (previousBatch && (previousBatch.failed || previousBatch.ordinal <= (invalidatedThroughOrdinal.current.get(pluginId) ?? 0))) {
           previousBatch = previousBatch.previous
         }
         if (

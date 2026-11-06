@@ -19,6 +19,7 @@ fn snapshot(provider: &str, plan: &str) -> CachedPluginSnapshot {
         lines: vec![],
         started_at: "2026-11-04T13:00:00Z".into(),
         fetched_at: "2026-11-04T13:00:00Z".into(),
+        config_fingerprint: None,
     }
 }
 

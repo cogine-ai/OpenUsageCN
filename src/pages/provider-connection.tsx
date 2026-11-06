@@ -6,6 +6,7 @@ import { ProviderConfigFields } from "@/components/provider-config-fields"
 import { ProviderAccountControls } from "@/components/provider-account-controls"
 import { useAppUiStore } from "@/stores/app-ui-store"
 import type { SettingsPluginConfig } from "@/components/settings-plugin-item"
+import { MuseConnection } from "@/components/muse-connection"
 import { OllamaAccountsPage } from "@/pages/ollama-accounts"
 import { checkOllamaLegacyConnection, getOllamaAccounts } from "@/lib/ollama-accounts"
 
@@ -63,6 +64,7 @@ export function ProviderConnectionPage({ plugin, error, onCheck, onAccountChange
 }) {
   const { connection, closeConnection, openConnection } = useAppUiStore()
   if (!connection || !plugin) return <Button variant="ghost" onClick={closeConnection}><ArrowLeft className="size-4" />返回</Button>
+  if (plugin.id === "muse") return <MuseConnection onBack={closeConnection} onSaved={onCheck} />
   if (plugin.id === "ollama") {
     return <OllamaAccountsPage
       initialScreen="keys"

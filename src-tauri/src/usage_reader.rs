@@ -26,6 +26,7 @@ pub(crate) enum LimitsReadError {
 }
 
 pub(crate) enum PendingUsageProbe {
+    Configured(crate::configured_providers::Probe),
     Unscoped {
         output: PluginOutput,
         started_at: time::OffsetDateTime,
@@ -146,6 +147,9 @@ pub(crate) fn read_limits_once(
     let mut refresh_failed = worker_failed;
     for (provider_id, pending) in results {
         let published = match pending {
+            PendingUsageProbe::Configured(probe) => probe.publish(|output, started_at| {
+                publish_cli_probe(&provider_id, output, started_at); Ok(output.clone())
+            }),
             PendingUsageProbe::Unscoped { output, started_at } => {
                 publish_cli_probe(&provider_id, &output, started_at);
                 Ok(output)
@@ -231,6 +235,9 @@ fn run_probes(
                 let provider_id = plugin.manifest.id.clone();
                 let probe_started_at = time::OffsetDateTime::now_utc();
                 let output = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    if crate::configured_providers::supports(&provider_id) {
+                        return PendingUsageProbe::Configured(crate::configured_providers::Probe::run(&plugin, &app_data_dir, &app_version));
+                    }
                     if provider_id == "ollama" {
                         return prepare_ollama_probe(&plugin, &app_data_dir, &app_version, probe_started_at);
                     }
@@ -346,7 +353,7 @@ fn publish_cli_probe(provider_id: &str, output: &PluginOutput, started_at: time:
         );
     } else {
         // Ollama already persisted its account snapshot and original fetch time in the probe.
-        if provider_id != "ollama" {
+        if provider_id != "ollama" && !crate::configured_providers::supports(provider_id) {
             local_http_api::cache_successful_output(output, started_at);
         }
     }

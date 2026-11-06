@@ -61,7 +61,7 @@ On Windows, `appDataDir` is under `%LOCALAPPDATA%\ai.cogine.openusagecn`; non-se
 
 ### Windows MVP Limits
 
-The Windows MVP runs `codex`, `bigmodel-cn`, `openai-api`, `openrouter`, `zai`, `deepseek`, `moonshot`, `ollama`, `doubao`, and `xai`. Codex is enabled by default. Windows launch plugins may use filesystem, environment, provider config, HTTP, crypto, and line-building APIs, but must not depend on the macOS Keychain or `ccusage`. Use `ctx.app.platform === "windows"` when a plugin needs a platform-specific credential path or optional metric.
+The Windows MVP runs `codex`, `bigmodel-cn`, `openai-api`, `openrouter`, `zai`, `deepseek`, `moonshot`, `ollama`, `doubao`, `xai`, `claude-platform`, `workbuddy`, `trae-cn`, `litellm`, `siliconflow`, and `muse`. Codex is enabled by default. Windows launch plugins may use filesystem, environment, provider config, HTTP, crypto, and line-building APIs, but must not depend on the macOS Keychain or `ccusage`. Use `ctx.app.platform === "windows"` when a plugin needs a platform-specific credential path or optional metric.
 
 ## Account Capability Declarations
 
@@ -231,6 +231,7 @@ Reads an environment variable by name.
 - Variable must be whitelisted first in `src-tauri/src/plugin_engine/host_api.rs`
 - Resolution order: current process env first, then a login+interactive shell lookup (macOS)
 - Values may be cached for the app session; restart OpenUsageCN after changing shell config
+- New-provider credentials are scoped to their declaring plugin: `CLAUDE_PLATFORM_COOKIE` / `CLAUDE_PLATFORM_ORGANIZATION_ID`, `LITELLM_BASE_URL` / `LITELLM_API_KEY`, `SILICONFLOW_API_KEY` / `SILICONFLOW_REGION`, `WORKBUDDY_COOKIE` / `WORKBUDDY_USER_AGENT`, and `TRAE_CN_COOKIE`. Muse has no environment-token input.
 - `XDG_DATA_HOME` and `OPENCODE_DB` are available only to the OpenCode Go plugin for locating its existing CLI store
 
 ### Example
@@ -269,6 +270,10 @@ If an environment lookup fails, the view keeps saved configuration and confirmed
 
 `required` defaults to `false` and applies only to `secret` and `text` fields. The form checks visible required fields against new input, saved values, or confirmed environment sources before submitting. It does not change the values returned by `host.config`.
 
+The six new providers (`claude-platform`, `workbuddy`, `trae-cn`, `litellm`, `siliconflow`, `muse`) freeze their declared configuration and environment sources for each probe. Publication rechecks those sources. Their cached results carry a source fingerprint and cannot be reused after a connection changes; switching a connection clears only that provider's old data and pending verification. Shell environment changes still require restarting the app as described above.
+
+Muse uses native `start_muse_login`, `poll_muse_login({ loginId })`, and `cancel_muse_login({ loginId })` commands. Only user code, trusted Meta verification URL, timing, session ID and status reach the frontend. A verified device grant conditionally replaces the unchanged Muse connection; cancellation, expiry, another session or a configuration change prevents saving. Model API keys returned by Meta are ignored. Tokens are saved privately in `providers.json`, not to an existing tool's credentials. Muse has no manual token form.
+
 ### Example
 
 ```javascript
@@ -286,6 +291,7 @@ if (!apiKey) {
 
 ```typescript
 host.http.normalizeHttpsBaseUrl(raw: string): string | null
+host.http.normalizeConfiguredBaseUrl(raw: string): string | null
 
 host.http.request({
   method?: string,           // Default: "GET"
@@ -302,6 +308,7 @@ host.http.request({
 
 ### Behavior
 
+- **Configured gateways**: `normalizeConfiguredBaseUrl` accepts HTTPS, or HTTP for explicit loopback/private/link-local addresses and `localhost`/`.localhost`/`.local` hosts. It rejects credentials, queries, fragments, control characters and backslashes. It preserves the configured path; public cleartext HTTP is rejected. LiteLLM uses this method for its user-provided gateway.
 - **Base URL validation**: `normalizeHttpsBaseUrl` returns a normalized HTTPS base URL without trailing slashes, or `null` for invalid URLs, embedded credentials, query parameters, or fragments. It does not restrict which valid HTTPS host a plugin may use.
 - **No redirects**: The HTTP client does not follow redirects (policy: none)
 - **Throws on network errors**: Connection failures, DNS errors, and timeouts throw
@@ -737,3 +744,6 @@ if (result.status === "ok") {
 ## See Also
 
 - [Plugin Schema](./schema.md) - Plugin structure, manifest format, and output schema
+
+
+Muse connection commits emit native `provider:connection-committed` with `providerId` and the last real `previousBatchId`. Credential save, batch replacement and notification share the ownership lock. The global UI listener compares its monotonic batch order: old data/checks are invalidated even after the sheet closes, while newer successful results and newer pending work remain valid. Cancellation is an asynchronous command, and the earliest grant/device-session deadline is rechecked immediately before credential replacement, including Windows retries.

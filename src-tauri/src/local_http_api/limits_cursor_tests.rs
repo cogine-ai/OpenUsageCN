@@ -19,6 +19,7 @@ fn snapshot_with(lines: Vec<MetricLine>) -> CachedPluginSnapshot {
         lines,
         started_at: "2026-11-03T00:00:00Z".into(),
         fetched_at: "2026-11-03T00:00:01Z".into(),
+        config_fingerprint: None,
     }
 }
 

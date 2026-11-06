@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "siliconflow",
+  "name": "SiliconFlow",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "brandColor": "#6E29F5",
+  "links": [{ "label": "China Console", "url": "https://cloud.siliconflow.cn" }, { "label": "International Console", "url": "https://cloud.siliconflow.com" }],
+  "config": {
+    "fields": [
+      { "id": "region", "type": "select", "label": "Region", "default": "auto", "autoValue": "auto", "environmentVariables": ["SILICONFLOW_REGION"], "options": [
+        { "value": "auto", "label": "Auto (Environment Or China)" }, { "value": "china", "label": "China" }, { "value": "international", "label": "International" }
+      ] },
+      { "id": "apiKey", "type": "secret", "label": "API Key", "required": true, "defaultSource": true, "placeholder": "sk-...", "help": "使用所选地区的 API Key；留空则使用 SILICONFLOW_API_KEY。", "environmentVariables": ["SILICONFLOW_API_KEY"] }
+    ]
+  },
+  "lines": [
+    { "type": "text", "label": "Balance", "scope": "overview" },
+    { "type": "text", "label": "Purchased", "scope": "detail" },
+    { "type": "text", "label": "Bonus", "scope": "detail" },
+    { "type": "text", "label": "Region", "scope": "detail" },
+    { "type": "text", "label": "Status", "scope": "detail" }
+  ]
+}

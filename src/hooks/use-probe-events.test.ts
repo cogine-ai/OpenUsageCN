@@ -101,7 +101,7 @@ describe("useProbeEvents", () => {
       expect(globalThis.crypto?.randomUUID).toHaveBeenCalled()
       expect(invokeMock).toHaveBeenCalledWith(
         "start_probe_batch",
-        expect.objectContaining({ batchId: "uuid-123" })
+        expect.objectContaining({ batchId: "uuid-123:1" })
       )
     } finally {
       globalThis.crypto = originalCrypto
@@ -178,10 +178,10 @@ describe("useProbeEvents", () => {
       } satisfies PluginOutput
       const resultListener = listeners.get("probe:result")
 
-      resultListener?.({ payload: { batchId: "batch-old", output: oldOutput } })
+      resultListener?.({ payload: { batchId: "batch-old:1", output: oldOutput } })
       expect(onResult).not.toHaveBeenCalled()
 
-      resultListener?.({ payload: { batchId: "batch-new", output: newOutput } })
+      resultListener?.({ payload: { batchId: "batch-old:2", output: newOutput } })
       expect(onResult).toHaveBeenCalledWith(newOutput, { manual: false })
     } finally {
       restoreCrypto()
@@ -212,13 +212,13 @@ describe("useProbeEvents", () => {
       }) satisfies PluginOutput
 
       resultListener?.({
-        payload: { batchId: "batch-old", output: output("p", "Old P") },
+        payload: { batchId: "batch-old:1", output: output("p", "Old P") },
       })
       resultListener?.({
-        payload: { batchId: "batch-old", output: output("q", "Old Q") },
+        payload: { batchId: "batch-old:1", output: output("q", "Old Q") },
       })
       resultListener?.({
-        payload: { batchId: "batch-new", output: output("p", "New P") },
+        payload: { batchId: "batch-old:2", output: output("p", "New P") },
       })
 
       expect(onResult).toHaveBeenNthCalledWith(
@@ -258,7 +258,7 @@ describe("useProbeEvents", () => {
         iconUrl: "",
       } satisfies PluginOutput
       listeners.get("probe:result")?.({
-        payload: { batchId: "batch-old", output: oldOutput },
+        payload: { batchId: "batch-old:1", output: oldOutput },
       })
 
       expect(onResult).not.toHaveBeenCalled()
@@ -352,10 +352,10 @@ describe("useProbeEvents", () => {
         iconUrl: "",
       }) satisfies PluginOutput
       listeners.get("probe:result")?.({
-        payload: { batchId: "batch-old", output: output("p") },
+        payload: { batchId: "batch-old:1", output: output("p") },
       })
       listeners.get("probe:result")?.({
-        payload: { batchId: "batch-old", output: output("q") },
+        payload: { batchId: "batch-old:1", output: output("q") },
       })
 
       expect(onResult).toHaveBeenNthCalledWith(1, output("p"), { manual: true })
@@ -440,7 +440,7 @@ describe("useProbeEvents", () => {
         iconUrl: "",
       } satisfies PluginOutput
       listeners.get("probe:result")?.({
-        payload: { batchId: "batch-active", output },
+        payload: { batchId: "batch-active:1", output },
       })
 
       expect(onResult).toHaveBeenCalledWith(output, { manual: false })
@@ -476,7 +476,7 @@ describe("useProbeEvents", () => {
     const { unmount } = renderHook(() =>
       useProbeEvents({ onResult: vi.fn(), onBatchComplete: vi.fn() })
     )
-    await Promise.resolve()
+    await waitFor(() => expect(listenMock).toHaveBeenCalledTimes(2))
     unmount()
     ref.resolve?.(unlistenSecond)
     await Promise.resolve()

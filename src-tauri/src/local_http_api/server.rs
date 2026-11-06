@@ -4,13 +4,13 @@ use super::cache::{
 use super::cors::cors_headers;
 use super::limits::envelope_from_state;
 use super::status::{
-    LocalHttpApiServiceStatus, get_status, mark_bind_failed, mark_running, mark_starting,
+    get_status, mark_bind_failed, mark_running, mark_starting, LocalHttpApiServiceStatus,
 };
 use serde::Serialize;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 const BIND_ADDR: &str = "127.0.0.1:6736";
@@ -248,12 +248,31 @@ fn handle_get_health(origin: Option<&str>) -> String {
     }
 }
 
+// The persistence-only connection fingerprint is not part of the public usage API.
+fn public_usage_json(value: &impl serde::Serialize) -> Result<String, serde_json::Error> {
+    let mut value = serde_json::to_value(value)?;
+    match &mut value {
+        serde_json::Value::Array(snapshots) => {
+            for snapshot in snapshots {
+                if let Some(object) = snapshot.as_object_mut() {
+                    object.remove("configFingerprint");
+                }
+            }
+        }
+        serde_json::Value::Object(snapshot) => {
+            snapshot.remove("configFingerprint");
+        }
+        _ => {}
+    }
+    serde_json::to_string(&value)
+}
+
 fn handle_get_usage_collection(origin: Option<&str>) -> String {
     let snapshots = {
         let state = cache_state().lock().expect("cache state poisoned");
         enabled_snapshots_ordered(&state)
     };
-    match serde_json::to_string(&snapshots) {
+    match public_usage_json(&snapshots) {
         Ok(body) => response_json(origin, 200, "OK", &body),
         Err(e) => {
             log::error!("failed to serialize local HTTP API usage collection response: {e}");
@@ -271,8 +290,12 @@ fn handle_get_usage_single(provider_id: &str, origin: Option<&str>) -> String {
         return response_not_found(origin, "provider_not_found");
     }
 
-    match state.snapshots.get(provider_id) {
-        Some(snapshot) => match serde_json::to_string(snapshot) {
+    match state
+        .snapshots
+        .get(provider_id)
+        .filter(|snapshot| super::cache::snapshot_is_current(snapshot))
+    {
+        Some(snapshot) => match public_usage_json(snapshot) {
             Ok(body) => response_json(origin, 200, "OK", &body),
             Err(e) => {
                 log::error!(
@@ -306,7 +329,12 @@ fn handle_get_limits_single(provider_id: &str, origin: Option<&str>) -> String {
         if !state.known_plugin_ids.iter().any(|id| id == provider_id) {
             return response_not_found(origin, "provider_not_found");
         }
-        if !state.snapshots.contains_key(provider_id) && !state.errors.contains_key(provider_id) {
+        if !state
+            .snapshots
+            .get(provider_id)
+            .is_some_and(super::cache::snapshot_is_current)
+            && !state.errors.contains_key(provider_id)
+        {
             return response_no_content(origin);
         }
         envelope_from_state(&[provider_id.to_string()], &state)

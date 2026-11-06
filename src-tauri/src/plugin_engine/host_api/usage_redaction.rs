@@ -1,4 +1,9 @@
 pub(super) fn response_body(plugin: &str, path: &str, body: &str) -> Option<String> {
+    // These private billing/auth payloads can contain identities and secondary model keys,
+    // including fields unknown to the generic JSON scrubber. Never log partial bodies.
+    if matches!(plugin, "claude-platform" | "litellm" | "siliconflow" | "workbuddy" | "trae-cn" | "muse") {
+        return Some("[REDACTED PROVIDER BILLING RESPONSE]".into());
+    }
     if plugin == "codex"
         && (path.ends_with("/wham/analytics/daily-workspace-usage-counts")
             || path.ends_with("/wham/usage/daily-workspace-user-token-usage-breakdown")
@@ -68,6 +73,30 @@ mod tests {
     use super::super::{
         is_env_var_allowed_for_plugin, redact_plugin_http_response_body, redact_url,
     };
+
+    #[test]
+    fn new_provider_request_identifiers_are_not_logged() {
+        let logged = redact_url("https://platform.claude.com/api/organizations/private-org/prepaid/credits");
+        assert!(!logged.contains("private-org"));
+        assert!(logged.ends_with("/prepaid/credits"));
+        let logged = redact_url("https://proxy.example/team/info?team_id=private-team&user_id=private-user&start_date=2026-11-01");
+        assert!(!logged.contains("private-team"));
+        assert!(!logged.contains("private-user"));
+        assert!(logged.contains("start_date=2026-11-01"));
+    }
+    #[test]
+    fn new_billing_providers_suppress_every_response_including_malformed_identity_data() {
+        for provider in ["claude-platform", "litellm", "siliconflow", "workbuddy", "trae-cn", "muse"] {
+            for body in [r#"{"UserEmail":"private@example.invalid","Result":{"Token":"secret-device"},"api_key":"secret-model"}"#, "broken secret-model private@example.invalid"] {
+                assert_eq!(redact_plugin_http_response_body(provider, "https://example.invalid/private", body), "[REDACTED PROVIDER BILLING RESPONSE]");
+            }
+        }
+        for (provider, name) in [("claude-platform", "CLAUDE_PLATFORM_COOKIE"), ("litellm", "LITELLM_API_KEY"), ("siliconflow", "SILICONFLOW_API_KEY"), ("workbuddy", "WORKBUDDY_COOKIE"), ("trae-cn", "TRAE_CN_COOKIE")] {
+            assert!(is_env_var_allowed_for_plugin(provider, name));
+            assert!(!is_env_var_allowed_for_plugin("muse", name));
+            assert!(!is_env_var_allowed_for_plugin("ollama", name));
+        }
+    }
 
     #[test]
     fn ollama_key_environment_is_private_to_its_plugin() {

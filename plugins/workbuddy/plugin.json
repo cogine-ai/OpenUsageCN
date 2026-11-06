@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "id": "workbuddy",
+  "name": "WorkBuddy",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "brandColor": "#0DC8A6",
+  "links": [{ "label": "Usage Dashboard", "url": "https://www.workbuddy.cn/profile/plans-usage" }],
+  "config": {
+    "fields": [
+      {
+        "id": "cookie", "type": "secret", "label": "Cookie Header", "required": true,
+        "placeholder": "session=...", "help": "复制已登录 WorkBuddy 用量页请求的 Cookie 值。",
+        "environmentVariables": ["WORKBUDDY_COOKIE"], "defaultSource": true
+      },
+      {
+        "id": "userAgent", "type": "text", "label": "User-Agent", "required": true,
+        "placeholder": "Mozilla/5.0 ...", "help": "从同一请求复制 User-Agent；WorkBuddy 会将会话与它绑定。",
+        "environmentVariables": ["WORKBUDDY_USER_AGENT"]
+      }
+    ]
+  },
+  "lines": [
+    { "type": "progress", "label": "Credits", "scope": "overview", "primaryOrder": 1, "limitResource": { "key": "credits", "countUnit": "credits" } },
+    { "type": "text", "label": "Credits", "scope": "overview" },
+    { "type": "text", "label": "Credits Remaining", "scope": "detail" },
+    { "type": "progress", "label": "Rewards", "scope": "detail" },
+    { "type": "text", "label": "Rewards", "scope": "detail" },
+    { "type": "text", "label": "Rewards Remaining", "scope": "detail" },
+    { "type": "text", "label": "Reserved", "scope": "detail" }
+  ]
+}

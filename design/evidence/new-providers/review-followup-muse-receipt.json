@@ -1,0 +1,43 @@
+{
+  "type": "Actual AppContent MuseConnection, Synthetic Native/IPC; Global Commit Ordering Proven Separately By Hook Regression",
+  "browser": "143.0.7499.4",
+  "scenarios": [
+    "Public Code With Timer Outside Live Status",
+    "slowDown Respects10SecondsBeforeNextPoll",
+    "Success ChecksQuotaOnce",
+    "CancelThenNativeCommitRefreshesMaskedPresence; LatePollDoesNotCheckAgain"
+  ],
+  "errors": [],
+  "externalRequests": [],
+  "sourceSha256": {
+    "src/components/muse-connection.tsx": "b87866dc2ad507a230e35e8fe3ea2c0f3a63a2e5b13927495983f181632c156b",
+    "src/hooks/use-probe-events.ts": "e1995162a3e255b18928701e78afdfb83fb4710038b5ba1d4d4b9d730a853e3d",
+    "src/hooks/app/use-probe-state.ts": "8a0c5fa881dd8c66dbd16adb62f65188b34cf433249711fdb6012af20a395b34",
+    "src/components/muse-connection.test.tsx": "7a319adc518a82554174bd838b576ed49b364f0bae9ca5d8119e48053969cd98",
+    "src/hooks/use-probe-events.test.ts": "4b4dca3acdc18a119b781df156f381024ad3c7c715a2085a0635ecf754db4294",
+    "src/hooks/use-probe-events-races.test.ts": "37303fb219980215b99127e722654f10f5b813aeaf8a42a2930afcdb2f06e735",
+    "src/hooks/app/muse-commit-invalidation.test.tsx": "e07c1ce01627c57f5c52fe28cf1afccd33b38e26a65d0f3caee061088b1655a3"
+  },
+  "boundary": "No Real Login, Keychain, External Requests Or OS Clipboard; No New Visual Structure",
+  "validation": {
+    "scope": "Current Shared Workspace Including Second Provider Batch; PR268 Extracted Head Requires Its Own CI",
+    "branch": "cliq/improve-provider-usage",
+    "baseHead": "674950b06a9432853ce25187ec2ad0e9b38ca297",
+    "testFiles": 176,
+    "testsPassed": 2568,
+    "focusedRaceTestsPassed": 4,
+    "typeCheck": "Passed",
+    "log": "/private/tmp/openusage-muse-reviewed-js-final.log"
+  },
+  "regressions": [
+    "Cancel/Unmount After Native Commit Still Invalidates Globally",
+    "Late A Preserves New Success C While D Pending/Probe Failed/Start Failed",
+    "New Claim Not Yet Registered Preserves Loading; Old Cached Data Removed",
+    "Invalidated Owner Cannot Return Through Start Failure Rollback",
+    "Consecutive Commits Share Last Real Probe Boundary",
+    "Presence Read Does Not Interrupt New Authorization Or Start Usage Check",
+    "Obsolete Presence Success And Failure Cannot Override New Read",
+    "Commit Listener Persists Across Result Callback Replacement",
+    "Countdown Timer Is Outside Live Status"
+  ]
+}

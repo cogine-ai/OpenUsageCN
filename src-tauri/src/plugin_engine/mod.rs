@@ -25,6 +25,12 @@ const WINDOWS_MVP_PLUGIN_IDS: &[&str] = &[
     "ollama",
     "doubao",
     "xai",
+    "claude-platform",
+    "workbuddy",
+    "trae-cn",
+    "litellm",
+    "siliconflow",
+    "muse",
 ];
 
 pub fn plugins_for_current_platform(plugins: Vec<LoadedPlugin>) -> Vec<LoadedPlugin> {
@@ -177,6 +183,12 @@ mod platform_tests {
             "ollama",
             "doubao",
             "xai",
+            "claude-platform",
+            "workbuddy",
+            "trae-cn",
+            "litellm",
+            "siliconflow",
+            "muse",
         ] {
             assert!(windows_mvp_supports_plugin(plugin_id));
         }

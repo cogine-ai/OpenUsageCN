@@ -27,9 +27,69 @@ pub(crate) fn normalize_https_base_url(raw: &str) -> Option<String> {
     Some(parsed.to_string().trim_end_matches('/').to_string())
 }
 
+/// A gateway explicitly configured by the user. Cleartext is limited to local/private targets.
+pub(crate) fn normalize_configured_base_url(raw: &str) -> Option<String> {
+    if let Some(url) = normalize_https_base_url(raw) {
+        return Some(url);
+    }
+    let trimmed = raw.trim();
+    if trimmed.contains('\\') || trimmed.chars().any(char::is_control) {
+        return None;
+    }
+    let url = reqwest::Url::parse(trimmed).ok()?;
+    if url.scheme() != "http"
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return None;
+    }
+    let authority = trimmed.split_once("://")?.1.split(['/', '?', '#']).next()?;
+    if authority.is_empty() || authority.contains('@') {
+        return None;
+    }
+    let host = url.host_str()?.trim_matches(['[', ']']);
+    let private = match host.parse::<std::net::IpAddr>() {
+        Ok(std::net::IpAddr::V4(ip)) => ip.is_loopback() || ip.is_private() || ip.is_link_local(),
+        Ok(std::net::IpAddr::V6(ip)) => {
+            ip.is_loopback() || ip.is_unique_local() || ip.is_unicast_link_local()
+        }
+        Err(_) => host == "localhost" || host.ends_with(".localhost") || host.ends_with(".local"),
+    };
+    private.then(|| url.to_string().trim_end_matches('/').to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::normalize_https_base_url;
+
+    #[test]
+    fn configured_gateways_require_https_or_an_explicit_private_http_origin() {
+        for url in [
+            "http://localhost:4000/v1",
+            "http://127.0.0.1:4000",
+            "http://192.168.1.8:4000",
+            "http://[::1]:4000",
+            "http://[fd00::1]:4000",
+            "http://proxy.local:4000",
+            "https://proxy.example/v1",
+        ] {
+            assert!(super::normalize_configured_base_url(url).is_some(), "{url}");
+        }
+        for url in [
+            "http://proxy.example",
+            "http://8.8.8.8",
+            "http://user:secret@localhost",
+            "http://@localhost",
+            "http://localhost?key=secret",
+            "http://localhost#fragment",
+            "file:///tmp/key",
+            "http://localhost\\@public.example",
+        ] {
+            assert!(super::normalize_configured_base_url(url).is_none(), "{url}");
+        }
+    }
 
     #[test]
     fn normalizes_only_unambiguous_https_base_urls() {

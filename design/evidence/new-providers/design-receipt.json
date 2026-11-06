@@ -1,0 +1,12 @@
+{
+  "scope": "Standalone design prototype, synthetic data; not production or native API acceptance",
+  "browser": "143.0.7499.4",
+  "layoutStatesChecked": 168,
+  "screenshots": 9,
+  "interactionChecks": [
+    "Muse start shows code",
+    "Muse cancel returns to missing"
+  ],
+  "pageErrors": [],
+  "networkCalls": "None; standalone file and synthetic controls"
+}

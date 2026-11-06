@@ -26,6 +26,7 @@ function safeDiagnostic(message: string): string {
     .replace(/\b(?:set-cookie|cookie)\s*:[^\r\n]+/gi, "Cookie: [已隐藏]")
     .replace(/\bBearer\s+[A-Za-z0-9._~+\/-]+=*/gi, "Bearer [已隐藏]")
     .replace(/(["']?\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|id[_-]?token|session[_-]?token|client[_-]?secret|authorization|cookie|password|secret|token|key|access|refresh)["']?\s*[:=]\s*)(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\[已隐藏\]|[^\s,;}\]]+)/gi, "$1[已隐藏]")
+    .replace(/\bdca:[A-Za-z0-9._~+\/-]+=*/gi, "[已隐藏]")
     .replace(/\bsk[-_][A-Za-z0-9_-]+\b/g, "[已隐藏]")
     .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[已隐藏]")
 }
@@ -58,6 +59,29 @@ export function getPluginRecovery(message: string, providerId?: string, capabili
       : "retry"
     return { kind, title, advice, diagnostic, action, focusField: credentialField?.id,
       actionLabel: action === "config" ? kind === "login" ? "更新凭据" : "连接账号" : action === "accounts" ? "重新连接" : action === "local" ? localReadFailure ? "检查读取权限" : kind === "permission" ? "检查账号权限" : "连接本机账号" : "重试" }
+  }
+
+  /** Keep provider-specific repair steps on their declared connection fields. */
+  const configure = (kind: RecoveryKind, title: string, advice: string, focusField?: string): PluginRecovery => ({
+    ...recovery(kind, title, advice), action: "config", actionLabel: "更新连接", focusField,
+  })
+  if (providerId === "muse" && /Connect Muse Code with Meta|Muse Code (?:connection is invalid|session expired)/i.test(message)) {
+    return { ...configure("login", "需要连接 Meta 账号", "请在连接页完成 Meta 授权，再检查 Muse Code 用量。"), actionLabel: "连接 Meta 账号" }
+  }
+  if (providerId === "claude-platform" && /Multiple Claude Platform API organizations|configured Claude Platform API organization is unavailable|Claude Platform Organization ID is invalid/i.test(message)) {
+    return configure("credentials", "需要选择 API 组织", "请填写当前 Console API 组织的 Organization ID，然后检查连接。", "organizationId")
+  }
+  if (providerId === "workbuddy" && /Cookie and matching User-Agent|User-Agent does not match/i.test(message)) {
+    return configure("credentials", "需要匹配的会话凭据", "请更新同一次 WorkBuddy 账单请求的 Cookie 和 User-Agent。")
+  }
+  if (providerId === "litellm" && /Proxy URL is invalid/i.test(message)) {
+    return configure("credentials", "需要有效代理地址", "请填写有效的 LiteLLM 代理地址，然后检查连接。", "baseUrl")
+  }
+  if (providerId === "siliconflow" && /Choose China or International/i.test(message)) {
+    return configure("credentials", "需要选择地区", "请选择与 API Key 对应的 SiliconFlow 地区。", "region")
+  }
+  if (["litellm", "siliconflow"].includes(providerId ?? "") && /Add .*API key|API key is (?:invalid|expired)/i.test(message)) {
+    return configure("credentials", "API Key 不可用", "请检查当前地区或代理对应的 API Key 及访问权限。", "apiKey")
   }
 
   if (providerId === "codex" && message.includes("Windows requires Codex file storage:") && message.includes("cli_auth_credentials_store")) {

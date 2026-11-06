@@ -16,7 +16,16 @@ use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-const WHITELISTED_ENV_VARS: [&str; 45] = [
+const WHITELISTED_ENV_VARS: [&str; 54] = [
+    "CLAUDE_PLATFORM_COOKIE",
+    "CLAUDE_PLATFORM_ORGANIZATION_ID",
+    "LITELLM_API_KEY",
+    "LITELLM_BASE_URL",
+    "SILICONFLOW_API_KEY",
+    "SILICONFLOW_REGION",
+    "WORKBUDDY_COOKIE",
+    "WORKBUDDY_USER_AGENT",
+    "TRAE_CN_COOKIE",
     "CODEX_HOME",
     "XDG_DATA_HOME",
     "OPENCODE_DB",
@@ -83,6 +92,11 @@ pub(crate) fn is_env_var_allowed_for_plugin(plugin_id: &str, name: &str) -> bool
                 | "CLAUDE_CODE_OAUTH_CLIENT_ID"
                 | "CLAUDE_LOCAL_OAUTH_API_BASE"
         ),
+        "claude-platform" => matches!(name, "CLAUDE_PLATFORM_COOKIE" | "CLAUDE_PLATFORM_ORGANIZATION_ID"),
+        "litellm" => matches!(name, "LITELLM_API_KEY" | "LITELLM_BASE_URL"),
+        "siliconflow" => matches!(name, "SILICONFLOW_API_KEY" | "SILICONFLOW_REGION"),
+        "workbuddy" => matches!(name, "WORKBUDDY_COOKIE" | "WORKBUDDY_USER_AGENT"),
+        "trae-cn" => matches!(name, "TRAE_CN_COOKIE"),
         "codex" => matches!(name, "CODEX_HOME"),
         "opencode-go" => matches!(name, "XDG_DATA_HOME" | "OPENCODE_DB"),
         "zai" => matches!(name, "ZAI_API_KEY" | "GLM_API_KEY"),
@@ -127,7 +141,7 @@ pub(crate) fn is_env_var_allowed_for_plugin(plugin_id: &str, name: &str) -> bool
 
 /// Only fixed region selectors may be returned to configuration UI as values.
 pub(crate) fn is_public_config_env(name: &str) -> bool {
-    matches!(name, "MOONSHOT_REGION" | "VOLCENGINE_REGION")
+    matches!(name, "MOONSHOT_REGION" | "VOLCENGINE_REGION" | "SILICONFLOW_REGION")
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -618,16 +632,14 @@ pub(crate) fn register_secret_for_redaction(value: &str) {
 
 /// Redact sensitive query parameters in URL
 fn redact_url(url: &str) -> String {
-    let url = if let Some(rest) = url.strip_prefix("https://management-api.x.ai/v1/billing/teams/")
-    {
-        let team_end = rest.find(&['/', '?', '#'][..]).unwrap_or(rest.len());
-        format!(
-            "https://management-api.x.ai/v1/billing/teams/[REDACTED]{}",
-            &rest[team_end..]
-        )
-    } else {
-        url.to_string()
-    };
+    let mut url = url.to_string();
+    for prefix in ["https://management-api.x.ai/v1/billing/teams/", "https://platform.claude.com/api/organizations/"] {
+        if let Some(rest) = url.strip_prefix(prefix) {
+            let end = rest.find(&['/', '?', '#'][..]).unwrap_or(rest.len());
+            url = format!("{prefix}[REDACTED]{}", &rest[end..]);
+            break;
+        }
+    }
     let is_opencode_server = url.split(['?', '#']).next() == Some("https://opencode.ai/_server");
     let sensitive_params = [
         "key",
@@ -643,6 +655,8 @@ fn redact_url(url: &str) -> String {
         "credential",
         "user",
         "user_id",
+        "team_id",
+        "teamid",
         "userid",
         "account_id",
         "accountid",
@@ -1219,6 +1233,15 @@ pub(crate) fn override_configuration(
     patch_config_wrapper(ctx)
 }
 
+/// Freeze the explicitly declared source variables for one authenticated request.
+pub(crate) fn override_environment(ctx: &Ctx<'_>, values: &HashMap<String, Option<String>>) -> rquickjs::Result<()> {
+    let host: Object = ctx.globals().get::<_, Object>("__openusage_ctx")?.get("host")?;
+    let environment = Object::new(ctx.clone())?;
+    let captured = values.clone();
+    environment.set("get", Function::new(ctx.clone(), move |name: String| captured.get(&name).cloned().flatten())?)?;
+    host.set("env", environment)
+}
+
 fn patch_config_wrapper(ctx: &rquickjs::Ctx<'_>) -> rquickjs::Result<()> {
     ctx.eval::<(), _>(
         r#"
@@ -1498,6 +1521,13 @@ fn normalize_https_base_url_for_js<'js>(
     }
 }
 
+fn normalize_configured_base_url_for_js<'js>(ctx: Ctx<'js>, raw: String) -> rquickjs::Result<Value<'js>> {
+    match super::endpoint_url::normalize_configured_base_url(&raw) {
+        Some(value) => value.into_js(&ctx),
+        None => Ok(Value::new_null(ctx)),
+    }
+}
+
 fn inject_http<'js>(
     ctx: &Ctx<'js>,
     host: &Object<'js>,
@@ -1511,6 +1541,8 @@ fn inject_http<'js>(
         "normalizeHttpsBaseUrl",
         Function::new(ctx.clone(), normalize_https_base_url_for_js)?,
     )?;
+
+    http_obj.set("normalizeConfiguredBaseUrl", Function::new(ctx.clone(), normalize_configured_base_url_for_js)?)?;
 
     http_obj.set(
         "_requestRaw",

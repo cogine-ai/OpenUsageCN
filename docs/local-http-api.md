@@ -53,7 +53,7 @@ Example:
 
 `providers.cached` and `cache.ready` only count enabled providers that would appear in `GET /v1/usage`. `cache.ready` is `false` on a clean launch until at least one enabled provider has refreshed successfully. That is not a service failure.
 
-The Windows MVP reports ten known providers: Codex, BigModel CN, OpenAI API, OpenRouter, Z.ai, DeepSeek, Moonshot, Ollama Cloud, Doubao, and xAI.
+The Windows MVP reports sixteen known providers: Codex, BigModel CN, OpenAI API, OpenRouter, Z.ai, DeepSeek, Moonshot, Ollama Cloud, Doubao, xAI, Claude Platform, WorkBuddy, Trae CN, LiteLLM, SiliconFlow, and Muse Code.
 
 New Antigravity quota pools remain separate numeric resources: `geminiSession`, `geminiWeekly`,
 `claude` (the existing Claude session key), `claudeWeekly` and `argonWeekly`. Only confirmed
@@ -316,3 +316,6 @@ If the service is running but `GET /v1/usage` returns `[]`, check `GET /health`.
 The API is read-only and binds only to loopback. It does not expose provider credentials, browser sessions, account identifiers, or raw usage events. `/v1/usage` returns the selected account's cached provider presentation data, while `/v1/limits` returns only explicitly exported numeric resources and freshness metadata.
 
 OpenUsageCN rejects non-loopback `Host` headers and only grants browser CORS reads to loopback or app origins. This reduces DNS rebinding exposure from browser pages. Keep local integrations pointed at `http://127.0.0.1:6736` or `http://localhost:6736`.
+
+
+Claude Platform、WorkBuddy、Trae CN、LiteLLM、SiliconFlow 和 Muse Code 的缓存只用于产生该次结果的连接。更换配置或环境来源后，旧账号读数不会作为新连接的结果；需要重新刷新。无法确认来源的旧缓存同样需要刷新，不按零额度处理。修改 shell 环境变量后请重启应用。

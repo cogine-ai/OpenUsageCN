@@ -78,3 +78,6 @@ The result is one compact JSON object with schema `openusage.guard.v1`. `decisio
 | `4` | Could not write the JSON result |
 
 An expired reset window or old cached reading never allows work. Treat every nonzero exit code as a reason to pause your script; `unknown` is not evidence of either free capacity or exhausted quota. These exit codes apply only to `guard`; the existing read command keeps its exit codes above.
+
+
+Claude Platform、WorkBuddy、Trae CN、LiteLLM、SiliconFlow 和 Muse Code 的缓存只用于产生该次结果的连接。更换配置或环境来源后，旧账号读数不会作为新连接的结果；需要重新刷新。无法确认来源的旧缓存同样需要刷新，不按零额度处理。修改 shell 环境变量后请重启应用。

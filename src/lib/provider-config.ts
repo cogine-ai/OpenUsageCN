@@ -2,6 +2,9 @@ import { invoke } from "@tauri-apps/api/core"
 
 export const PROVIDER_CONFIG_CHANGED = "openusage-provider-config-changed"
 
+/** These configured sources isolate cached usage whenever their credentials change. */
+export const ISOLATED_CONFIG_PROVIDERS = new Set(["claude-platform", "workbuddy", "trae-cn", "litellm", "siliconflow", "muse"])
+
 export type ProviderConfigViewValue =
   | { type: "secret"; configured: boolean; hint?: string | null }
   | { type: "text"; value?: string | null }

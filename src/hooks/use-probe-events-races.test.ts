@@ -76,7 +76,7 @@ describe("useProbeEvents race handling", () => {
         iconUrl: "",
       } satisfies PluginOutput
       listeners.get("probe:result")?.({
-        payload: { batchId: "batch-old", output: oldOutput },
+        payload: { batchId: "batch-old:1", output: oldOutput },
       })
       expect(onResult).not.toHaveBeenCalled()
 
@@ -114,13 +114,13 @@ describe("useProbeEvents race handling", () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
       expect(invokeMock).toHaveBeenCalledTimes(1)
 
-      resolveOld({ batchId: "batch-old", pluginIds: ["p"] })
+      resolveOld({ batchId: "batch-old:1", pluginIds: ["p"] })
       await oldBatch
       await newBatch
 
       expect(invokeMock.mock.calls.map(([, args]) => args.batchId)).toEqual([
-        "batch-old",
-        "batch-new",
+        "batch-old:1",
+        "batch-old:2",
       ])
     } finally {
       restoreCrypto()
@@ -152,7 +152,7 @@ describe("useProbeEvents race handling", () => {
       await waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(2))
 
       await expect(startedQ).resolves.toEqual(["q"])
-      resolveP({ batchId: "batch-p", pluginIds: ["p"] })
+      resolveP({ batchId: "batch-p:1", pluginIds: ["p"] })
       await expect(pendingP).resolves.toEqual(["p"])
     } finally {
       restoreCrypto()
@@ -167,7 +167,7 @@ describe("useProbeEvents race handling", () => {
         (value: { batchId: string; pluginIds: string[] }) => void
       >()
       invokeMock.mockImplementation((_cmd: string, args: any) => {
-        if (args.batchId === "batch-pq") {
+        if (args.batchId === "batch-p:3") {
           return Promise.resolve({
             batchId: args.batchId,
             pluginIds: args.pluginIds,
@@ -188,12 +188,12 @@ describe("useProbeEvents race handling", () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
       expect(invokeMock).toHaveBeenCalledTimes(2)
 
-      resolvers.get("batch-p")?.({ batchId: "batch-p", pluginIds: ["p"] })
+      resolvers.get("batch-p:1")?.({ batchId: "batch-p:1", pluginIds: ["p"] })
       await pendingP
       await new Promise((resolve) => setTimeout(resolve, 0))
       expect(invokeMock).toHaveBeenCalledTimes(2)
 
-      resolvers.get("batch-q")?.({ batchId: "batch-q", pluginIds: ["q"] })
+      resolvers.get("batch-p:2")?.({ batchId: "batch-p:2", pluginIds: ["q"] })
       await pendingQ
       await expect(combined).resolves.toEqual(["p", "q"])
       expect(invokeMock).toHaveBeenCalledTimes(3)

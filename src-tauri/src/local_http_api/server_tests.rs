@@ -1,4 +1,4 @@
-use super::super::cache::{CachedPluginSnapshot, cache_state};
+use super::super::cache::{cache_state, CachedPluginSnapshot};
 use super::*;
 use serial_test::serial;
 use std::net::Shutdown;
@@ -12,6 +12,7 @@ fn make_snapshot(id: &str, name: &str) -> CachedPluginSnapshot {
         lines: vec![],
         started_at: "2026-03-26T08:15:00Z".to_string(),
         fetched_at: "2026-03-26T08:15:30Z".to_string(),
+        config_fingerprint: None,
     }
 }
 
@@ -303,4 +304,37 @@ fn header_value_is_case_insensitive() {
         header_value(request, "host").as_deref(),
         Some("127.0.0.1:6736")
     );
+}
+
+#[test]
+#[serial]
+fn configured_provider_without_a_source_is_hidden_from_usage_and_limits() {
+    let mut snapshot = make_snapshot("muse", "Muse Code");
+    snapshot.config_fingerprint = None;
+    {
+        let mut state = cache_state().lock().unwrap();
+        state.known_plugin_ids = vec!["muse".into()];
+        state.snapshots = std::collections::HashMap::from([("muse".into(), snapshot)]);
+        state.errors.clear();
+    }
+    for path in ["/v1/usage/muse", "/v1/limits/muse"] {
+        assert!(route("GET", path, None, None).starts_with("HTTP/1.1 204"));
+    }
+}
+
+#[test]
+fn public_usage_json_never_exposes_the_internal_configuration_fingerprint() {
+    let mut snapshot = make_snapshot("muse", "Muse Code");
+    snapshot.config_fingerprint = Some("synthetic-private-fingerprint".into());
+    assert!(serde_json::to_string(&snapshot)
+        .unwrap()
+        .contains("configFingerprint"));
+    for public in [
+        public_usage_json(&snapshot).unwrap(),
+        public_usage_json(&vec![snapshot]).unwrap(),
+    ] {
+        assert!(!public.contains("configFingerprint"));
+        assert!(!public.contains("synthetic-private-fingerprint"));
+        assert!(public.contains("Muse Code"));
+    }
 }
