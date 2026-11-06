@@ -68,6 +68,32 @@ fn kiro_cli_bundle_splits_plan_and_overage_without_native_credentials() {
     assert_eq!(result["calls"].as_array().unwrap().len(), 1);
 }
 #[test]
+fn kiro_cli_missing_enabled_overage_preserves_plan_without_fabricating_zero() {
+    let result = probe("kiro", &format!("{CLI}\ndelete credit.currentOveragesWithPrecision;usage.subscriptionInfo={{subscriptionTitle:'KIRO PRO'}};"));
+    assert_eq!(result["output"]["plan"], "Kiro Pro");
+    assert_eq!(line(&result, "Credits")["type"], "badge");
+    assert_eq!(line(&result, "Overage Credits")["value"], "Unavailable");
+    assert!(line(&result, "Overage Credits").get("used").is_none());
+    assert_eq!(line(&result, "Overages")["text"], "Enabled");
+}
+#[test]
+fn kiro_cli_missing_overage_exception_requires_enabled_and_no_reported_amount() {
+    for change in [
+        "delete credit.currentOveragesWithPrecision;usage.overageConfiguration.overageStatus='DISABLED';",
+        "delete credit.currentOveragesWithPrecision;usage.overageConfiguration.overageStatus='FUTURE';",
+        "delete credit.currentOveragesWithPrecision;delete usage.overageConfiguration;",
+        "credit.currentOveragesWithPrecision=0;",
+        "delete credit.currentOveragesWithPrecision;credit.currentOverages=0;",
+        "delete credit.currentOveragesWithPrecision;credit.currentOverages=-1;",
+        "delete credit.currentOveragesWithPrecision;credit.currentOverages=121;",
+        "delete credit.currentOveragesWithPrecision;credit.currentOverages=NaN;",
+    ] {
+        let result = probe("kiro", &format!("{CLI}\n{change}"));
+        assert_eq!(result["error"], "Kiro CLI usage data is incomplete. Try again later.");
+        assert!(result.get("output").is_none());
+    }
+}
+#[test]
 fn kiro_bonus_inclusive_api_never_fabricates_a_separated_main_pool() {
     let result = probe("kiro", &format!("{CLI}\ncredit.bonuses=[{{currentUsage:30,usageLimit:50,expiresAt:'2026-11-07T00:30:00Z'}}];credit.currentUsageWithPrecision=150;"));
     assert_eq!(line(&result, "Credits")["type"], "badge");

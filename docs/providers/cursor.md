@@ -75,6 +75,11 @@ and explicit request quotas keep their existing priority. Additional spending ne
 Model Usage history or adds historical charged amounts to the current monthly reading.
 If no included or legacy request quota is reported, a verified current-user monthly reading can
 stand alone as a partial result with only `On-demand` and `Billing Scope`; no included allowance is invented.
+For Desktop/CLI, this partial result applies only to the non-request-based branch with an explicitly
+enabled, otherwise valid base response and no `planUsage`. Enterprise and Team request-based flows
+retain Requests priority and their existing failure behavior; monthly spending does not recover
+those failures. Authentication, identity, malformed-response and explicitly disabled-subscription
+errors remain errors. The independent browser partial-result behavior is unchanged.
 
 Unavailable, rejected, malformed or out-of-period optional billing leaves the verified old
 spending reading in place and logs a fixed warning. The app never changes accounts to fill it.

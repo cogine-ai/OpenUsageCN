@@ -137,6 +137,43 @@ describe("Kiro CLI source isolation and quota pools", () => {
     expect(line(output, "Overages")).toBeUndefined()
     expect(line(output, "Overage Credits")).toMatchObject({ type: "text", value: "20 credits used; limit not reported" })
   })
+  it("retains plan details when enabled overage is missing and total exceeds the plan", async () => {
+    const { ctx } = fixture()
+    ctx.host.http.request.mockReturnValue(reply(usage(credits({ currentOveragesWithPrecision: undefined }))))
+    const output = (await plugin()).probe(ctx)
+    expect(output.plan).toBe("Kiro Pro")
+    expect(line(output, "Credits")).toMatchObject({ type: "badge", text: "Usage unavailable" })
+    expect(line(output, "Overage Credits")).toMatchObject({ type: "text", value: "Unavailable" })
+    expect(line(output, "Overages")).toMatchObject({ text: "Enabled" })
+    expect(output.lines.some((item) => item.label === "Overage Credits" && "used" in item)).toBe(false)
+    expect(ctx.host.fs.writeText).not.toHaveBeenCalled()
+  })
+  it.each(["DISABLED", "FUTURE", undefined])("rejects unexplained over-limit usage when missing overage status is %s", async (overageStatus) => {
+    const { ctx } = fixture()
+    ctx.host.http.request.mockReturnValue(reply(usage(credits({ currentOveragesWithPrecision: undefined }), { overageConfiguration: { overageStatus } })))
+    const loaded = await plugin()
+    expect(() => loaded.probe(ctx)).toThrow("Kiro CLI usage data is incomplete")
+  })
+  it.each([
+    { currentOveragesWithPrecision: 0 },
+    { currentOveragesWithPrecision: undefined, currentOverages: 0 },
+    { currentOveragesWithPrecision: undefined, currentOverages: -1 },
+    { currentOveragesWithPrecision: undefined, currentOverages: 121 },
+    { currentOveragesWithPrecision: undefined, currentOverages: null },
+    { currentOveragesWithPrecision: undefined, currentOverages: NaN },
+  ])("does not treat a reported invalid or insufficient amount as missing: %j", async (overrides) => {
+    const { ctx } = fixture()
+    ctx.host.http.request.mockReturnValue(reply(usage(credits(overrides))))
+    const loaded = await plugin()
+    expect(() => loaded.probe(ctx)).toThrow("Kiro CLI usage data is incomplete")
+  })
+  it("accepts a valid plain overage amount without fabricating an unknown pool", async () => {
+    const { ctx } = fixture()
+    ctx.host.http.request.mockReturnValue(reply(usage(credits({ currentOveragesWithPrecision: undefined, currentOverages: 20 }))))
+    const output = (await plugin()).probe(ctx)
+    expect(line(output, "Credits")).toMatchObject({ used: 100, limit: 100 })
+    expect(line(output, "Overage Credits")).toMatchObject({ used: 20, limit: 50 })
+  })
   it.each([
     { currentUsageWithPrecision: "120" }, { usageLimitWithPrecision: -1 }, { currentOveragesWithPrecision: 121 },
     { currentOveragesWithPrecision: -1 }, { overageCapWithPrecision: "50" }, { bonuses: {} },

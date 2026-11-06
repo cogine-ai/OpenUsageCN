@@ -193,3 +193,47 @@ fn cursor_full_bundle_exports_one_monthly_resource_without_changing_included_usa
     );
     assert!(!result["calls"].to_string().contains("usage-events"));
 }
+
+fn cursor_monthly_only_binding(connection_key: &str, reject_monthly: bool) -> String {
+    format!(
+        r#"{CURSOR}
+        const selectedKey={key};
+        const otherToken='a.'+ctx.base64.encode(JSON.stringify({{sub:'auth0|unselected-user',exp:9999999999}}))+'.c';
+        if(selectedKey==='cursor-cli')ctx.host.sqlite.query=(_db,sql)=>sql.includes('cursorAuth/accessToken')?JSON.stringify([{{value:otherToken}}]):'[]';
+        ctx.host.keychain.readGenericPassword=service=>service==='cursor-access-token'?(selectedKey==='cursor-cli'?token:otherToken):null;
+        const ordinaryRequest=ctx.host.http.request;
+        ctx.host.http.request=options=>{{
+          if(options.url.endsWith('/api/auth/me')){{calls.push(options.url);return reply({{sub:'auth0|synthetic-user'}})}}
+          if(options.url.endsWith('GetCurrentPeriodUsage')){{calls.push(options.url);return reply({{enabled:true}})}}
+          if({reject_monthly}&&options.url.includes('/usage-status?')){{calls.push(options.url);return reply({{}},403)}}
+          return ordinaryRequest(options);
+        }};
+        const target={{connectionKey:selectedKey}};
+        target.credentialGeneration=__openusage_plugin.credentialGeneration(ctx,target);
+        const scopedProbe=__openusage_plugin.probe;
+        __openusage_plugin.probe=ctx=>scopedProbe(ctx,target);
+        "#,
+        key = serde_json::to_string(connection_key).unwrap(),
+    )
+}
+
+#[test]
+fn cursor_desktop_and_cli_bindings_can_publish_only_verified_monthly_spending() {
+    for key in ["cursor-desktop", "cursor-cli"] {
+        let result = probe("cursor", &cursor_monthly_only_binding(key, false)).unwrap();
+        assert_eq!(result["lines"].as_array().unwrap().len(), 2);
+        assert_eq!(line(&result, "On-demand")["used"].as_f64(), Some(0.93));
+        assert_eq!(line(&result, "On-demand")["limitResourceKey"], "onDemand");
+        assert_eq!(line(&result, "Billing Scope")["value"], "Current User");
+    }
+}
+
+#[test]
+fn cursor_monthly_only_bindings_keep_the_original_error_when_personal_billing_is_denied() {
+    for key in ["cursor-desktop", "cursor-cli"] {
+        assert_eq!(
+            probe("cursor", &cursor_monthly_only_binding(key, true)).unwrap_err(),
+            "No active Cursor subscription."
+        );
+    }
+}

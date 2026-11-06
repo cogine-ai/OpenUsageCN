@@ -154,7 +154,11 @@ bonus or free-trial pools. **Bonus Expiry** is displayed as a separate UTC times
 Bonus progress does not export that expiry as a resource reset. Missing overage is not
 shown as zero. If overage is enabled but its usage amount is missing, both the overage pool
 and API-derived main pool are unavailable: the total cannot establish a precise plan-only amount.
-An explicit zero overage amount still allows the plan meter to load.
+This also applies when total usage exceeds the plan limit: the plan label and other available
+information remain visible. This exception requires an explicitly enabled overage status and
+no reported amount. An explicit zero is a known amount; it allows the plan meter to load only
+when the remaining usage fits the plan. CLI responses with invalid or inconsistent amounts
+are rejected.
 An unknown enabled/disabled status is not labeled disabled.
 
 The CLI protocol and pool separation follow the fixed

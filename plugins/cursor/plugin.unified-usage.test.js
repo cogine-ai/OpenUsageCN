@@ -8,12 +8,15 @@ function context(options = {}) {
   ctx.nowIso = fixtures[0].now
   const subject = options.subject ?? "auth0|selected-user"
   const token = "a." + Buffer.from(JSON.stringify({ sub: subject, exp: 9999999999 })).toString("base64") + ".c"
-  ctx.host.sqlite.query.mockImplementation((_db, sql) => String(sql).includes("cursorAuth/accessToken") ? JSON.stringify([{ value: token }]) : "[]")
+  const otherToken = "a." + Buffer.from(JSON.stringify({ sub: "auth0|unselected-account", exp: 9999999999 })).toString("base64") + ".c"
+  const desktopToken = options.unselectedSource && options.connectionKey === "cursor-cli" ? otherToken : token
+  ctx.host.sqlite.query.mockImplementation((_db, sql) => String(sql).includes("cursorAuth/accessToken") ? JSON.stringify([{ value: desktopToken }]) : "[]")
+  if (options.connectionKey === "cursor-cli" || options.unselectedSource) ctx.host.keychain.readGenericPassword.mockImplementation((service) => service === "cursor-access-token" ? options.connectionKey === "cursor-cli" ? token : otherToken : null)
   ctx.host.http.request.mockImplementation(({ url, headers }) => {
     const ok = (data) => ({ status: 200, bodyText: JSON.stringify(data) })
-    if (url.endsWith("GetCurrentPeriodUsage")) return ok(options.usage ?? { enabled: true, planUsage: { limit: 2000, totalSpend: 500, totalPercentUsed: 25 }, spendLimitUsage: { individualLimit: 1000, individualRemaining: 750 } })
+    if (url.endsWith("GetCurrentPeriodUsage")) return { status: options.usageStatus ?? 200, bodyText: options.usageRaw ?? JSON.stringify(options.usage ?? { enabled: true, planUsage: { limit: 2000, totalSpend: 500, totalPercentUsed: 25 }, spendLimitUsage: { individualLimit: 1000, individualRemaining: 750 } }) }
     if (url.endsWith("GetPlanInfo")) return ok({ planInfo: { planName: options.plan ?? "Pro" } })
-    if (url.endsWith("/api/auth/me")) return ok({ sub: subject })
+    if (url.endsWith("/api/auth/me")) return ok({ sub: options.identity ?? subject })
     if (url.endsWith("GetSandUsageStatus")) return ok(options.sand ?? {})
     if (url.includes("/api/usage?")) return ok(options.legacy ?? {})
     if (url.endsWith("/api/usage-summary") || url.includes("/usage-status?")) {
@@ -29,7 +32,10 @@ function context(options = {}) {
 async function probe(options) {
   const ctx = context(options)
   await import("./plugin.js")
-  return { ctx, output: globalThis.__openusage_plugin.probe(ctx) }
+  const plugin = globalThis.__openusage_plugin
+  const target = options?.connectionKey ? { connectionKey: options.connectionKey } : undefined
+  if (target) target.credentialGeneration = options.invalidGeneration ? "0".repeat(64) : plugin.credentialGeneration(ctx, target)
+  return { ctx, output: plugin.probe(ctx, target) }
 }
 
 describe("Cursor Unified Monthly Additional Spend", () => {
@@ -88,5 +94,43 @@ describe("Cursor Unified Monthly Additional Spend", () => {
     const b = await probe({ subject: "auth0|account-b" })
     expect(a.output.lines.find((line) => line.label === "On-demand").used).toBe(0.93)
     for (const { ctx } of [a, b]) expect(ctx.host.http.request.mock.calls.some(([r]) => r.url.includes("usage-events"))).toBe(false)
+  })
+
+  it.each(["cursor-desktop", "cursor-cli"])("returns only verified monthly spending for an enabled no-quota %s binding", async (connectionKey) => {
+    const { output, ctx } = await probe({ connectionKey, unselectedSource: true, subject: "auth0|" + connectionKey, usage: { enabled: true }, sand: { isUnified: true, includedLimitZero: true } })
+    expect(output.plan).toBe("Pro")
+    expect(output.lines.map((line) => line.label)).toEqual(["On-demand", "Billing Scope"])
+    expect(output.lines[0]).toMatchObject({ used: 0.93, limit: 10, limitResourceKey: "onDemand" })
+    expect(Object.keys(output).sort()).toEqual(["lines", "plan"])
+    expect(ctx.host.sqlite.exec).not.toHaveBeenCalled()
+    expect(ctx.host.keychain.writeGenericPassword).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { status: 403 }, { status: 500 }, { payload: { availability: "identity_unlinked" } },
+    { summary: { membershipType: "unified_ultra", limitType: "team" } },
+    { summary: { membershipType: "unified_ultra" } },
+  ])("keeps the original no-quota error if independent monthly billing cannot be verified: %o", async (options) => {
+    await expect(probe({ ...options, connectionKey: "cursor-cli", usage: { enabled: true } })).rejects.toThrow("No active Cursor subscription.")
+  })
+
+  it.each([
+    [{ usage: { enabled: false } }, "No active Cursor subscription."],
+    [{ usage: { enabled: true, planUsage: "invalid" } }, "Usage response invalid"],
+    [{ usage: { enabled: true, spendLimitUsage: [] } }, "Usage response invalid"],
+    [{ usage: { enabled: true, spendLimitUsage: { individualLimit: "invalid" } } }, "Usage response invalid"],
+    [{ usageRaw: "not-json" }, "Usage response invalid"],
+    [{ usageStatus: 503 }, "Usage request failed (HTTP 503)"],
+    [{ usageStatus: 401 }, "Token expired"],
+    [{ identity: "auth0|another-account" }, "identity could not be verified"],
+    [{ invalidGeneration: true }, "Account credentials changed"],
+  ])("never uses monthly spending to recover a base or identity failure: %o", async (options, error) => {
+    const ctx = context({ ...options, connectionKey: "cursor-desktop", usage: options.usage ?? { enabled: true } })
+    await import("./plugin.js")
+    const plugin = globalThis.__openusage_plugin
+    const target = { connectionKey: "cursor-desktop" }
+    target.credentialGeneration = options.invalidGeneration ? "0".repeat(64) : plugin.credentialGeneration(ctx, target)
+    expect(() => plugin.probe(ctx, target)).toThrow(error)
+    expect(ctx.host.http.request.mock.calls.some(([r]) => r.url.endsWith("/api/usage-summary") || r.url.includes("/usage-status?"))).toBe(false)
   })
 })

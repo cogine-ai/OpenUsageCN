@@ -919,6 +919,15 @@
       if (usage.enabled === true && allowance && allowance.limitResourceKey === "weekly") {
         return buildUnknownRequestBasedResult(ctx, accessToken, planName, allowance, usage.spendLimitUsage)
       }
+      if (usage.enabled === true) {
+        const spend = usage.spendLimitUsage
+        if (spend != null && (typeof spend !== "object" || Array.isArray(spend) ||
+          ["individualLimit", "individualRemaining", "pooledLimit", "pooledRemaining"].some((key) =>
+            spend[key] != null && (typeof spend[key] !== "number" || !Number.isFinite(spend[key]) || spend[key] < 0)))) {
+          throw "Usage response invalid. Try again later."
+        }
+        return { plan: formatCursorPlan(ctx, planName), lines: [], requiresMonthlyUsage: true }
+      }
       throw "No active Cursor subscription."
     }
 
@@ -1056,8 +1065,10 @@
 
   function probe(ctx, connectionTarget) {
     let selectedToken
-    const output = probeCurrent(ctx, connectionTarget, (token) => { selectedToken = token })
-    return __openusage_cursor_unified.enrich(ctx, output, buildSessionToken(ctx, selectedToken))
+    const { requiresMonthlyUsage, ...output } = probeCurrent(ctx, connectionTarget, (token) => { selectedToken = token })
+    const enriched = __openusage_cursor_unified.enrich(ctx, output, buildSessionToken(ctx, selectedToken))
+    if (requiresMonthlyUsage && enriched.lines.length === 0) throw "No active Cursor subscription."
+    return enriched
   }
 
   globalThis.__openusage_plugin = {

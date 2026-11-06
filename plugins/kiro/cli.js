@@ -76,7 +76,8 @@
     if (credits.length !== 1) invalid(ctx)
     const credit = credits[0]
     if (!validNumber(credit.currentUsageWithPrecision) || !validNumber(credit.usageLimitWithPrecision)) invalid(ctx)
-    const overage = credit.currentOveragesWithPrecision === undefined ? 0 : credit.currentOveragesWithPrecision
+    const overageMissing = credit.currentOveragesWithPrecision === undefined && credit.currentOverages === undefined
+    const overage = overageMissing ? 0 : credit.currentOveragesWithPrecision === undefined ? credit.currentOverages : credit.currentOveragesWithPrecision
     if (!validNumber(overage) || overage > credit.currentUsageWithPrecision) invalid(ctx)
     if (credit.overageCapWithPrecision !== undefined && !validNumber(credit.overageCapWithPrecision)) invalid(ctx)
     if (credit.bonuses !== undefined && !Array.isArray(credit.bonuses)) invalid(ctx)
@@ -84,7 +85,8 @@
     const trialUsed = trial && (trial.currentUsageWithPrecision === undefined ? trial.currentUsage : trial.currentUsageWithPrecision)
     const trialLimit = trial && (trial.usageLimitWithPrecision === undefined ? trial.usageLimit : trial.usageLimitWithPrecision)
     const activeTrial = trial && trial.freeTrialStatus === "ACTIVE" && validNumber(trialUsed) && validNumber(trialLimit) && trialLimit > 0
-    if (!(credit.bonuses && credit.bonuses.length) && !activeTrial && credit.currentUsageWithPrecision - overage > credit.usageLimitWithPrecision) invalid(ctx)
+    const unknownEnabledOverage = overageMissing && data.overageConfiguration && data.overageConfiguration.overageStatus === "ENABLED"
+    if (!(credit.bonuses && credit.bonuses.length) && !activeTrial && !unknownEnabledOverage && credit.currentUsageWithPrecision - overage > credit.usageLimitWithPrecision) invalid(ctx)
     const reset = credit.nextDateReset === undefined ? data.nextDateReset : credit.nextDateReset
     if (reset !== undefined && (typeof reset !== "number" || !Number.isFinite(reset) || reset < 1000000000 || reset > 4102444800)) invalid(ctx)
     // This branch never refreshes or writes the CLI-owned token, and never reads desktop usage.
