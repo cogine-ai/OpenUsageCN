@@ -197,4 +197,44 @@ describe("Kiro CLI source isolation and quota pools", () => {
     expect(line(output, "Overage Credits")).toMatchObject({ type: "progress", used: 0, limit: 50 })
   })
 
+  it.each(["bonus", "freeTrial"])("preserves a valid %s pool with a zero plan allowance", async (pool) => {
+    const { ctx } = fixture()
+    const credit = credits({ currentUsageWithPrecision: 30, usageLimitWithPrecision: 0, currentOveragesWithPrecision: 0, bonuses: pool === "bonus" ? [{ currentUsage: 30, usageLimit: 50 }] : [] })
+    if (pool === "freeTrial") credit.freeTrialInfo = { freeTrialStatus: "ACTIVE", currentUsageWithPrecision: 30, usageLimitWithPrecision: 50 }
+    ctx.host.http.request.mockReturnValue(reply(usage(credit)))
+    const output = (await plugin()).probe(ctx)
+    expect(line(output, "Credits")).toMatchObject({ type: "badge", text: "Usage unavailable" })
+    expect(line(output, "Bonus Credits")).toMatchObject({ used: 30, limit: 50 })
+    expect(line(output, "Overage Credits")).toMatchObject({ used: 0, limit: 50 })
+    expect(ctx.host.fs.writeText).not.toHaveBeenCalled()
+  })
+  it.each([
+    { freeTrialStatus: "EXPIRED", currentUsage: 30, usageLimit: 50 },
+    { freeTrialStatus: "ACTIVE", currentUsage: -1, usageLimit: 50 },
+    { freeTrialStatus: "ACTIVE", currentUsage: "30", usageLimit: 50 },
+    { freeTrialStatus: "ACTIVE", currentUsage: 30, usageLimit: 0 },
+    { currentUsage: 30, usageLimit: 50 },
+  ])("does not use an invalid or unconfirmed free trial to bypass total validation: %j", async (freeTrialInfo) => {
+    const { ctx } = fixture()
+    ctx.host.http.request.mockReturnValue(reply(usage(credits({ currentUsageWithPrecision: 30, usageLimitWithPrecision: 0, currentOveragesWithPrecision: 0, freeTrialInfo }))))
+    const loaded = await plugin()
+    expect(() => loaded.probe(ctx)).toThrow("Kiro CLI usage data is incomplete")
+  })
+
+  it.each([0, 30])("does not claim a separated main pool from active free trial usage %s", async (currentUsage) => {
+    const { ctx } = fixture()
+    ctx.host.http.request.mockReturnValue(reply(usage(credits({ currentUsageWithPrecision: currentUsage, usageLimitWithPrecision: 100, currentOveragesWithPrecision: 0, freeTrialInfo: { freeTrialStatus: "ACTIVE", currentUsageWithPrecision: currentUsage, usageLimitWithPrecision: 50 } }))))
+    const output = (await plugin()).probe(ctx)
+    expect(line(output, "Credits")).toMatchObject({ type: "badge", text: "Usage unavailable" })
+    expect(line(output, "Bonus Credits")).toMatchObject({ used: currentUsage, limit: 50 })
+  })
+
+  it("does not restore a precise main pool when an unseparated bonus record is invalid", async () => {
+    const { ctx } = fixture()
+    ctx.host.http.request.mockReturnValue(reply(usage(credits({ currentUsageWithPrecision: 20, currentOveragesWithPrecision: 0, bonuses: [{ currentUsage: "invalid", usageLimit: 50 }] }))))
+    const output = (await plugin()).probe(ctx)
+    expect(line(output, "Credits")).toMatchObject({ type: "badge", text: "Usage unavailable" })
+    expect(line(output, "Bonus Credits")).toBeUndefined()
+  })
+
 })

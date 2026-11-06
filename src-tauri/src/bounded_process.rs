@@ -65,12 +65,14 @@ pub(crate) fn run(
                     && stderr.is_finished()
                     && writer.as_ref().is_none_or(|writer| writer.is_finished()) =>
             {
-                let stdout = stdout.join().map_err(|_| worker_error())??;
-                let stderr = stderr.join().map_err(|_| worker_error())??;
+                let mut stdout = stdout.join().map_err(|_| worker_error())??;
+                let mut stderr = stderr.join().map_err(|_| worker_error())??;
                 if let Some(writer) = writer {
                     writer.join().map_err(|_| worker_error())??;
                 }
                 if stdout.len() > limit || stderr.len() > limit {
+                    stdout.fill(0);
+                    stderr.fill(0);
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidData,
                         "process output exceeded its limit",

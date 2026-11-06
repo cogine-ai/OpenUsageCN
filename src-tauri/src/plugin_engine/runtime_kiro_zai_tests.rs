@@ -89,6 +89,51 @@ fn kiro_cli_denied_request_cannot_fall_back_to_desktop() {
     assert_eq!(result["calls"].as_array().unwrap().len(), 1);
     assert!(!result["logs"].to_string().contains("synthetic-kiro-token"));
 }
+const DESKTOP: &str = r#"
+  const tokenPath='~/.aws/sso/cache/kiro-auth-token.json';
+  const selectedArn='arn:aws:codewhisperer:us-east-1:123456789012:profile/synthetic-b';
+  ctx.host.crypto={sha256Hex:text=>'synthetic-hash:'+text};
+  ctx.host.fs.exists=ctx.host.fs.existsStrict=path=>path===tokenPath||path.includes('state.vscdb')||path.endsWith('q-client.log');
+  ctx.host.fs.readText=path=>{
+    if(path===tokenPath)return JSON.stringify({accessToken:'synthetic-desktop-b',refreshToken:'synthetic-refresh-b',profileArn:selectedArn,expiresAt:'2099-01-01T00:00:00Z'});
+    calls.push('unbound-log');return '2026-11-04 00:00:00.000 [info] '+JSON.stringify({commandName:'GetUsageLimitsCommand',output:{usageBreakdownList:[{resourceType:'CREDIT',currentUsage:20,usageLimit:100}],subscriptionInfo:{subscriptionTitle:'KIRO A'}}});
+  };
+  ctx.host.fs.listDir=()=>{calls.push('unbound-directory');return ['session']};
+  ctx.host.sqlite.query=()=>{calls.push('unbound-sqlite');return JSON.stringify([{value:JSON.stringify({'kiro.resourceNotifications.usageState':{timestamp:Date.parse(ctx.nowIso),usageBreakdowns:[{type:'CREDIT',currentUsage:20,usageLimit:100}]}})}])};
+  ctx.host.http.request=request=>{
+    if(request.headers.Authorization!=='Bearer synthetic-desktop-b'||!request.url.includes(encodeURIComponent(selectedArn)))return denied();
+    calls.push(request.url);return liveResponse;
+  };
+"#;
+#[test]
+fn kiro_desktop_uses_selected_live_usage_not_previous_accounts_local_cache() {
+    let result = probe("kiro", &format!("{DESKTOP}\nconst liveResponse=reply({{usageBreakdownList:[{{resourceType:'CREDIT',currentUsageWithPrecision:60,usageLimitWithPrecision:100,currentOveragesWithPrecision:0,bonuses:[]}}]}});"));
+    assert_eq!(line(&result, "Credits")["used"], 60);
+    assert_eq!(result["calls"].as_array().unwrap().len(), 1);
+}
+#[test]
+fn kiro_desktop_live_failure_cannot_return_unbound_previous_account_usage() {
+    let result = probe(
+        "kiro",
+        &format!("{DESKTOP}\nconst liveResponse=reply({{}},503);"),
+    );
+    assert!(result["error"]
+        .as_str()
+        .unwrap()
+        .contains("Kiro usage data unavailable"));
+    assert!(result.get("output").is_none());
+    assert_eq!(result["calls"].as_array().unwrap().len(), 1);
+}
+#[test]
+fn kiro_zero_plan_preserves_bonus_and_active_free_trial_in_production_bundle() {
+    for pool in ["credit.bonuses=[{currentUsage:30,usageLimit:50}];", "credit.bonuses=[];credit.freeTrialInfo={freeTrialStatus:'ACTIVE',currentUsageWithPrecision:30,usageLimitWithPrecision:50};"] {
+        let result = probe("kiro", &format!("{CLI}\ncredit.currentUsageWithPrecision=30;credit.usageLimitWithPrecision=0;credit.currentOveragesWithPrecision=0;{pool}"));
+        assert_eq!(line(&result, "Credits")["type"], "badge");
+        assert_eq!(line(&result, "Bonus Credits")["used"], 30);
+        assert_eq!(line(&result, "Bonus Credits")["limit"], 50);
+        assert_eq!(line(&result, "Overage Credits")["used"], 0);
+    }
+}
 const ZAI: &str = r#"
   ctx.host.config.get=name=>name==='apiKey'?'synthetic-zai-key':null;
   ctx.host.http.request=request=>{

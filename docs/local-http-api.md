@@ -209,7 +209,7 @@ On Windows, only the ten Windows MVP providers are present; the rest of this tab
 | `amp` | `free`, `other`, `orb` |
 | `antigravity` | `geminiPro`, `geminiFlash`, `claude`, `geminiSession`, `geminiWeekly`, `claudeWeekly`, `argonWeekly` |
 | `bigmodel-cn` | `session`, `weekly`, `webSearches` |
-| `claude` | `session`, `weekly`, `sonnet`, `claudeDesign`, `extraUsage` |
+| `claude` | `session`, `weekly`, `sonnet`, `claudeDesign`, `extraUsage`, `fable` |
 | `codex` | `session`, `weekly`, `spark`, `sparkWeekly`, `codeReview` |
 | `copilot` | `premiumCredits`, `chat`, `completions` |
 | `cursor` | `credits`, `totalUsage`, `weekly`, `requests`, `autoUsage`, `apiUsage`, `grokBotUsage`, `onDemand` |
@@ -221,7 +221,7 @@ On Windows, only the ten Windows MVP providers are present; the rest of this tab
 | `grok` | `creditsUsed` |
 | `jetbrains-ai-assistant` | `quota` |
 | `kimi` | `session`, `weekly` |
-| `kiro` | `credits`, `bonusCredits` |
+| `kiro` | `credits`, `bonusCredits`, `overageCredits` |
 | `minimax` | `session`, `weekly` |
 | `moonshot` | None; balance is text in `/v1/usage` |
 | `ollama` | `monthly`, `session`, `weekly` when returned by the selected Cookie or API Key source |
@@ -230,7 +230,7 @@ On Windows, only the ten Windows MVP providers are present; the rest of this tab
 | `opencode` | `session`, `weekly` |
 | `openrouter` | `credits`, `keyLimit` |
 | `perplexity` | `apiCredits`, `subscriptionCredits`, `purchasedCredits`, `promotionalCredits`, `organizationCredits` |
-| `synthetic` | `fiveHour`, `mana`, `subscription`, `freeToolCalls`, `search` |
+| `synthetic` | `fiveHour`, `mana`, `subscription`, `freeToolCalls`, `search`, `planWeekly` |
 | `xai` | None; billing balance and spend are text in `/v1/usage` |
 | `zai` | `session`, `weekly`, `webSearches` |
 

@@ -2,9 +2,22 @@
 use super::*;
 use std::process::{Command, Output};
 
-fn execute(args: &[&str], deadline: Instant) -> Result<Output, &'static str> {
+fn sqlite_command(path: &str, sql: &str, readonly: bool) -> Command {
+    let mut command = Command::new("sqlite3");
+    if readonly {
+        command.args(["-readonly", "-json"]);
+    }
+    command.arg("--").arg(path).arg(sql);
+    command
+}
+fn execute(
+    path: &str,
+    sql: &str,
+    readonly: bool,
+    deadline: Instant,
+) -> Result<Output, &'static str> {
     crate::bounded_process::run(
-        Command::new("sqlite3").args(args),
+        &mut sqlite_command(path, sql, readonly),
         None,
         deadline,
         8 * 1024 * 1024,
@@ -16,7 +29,7 @@ fn execute(args: &[&str], deadline: Instant) -> Result<Output, &'static str> {
     })
 }
 fn read(path: &str, sql: &str, strict: bool, deadline: Instant) -> Result<String, &'static str> {
-    let primary = execute(&["-readonly", "-json", path, sql], deadline)?;
+    let primary = execute(path, sql, true, deadline)?;
     if primary.status.success() {
         return Ok(String::from_utf8_lossy(&primary.stdout).into_owned());
     }
@@ -28,15 +41,7 @@ fn read(path: &str, sql: &str, strict: bool, deadline: Instant) -> Result<String
         .replace(' ', "%20")
         .replace('#', "%23")
         .replace('?', "%3F");
-    let fallback = execute(
-        &[
-            "-readonly",
-            "-json",
-            &format!("file:{encoded}?immutable=1"),
-            sql,
-        ],
-        deadline,
-    )?;
+    let fallback = execute(&format!("file:{encoded}?immutable=1"), sql, true, deadline)?;
     if !fallback.status.success() {
         return Err("SQLite read failed. Check the local connection.");
     }
@@ -87,7 +92,7 @@ pub(super) fn inject<'js>(
                 let budget = deadline
                     .clamp_duration(Duration::from_secs(10))
                     .ok_or_else(|| probe_timeout_error(&vm))?;
-                let output = execute(&[&expand_path(&path), &sql], Instant::now() + budget)
+                let output = execute(&expand_path(&path), &sql, false, Instant::now() + budget)
                     .map_err(|message| {
                         log::warn!("SQLite statement failed: {message}");
                         Exception::throw_message(&vm, message)
@@ -103,29 +108,5 @@ pub(super) fn inject<'js>(
     host.set("sqlite", sqlite)
 }
 #[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn strict_read_never_creates_a_missing_database() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("missing.sqlite3");
-        assert!(read(
-            path.to_str().unwrap(),
-            "SELECT 1",
-            true,
-            Instant::now() + Duration::from_secs(1)
-        )
-        .is_err());
-        assert!(!path.exists());
-    }
-    #[test]
-    fn expired_sqlite_budget_does_not_start_fallback_or_create_a_file() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("missing.sqlite3");
-        assert_eq!(
-            read(path.to_str().unwrap(), "SELECT 1", false, Instant::now()),
-            Err("SQLite read timed out. Try again.")
-        );
-        assert!(!path.exists());
-    }
-}
+#[path = "sqlite_tests.rs"]
+mod tests;

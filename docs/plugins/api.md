@@ -396,6 +396,8 @@ Kiro alone can read `KIRO_DATA_DIR` and `XDG_DATA_HOME` to locate its CLI databa
 
 ## SQLite
 
+All SQLite methods treat `dbPath` as a database filename, including names beginning with `-`; it is never parsed as a command-line option.
+
 ### Query (Read-Only)
 
 ```typescript

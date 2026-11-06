@@ -58,9 +58,11 @@ Extra Usage 先按 `decimal_places` 把数值金额换成原币种金额，不�
 
 主 Credits 与 Overage Credits 是两条独立 count progress：`Credits 100 / 100 credits`、`Overage Credits 20 / 50 credits`。主额度已满仍显示已达上限；超额池单独显示，不把主进度画成 120/100，也不合成 120/150。
 
-Bonus Credits 若存在继续独立显示，不加到主额度或超额池。CLI 只给出包含奖励的合计时，不能仅减 overage 就称为纯套餐主额度；无法可靠拆分时主 Credits 显示 Unavailable，仍保留已确认的 overage / bonus。Overages Enabled/Disabled 作为辅助 badge，与实际超额计数不是同一信息；未知开关不猜 Disabled。奖励到期不画成套餐重新补满。
+Bonus Credits 若存在继续独立显示，不加到主额度或超额池。API 只给出包含奖励或有效试用池的合计时，不能仅减 overage 就称为纯套餐主额度；无法可靠拆分时主 Credits 显示 Unavailable，仍保留已确认的 overage / bonus。Overages Enabled/Disabled 作为辅助 badge，与实际超额计数不是同一信息；未知开关不猜 Disabled。奖励到期不画成套餐重新补满。主额度为零时仍保留合法的独立奖励/试用池，无法拆分的主池继续显示 Unavailable。
 
 CLI 登录/过期状态沿用现有本机登录恢复入口，后端完成 CLI 识别后给出准确步骤，不新增账号表单或 token 输入。未取得超额计数不显示 0/50，只影响该池。
+
+桌面每次刷新只使用所选凭据的实时 API 成功结果，不把无法绑定账号的 Kiro 本地 usageState 或日志当成新账号读数。请求失败时只允许保留 OpenUsageCN 自身同来源的旧快照及原更新时间；来源变化后不复用旧账号数据。桌面令牌续期仅在原文件仍匹配时保存，外部登录已替换文件则停止并保留新登录；不声称可覆盖所有跨进程文件替换的原子保证。CLI 登录文件仍只读。
 
 ## Installation HMAC Keychain
 

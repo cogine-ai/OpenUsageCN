@@ -1,18 +1,15 @@
 (function () {
-  const STATE_DB = "~/Library/Application Support/Kiro/User/globalStorage/state.vscdb"
-  const STATE_KEY = "kiro.kiroAgent"
-  const LOGS_ROOT = "~/Library/Application Support/Kiro/logs"
-  const LOG_FILE_NAME = "q-client.log"
   const TOKEN_PATH = "~/.aws/sso/cache/kiro-auth-token.json"
   const PROFILE_PATH = "~/Library/Application Support/Kiro/User/globalStorage/kiro.kiroagent/profile.json"
   const REFRESH_URL = "https://prod.us-east-1.auth.desktop.kiro.dev/refreshToken"
-  const LIVE_STALE_MS = 15 * 60 * 1000
   const REFRESH_BUFFER_MS = 10 * 60 * 1000
   const DEFAULT_REGION = "us-east-1"
   const COUNT_FORMAT = { kind: "count", suffix: "credits" }
   const LOGIN_HINT = "Open Kiro and sign in, then try again."
   const SESSION_HINT = "Kiro session expired. Open Kiro and sign in again."
-  const DATA_HINT = "Kiro usage data unavailable. Open the Kiro account dashboard once and try again."
+  const CHANGED_HINT = "Kiro connection changed. Refresh usage."
+  const SAVE_HINT = "Kiro refreshed sign-in could not be saved. Check file access and try again."
+  const DATA_HINT = "Kiro usage data unavailable. Check your connection and try again."
 
   function num(value) {
     if (typeof value === "number") return Number.isFinite(value) ? value : null
@@ -60,19 +57,34 @@
     }
   }
   function loadAuthState(ctx) {
-    const parsed = readJsonFile(ctx, TOKEN_PATH, "auth token")
+    let original
+    try {
+      if (!ctx.host.fs.existsStrict(TOKEN_PATH)) return null
+      original = ctx.host.fs.readText(TOKEN_PATH)
+    }
+    catch (_) {
+      ctx.host.log.error("Kiro desktop sign-in could not be read")
+      throw "Kiro sign-in data could not be read. Check file access and try again."
+    }
+    const parsed = ctx.util.tryParseJson(original)
     if (!parsed || typeof parsed !== "object") return null
     const token = sanitizeAuth(parsed)
-    return token && (token.refreshToken || token.accessToken) ? { path: TOKEN_PATH, token } : null
+    return token && (token.refreshToken || token.accessToken)
+      ? { path: TOKEN_PATH, token, originalHash: ctx.host.crypto.sha256Hex(original) } : null
   }
   function saveAuthState(ctx, authState) {
-    try {
-      ctx.host.fs.writeText(authState.path, JSON.stringify(authState.token, null, 2))
-      return true
-    } catch (e) {
-      ctx.host.log.warn("failed to persist refreshed Kiro auth: " + String(e))
-      return false
+    const content = JSON.stringify(authState.token, null, 2)
+    let saved
+    try { saved = ctx.host.fs.writeTextIfUnchanged(authState.path, content, authState.originalHash) }
+    catch (_) {
+      ctx.host.log.error("Kiro refreshed desktop sign-in could not be saved")
+      throw SAVE_HINT
     }
+    if (!saved) {
+      ctx.host.log.warn("Kiro desktop sign-in changed before refreshed credentials could be saved")
+      throw CHANGED_HINT
+    }
+    authState.originalHash = ctx.host.crypto.sha256Hex(content)
   }
   function loadProfileArn(ctx, authState) {
     const fromToken = authState && authState.token && authState.token.profileArn
@@ -83,16 +95,6 @@
   function regionFromArn(profileArn) {
     const parts = String(profileArn || "").split(":")
     return parts.length > 3 && parts[3] ? parts[3] : DEFAULT_REGION
-  }
-  function readStateValue(ctx, key) {
-    try {
-      const sql = "SELECT value FROM ItemTable WHERE key = '" + String(key).replace(/'/g, "''") + "' LIMIT 1;"
-      const rows = ctx.util.tryParseJson(ctx.host.sqlite.query(STATE_DB, sql))
-      return Array.isArray(rows) && rows.length && typeof rows[0].value === "string" ? rows[0].value : null
-    } catch (e) {
-      ctx.host.log.warn("Kiro sqlite read failed: " + String(e))
-      return null
-    }
   }
   function normalizePool(ctx, raw, config) {
     if (!raw || typeof raw !== "object") return null
@@ -114,7 +116,7 @@
     if (!raw || typeof raw !== "object") return null
     const currentUsage = first(raw.currentUsageWithPrecision, raw.currentUsage)
     const usageLimit = first(raw.usageLimitWithPrecision, raw.usageLimit)
-    if (currentUsage === null || usageLimit === null || usageLimit <= 0) return null
+    if (currentUsage === null || usageLimit === null || usageLimit < 0) return null
     const bonuses = Array.isArray(raw.bonuses)
       ? raw.bonuses
           .map((item) =>
@@ -150,20 +152,8 @@
       bonuses,
     }
   }
-  function normalizeCachedState(ctx) {
-    const parsed = ctx.util.tryParseJson(readStateValue(ctx, STATE_KEY))
-    const usageState = parsed && parsed["kiro.resourceNotifications.usageState"]
-    if (!usageState || !Array.isArray(usageState.usageBreakdowns)) return null
-    const usageBreakdowns = usageState.usageBreakdowns.map((item) => normalizeBreakdown(ctx, item)).filter(Boolean)
-    return usageBreakdowns.length
-      ? { usageBreakdowns, timestampMs: first(usageState.timestamp), plan: null, overageEnabled: null }
-      : null
-  }
   function normalizeApiBreakdown(ctx, raw, rawSnapshot) {
-    let value = normalizeBreakdown(ctx, raw)
-    if (!value && raw && typeof raw === "object" && first(raw.usageLimitWithPrecision, raw.usageLimit) === 0) {
-      value = { type: raw.resourceType || raw.type, currentUsage: first(raw.currentUsageWithPrecision, raw.currentUsage), usageLimit: 0, bonuses: [] }
-    }
+    const value = normalizeBreakdown(ctx, raw)
     if (!value) return null
     const overage = first(raw.currentOveragesWithPrecision, raw.currentOverages)
     if (overage !== null) {
@@ -176,7 +166,7 @@
       }
     }
     // API usage folds bonus spend into the total; it cannot establish an isolated plan meter.
-    if (Array.isArray(raw.bonuses) && raw.bonuses.length) {
+    if (Array.isArray(raw.bonuses) && raw.bonuses.length || value.freeTrialUsage) {
       ctx.host.log.warn("Kiro API plan usage includes an unseparated bonus pool")
       value.mainUnavailable = true
     }
@@ -197,60 +187,17 @@
     value.resetDate = iso(ctx, raw.nextDateReset || raw.resetDate || rawSnapshot.nextDateReset)
     return value
   }
-  function normalizeApiSnapshot(ctx, raw, timestampMs) {
+  function normalizeApiSnapshot(ctx, raw) {
     if (!raw || typeof raw !== "object") return null
     return {
       usageBreakdowns: Array.isArray(raw.usageBreakdownList)
         ? raw.usageBreakdownList.map((item) => normalizeApiBreakdown(ctx, item, raw)).filter(Boolean)
         : [],
-      timestampMs: timestampMs !== null ? timestampMs : null,
       plan: title(raw.subscriptionInfo && raw.subscriptionInfo.subscriptionTitle),
       overageEnabled: raw.overageConfiguration && typeof raw.overageConfiguration.overageStatus === "string"
         ? raw.overageConfiguration.overageStatus.toUpperCase() === "ENABLED" ? true : raw.overageConfiguration.overageStatus.toUpperCase() === "DISABLED" ? false : null
         : null,
     }
-  }
-  function parseUsageLogText(ctx, text) {
-    const lines = String(text || "").split(/\r?\n/)
-    for (let i = lines.length - 1; i >= 0; i -= 1) {
-      const line = lines[i]
-      if (line.indexOf('"commandName":"GetUsageLimitsCommand"') === -1) continue
-      const jsonStart = line.indexOf("{")
-      if (jsonStart === -1) continue
-      const parsed = ctx.util.tryParseJson(line.slice(jsonStart))
-      if (!parsed || !parsed.output) continue
-      const loggedAt = line.slice(0, jsonStart).trim().split(" [")[0]
-      return normalizeApiSnapshot(ctx, parsed.output, loggedAt ? ctx.util.parseDateMs(loggedAt.replace(" ", "T")) : null)
-    }
-    return null
-  }
-  function loadLoggedState(ctx) {
-    let sessions = []
-    try {
-      sessions = ctx.host.fs.listDir(LOGS_ROOT).slice().sort().reverse()
-    } catch {
-      return null
-    }
-    for (let i = 0; i < sessions.length && i < 12; i += 1) {
-      const sessionRoot = LOGS_ROOT + "/" + sessions[i]
-      let windows = []
-      try {
-        windows = ctx.host.fs.listDir(sessionRoot).slice().sort().reverse()
-      } catch {
-        continue
-      }
-      for (let j = 0; j < windows.length; j += 1) {
-        const logPath = sessionRoot + "/" + windows[j] + "/exthost/kiro.kiroAgent/" + LOG_FILE_NAME
-        if (!ctx.host.fs.exists(logPath)) continue
-        try {
-          const snapshot = parseUsageLogText(ctx, ctx.host.fs.readText(logPath))
-          if (snapshot) return snapshot
-        } catch (e) {
-          ctx.host.log.warn("failed to parse Kiro usage log: " + String(e))
-        }
-      }
-    }
-    return null
   }
   function buildUserAgent(ctx) {
     return "OpenUsageCN/" + String(ctx.app && ctx.app.version ? ctx.app.version : "0.0.0")
@@ -334,36 +281,7 @@
       ctx.host.log.warn("Kiro live usage response invalid JSON")
       return null
     }
-    return normalizeApiSnapshot(ctx, parsed, nowMs)
-  }
-  function shouldTryLive(localState, loggedState, nowMs) {
-    return !localState || !loggedState || !loggedState.plan || localState.timestampMs === null || nowMs - localState.timestampMs > LIVE_STALE_MS
-  }
-  function mergeSnapshots(localState, loggedState, liveState, nowMs) {
-    const usageSource =
-      liveState && liveState.usageBreakdowns.length
-        ? liveState
-        : localState && localState.usageBreakdowns.length
-          ? localState
-          : loggedState && loggedState.usageBreakdowns.length
-            ? loggedState
-            : null
-    if (!usageSource) return null
-    return {
-      plan: (liveState && liveState.plan) || (loggedState && loggedState.plan) || null,
-      overageEnabled:
-        liveState && liveState.overageEnabled !== null
-          ? liveState.overageEnabled
-          : loggedState && loggedState.overageEnabled !== null
-            ? loggedState.overageEnabled
-            : null,
-      usageBreakdowns: usageSource.usageBreakdowns.map((item) => {
-        const metadata = liveState || (loggedState && loggedState.timestampMs !== null && nowMs - loggedState.timestampMs <= LIVE_STALE_MS ? loggedState : null)
-        const matching = metadata && metadata.usageBreakdowns.find((candidate) => candidate.type === item.type)
-        return matching && matching !== item ? { ...item, overageUsage: matching.overageUsage, overageCap: matching.overageCap, overageUnavailable: matching.overageUnavailable } : item
-      }),
-      timestampMs: usageSource.timestampMs !== null ? usageSource.timestampMs : nowMs,
-    }
+    return normalizeApiSnapshot(ctx, parsed)
   }
   function pickPrimaryBreakdown(usageBreakdowns) {
     for (let i = 0; i < usageBreakdowns.length; i += 1) if (usageBreakdowns[i].type === "CREDIT") return usageBreakdowns[i]
@@ -372,16 +290,7 @@
   function pickBonusUsage(primary) {
     return !primary ? null : primary.freeTrialUsage && primary.freeTrialUsage.usageLimit > 0 ? primary.freeTrialUsage : primary.bonuses && primary.bonuses.length ? primary.bonuses[0] : null
   }
-  function formatAge(nowMs, timestampMs) {
-    if (!Number.isFinite(nowMs) || !Number.isFinite(timestampMs)) return null
-    const diffMs = Math.max(0, nowMs - timestampMs)
-    if (diffMs < 60000) return "Just now"
-    const minutes = Math.floor(diffMs / 60000)
-    if (minutes < 60) return minutes + "m ago"
-    const hours = Math.floor(minutes / 60)
-    return hours < 48 ? hours + "h ago" : Math.floor(hours / 24) + "d ago"
-  }
-  function buildOutput(ctx, snapshot, nowMs) {
+  function buildOutput(ctx, snapshot) {
     const primary = pickPrimaryBreakdown(snapshot.usageBreakdowns)
     if (!primary) throw DATA_HINT
     const lines = []
@@ -431,29 +340,24 @@
           ctx.host.log.warn("Kiro selected sign-in source changed during refresh")
           throw "Kiro connection changed. Refresh usage."
         }
-        return buildOutput(ctx, normalizeApiSnapshot(ctx, cli, nowMs), nowMs)
+        return buildOutput(ctx, normalizeApiSnapshot(ctx, cli))
       }
     }
     const authState = loadAuthState(ctx)
     if (!authState || !authState.token || !authState.token.refreshToken) throw LOGIN_HINT
-    const localState = normalizeCachedState(ctx)
-    const loggedState = loadLoggedState(ctx)
-    let liveState = null
-    let liveError = null
-    if (shouldTryLive(localState, loggedState, nowMs)) {
-      try {
-        liveState = fetchLiveState(ctx, authState, nowMs)
-      } catch (e) {
-        liveError = e
-        ctx.host.log.warn("Kiro live fallback failed: " + String(e))
-      }
+    let snapshot
+    try {
+      snapshot = fetchLiveState(ctx, authState, nowMs)
+    } catch (error) {
+      ctx.host.log.error("Kiro desktop usage request failed for the selected credentials")
+      if (error === SESSION_HINT || error === CHANGED_HINT || error === SAVE_HINT) throw error
+      throw "Kiro usage request failed. Check your connection."
     }
-    const snapshot = mergeSnapshots(localState, loggedState, liveState, nowMs)
-    if (!snapshot) {
-      if (typeof liveError === "string" && liveError) throw liveError
+    if (!snapshot || !snapshot.usageBreakdowns.length) {
+      ctx.host.log.error("Kiro desktop usage is unavailable for the selected credentials")
       throw DATA_HINT
     }
-    return buildOutput(ctx, snapshot, nowMs)
+    return buildOutput(ctx, snapshot)
   }
   globalThis.__openusage_plugin = { id: "kiro", probe }
 })()

@@ -78,6 +78,53 @@ fn monthly_replaces_only_one_on_demand_resource_and_keeps_binding_requests() {
         serde_json::to_value(unchanged).unwrap()
     );
 }
+
+#[test]
+fn verified_monthly_spend_can_stand_alone_without_inventing_an_included_quota() {
+    use super::super::{browser_cursor_probe, browser_cursor_weekly};
+
+    let summary = json!({"membershipType":"unified_ultra","limitType":"user"});
+    let summary_body = serde_json::to_vec(&summary).unwrap();
+    assert_eq!(
+        browser_cursor_probe::build_usage_summary_output(&summary_body, "Cursor", "").unwrap_err(),
+        "Cursor browser usage did not include an available quota."
+    );
+    let now = OffsetDateTime::parse("2026-10-20T00:00:00Z", &Rfc3339).unwrap();
+    let sand_body = br#"{"isUnified":true,"includedLimitZero":true}"#;
+    let weekly = browser_cursor_weekly::decode_shared_weekly(sand_body, now).unwrap();
+    assert!(weekly.is_none());
+    let unified = decode(
+        &summary,
+        &json!({"availability":"available","monthlyUsage":{
+            "usedCents":93,"limitCents":1000,
+            "periodStart":"2026-10-01T00:00:00Z","resetsAt":"2026-11-01T00:00:00Z"
+        }}),
+        now,
+    )
+    .unwrap();
+    assert!(unified.is_some());
+    let recovered =
+        browser_cursor_weekly::recover_summary_without_quota(&summary_body, b"{}", "Cursor", "")
+            .unwrap();
+    let result = apply(
+        browser_cursor_weekly::finish_with_allowance(
+            recovered,
+            weekly,
+            Ok(sand_body.to_vec()),
+            now,
+            "synthetic-monthly-only",
+        ),
+        unified,
+    );
+    assert_eq!(result.lines.len(), 2);
+    assert!(matches!(&result.lines[0], MetricLine::Progress {
+        label, limit_resource_key:Some(key), used, limit, format:ProgressFormat::Dollars, ..
+    } if label == "On-demand" && key == "onDemand" && *used == 0.93 && *limit == 10.0));
+    assert!(
+        matches!(&result.lines[1], MetricLine::Text { label, value, .. }
+        if label == "Billing Scope" && value == "Current User")
+    );
+}
 #[test]
 fn zero_cap_stays_text_and_does_not_export_a_fake_progress_resource() {
     let result = apply(

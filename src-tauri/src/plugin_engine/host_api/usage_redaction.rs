@@ -104,6 +104,32 @@ mod tests {
         assert!(!is_env_var_allowed_for_plugin("cursor", "KIRO_DATA_DIR"));
         assert!(!is_env_var_allowed_for_plugin("zai", "KIRO_DATA_DIR"));
     }
+
+    #[test]
+    fn desktop_kiro_usage_request_and_response_hide_profile_identity_and_credentials() {
+        let arn = "arn:aws:codewhisperer:us-east-1:123456789012:profile/synthetic-private-profile";
+        let mut url = reqwest::Url::parse("https://q.us-east-1.amazonaws.com/getUsageLimits").unwrap();
+        url.query_pairs_mut()
+            .append_pair("origin", "AI_EDITOR")
+            .append_pair("profileArn", arn)
+            .append_pair("resourceType", "AGENTIC_REQUEST");
+        let request_log = format!("[plugin:kiro] HTTP GET {}", redact_url(url.as_str()));
+        for private in [arn, "123456789012", "synthetic-private-profile"] {
+            assert!(!request_log.contains(private), "{request_log}");
+        }
+        assert!(request_log.contains("/getUsageLimits?origin=AI_EDITOR"));
+        assert!(request_log.contains("resourceType=AGENTIC_REQUEST"));
+
+        for body in [
+            r#"{"profileArn":"private-profile","userInfo":{"email":"private@example.invalid","userId":"private-user"},"accessToken":"synthetic-private-access","refreshToken":"synthetic-private-refresh","usageBreakdownList":[{"currentUsageWithPrecision":42.5}]}"#,
+            "malformed private-profile private@example.invalid synthetic-private-access",
+        ] {
+            assert_eq!(
+                redact_plugin_http_response_body("kiro", url.as_str(), body),
+                "[REDACTED PROVIDER USAGE RESPONSE]"
+            );
+        }
+    }
     #[test]
     fn new_provider_request_identifiers_are_not_logged() {
         let logged = redact_url("https://platform.claude.com/api/organizations/private-org/prepaid/credits");

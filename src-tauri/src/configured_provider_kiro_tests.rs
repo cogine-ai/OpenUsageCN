@@ -33,12 +33,23 @@ impl Drop for Credentials {
         }
     }
 }
-fn output() -> PluginOutput {
+fn output(used: f64) -> PluginOutput {
     PluginOutput {
         provider_id: "kiro".into(),
         display_name: "Kiro".into(),
         plan: None,
-        lines: vec![],
+        lines: vec![runtime::MetricLine::Progress {
+            label: "Credits".into(),
+            limit_resource_key: None,
+            used,
+            limit: 100.0,
+            format: runtime::ProgressFormat::Count {
+                suffix: "credits".into(),
+            },
+            resets_at: None,
+            period_duration_ms: None,
+            color: None,
+        }],
         icon_url: String::new(),
     }
 }
@@ -64,7 +75,7 @@ fn kiro_source_change_rejects_late_probe_old_cache_and_failed_new_source_ui_data
     .unwrap();
     let probe = Probe {
         plugin: plugin.clone(),
-        output: output(),
+        output: output(20.0),
         started_at: time::OffsetDateTime::now_utc(),
         preparation_error: None,
         fingerprint: source_a.fingerprint.clone(),
@@ -95,20 +106,49 @@ fn kiro_source_change_rejects_late_probe_old_cache_and_failed_new_source_ui_data
         "a failed new-source refresh clears old UI data"
     );
     assert!(cache::cache_configured_output(
-        &output(),
+        &output(20.0),
         time::OffsetDateTime::now_utc(),
         &source_a.fingerprint
     )
     .is_err());
 
     let source_b = crate::kiro_sources::snapshot().unwrap();
-    cache::cache_configured_output(
-        &output(),
-        time::OffsetDateTime::now_utc(),
-        &source_b.fingerprint,
-    )
-    .unwrap();
+    let current_probe = |result| Probe {
+        plugin: plugin.clone(),
+        output: result,
+        started_at: time::OffsetDateTime::now_utc(),
+        preparation_error: None,
+        fingerprint: source_b.fingerprint.clone(),
+        values: HashMap::new(),
+        environment: source_b.environment.clone(),
+        deadline: Instant::now() + Duration::from_secs(30),
+    };
+    current_probe(failure.clone())
+        .publish(|_, _| Ok(()))
+        .unwrap();
+    assert!(
+        cache::snapshot_for_provider("kiro").is_none(),
+        "failed B must not republish A's 20"
+    );
+    assert!(invalidate_failed_output(&failure));
+    current_probe(output(60.0)).publish(|_, _| Ok(())).unwrap();
     cache::flush_cache().unwrap();
-    assert!(cache::snapshot_for_provider("kiro").is_some());
+    let before_failure = cache::snapshot_for_provider("kiro").unwrap();
+    assert_eq!(
+        serde_json::to_value(&before_failure).unwrap()["lines"][0]["used"],
+        60.0
+    );
+    current_probe(failure.clone())
+        .publish(|_, _| Ok(()))
+        .unwrap();
     assert!(!invalidate_failed_output(&failure));
+    let retained = cache::snapshot_for_provider("kiro").unwrap();
+    assert_eq!(
+        serde_json::to_value(&retained).unwrap()["lines"][0]["used"],
+        60.0
+    );
+    assert_eq!(
+        retained.started_at, before_failure.started_at,
+        "failure must not claim new freshness"
+    );
 }

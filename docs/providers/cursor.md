@@ -73,6 +73,8 @@ This reading replaces the single `On-demand` row and retains its stable `onDeman
 monthly dates; a zero cap produces spend-only text without a numeric limit. Shared Weekly Usage
 and explicit request quotas keep their existing priority. Additional spending never changes
 Model Usage history or adds historical charged amounts to the current monthly reading.
+If no included or legacy request quota is reported, a verified current-user monthly reading can
+stand alone as a partial result with only `On-demand` and `Billing Scope`; no included allowance is invented.
 
 Unavailable, rejected, malformed or out-of-period optional billing leaves the verified old
 spending reading in place and logs a fixed warning. The app never changes accounts to fill it.
