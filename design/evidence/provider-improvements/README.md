@@ -26,8 +26,15 @@
 - `before-production-zai-320-light-detail.png` / `after-production-zai-expiry-320-light.png`：重置券数量与到期分开，Nov 7 00:30 明确 UTC+08:00；`after-production-zai-partial-320-light.png` 保留主额度并仅将券项标不可用。
 - `before-production-cursor-400-dark-detail.png` / `after-production-cursor-400-dark-detail.png`：当前用户的月度 On-demand 与 Shared Weekly Usage 独立，未读或合并模型历史账单。
 
-收据按执行版本保留：`before-production-receipt.json` 为 40 个基线场景；`after-production-receipt.json` 为首轮 93 个场景；`after-production-followup-receipt.json` 为 Claude/Kiro 后续源码更改后 45 个受影响场景复验。最终小范围 13 项见 `final-targeted-receipt.json`，包括重新截取登录页顶部及奖励到期完整可见。40/93/45 轮的浏览器收据均无 pageerror、console error 或外部请求；after 轮同时检查页面根与真实滚动容器的水平尺寸。后续收据的源码 SHA256 覆盖最终插件和前端，避免把旧版本结果当成新版本验收。
+收据按执行版本保留：`before-production-receipt.json` 为 40 个基线场景；`after-production-receipt.json` 为首轮 93 个场景；`after-production-followup-receipt.json` 为 Claude/Kiro 后续源码更改后 45 个受影响场景复验。最终小范围 13 项见 `final-targeted-receipt.json`，包括重新截取登录页顶部及奖励到期完整可见。40/93/45 轮的浏览器收据均无 pageerror、console error 或外部请求；after 轮同时检查页面根与真实滚动容器的水平尺寸。各收据的源码 SHA256 仅对应该轮验证；后续终审修改以新的定向收据为准，不将旧版本结果当成新版本验收。
 
 `production-probe-output-fixtures.json` 与 `before-production-probe-output-fixtures.json` 保留脱敏合成输出、manifest 和请求路由收据；请求仅进入内存 mock，没有实际发往这些 URL。JPY/BHD/USD、零消费、无正上限、第二个 Cursor 合成账号、未知长模型、部分再生元数据、Kiro bonus 主池未知、Z.ai 空券/拒绝等均有覆盖。
 
 这仍不是原生 QuickJS/安装后/真实账号验收，HMAC Keychain 操作与原生 source-scoped 缓存不在浏览器证据范围。UI 命令复制使用模拟适配器，不写系统剪贴板。临时可复现夹具位于本机 `~/.codex/visualizations/2026/11/02/01a19afe-e22d-7d52-a8c7-c395af393e72/provider-improvements-qa/`，不进入产品构建。
+
+
+终审未知值复验见 `review-unknown-production-receipt.json`：真实 probe 输出接入生产组件，仅复验 Kiro 超额数缺失/显式 0，以及 Z.ai available 缺失/null/string/false/true，共 7 个场景，无页面/控制台错误、水平溢出或外部请求。未知值不补 0 是本地保守规则，不声明为上游保证；新未知值截图为 `review-unknown-zai-320-light.png`，另一券窗口和主额度仍保留。
+
+两家原 valid 样例的新旧序列化输出完全一致，原 valid 截图的行为仍适用；93/45 场景未重跑。旧收据的 SHA 不代表此次终审代码，新收据记录最新两家源码和实际 renderer 的 SHA256；未改产品 TS，也未访问真实账号或 Keychain，临时服务已停止。
+
+Claude 模型名称的 Unicode 截断另做回归：79 个 ASCII 字符后接 emoji 时，旧 UTF-16 截断让真实 QuickJS 标签变空；改为完整字符截断后，Claude 175 项与真实 VM 6 项通过。见 review-unicode-receipt.json。此修复不改变此前普通名称样例的布局；没有将旧浏览器截图宣称为新增 Unicode 边界的浏览器验收。

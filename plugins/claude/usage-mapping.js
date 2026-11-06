@@ -14,7 +14,7 @@
         ctx.host.log.warn("Claude model weekly limit entry is unavailable")
         continue
       }
-      const name = raw.replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, "").replace(/\s+/g, " ").trim().slice(0, 80)
+      const name = Array.from(raw.replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, "").replace(/\s+/g, " ").trim()).slice(0, 80).join("")
       if (!name) continue
       const normalized = name.toLowerCase()
       const id = typeof model.id === "string" && model.id.trim() ? model.id.trim().toLowerCase() : normalized

@@ -103,6 +103,19 @@ fn claude_usd_resource_keeps_reported_decimal_scale_and_bad_money_is_partial() {
     assert_eq!(line(&invalid, "Session")["used"].as_f64(), Some(20.0));
 }
 
+#[test]
+fn claude_external_model_name_preserves_unicode_at_the_native_string_boundary() {
+    let name = format!("{}😀 trailing model text", "A".repeat(79));
+    let setup = format!(
+        "{CLAUDE}\nusage.limits=[{{kind:'weekly_scoped',group:'weekly',percent:25,scope:{{model:{{display_name:{}}}}}}}];",
+        serde_json::to_string(&name).unwrap()
+    );
+    let result = probe("claude", &setup).unwrap();
+    let expected = format!("{}😀 Weekly", "A".repeat(79));
+    assert_eq!(line(&result, &expected)["used"].as_f64(), Some(25.0));
+    assert_eq!(line(&result, "Session")["used"].as_f64(), Some(20.0));
+}
+
 const SYNTHETIC: &str = r#"
   ctx.host.env.get=name=>name==='SYNTHETIC_API_KEY'?'synthetic-key':null;
   let usage={planWeeklyLimit:{percentRemaining:0.5,nextRegenAt:'2026-11-07T00:30:00+08:00',nextRegenPercent:0.5},

@@ -44,7 +44,7 @@ describe("Z.ai read-only reset coupons", () => {
     expect(line(output, "Coupon Expiry")).not.toHaveProperty("resetsAt")
   })
   it("preserves explicit zero separately from unavailable lists", async () => {
-    const { probe } = await setup({ status: 200, bodyText: JSON.stringify({ data: { fiveHourResets: [], weekResets: [] } }) })
+    const { probe } = await setup({ status: 200, bodyText: JSON.stringify({ data: { fiveHourResets: [{ available: false }], weekResets: [] } }) })
     const output = probe()
     expect(line(output, "5h Reset Coupons").value).toBe("0")
     expect(line(output, "Weekly Reset Coupons").value).toBe("0")
@@ -118,6 +118,18 @@ describe("Z.ai read-only reset coupons", () => {
     })
     expect(line(probe(), "Session").used).toBe(64)
     expect(ctx.host.http.request.mock.calls.at(-1)[0].timeoutMs).toBe(2000)
+  })
+
+  it.each([undefined, null, "true"])("does not treat invalid coupon availability %j as a spent coupon", async (available) => {
+    const response = list()
+    response.data.fiveHourResets = [record(1, "2026-11-07 00:30:00", { available })]
+    const { ctx, probe } = await setup({ status: 200, bodyText: JSON.stringify(response) })
+    const output = probe()
+    expect(line(output, "5h Reset Coupons").value).toBe("Unavailable")
+    expect(line(output, "Weekly Reset Coupons").value).toBe("1")
+    expect(line(output, "Coupon Expiry").value).toBe("Unavailable")
+    expect(line(output, "Session").used).toBe(64)
+    expect(ctx.host.log.warn).toHaveBeenCalledWith("Z.ai reset coupons window contains invalid records")
   })
 
 })

@@ -1,0 +1,16 @@
+{
+  "type": "Targeted Unicode Regression",
+  "createdAt": "2026-11-06T15:26:56.401918+00:00",
+  "before": "Node label ended in an unpaired surrogate; the production QuickJS parser returned an empty model label.",
+  "after": "Codepoint truncation preserves the complete emoji and the existing Session quota.",
+  "tests": {
+    "claude": 175,
+    "productionQuickJS": 6
+  },
+  "sourceSha256": {
+    "plugins/claude/usage-mapping.js": "b58d2de483f8a30a3af4bd09e66cb844f0451aa74b09d89daacc484907fcbdd4",
+    "plugins/claude/plugin.usage-mapping.test.js": "ef55cbecc1c8694d219ac523a8ee84af551510854edcedf91f8a054f12608310",
+    "src-tauri/src/plugin_engine/runtime_provider_improvements_tests.rs": "43ce11662c36579e9af7dc12b77876d39ef5edf0087d6328ae3c94ddbb41de99"
+  },
+  "boundary": "Synthetic Node and real native QuickJS contract tests. No browser claim, real provider request or credentials."
+}

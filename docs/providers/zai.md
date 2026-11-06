@@ -218,7 +218,9 @@ It is not the Session or Weekly quota reset time.
 
 Only available, unexpired coupons count. A successfully read empty list displays **0**;
 an unavailable, malformed, or unreported list displays **Unavailable** while valid quota
-meters continue loading. If either list is unavailable, the overall nearest expiry is also
+meters continue loading. A coupon without an explicit boolean availability also makes its
+window unavailable; a missing or malformed flag is not interpreted as a spent coupon.
+If either list is unavailable, the overall nearest expiry is also
 unavailable. When both lists are known and no coupons remain, expiry displays **None**.
 
 The app only reads

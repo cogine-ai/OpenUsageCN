@@ -131,6 +131,7 @@ describe("Kiro CLI source isolation and quota pools", () => {
     ctx.host.http.request.mockReturnValue(reply(usage(credits({ currentUsageWithPrecision: 20, currentOveragesWithPrecision: undefined }))))
     let output = (await plugin()).probe(ctx)
     expect(line(output, "Overage Credits")).toMatchObject({ type: "text", value: "Unavailable" })
+    expect(line(output, "Credits")).toMatchObject({ type: "badge", text: "Usage unavailable" })
     ctx.host.http.request.mockReturnValue(reply(usage(credits(), { overageConfiguration: { overageStatus: "FUTURE" } })))
     output = globalThis.__openusage_plugin.probe(ctx)
     expect(line(output, "Overages")).toBeUndefined()
@@ -186,6 +187,14 @@ describe("Kiro CLI source isolation and quota pools", () => {
     expect(() => loaded.probe(ctx)).toThrow("Could not verify Kiro desktop sign-in. Check file access and try again.")
     expect(ctx.host.sqlite.queryReadOnly).not.toHaveBeenCalled()
     expect(ctx.host.http.request).not.toHaveBeenCalled()
+  })
+
+  it("keeps an explicitly reported zero overage distinct from a missing amount", async () => {
+    const { ctx } = fixture()
+    ctx.host.http.request.mockReturnValue(reply(usage(credits({ currentUsageWithPrecision: 20, currentOveragesWithPrecision: 0 }))))
+    const output = (await plugin()).probe(ctx)
+    expect(line(output, "Credits")).toMatchObject({ type: "progress", used: 20, limit: 100 })
+    expect(line(output, "Overage Credits")).toMatchObject({ type: "progress", used: 0, limit: 50 })
   })
 
 })

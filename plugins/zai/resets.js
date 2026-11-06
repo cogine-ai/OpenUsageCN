@@ -17,7 +17,8 @@
     const result = []
     for (const record of data[key]) {
       if (!record || typeof record !== "object" || Array.isArray(record)) throw new Error("invalid reset record")
-      if (record.available !== true) continue
+      if (typeof record.available !== "boolean") throw new Error("invalid reset availability")
+      if (!record.available) continue
       const expiresAt = expiry(record.expireTime)
       if (!Number.isSafeInteger(record.recordId) || expiresAt === null || typeof record.grantType !== "string" || !record.grantType.trim()) {
         throw new Error("invalid available reset record")

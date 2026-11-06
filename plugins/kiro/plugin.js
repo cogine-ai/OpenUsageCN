@@ -191,6 +191,7 @@
       if (value.overageUsage === undefined) {
         ctx.host.log.warn("Kiro overage amount was not reported")
         value.overageUnavailable = true
+        value.mainUnavailable = true
       }
     }
     value.resetDate = iso(ctx, raw.nextDateReset || raw.resetDate || rawSnapshot.nextDateReset)

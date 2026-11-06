@@ -85,4 +85,10 @@ describe("Claude Scoped Weekly And Original Currency", () => {
     expect(output.lines[0].limitResourceKey).toBeUndefined()
     expect(JSON.stringify(output)).not.toContain("private-model-id")
   })
+
+  it("keeps a whole Unicode character at the model-name boundary", async () => {
+    const name = "A".repeat(79) + "😀 trailing model text"
+    const { output } = await probe({ limits: [scoped(name)] })
+    expect(output.lines[0].label).toBe("A".repeat(79) + "😀 Weekly")
+  })
 })

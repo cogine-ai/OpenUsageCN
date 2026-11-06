@@ -203,7 +203,10 @@ plan meter shows **Usage unavailable**, while valid bonus and overage pools rema
 An already separated desktop cache can retain its own plan meter. **Bonus Expiry** is displayed
 as a separate UTC timestamp; it is not a quota reset or a prediction that the bonus will refill.
 Bonus progress does not export that expiry as a resource reset. Missing overage is not
-shown as zero, and an unknown enabled/disabled status is not labeled disabled.
+shown as zero. If overage is enabled but its usage amount is missing, both the overage pool
+and API-derived main pool are unavailable: the total cannot establish a precise plan-only amount.
+An explicit zero overage amount still allows the plan meter to load.
+An unknown enabled/disabled status is not labeled disabled.
 
 The CLI protocol and pool separation follow the fixed
 [CodexBar implementation](https://github.com/steipete/CodexBar/blob/197025e12e41c451899b66aa897423b550e06344/Sources/CodexBarCore/Providers/Kiro/KiroUsageLimitsAPI.swift).
