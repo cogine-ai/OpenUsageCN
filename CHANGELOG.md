@@ -4,6 +4,45 @@
 
 暂无。
 
+## v0.6.50
+
+### New Features
+
+- 新增 Claude Platform、WorkBuddy、Trae CN、LiteLLM、SiliconFlow、Muse Code 六家服务商的独立连接和用量展示。 ([#268](https://github.com/cogine-ai/OpenUsageCN/pull/268)) by @lc708
+- Cursor 新增当前用户月度额外消费；Claude 支持原币种额外消费与模型周额度；Synthetic 支持周计划额度和独立再生信息。 ([#269](https://github.com/cogine-ai/OpenUsageCN/pull/269)) by @lc708
+- Kiro 支持只读 CLI 登录及独立主额度、超额和奖励池；Z.ai 展示可用重置券数量与到期时间。 ([#269](https://github.com/cogine-ai/OpenUsageCN/pull/269)) by @lc708
+
+### Bug Fixes
+
+- 加强账号切换、授权取消或过期和晚到结果的隔离；Kiro 续期不会覆盖已检测到的新登录，无法确认的额度不再填成零。 ([#268](https://github.com/cogine-ai/OpenUsageCN/pull/268), [#269](https://github.com/cogine-ai/OpenUsageCN/pull/269)) by @lc708
+- 安装身份密钥的 Keychain 操作与 SQLite 读取使用完整超时预算；兼容旧版 SQLite，阻断参数注入，并隐藏包含异常格式的敏感响应日志。 ([#269](https://github.com/cogine-ai/OpenUsageCN/pull/269)) by @lc708
+- 修复窄面板的长模型名换行和 Unicode 标签问题，保留可验证的部分用量与原有认证错误。 ([#269](https://github.com/cogine-ai/OpenUsageCN/pull/269)) by @lc708
+
+### Chores
+
+- 补齐回归测试、真实 QuickJS 验证、使用文档与界面前后截图，并让 CI 覆盖各 PR 目标分支。 ([#268](https://github.com/cogine-ai/OpenUsageCN/pull/268), [#269](https://github.com/cogine-ai/OpenUsageCN/pull/269)) by @lc708
+
+### 下载说明
+
+Windows 安装包未做 Authenticode 签名，SmartScreen 或企业策略可能提示或阻止运行；发布时提供 setup.exe 的 SHA-256 校验文件。缺少 WebView2 Runtime 的电脑需要联网完成安装。
+
+---
+
+### Changelog
+
+**Full Changelog**: [v0.6.49...v0.6.50](https://github.com/cogine-ai/OpenUsageCN/compare/v0.6.49...v0.6.50)
+
+- [674950b](https://github.com/cogine-ai/OpenUsageCN/commit/674950b06a9432853ce25187ec2ad0e9b38ca297) feat: add six isolated provider connections by @lc708
+- [f0896f2](https://github.com/cogine-ai/OpenUsageCN/commit/f0896f20ab4852c72073cfa87237b7f8d22b15ff) fix: fence Muse commits across cancellation and expiry by @lc708
+- [b4875fb](https://github.com/cogine-ai/OpenUsageCN/commit/b4875fb395db94abfc3ad48965661443038913b9) feat: improve existing provider usage and credential safety by @lc708
+- [5db66fb](https://github.com/cogine-ai/OpenUsageCN/commit/5db66fbf499aa52576ecdc27f1d24cbc83f8155c) ci: validate stacked pull requests by @lc708
+- [f84ad8b](https://github.com/cogine-ai/OpenUsageCN/commit/f84ad8b4d6c362a3ea51a7f86799fa825b801972) fix: preserve unknown provider values and Unicode labels by @lc708
+- [8cf930b](https://github.com/cogine-ai/OpenUsageCN/commit/8cf930b6fc575dbcf40885f72d18924af57f40f7) Merge pull request #268 from cogine-ai/cliq/add-six-providers by @lc708
+- [fc618fe](https://github.com/cogine-ai/OpenUsageCN/commit/fc618fe52b6be169bd03a8d484d54a1d102cc0e2) fix: address provider review and isolate Kiro refreshes by @lc708
+- [5f5c04d](https://github.com/cogine-ai/OpenUsageCN/commit/5f5c04dc24973bb294838072728dba12f7af0923) fix: preserve verified partial provider usage by @lc708
+- [9ebfeaa](https://github.com/cogine-ai/OpenUsageCN/commit/9ebfeaa5cd291d91f37b129698c1c71351e56417) fix: support older SQLite safely and redact Kiro refreshes by @lc708
+- [690985a](https://github.com/cogine-ai/OpenUsageCN/commit/690985a843cf29bd40594d0863e2a1ddd46a6ae5) Merge pull request #269 from cogine-ai/cliq/improve-provider-usage by @lc708
+
 ## v0.6.49
 
 ### New Features
