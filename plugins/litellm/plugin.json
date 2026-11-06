@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "litellm",
+  "name": "LiteLLM",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "brandColor": "#4C89F0",
+  "config": { "fields": [
+    { "id": "baseUrl", "type": "text", "label": "Proxy URL", "required": true, "placeholder": "https://litellm.example.com", "help": "使用自己的 LiteLLM 网关地址；支持 /v1 后缀。Key 只发送到此地址，HTTP 仅限本机或私有网络。", "environmentVariables": ["LITELLM_BASE_URL"] },
+    { "id": "apiKey", "type": "secret", "label": "Virtual API Key", "required": true, "defaultSource": true, "placeholder": "sk-...", "help": "使用自己的虚拟 Key，读取其个人、成员及团队预算；不需要管理主 Key。", "environmentVariables": ["LITELLM_API_KEY"] }
+  ] },
+  "lines": [
+    { "type": "progress", "label": "Team Budget", "scope": "overview", "primaryOrder": 1, "limitResource": { "key": "teamBudget", "countUnit": "USD" } },
+    { "type": "progress", "label": "Team Member Budget", "scope": "overview", "primaryOrder": 2, "limitResource": { "key": "memberBudget", "countUnit": "USD" } },
+    { "type": "progress", "label": "Personal Budget", "scope": "overview", "primaryOrder": 3, "limitResource": { "key": "personalBudget", "countUnit": "USD" } },
+    { "type": "text", "label": "Personal Spend", "scope": "overview" },
+    { "type": "text", "label": "Team Member Spend", "scope": "overview" },
+    { "type": "text", "label": "Team Spend", "scope": "overview" },
+    { "type": "text", "label": "Key Spend", "scope": "overview" },
+    { "type": "text", "label": "User Spend", "scope": "overview" },
+    { "type": "text", "label": "Scope", "scope": "detail" },
+    { "type": "text", "label": "Status", "scope": "detail" }
+  ]
+}

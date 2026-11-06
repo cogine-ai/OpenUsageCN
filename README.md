@@ -39,7 +39,7 @@ OpenUsageCN 常驻菜单栏或系统托盘，用一个轻量面板展示各类 A
 
 ## 支持的服务商
 
-Windows MVP 启用和展示 **Codex、BigModel CN、OpenAI API、OpenRouter、Z.ai、DeepSeek、Moonshot、Ollama Cloud、Doubao 和 xAI**。Codex 默认启用；DeepSeek、Moonshot、Ollama Cloud、Doubao 和 xAI 在首次出现时可依据已配置凭据[自动启用](docs/provider-enablement.md)，其余服务商仍需手动启用。Windows 首版暂不提供 CLI、额度通知、全局快捷键、动态托盘图标和托盘标题。macOS 继续支持下面的完整服务商列表。
+Windows MVP 启用和展示 **Codex、BigModel CN、OpenAI API、OpenRouter、Z.ai、DeepSeek、Moonshot、Ollama Cloud、Doubao、xAI、Claude Platform、WorkBuddy、Trae CN、LiteLLM、SiliconFlow 和 Muse Code**。Codex 默认启用；DeepSeek、Moonshot、Ollama Cloud、Doubao 和 xAI 在首次出现时可依据已配置凭据[自动启用](docs/provider-enablement.md)，其余服务商仍需手动启用。Windows 首版暂不提供 CLI、额度通知、全局快捷键、动态托盘图标和托盘标题。macOS 继续支持下面的完整服务商列表。
 
 - [**Alibaba Coding Plan**](docs/providers/alibaba-coding-plan.md)：5 小时、weekly、monthly coding plan quota
 - [**Alibaba Token Plan**](docs/providers/alibaba-token-plan.md)：token plan quota、remaining、expires
@@ -70,6 +70,13 @@ Windows MVP 启用和展示 **Codex、BigModel CN、OpenAI API、OpenRouter、Z.
 - [**xAI**](docs/providers/xai.md)：Management API 预付余额及最近 30 天消费
 - [**Devin**](docs/providers/devin.md)：weekly quota、extra usage
 - [**Z.ai**](docs/providers/zai.md)：token/credit 计划的 session、weekly、web searches、设置页 API Key
+
+- [**Claude Platform**](docs/providers/claude-platform.md)：独立于 Claude Code 的 Console API 余额、赠送与购买 credit、按组织读取的当月消费
+- [**LiteLLM**](docs/providers/litellm.md)：自建代理的个人、成员和团队预算及消费，按范围分别展示
+- [**SiliconFlow**](docs/providers/siliconflow.md)：中国站人民币或国际站美元的 API 总余额、充值额和赠额，保留负余额
+- [**WorkBuddy**](docs/providers/workbuddy.md)：账单 credits 总额、可用额、预留额及其中的奖励部分
+- [**Trae CN**](docs/providers/trae-cn.md)：国内站 Cookie 连接，显示服务端汇总的 credits 已用、总额与剩余
+- [**Muse Code**](docs/providers/muse.md)：Meta 设备码授权，显示当前账号的 session 和 weekly 配额
 
 ## 参与项目
 

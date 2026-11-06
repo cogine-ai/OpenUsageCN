@@ -109,7 +109,10 @@ pub(super) fn envelope_from_state(provider_ids: &[String], state: &CacheState) -
         .collect();
     for provider_id in provider_ids {
         let (Some(snapshot), Some(catalog)) = (
-            state.snapshots.get(provider_id),
+            state
+                .snapshots
+                .get(provider_id)
+                .filter(|snapshot| super::cache::snapshot_is_current(snapshot)),
             state.limit_catalog.get(provider_id),
         ) else {
             continue;
@@ -296,6 +299,7 @@ mod tests {
             }],
             started_at: "2026-07-14T01:59:00Z".to_string(),
             fetched_at: "2026-07-14T02:00:00Z".to_string(),
+            config_fingerprint: None,
         }
     }
 

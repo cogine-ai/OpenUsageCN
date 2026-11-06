@@ -1,0 +1,1077 @@
+{
+  "browser": "143.0.7499.4",
+  "fixture": "Actual AppContent, Connection, Config Fields, Settings and Detail production components; synthetic IPC and usage, no real auth or Keychain",
+  "cases": [
+    {
+      "provider": "muse",
+      "screen": "catalog",
+      "state": "missing",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "muse",
+      "screen": "catalog",
+      "state": "missing",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "claude-platform",
+      "screen": "connect",
+      "state": "missing",
+      "width": 320,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "claude-platform",
+      "screen": "detail",
+      "state": "ready",
+      "width": 320,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "claude-platform",
+      "screen": "detail",
+      "state": "partial",
+      "width": 320,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "claude-platform",
+      "screen": "detail",
+      "state": "checking",
+      "width": 320,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "claude-platform",
+      "screen": "detail",
+      "state": "error",
+      "width": 320,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "claude-platform",
+      "screen": "connect",
+      "state": "missing",
+      "width": 320,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "claude-platform",
+      "screen": "detail",
+      "state": "ready",
+      "width": 320,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "claude-platform",
+      "screen": "detail",
+      "state": "partial",
+      "width": 320,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "claude-platform",
+      "screen": "detail",
+      "state": "checking",
+      "width": 320,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "claude-platform",
+      "screen": "detail",
+      "state": "error",
+      "width": 320,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "claude-platform",
+      "screen": "connect",
+      "state": "missing",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "claude-platform",
+      "screen": "detail",
+      "state": "ready",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "claude-platform",
+      "screen": "detail",
+      "state": "partial",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "claude-platform",
+      "screen": "detail",
+      "state": "checking",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "claude-platform",
+      "screen": "detail",
+      "state": "error",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "claude-platform",
+      "screen": "connect",
+      "state": "missing",
+      "width": 400,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "claude-platform",
+      "screen": "detail",
+      "state": "ready",
+      "width": 400,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "claude-platform",
+      "screen": "detail",
+      "state": "partial",
+      "width": 400,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "claude-platform",
+      "screen": "detail",
+      "state": "checking",
+      "width": 400,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "claude-platform",
+      "screen": "detail",
+      "state": "error",
+      "width": 400,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "workbuddy",
+      "screen": "connect",
+      "state": "missing",
+      "width": 320,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "workbuddy",
+      "screen": "detail",
+      "state": "ready",
+      "width": 320,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "workbuddy",
+      "screen": "detail",
+      "state": "partial",
+      "width": 320,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "workbuddy",
+      "screen": "detail",
+      "state": "checking",
+      "width": 320,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "workbuddy",
+      "screen": "detail",
+      "state": "error",
+      "width": 320,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "workbuddy",
+      "screen": "connect",
+      "state": "missing",
+      "width": 320,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "workbuddy",
+      "screen": "detail",
+      "state": "ready",
+      "width": 320,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "workbuddy",
+      "screen": "detail",
+      "state": "partial",
+      "width": 320,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "workbuddy",
+      "screen": "detail",
+      "state": "checking",
+      "width": 320,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "workbuddy",
+      "screen": "detail",
+      "state": "error",
+      "width": 320,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "workbuddy",
+      "screen": "connect",
+      "state": "missing",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "workbuddy",
+      "screen": "detail",
+      "state": "ready",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "workbuddy",
+      "screen": "detail",
+      "state": "partial",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "workbuddy",
+      "screen": "detail",
+      "state": "checking",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "workbuddy",
+      "screen": "detail",
+      "state": "error",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "workbuddy",
+      "screen": "connect",
+      "state": "missing",
+      "width": 400,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "workbuddy",
+      "screen": "detail",
+      "state": "ready",
+      "width": 400,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "workbuddy",
+      "screen": "detail",
+      "state": "partial",
+      "width": 400,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "workbuddy",
+      "screen": "detail",
+      "state": "checking",
+      "width": 400,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "workbuddy",
+      "screen": "detail",
+      "state": "error",
+      "width": 400,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "trae-cn",
+      "screen": "connect",
+      "state": "missing",
+      "width": 320,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "trae-cn",
+      "screen": "detail",
+      "state": "ready",
+      "width": 320,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "trae-cn",
+      "screen": "detail",
+      "state": "partial",
+      "width": 320,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "trae-cn",
+      "screen": "detail",
+      "state": "checking",
+      "width": 320,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "trae-cn",
+      "screen": "detail",
+      "state": "error",
+      "width": 320,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "trae-cn",
+      "screen": "connect",
+      "state": "missing",
+      "width": 320,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "trae-cn",
+      "screen": "detail",
+      "state": "ready",
+      "width": 320,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "trae-cn",
+      "screen": "detail",
+      "state": "partial",
+      "width": 320,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "trae-cn",
+      "screen": "detail",
+      "state": "checking",
+      "width": 320,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "trae-cn",
+      "screen": "detail",
+      "state": "error",
+      "width": 320,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "trae-cn",
+      "screen": "connect",
+      "state": "missing",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "trae-cn",
+      "screen": "detail",
+      "state": "ready",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "trae-cn",
+      "screen": "detail",
+      "state": "partial",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "trae-cn",
+      "screen": "detail",
+      "state": "checking",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "trae-cn",
+      "screen": "detail",
+      "state": "error",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "trae-cn",
+      "screen": "connect",
+      "state": "missing",
+      "width": 400,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "trae-cn",
+      "screen": "detail",
+      "state": "ready",
+      "width": 400,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "trae-cn",
+      "screen": "detail",
+      "state": "partial",
+      "width": 400,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "trae-cn",
+      "screen": "detail",
+      "state": "checking",
+      "width": 400,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "trae-cn",
+      "screen": "detail",
+      "state": "error",
+      "width": 400,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "litellm",
+      "screen": "connect",
+      "state": "missing",
+      "width": 320,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "litellm",
+      "screen": "detail",
+      "state": "ready",
+      "width": 320,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "litellm",
+      "screen": "detail",
+      "state": "partial",
+      "width": 320,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "litellm",
+      "screen": "detail",
+      "state": "checking",
+      "width": 320,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "litellm",
+      "screen": "detail",
+      "state": "error",
+      "width": 320,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "litellm",
+      "screen": "connect",
+      "state": "missing",
+      "width": 320,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "litellm",
+      "screen": "detail",
+      "state": "ready",
+      "width": 320,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "litellm",
+      "screen": "detail",
+      "state": "partial",
+      "width": 320,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "litellm",
+      "screen": "detail",
+      "state": "checking",
+      "width": 320,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "litellm",
+      "screen": "detail",
+      "state": "error",
+      "width": 320,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "litellm",
+      "screen": "connect",
+      "state": "missing",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "litellm",
+      "screen": "detail",
+      "state": "ready",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "litellm",
+      "screen": "detail",
+      "state": "partial",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "litellm",
+      "screen": "detail",
+      "state": "checking",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "litellm",
+      "screen": "detail",
+      "state": "error",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "litellm",
+      "screen": "connect",
+      "state": "missing",
+      "width": 400,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "litellm",
+      "screen": "detail",
+      "state": "ready",
+      "width": 400,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "litellm",
+      "screen": "detail",
+      "state": "partial",
+      "width": 400,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "litellm",
+      "screen": "detail",
+      "state": "checking",
+      "width": 400,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "litellm",
+      "screen": "detail",
+      "state": "error",
+      "width": 400,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "siliconflow",
+      "screen": "connect",
+      "state": "missing",
+      "width": 320,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "siliconflow",
+      "screen": "detail",
+      "state": "ready",
+      "width": 320,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "siliconflow",
+      "screen": "detail",
+      "state": "partial",
+      "width": 320,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "siliconflow",
+      "screen": "detail",
+      "state": "checking",
+      "width": 320,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "siliconflow",
+      "screen": "detail",
+      "state": "error",
+      "width": 320,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "siliconflow",
+      "screen": "connect",
+      "state": "missing",
+      "width": 320,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "siliconflow",
+      "screen": "detail",
+      "state": "ready",
+      "width": 320,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "siliconflow",
+      "screen": "detail",
+      "state": "partial",
+      "width": 320,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "siliconflow",
+      "screen": "detail",
+      "state": "checking",
+      "width": 320,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "siliconflow",
+      "screen": "detail",
+      "state": "error",
+      "width": 320,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "siliconflow",
+      "screen": "connect",
+      "state": "missing",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "siliconflow",
+      "screen": "detail",
+      "state": "ready",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "siliconflow",
+      "screen": "detail",
+      "state": "partial",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "siliconflow",
+      "screen": "detail",
+      "state": "checking",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "siliconflow",
+      "screen": "detail",
+      "state": "error",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "siliconflow",
+      "screen": "connect",
+      "state": "missing",
+      "width": 400,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "siliconflow",
+      "screen": "detail",
+      "state": "ready",
+      "width": 400,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "siliconflow",
+      "screen": "detail",
+      "state": "partial",
+      "width": 400,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "siliconflow",
+      "screen": "detail",
+      "state": "checking",
+      "width": 400,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "siliconflow",
+      "screen": "detail",
+      "state": "error",
+      "width": 400,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "muse",
+      "screen": "connect",
+      "state": "missing",
+      "width": 320,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "muse",
+      "screen": "detail",
+      "state": "ready",
+      "width": 320,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "muse",
+      "screen": "detail",
+      "state": "partial",
+      "width": 320,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "muse",
+      "screen": "detail",
+      "state": "checking",
+      "width": 320,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "muse",
+      "screen": "detail",
+      "state": "error",
+      "width": 320,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "muse",
+      "screen": "connect",
+      "state": "missing",
+      "width": 320,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "muse",
+      "screen": "detail",
+      "state": "ready",
+      "width": 320,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "muse",
+      "screen": "detail",
+      "state": "partial",
+      "width": 320,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "muse",
+      "screen": "detail",
+      "state": "checking",
+      "width": 320,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "muse",
+      "screen": "detail",
+      "state": "error",
+      "width": 320,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "muse",
+      "screen": "connect",
+      "state": "missing",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "muse",
+      "screen": "detail",
+      "state": "ready",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "muse",
+      "screen": "detail",
+      "state": "partial",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "muse",
+      "screen": "detail",
+      "state": "checking",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "muse",
+      "screen": "detail",
+      "state": "error",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "muse",
+      "screen": "connect",
+      "state": "missing",
+      "width": 400,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "muse",
+      "screen": "detail",
+      "state": "ready",
+      "width": 400,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "muse",
+      "screen": "detail",
+      "state": "partial",
+      "width": 400,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "muse",
+      "screen": "detail",
+      "state": "checking",
+      "width": 400,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "muse",
+      "screen": "detail",
+      "state": "error",
+      "width": 400,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "muse",
+      "screen": "connect",
+      "state": "missing",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "muse",
+      "screen": "connect",
+      "state": "expired",
+      "width": 320,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "muse",
+      "screen": "connect",
+      "state": "missing",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "muse",
+      "screen": "connect",
+      "state": "missing",
+      "width": 320,
+      "dark": false,
+      "overflow": false
+    },
+    {
+      "provider": "claude-platform",
+      "screen": "connect",
+      "state": "missing",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "workbuddy",
+      "screen": "connect",
+      "state": "missing",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "trae-cn",
+      "screen": "connect",
+      "state": "missing",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "litellm",
+      "screen": "connect",
+      "state": "missing",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    },
+    {
+      "provider": "siliconflow",
+      "screen": "connect",
+      "state": "missing",
+      "width": 400,
+      "dark": true,
+      "overflow": false
+    }
+  ],
+  "errors": [],
+  "externalRequests": [],
+  "beforeCatalogCount": 29,
+  "afterCatalogCount": 35,
+  "interactions": [
+    "Muse Native Validated URI Open Intent",
+    "Synthetic Code Clipboard Adapter",
+    "Muse Poll Success And Single Quota Callback",
+    "Muse Cancel",
+    "Expired Stored Connection Preserved",
+    "Five Generic Provider Save Namespace And Toggle Preservation",
+    "Config Changed Before Quota Verification"
+  ],
+  "sourceBase": "02af5b2358cc23592e67cbdf11ce7f3e93d22e60",
+  "sourceSha256": {
+    "src/components/muse-connection.tsx": "76e5d99542712089c635f47d0ba11a95eec0fb3134e96bc2f694abea4793bbd9",
+    "src/lib/muse-login.ts": "e9fe8e2ce3d5031a94807e9cd2594c6031ef43f56a08c1a796f531e2fb190783",
+    "src/pages/provider-connection.tsx": "bddb8c1b4382d4f6aaa667f7be0e7bbd8187509219101c1837866fa2a79e856e",
+    "src/lib/plugin-recovery.ts": "2bd6c785e21b3fce6a2c8d8d511a23a3a685c3f4a3d5c4f69d5945fd0be4c122",
+    "src/hooks/app/use-probe-state.ts": "8164784084c58e2ca8484c8c9efa5f9ed1f1d6395a7b35f5ecca87f8fb578669",
+    "src/hooks/use-probe-events.ts": "79c2646be7dc63e9683b7612478a7173ed965eab7d89a52ea9caf51c153fda91",
+    "src/lib/provider-config.ts": "8559e4c177262c5002ca0d61a44075a5510b0336395a7dd4443578d06b359297"
+  }
+}

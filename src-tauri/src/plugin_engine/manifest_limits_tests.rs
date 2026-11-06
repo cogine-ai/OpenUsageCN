@@ -113,6 +113,12 @@ fn bundled_provider_limit_resource_keys_are_stable() {
                 "geminiWeekly",
             ][..],
         ),
+        ("claude-platform", &["apiCredit", "purchasedCredit"][..]),
+        ("litellm", &["memberBudget", "personalBudget", "teamBudget"][..]),
+        ("siliconflow", &[][..]),
+        ("workbuddy", &["credits"][..]),
+        ("trae-cn", &["credits"][..]),
+        ("muse", &["session", "weekly"][..]),
         ("bigmodel-cn", &["session", "webSearches", "weekly"][..]),
         (
             "claude",

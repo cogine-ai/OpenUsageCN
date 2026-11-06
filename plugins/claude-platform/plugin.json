@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "claude-platform",
+  "name": "Claude Platform",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "brandColor": "#CC7C5E",
+  "links": [{ "label": "Console Billing", "url": "https://platform.claude.com/settings/billing" }],
+  "config": { "fields": [
+    { "id": "cookieHeader", "type": "secret", "label": "Session Cookie", "required": true, "defaultSource": true, "placeholder": "sessionKey=...", "help": "来自 platform.claude.com 的 Cookie 请求头，需包含 sessionKey；不是 Claude Code OAuth 或推理 API Key。", "environmentVariables": ["CLAUDE_PLATFORM_COOKIE"] },
+    { "id": "organizationId", "type": "secret", "label": "Organization ID", "help": "只有一个 API 组织时可留空；多个组织时必须明确指定。", "environmentVariables": ["CLAUDE_PLATFORM_ORGANIZATION_ID"] }
+  ] },
+  "lines": [
+    { "type": "text", "label": "Prepaid Balance", "scope": "overview" },
+    { "type": "progress", "label": "API Credit", "scope": "overview", "primaryOrder": 1, "limitResource": { "key": "apiCredit" } },
+    { "type": "progress", "label": "Purchased Credit", "scope": "overview", "primaryOrder": 2, "limitResource": { "key": "purchasedCredit" } },
+    { "type": "text", "label": "API Credit Remaining", "scope": "detail" },
+    { "type": "text", "label": "Purchased Credit Remaining", "scope": "detail" },
+    { "type": "text", "label": "Other Credit Grants", "scope": "detail" },
+    { "type": "text", "label": "This Month Spend", "scope": "detail" },
+    { "type": "text", "label": "Scope", "scope": "detail" }
+  ]
+}

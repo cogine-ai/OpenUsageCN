@@ -147,6 +147,7 @@ fn restoring_ollama_primary_preserves_the_actual_fetch_time_and_other_providers(
         lines: vec![],
         started_at: "2026-11-03T00:00:00Z".into(),
         fetched_at: "2026-11-03T00:00:00Z".into(),
+        config_fingerprint: None,
     };
     replace_cached_account_projection("ollama", Some(restored)).unwrap();
     assert_eq!(

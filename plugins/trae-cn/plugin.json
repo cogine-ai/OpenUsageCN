@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "trae-cn",
+  "name": "Trae CN",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "brandColor": "#4D7CFE",
+  "links": [{ "label": "Usage Dashboard", "url": "https://www.trae.cn/dashboard" }],
+  "config": {
+    "fields": [{
+      "id": "cookie", "type": "secret", "label": "Cookie Header", "required": true,
+      "placeholder": "session=...", "help": "复制已登录 Trae 中国站控制台 API 请求的 Cookie 值。",
+      "environmentVariables": ["TRAE_CN_COOKIE"], "defaultSource": true
+    }]
+  },
+  "lines": [
+    { "type": "progress", "label": "Usage", "scope": "overview", "primaryOrder": 1, "limitResource": { "key": "credits", "countUnit": "credits" } },
+    { "type": "text", "label": "Used", "scope": "detail" },
+    { "type": "text", "label": "Total", "scope": "detail" },
+    { "type": "text", "label": "Remaining", "scope": "overview" }
+  ]
+}

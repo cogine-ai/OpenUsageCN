@@ -7,20 +7,22 @@ use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 mod account_projection;
+mod configured;
 #[cfg(test)]
 pub(crate) use account_projection::replace_cached_account_projection;
 pub(crate) use account_projection::{
     replace_account_projection, replace_cached_account_projection_before,
 };
+pub(crate) use configured::{cache_configured_output, snapshot_is_current};
 #[cfg(test)]
 #[path = "cache_account_projection_tests.rs"]
 mod account_projection_tests;
 #[cfg(test)]
 use account_projection::save_cache;
 mod flush;
-use flush::{CacheFlushResult, flush_pending_cache_once, schedule_cache_flush_locked};
 #[cfg(test)]
 use flush::{cache_write_retry_delay, should_log_cache_write_failure};
+use flush::{flush_pending_cache_once, schedule_cache_flush_locked, CacheFlushResult};
 
 const CACHE_FILE_NAME: &str = "usage-api-cache.json";
 const CACHE_LOCK_FILE_NAME: &str = ".usage-api-cache.lock";
@@ -50,6 +52,9 @@ pub struct CachedPluginSnapshot {
     #[serde(default)]
     pub started_at: String,
     pub fetched_at: String,
+    /// Present only for the six providers whose credentials are app-owned configuration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub config_fingerprint: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -141,7 +146,11 @@ pub fn load_cache(app_data_dir: &Path) -> HashMap<String, CachedPluginSnapshot> 
         Err(_) => return HashMap::new(),
     };
     match serde_json::from_str::<UsageApiCacheFile>(&data) {
-        Ok(file) if file.version == 1 => file.snapshots,
+        Ok(mut file) if file.version == 1 => {
+            file.snapshots
+                .retain(|_, snapshot| snapshot_is_current(snapshot));
+            file.snapshots
+        }
         Ok(_) => {
             log::warn!("usage-api-cache.json has unsupported version, starting empty");
             HashMap::new()
@@ -277,6 +286,7 @@ fn adopt_disk_snapshot_if_newer(state: &mut CacheState, provider_id: &str) {
     let should_adopt = state
         .snapshots
         .get(provider_id)
+        .filter(|current| snapshot_is_current(current))
         .map(|current| snapshot_is_at_least_as_new(&disk_snapshot, current))
         .unwrap_or(true);
     if should_adopt {
@@ -342,32 +352,53 @@ fn snapshot_from_output(
         lines: output.lines.clone(),
         started_at: format_timestamp(started_at),
         fetched_at: format_timestamp(time::OffsetDateTime::now_utc()),
+        config_fingerprint: None,
     }
 }
 
 pub fn cache_successful_output(output: &PluginOutput, started_at: time::OffsetDateTime) {
-    let snapshot = snapshot_from_output(output, started_at);
+    if crate::configured_providers::supports(&output.provider_id) {
+        log::warn!("Configured provider cache rejected an unscoped result");
+        return;
+    }
+    let _ = cache_snapshot(snapshot_from_output(output, started_at));
+}
 
+fn cache_snapshot(snapshot: CachedPluginSnapshot) -> bool {
     let _write_guard = cache_write_lock()
         .lock()
         .expect("cache write lock poisoned");
+    if !snapshot_is_current(&snapshot) {
+        log::warn!("Configured provider cache rejected an obsolete result");
+        return false;
+    }
     let mut state = cache_state().lock().expect("cache state poisoned");
-    adopt_disk_snapshot_if_newer(&mut state, &output.provider_id);
+    adopt_disk_snapshot_if_newer(&mut state, &snapshot.provider_id);
     if state
         .snapshots
-        .get(&output.provider_id)
+        .get(&snapshot.provider_id)
+        .is_some_and(|current| !snapshot_is_current(current))
+    {
+        state.snapshots.remove(&snapshot.provider_id);
+    }
+    if state
+        .snapshots
+        .get(&snapshot.provider_id)
         .is_some_and(|current| !snapshot_is_at_least_as_new(&snapshot, current))
     {
         log::debug!(
             "usage cache ignored older probe result for {}",
-            output.provider_id
+            snapshot.provider_id
         );
-        return;
+        return true;
     }
-    state.snapshots.insert(output.provider_id.clone(), snapshot);
-    state.errors.remove(&output.provider_id);
+    state.errors.remove(&snapshot.provider_id);
+    state
+        .snapshots
+        .insert(snapshot.provider_id.clone(), snapshot);
     state.dirty_generation = state.dirty_generation.wrapping_add(1);
     schedule_cache_flush_locked(&mut state);
+    true
 }
 
 pub fn record_probe_error(provider_id: &str, message: impl Into<String>) {
@@ -396,6 +427,7 @@ pub(crate) fn snapshot_for_provider(provider_id: &str) -> Option<CachedPluginSna
         .expect("cache state poisoned")
         .snapshots
         .get(provider_id)
+        .filter(|snapshot| snapshot_is_current(snapshot))
         .cloned()
 }
 
@@ -403,7 +435,13 @@ pub(crate) fn snapshot_for_provider(provider_id: &str) -> Option<CachedPluginSna
 pub(super) fn enabled_snapshots_ordered(state: &CacheState) -> Vec<CachedPluginSnapshot> {
     enabled_plugin_ids_ordered(state)
         .into_iter()
-        .filter_map(|id| state.snapshots.get(&id).cloned())
+        .filter_map(|id| {
+            state
+                .snapshots
+                .get(&id)
+                .filter(|snapshot| snapshot_is_current(snapshot))
+                .cloned()
+        })
         .collect()
 }
 
@@ -412,7 +450,12 @@ pub(super) fn health_cache_state() -> HealthCacheState {
     let enabled_plugin_ids = enabled_plugin_ids_ordered(&state);
     let enabled_cached_snapshots: Vec<&CachedPluginSnapshot> = enabled_plugin_ids
         .iter()
-        .filter_map(|id| state.snapshots.get(id))
+        .filter_map(|id| {
+            state
+                .snapshots
+                .get(id)
+                .filter(|snapshot| snapshot_is_current(snapshot))
+        })
         .collect();
     let last_successful_fetch_at = enabled_cached_snapshots
         .iter()

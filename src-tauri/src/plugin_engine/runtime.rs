@@ -170,6 +170,7 @@ fn run_probe_with_timeout_and_connection(
         connection_target,
         entrypoint,
         None,
+        None,
     )
 }
 
@@ -192,7 +193,17 @@ pub(crate) fn run_probe_with_configuration(
         None,
         "probe",
         Some(configuration),
+        None,
     )
+}
+
+pub(crate) fn run_probe_with_sources(
+    plugin: &LoadedPlugin, app_data_dir: &PathBuf, app_version: &str,
+    configuration: &std::collections::HashMap<String, serde_json::Value>,
+    environment: &std::collections::HashMap<String, Option<String>>, deadline: Instant,
+) -> PluginOutput {
+    let remaining = deadline.saturating_duration_since(Instant::now()).min(Duration::from_secs(PROBE_TIMEOUT_SECS));
+    run_probe_with_settings(plugin, app_data_dir, app_version, remaining, None, "probe", Some(configuration), Some(environment))
 }
 
 fn run_probe_with_settings(
@@ -203,6 +214,7 @@ fn run_probe_with_settings(
     connection_target: Option<(&str, &str)>,
     entrypoint: &str,
     configuration: Option<&std::collections::HashMap<String, serde_json::Value>>,
+    environment: Option<&std::collections::HashMap<String, Option<String>>>,
 ) -> PluginOutput {
     let fallback = error_output(plugin, "runtime error".to_string());
     let timeout_message = probe_timeout_message(timeout);
@@ -259,6 +271,11 @@ fn run_probe_with_settings(
         if let Some(configuration) = configuration {
             if host_api::override_configuration(&ctx, configuration).is_err() {
                 return error_output(plugin, "configuration snapshot failed".to_string());
+            }
+        }
+        if let Some(environment) = environment {
+            if host_api::override_environment(&ctx, environment).is_err() {
+                return error_output(plugin, "environment snapshot failed".into());
             }
         }
         if host_api::patch_ls_wrapper(&ctx).is_err() {
@@ -1124,3 +1141,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "runtime_new_providers_tests.rs"]
+mod new_providers_tests;

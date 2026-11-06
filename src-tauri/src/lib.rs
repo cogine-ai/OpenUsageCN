@@ -5,12 +5,14 @@ mod browser_sessions;
 pub mod cli;
 mod cli_installer;
 mod config;
+mod configured_providers;
 mod cursor_history;
 mod global_shortcut;
 mod local_history;
 mod local_http_api;
 mod log_path;
 mod notifications;
+mod muse_auth;
 mod ollama_accounts;
 #[cfg(target_os = "macos")]
 mod panel;
@@ -53,6 +55,7 @@ const DAILY_ACTIVE_EVENT_NAME: &str = "app_started";
 const MAX_CONCURRENT_PROBES: usize = 4;
 
 enum PendingProbe {
+    Configured(configured_providers::Probe),
     Unscoped {
         output: plugin_engine::runtime::PluginOutput,
         started_at: time::OffsetDateTime,
@@ -406,7 +409,9 @@ fn publish_probe_output_with_invalidation(
             plugin_id,
             output.lines.len()
         );
-        local_http_api::cache_successful_output(&output, started_at);
+        if !configured_providers::supports(plugin_id) {
+            local_http_api::cache_successful_output(&output, started_at);
+        }
     }
     if let Err(error) = app_handle.emit(
         "probe:result",
@@ -688,6 +693,9 @@ async fn start_probe_batch(
                             generation,
                         };
                     }
+                    if configured_providers::supports(&plugin_id) {
+                        return PendingProbe::Configured(configured_providers::Probe::run(&plugin, &data_dir, &version));
+                    }
                     if !account_aware {
                         return PendingProbe::Unscoped {
                             output: plugin_engine::runtime::run_probe(&plugin, &data_dir, &version),
@@ -743,6 +751,15 @@ async fn start_probe_batch(
 
                 let committed =
                     latest_batches.commit_if_latest(&bid, &plugin_id, || match result {
+                        Ok(PendingProbe::Configured(probe)) => {
+                            if let Err(error) = probe.publish(|output, started_at| {
+                                publish_probe_output(&handle, &bid, &plugin_id, output.clone(), started_at); Ok(())
+                            }) {
+                                log::warn!("Configured provider publication rejected: provider={plugin_id}");
+                                publish_probe_output_with_invalidation(&handle, &bid, &plugin_id,
+                                    plugin_engine::runtime::provider_account_probe_error(&plugin, &error), probe_started_at, true);
+                            }
+                        }
                         Ok(PendingProbe::Unscoped { output, started_at }) => {
                             publish_probe_output(&handle, &bid, &plugin_id, output, started_at);
                         }
@@ -972,9 +989,15 @@ fn save_provider_config(
     values: HashMap<String, serde_json::Value>,
     state: tauri::State<'_, Mutex<AppState>>,
 ) -> Result<(), String> {
+    let batches = Arc::clone(&state.lock().map_err(|_| "应用状态暂不可用。")?.latest_probe_batches);
     let fields = plugin_config_fields(state, &plugin_id)?;
     if fields.is_empty() && !values.is_empty() {
         return Err(format!("Plugin '{plugin_id}' has no configurable fields"));
+    }
+    if configured_providers::supports(&plugin_id) {
+        batches.begin_batch(&format!("config-{}", Uuid::new_v4()), &[plugin_id.clone()]);
+        return provider_config::save_plugin_values_with_hook(&plugin_id, &fields, values,
+            || local_http_api::cache::replace_account_projection(&plugin_id, None));
     }
     if plugin_id == "ollama" {
         ollama_accounts::with_legacy_configuration_change(|| {
@@ -991,7 +1014,13 @@ fn delete_provider_config_field(
     field_id: String,
     state: tauri::State<'_, Mutex<AppState>>,
 ) -> Result<(), String> {
+    let batches = Arc::clone(&state.lock().map_err(|_| "应用状态暂不可用。")?.latest_probe_batches);
     let fields = plugin_config_fields(state, &plugin_id)?;
+    if configured_providers::supports(&plugin_id) {
+        batches.begin_batch(&format!("config-{}", Uuid::new_v4()), &[plugin_id.clone()]);
+        return provider_config::delete_plugin_field_with_hook(&plugin_id, &fields, &field_id,
+            || local_http_api::cache::replace_account_projection(&plugin_id, None));
+    }
     if plugin_id == "ollama" {
         ollama_accounts::with_legacy_configuration_change(|| {
             provider_config::delete_plugin_field(&plugin_id, &fields, &field_id)
@@ -1391,6 +1420,9 @@ pub fn run() {
         )
         .invoke_handler(tauri::generate_handler![
             init_panel,
+            muse_auth::start_muse_login,
+            muse_auth::poll_muse_login,
+            muse_auth::cancel_muse_login,
             hide_panel,
             reposition_panel,
             open_devtools,

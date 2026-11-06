@@ -19,6 +19,7 @@ fn final_ollama_publication_preserves_the_selected_rows_actual_fetch_time() {
         lines: vec![],
         started_at: "2026-11-04T00:00:00Z".into(),
         fetched_at: "2026-11-04T00:00:00Z".into(),
+        config_fingerprint: None,
     };
     cache::replace_cached_account_projection("ollama", Some(original.clone())).unwrap();
     let output = PluginOutput {

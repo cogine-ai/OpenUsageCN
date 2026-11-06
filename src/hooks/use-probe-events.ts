@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from "react"
 import { listen, type UnlistenFn } from "@tauri-apps/api/event"
 import { invoke } from "@tauri-apps/api/core"
+import { ISOLATED_CONFIG_PROVIDERS, PROVIDER_CONFIG_CHANGED } from "@/lib/provider-config"
 import type { PluginOutput } from "@/lib/plugin-types"
 
 type ProbeResult = {
@@ -84,6 +85,18 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
   const listenersReadyRef = useRef<Promise<void> | null>(null)
   const listenersReadyResolveRef = useRef<(() => void) | null>(null)
   const listenersReadyRejectRef = useRef<((error: unknown) => void) | null>(null)
+
+  useEffect(() => {
+    const changed = (event: Event) => {
+      const id: unknown = (event as CustomEvent).detail
+      if (typeof id !== "string" || !ISOLATED_CONFIG_PROVIDERS.has(id)) return
+      const previous = latestBatchByProvider.current.get(id)
+      latestBatchByProvider.current.delete(id)
+      previous?.onInterrupted?.(new ProbeVerificationCancelled("连接配置已更新，请重新检查。"))
+    }
+    window.addEventListener(PROVIDER_CONFIG_CHANGED, changed)
+    return () => window.removeEventListener(PROVIDER_CONFIG_CHANGED, changed)
+  }, [])
 
   useEffect(() => {
     let cancelled = false

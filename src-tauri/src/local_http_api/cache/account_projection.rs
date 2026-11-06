@@ -54,7 +54,7 @@ fn save_cache_before(
 
     let mut merged_snapshots = super::load_cache(app_data_dir);
     for (incoming_id, incoming) in snapshots {
-        if forced_projections.contains_key(incoming_id) {
+        if forced_projections.contains_key(incoming_id) || !super::snapshot_is_current(incoming) {
             continue;
         }
         let should_replace = merged_snapshots
@@ -68,7 +68,9 @@ fn save_cache_before(
     for (provider_id, projection) in forced_projections {
         match projection {
             Some(snapshot) => {
-                merged_snapshots.insert(provider_id.clone(), snapshot.clone());
+                if super::snapshot_is_current(snapshot) {
+                    merged_snapshots.insert(provider_id.clone(), snapshot.clone());
+                }
             }
             None => {
                 merged_snapshots.remove(provider_id);
@@ -124,6 +126,14 @@ fn replace_projection_before(
     {
         return Err("account projection provider does not match".to_string());
     }
+    if projection
+        .as_ref()
+        .is_some_and(|snapshot| !super::snapshot_is_current(snapshot))
+    {
+        return Err("连接来源已更改，请重新刷新。".into());
+    }
+    let configured_deletion =
+        projection.is_none() && crate::configured_providers::supports(provider_id);
     let mutex = super::cache_write_lock();
     let _write_guard = if let Some(deadline) = deadline {
         loop {
@@ -170,6 +180,11 @@ fn replace_projection_before(
         super::flush::mark_cache_flushed(generation);
     } else {
         let mut state = super::cache_state().lock().expect("cache state poisoned");
+        if configured_deletion {
+            // The failed configuration mutation is aborted. A later account's cache must
+            // not be deleted by retrying this unscoped tombstone from another process.
+            state.forced_projections.remove(provider_id);
+        }
         super::flush::schedule_cache_flush_locked(&mut state);
     }
     result

@@ -216,6 +216,7 @@ fn cached_snapshot(
             lines: snapshot.lines.clone(),
             started_at: updated.clone(),
             fetched_at: updated.clone(),
+            config_fingerprint: None,
         });
     }
     let Primary::Connection { connection_id } = &stored.primary else {
@@ -235,6 +236,7 @@ fn cached_snapshot(
         lines: snapshot.lines.clone(),
         started_at: updated.clone(),
         fetched_at: updated.clone(),
+            config_fingerprint: None,
     })
 }
 

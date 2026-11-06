@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import type { PluginOutput } from "@/lib/plugin-types"
 import type { PluginState } from "@/hooks/app/types"
 import type { ProbeResultContext } from "@/hooks/use-probe-events"
+import { ISOLATED_CONFIG_PROVIDERS, PROVIDER_CONFIG_CHANGED } from "@/lib/provider-config"
 import { probeFailure } from "@/lib/probe-failure"
 
 type UseProbeStateArgs = {
@@ -30,6 +31,21 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
     },
     []
   )
+
+  // A saved replacement credential must never inherit another account's quota.
+  useEffect(() => {
+    const changed = (event: Event) => {
+      const id: unknown = (event as CustomEvent).detail
+      if (typeof id !== "string" || !ISOLATED_CONFIG_PROVIDERS.has(id)) return
+      updatePluginStates((previous) => {
+        const existing = previous[id]
+        if (!existing) return previous
+        return { ...previous, [id]: { ...existing, data: null, loading: false, lastUpdatedAt: null, lastManualRefreshAt: null } }
+      })
+    }
+    window.addEventListener(PROVIDER_CONFIG_CHANGED, changed)
+    return () => window.removeEventListener(PROVIDER_CONFIG_CHANGED, changed)
+  }, [updatePluginStates])
 
   /** Mark refreshes pending without discarding the existing quota or its success timestamp. */
   const setLoadingForPlugins = useCallback((ids: string[]) => {

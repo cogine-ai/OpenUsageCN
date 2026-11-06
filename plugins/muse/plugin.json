@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "muse",
+  "name": "Muse Code",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "brandColor": "#0064E0",
+  "links": [{ "label": "Usage Dashboard", "url": "https://dev.meta.ai/usage" }],
+  "config": {
+    "fields": [
+      { "id": "accessToken", "type": "secret", "label": "Access Token" },
+      { "id": "tokenExpiresAt", "type": "text", "label": "Token Expiry" }
+    ]
+  },
+  "lines": [
+    { "type": "progress", "label": "Session", "scope": "overview", "primaryOrder": 1, "limitResource": { "key": "session" } },
+    { "type": "progress", "label": "Weekly", "scope": "overview", "period": "weekly", "limitResource": { "key": "weekly" } },
+    { "type": "badge", "label": "Subscription", "scope": "overview" },
+    { "type": "text", "label": "Usage", "scope": "overview" }
+  ]
+}
