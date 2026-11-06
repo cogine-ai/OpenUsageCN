@@ -34,6 +34,7 @@ export function MuseConnection({ onBack, onSaved }: {
   const [slowed, setSlowed] = useState(false)
   const mounted = useRef(false)
   const revision = useRef(0)
+  const readRevision = useRef(0)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const current = useRef<MuseLoginSession | null>(null)
   const onSavedRef = useRef(onSaved)
@@ -50,8 +51,12 @@ export function MuseConnection({ onBack, onSaved }: {
     void cancelMuseLogin(loginId).catch(() => console.error("Failed to cancel Muse authorization"))
   }
   const read = async (expected: number) => {
-    const view = await getProviderConfig("muse")
-    if (!mounted.current || revision.current !== expected) return
+    const request = ++readRevision.current
+    const view = await getProviderConfig("muse").catch((error: unknown) => {
+      if (!mounted.current || revision.current !== expected || readRevision.current !== request) return null
+      throw error
+    })
+    if (!view || !mounted.current || revision.current !== expected || readRevision.current !== request) return
     const saved = view.values.accessToken
     const expiry = view.values.tokenExpiresAt
     const expiryMs = expiry?.type === "text" && expiry.value ? Date.parse(expiry.value) : NaN
@@ -70,7 +75,20 @@ export function MuseConnection({ onBack, onSaved }: {
   useEffect(() => {
     mounted.current = true
     void load()
+    const changed = (event: Event) => {
+      const detail: unknown = (event as CustomEvent).detail
+      const targeted = typeof detail === "object" && detail !== null && "providerId" in detail && detail.providerId === "muse" ? detail : null
+      if (detail !== "muse" && !targeted) return
+      if (!targeted || !("clearData" in targeted) || targeted.clearData !== false) setVerified(false)
+      const expected = revision.current
+      void read(expected).catch(() => {
+        console.error("Failed to refresh Muse connection status")
+        if (mounted.current && revision.current === expected) { setReadFailed(true); setFailure("无法更新连接状态，请重新读取连接。") }
+      })
+    }
+    window.addEventListener(PROVIDER_CONFIG_CHANGED, changed)
     return () => {
+      window.removeEventListener(PROVIDER_CONFIG_CHANGED, changed)
       mounted.current = false; revision.current += 1; stopTimer()
       const previous = current.current; current.current = null
       if (previous) release(previous.loginId)
@@ -104,7 +122,6 @@ export function MuseConnection({ onBack, onSaved }: {
       if (!mounted.current || revision.current !== expected) return
       if (result.state === "succeeded") {
         current.current = null; setSession(null); setConfigured(true)
-        window.dispatchEvent(new CustomEvent(PROVIDER_CONFIG_CHANGED, { detail: "muse" }))
         await check(expected)
       } else {
         setSlowed(result.state === "slowDown")
@@ -162,7 +179,7 @@ export function MuseConnection({ onBack, onSaved }: {
       <p className="select-all break-all text-2xl font-semibold tracking-widest tabular-nums">{session.userCode}</p>
       <Button variant="outline" className="h-10 w-full" onClick={() => void copy()}>{copied ? <CheckCircle2 className="size-4" /> : <Clipboard className="size-4" />}{copied ? "已复制" : "复制验证码"}</Button>
       <Button className="h-10 w-full" onClick={() => void open()}><ExternalLink className="size-4" />打开 Meta 授权网页</Button>
-      <p role="status" className="text-xs text-muted-foreground">{slowed ? "Meta 正在处理授权，稍后自动检查" : "等待授权"} · 还有 <span className="tabular-nums">{Math.floor(remaining / 60)} 分 {remaining % 60} 秒</span></p>
+      <p className="text-xs text-muted-foreground"><span role="status">{slowed ? "Meta 正在处理授权，稍后自动检查" : "等待授权"}</span> · 还有 <span role="timer" aria-label="验证码剩余有效时间" aria-live="off" className="tabular-nums">{Math.floor(remaining / 60)} 分 {remaining % 60} 秒</span></p>
     </section> : configured ? <div className="space-y-2 rounded-lg border bg-muted/50 p-4">
       <p className={`flex items-center gap-2 text-sm ${expired ? "text-amber-600 dark:text-amber-400" : verified ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}`}>{verified && !expired && <CheckCircle2 className="size-4" />}{expired ? "已保存的 Meta 连接已过期" : verified ? "Meta 连接已验证" : "已保存 Meta 连接"}</p>
       <p className="text-xs leading-relaxed text-muted-foreground">{expired ? "请重新授权以读取当前用量。" : "可以检查用量，或重新连接 Meta 账号。"}</p>

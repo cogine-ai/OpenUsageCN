@@ -32,3 +32,7 @@ Muse 连接使用本地 `providers.json` 的独立配置，按现有配置机制
 [OpenUsage Muse Code 接入](https://github.com/robinebers/openusage/blob/0a3813a964f030c50f8c3f1ed13c2781c1f207e3/Sources/OpenUsage/Providers/Muse/MuseUsageClient.swift)。
 接口可能变化，代码及合成用例通过不代表真实账号已验收。
 品牌色 `#0064E0` 来自 [Meta 开发者网站](https://dev.meta.ai/) 的公开 accent CSS，图标使用单色品牌标识。
+
+授权提交由原生端通知应用，即使连接页已关闭或刚取消，也会移除旧账号用量。通知只影响提交前的检查；较新的有效用量和检查会保留。取消等待在后台完成，不阻塞应用。授权到期会在配置锁、缓存工作和最终写入后再次核对，过期不会替换已有连接。
+
+等待授权的状态只在变化时播报；倒计时可以读取，不会每秒自动播报。

@@ -744,3 +744,6 @@ if (result.status === "ok") {
 ## See Also
 
 - [Plugin Schema](./schema.md) - Plugin structure, manifest format, and output schema
+
+
+Muse connection commits emit native `provider:connection-committed` with `providerId` and the last real `previousBatchId`. Credential save, batch replacement and notification share the ownership lock. The global UI listener compares its monotonic batch order: old data/checks are invalidated even after the sheet closes, while newer successful results and newer pending work remain valid. Cancellation is an asynchronous command, and the earliest grant/device-session deadline is rechecked immediately before credential replacement, including Windows retries.

@@ -128,7 +128,11 @@ impl Controller {
         &self,
         id: &str,
         http: &impl Http,
-        save: impl FnOnce(&HashMap<String, Value>, HashMap<String, Value>) -> Result<(), String>,
+        save: impl FnOnce(
+            &HashMap<String, Value>,
+            HashMap<String, Value>,
+            Instant,
+        ) -> Result<(), String>,
     ) -> Result<PollView, String> {
         self.poll_with_clock(id, http, save, || {
             (Instant::now(), time::OffsetDateTime::now_utc())
@@ -139,7 +143,11 @@ impl Controller {
         &self,
         id: &str,
         http: &impl Http,
-        save: impl FnOnce(&HashMap<String, Value>, HashMap<String, Value>) -> Result<(), String>,
+        save: impl FnOnce(
+            &HashMap<String, Value>,
+            HashMap<String, Value>,
+            Instant,
+        ) -> Result<(), String>,
         now: impl Fn() -> (Instant, time::OffsetDateTime),
     ) -> Result<PollView, String> {
         let (code, expected) = {
@@ -240,12 +248,14 @@ impl Controller {
         }
         match result {
             Ok((Some((values, token_deadline)), _)) => {
+                let save_valid_until = token_deadline
+                    .map_or(current.deadline, |deadline| deadline.min(current.deadline));
                 *locked = None;
-                if token_deadline.is_some_and(|deadline| now().0 >= deadline) {
-                    log::warn!("Muse authorization token expired during identity verification");
+                if now().0 >= save_valid_until {
+                    log::warn!("Muse authorization expired before saving the connection");
                     return Err("Muse Code 授权已过期，请重新连接。".into());
                 }
-                save(&expected, values).map_err(|error| {
+                save(&expected, values, save_valid_until).map_err(|error| {
                     log::warn!("Muse device authorization could not save the connection");
                     error
                 })?;
@@ -311,28 +321,67 @@ pub(crate) async fn poll_muse_login(
     app: tauri::AppHandle,
 ) -> Result<PollView, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        controller().poll(&login_id, &transport::Client, |expected, values| {
-            use tauri::Manager;
-            let state = app.state::<std::sync::Mutex<crate::AppState>>();
-            let batches = std::sync::Arc::clone(
-                &state
-                    .lock()
-                    .map_err(|_| "应用状态暂不可用。")?
-                    .latest_probe_batches,
-            );
-            batches.begin_batch(
-                &format!("muse-login-{}", uuid::Uuid::new_v4()),
-                &["muse".into()],
-            );
-            crate::provider_config::save_login_values("muse", &fields(), expected, values, || {
-                crate::local_http_api::cache::replace_account_projection("muse", None)
-            })
-        })
+        controller().poll(
+            &login_id,
+            &transport::Client,
+            |expected, values, save_valid_until| {
+                use tauri::{Emitter, Manager};
+                let state = app.state::<std::sync::Mutex<crate::AppState>>();
+                let batches = std::sync::Arc::clone(
+                    &state
+                        .lock()
+                        .map_err(|_| "应用状态暂不可用。")?
+                        .latest_probe_batches,
+                );
+                batches.with_connection_commit(
+                    "muse",
+                    &format!("muse-login-{}", uuid::Uuid::new_v4()),
+                    || {
+                        crate::provider_config::save_login_values(
+                            "muse",
+                            &fields(),
+                            expected,
+                            values,
+                            save_valid_until,
+                            || {
+                                crate::local_http_api::cache::replace_account_projection(
+                                    "muse", None,
+                                )
+                            },
+                        )
+                    },
+                    |previous_batch_id| {
+                        #[derive(Clone, Serialize)]
+                        #[serde(rename_all = "camelCase")]
+                        struct Committed {
+                            provider_id: &'static str,
+                            previous_batch_id: Option<String>,
+                        }
+                        if app
+                            .emit(
+                                "provider:connection-committed",
+                                Committed {
+                                    provider_id: "muse",
+                                    previous_batch_id,
+                                },
+                            )
+                            .is_err()
+                        {
+                            log::error!(
+                                "Muse committed connection notification could not be delivered"
+                            );
+                        }
+                    },
+                )
+            },
+        )
     })
     .await
     .map_err(|_| "授权服务暂不可用，请重试。".to_string())?
 }
 #[tauri::command]
-pub(crate) fn cancel_muse_login(login_id: String) -> Result<(), String> {
-    controller().cancel(&login_id)
+pub(crate) async fn cancel_muse_login(login_id: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || controller().cancel(&login_id))
+        .await
+        .map_err(|_| "授权服务暂不可用，请重试。".to_string())?
 }

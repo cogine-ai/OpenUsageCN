@@ -12,9 +12,9 @@ const time = Date.parse("2026-11-06T12:00:00Z")
 const saved = { values: { accessToken: { type: "secret", configured: true, hint: "...demo" }, tokenExpiresAt: { type: "text", value: "2026-11-07T12:00:00Z" } } }
 const session: MuseLoginSession = { loginId: "session-one", userCode: "TEST-1234", verificationUri: "https://auth.meta.com/device", expiresAt: time + 60_000, intervalSeconds: 5 }
 function deferred<T>() {
-  let resolve!: (value: T) => void
-  const promise = new Promise<T>((done) => { resolve = done })
-  return { promise, resolve }
+  let resolve!: (value: T) => void, reject!: (error: Error) => void
+  const promise = new Promise<T>((done, fail) => { resolve = done; reject = fail })
+  return { promise, resolve, reject }
 }
 async function mount(onSaved = vi.fn().mockResolvedValue(undefined)) {
   const result = render(<MuseConnection onBack={vi.fn()} onSaved={onSaved} />)
@@ -42,6 +42,28 @@ describe("Muse Device Connection", () => {
     expect(screen.queryByDisplayValue(/dca:/)).not.toBeInTheDocument()
     expect(mocks.start).not.toHaveBeenCalled(); expect(onSaved).not.toHaveBeenCalled()
   })
+  it("refreshes committed presence without interrupting another pending authorization or checking quota", async () => {
+    const { onSaved } = await mount(); await start()
+    mocks.get.mockResolvedValue(saved)
+    await act(async () => window.dispatchEvent(new CustomEvent("openusage-provider-config-changed", { detail: { providerId: "muse", clearData: true, preserveLoading: true } })))
+    expect(screen.getByText("TEST-1234")).toBeVisible()
+    expect(screen.getByRole("button", { name: "取消连接" })).toBeVisible()
+    expect(onSaved).not.toHaveBeenCalled()
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "取消连接" })))
+    expect(screen.getByText("已保存 Meta 连接")).toBeVisible()
+  })
+  it.each(["resolve", "reject"])("ignores an older presence read that finishes after the current read: %s", async (outcome) => {
+    await mount()
+    const old = deferred<any>()
+    mocks.get.mockReturnValueOnce(old.promise).mockResolvedValueOnce(saved)
+    const changed = () => window.dispatchEvent(new CustomEvent("openusage-provider-config-changed", { detail: { providerId: "muse", clearData: false, preserveLoading: false } }))
+    await act(async () => { changed(); changed(); await Promise.resolve() })
+    if (outcome === "resolve") await act(async () => old.resolve({ values: { ...saved.values, tokenExpiresAt: { type: "text", value: "2026-11-05T12:00:00Z" } } }))
+    else await act(async () => old.reject(new Error("Obsolete Read Failed")))
+    expect(screen.getByText("已保存 Meta 连接")).toBeVisible()
+    expect(screen.queryByText("已保存的 Meta 连接已过期")).not.toBeInTheDocument()
+    expect(screen.queryByText("无法更新连接状态，请重新读取连接。")).not.toBeInTheDocument()
+  })
   it("keeps saved but expired credentials and offers explicit reconnect", async () => {
     mocks.get.mockResolvedValue({ values: { ...saved.values, tokenExpiresAt: { type: "text", value: "2026-11-05T12:00:00Z" } } })
     await mount()
@@ -57,11 +79,21 @@ describe("Muse Device Connection", () => {
     expect(mocks.open).toHaveBeenCalledWith(session.verificationUri)
     await tick(4999); expect(mocks.poll).not.toHaveBeenCalled()
   })
+  it("keeps the changing countdown outside the live authorization status", async () => {
+    await mount(); await start()
+    const status = screen.getByRole("status")
+    const timer = screen.getByRole("timer", { name: "验证码剩余有效时间" })
+    expect(status).toHaveTextContent(/^等待授权$/)
+    expect(timer).toHaveTextContent("1 分 0 秒")
+    expect(timer).toHaveAttribute("aria-live", "off")
+    expect(timer.closest('[role="status"]')).toBeNull()
+    await tick(1000)
+    expect(timer).toHaveTextContent("0 分 59 秒")
+    expect(status).toHaveTextContent(/^等待授权$/)
+  })
   it("honors slowDown before accepting the saved identity and checking quota once", async () => {
     mocks.poll.mockResolvedValueOnce({ state: "slowDown", intervalSeconds: 10 }).mockResolvedValueOnce({ state: "succeeded" })
-    const changed = vi.fn()
-    window.addEventListener("openusage-provider-config-changed", changed, { once: true })
-    const { onSaved } = await mount(vi.fn(async () => { expect(changed).toHaveBeenCalledTimes(1) })); await start()
+    const { onSaved } = await mount(); await start()
     await tick(5000); expect(mocks.poll).toHaveBeenCalledTimes(1)
     expect(screen.getByText(/Meta 正在处理授权/)).toBeVisible()
     await tick(9999); expect(mocks.poll).toHaveBeenCalledTimes(1)

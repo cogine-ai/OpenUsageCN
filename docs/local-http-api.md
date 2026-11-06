@@ -53,7 +53,7 @@ Example:
 
 `providers.cached` and `cache.ready` only count enabled providers that would appear in `GET /v1/usage`. `cache.ready` is `false` on a clean launch until at least one enabled provider has refreshed successfully. That is not a service failure.
 
-The Windows MVP reports ten known providers: Codex, BigModel CN, OpenAI API, OpenRouter, Z.ai, DeepSeek, Moonshot, Ollama Cloud, Doubao, and xAI.
+The Windows MVP reports sixteen known providers: Codex, BigModel CN, OpenAI API, OpenRouter, Z.ai, DeepSeek, Moonshot, Ollama Cloud, Doubao, xAI, Claude Platform, WorkBuddy, Trae CN, LiteLLM, SiliconFlow, and Muse Code.
 
 New Antigravity quota pools remain separate numeric resources: `geminiSession`, `geminiWeekly`,
 `claude` (the existing Claude session key), `claudeWeekly` and `argonWeekly`. Only confirmed

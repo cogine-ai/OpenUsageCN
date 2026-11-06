@@ -76,6 +76,7 @@ pub(crate) fn save_login_values(
     fields: &[PluginConfigField],
     expected: &HashMap<String, Value>,
     input: HashMap<String, Value>,
+    valid_until: std::time::Instant,
     before_commit: impl FnOnce() -> Result<(), String>,
 ) -> Result<(), String> {
     save_login_values_at(
@@ -84,6 +85,7 @@ pub(crate) fn save_login_values(
         fields,
         expected,
         input,
+        valid_until,
         before_commit,
     )
 }
@@ -94,12 +96,14 @@ fn save_login_values_at(
     fields: &[PluginConfigField],
     expected: &HashMap<String, Value>,
     input: HashMap<String, Value>,
+    valid_until: std::time::Instant,
     before_commit: impl FnOnce() -> Result<(), String>,
 ) -> Result<(), String> {
     let _guard = save_lock()
         .lock()
         .map_err(|_| "连接设置暂不可用，请重试。")?;
     let _file_guard = lock_config_file(&path)?;
+    ensure_login_valid(valid_until)?;
     let (mut config, original) = read(&path)?;
     let old = config.providers.get(plugin).cloned().unwrap_or_default();
     if resolve_values(fields, &old) != *expected {
@@ -109,15 +113,19 @@ fn save_login_values_at(
     register_secret_values(fields, &values);
     config.providers.insert(plugin.into(), values);
     let json = serde_json::to_string_pretty(&config).map_err(|_| "无法保存登录设置。")?;
+    ensure_login_valid(valid_until)?;
     before_commit()?;
+    ensure_login_valid(valid_until)?;
     let saved = if let Some(bytes) = original {
-        crate::safe_file::write_text_if_unchanged(
+        crate::safe_file::write_text_if_unchanged_before(
             &path,
             &json,
             &crate::safe_file::sha256_hex(&bytes),
-        )?
+            valid_until,
+        )
+        .map_err(|_| "无法保存登录设置，授权可能已过期，请重新连接。")?
     } else {
-        create_if_missing(&path, json.as_bytes())?
+        create_if_missing(&path, json.as_bytes(), valid_until)?
     };
     if !saved {
         return Err("连接设置已被其他操作修改，请重新授权。".into());
@@ -125,6 +133,15 @@ fn save_login_values_at(
     *store().lock().map_err(|_| "连接设置暂不可用，请重试。")? = config;
     LOAD_DEGRADED.store(false, Ordering::Release);
     Ok(())
+}
+
+fn ensure_login_valid(valid_until: std::time::Instant) -> Result<(), String> {
+    if std::time::Instant::now() >= valid_until {
+        log::warn!("Muse authorization expired during conditional persistence");
+        Err("Muse Code 授权已过期，请重新连接。".into())
+    } else {
+        Ok(())
+    }
 }
 
 fn read(path: &Path) -> Result<(ProviderConfigFile, Option<Vec<u8>>), String> {
@@ -140,7 +157,11 @@ fn read(path: &Path) -> Result<(ProviderConfigFile, Option<Vec<u8>>), String> {
 }
 
 // A hard link installs a fully written private file without replacing a concurrently created file.
-fn create_if_missing(path: &Path, bytes: &[u8]) -> Result<bool, String> {
+fn create_if_missing(
+    path: &Path,
+    bytes: &[u8],
+    valid_until: std::time::Instant,
+) -> Result<bool, String> {
     let parent = path.parent().ok_or("无法定位连接设置。")?;
     std::fs::create_dir_all(parent).map_err(|_| "无法创建连接设置目录。")?;
     let temporary = parent.join(format!(".login-{}.tmp", uuid::Uuid::new_v4()));
@@ -157,6 +178,7 @@ fn create_if_missing(path: &Path, bytes: &[u8]) -> Result<bool, String> {
             .and_then(|_| file.sync_all())
             .map_err(|_| "无法写入登录设置。")?;
         drop(file);
+        ensure_login_valid(valid_until)?;
         match std::fs::hard_link(&temporary, path) {
             Ok(()) => Ok(true),
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(false),
@@ -176,8 +198,18 @@ mod tests {
     fn first_login_never_replaces_an_existing_file() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("providers.json");
-        assert!(create_if_missing(&path, b"original").unwrap());
-        assert!(!create_if_missing(&path, b"replacement").unwrap());
+        assert!(create_if_missing(
+            &path,
+            b"original",
+            std::time::Instant::now() + std::time::Duration::from_secs(10)
+        )
+        .unwrap());
+        assert!(!create_if_missing(
+            &path,
+            b"replacement",
+            std::time::Instant::now() + std::time::Duration::from_secs(10)
+        )
+        .unwrap());
         assert_eq!(std::fs::read(&path).unwrap(), b"original");
         assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
     }
@@ -247,6 +279,7 @@ mod tests {
             &muse_fields(),
             &expected,
             HashMap::from([("accessToken".into(), Value::String("dca:new".into()))]),
+            std::time::Instant::now() + std::time::Duration::from_secs(10),
             || Ok(()),
         )
         .unwrap();
@@ -260,6 +293,7 @@ mod tests {
             &muse_fields(),
             &expected,
             HashMap::new(),
+            std::time::Instant::now() + std::time::Duration::from_secs(10),
             || panic!("must reject before mutation")
         )
         .is_err());
@@ -280,6 +314,7 @@ mod tests {
             &muse_fields(),
             &expected,
             HashMap::from([("accessToken".into(), Value::String("dca:new".into()))]),
+            std::time::Instant::now() + std::time::Duration::from_secs(10),
             || {
                 std::fs::write(&path, external).unwrap();
                 Ok(())
@@ -288,5 +323,28 @@ mod tests {
         assert!(result.is_err());
         assert_eq!(std::fs::read_to_string(&path).unwrap(), external);
         *store().lock().unwrap() = previous;
+    }
+    #[test]
+    #[serial_test::serial]
+    fn expiry_during_cache_work_preserves_existing_credentials() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("providers.json");
+        let original = r#"{"providers":{"muse":{"accessToken":"dca:old"},"cursor":{"encrypted":"untouched"}}}"#;
+        std::fs::write(&path, original).unwrap();
+        let expected = resolved_values_from_path(&path, "muse", &muse_fields()).unwrap();
+        let result = save_login_values_at(
+            &path,
+            "muse",
+            &muse_fields(),
+            &expected,
+            HashMap::from([("accessToken".into(), Value::String("dca:new".into()))]),
+            std::time::Instant::now() + std::time::Duration::from_millis(200),
+            || {
+                std::thread::sleep(std::time::Duration::from_millis(250));
+                Ok(())
+            },
+        );
+        assert!(result.is_err());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
     }
 }

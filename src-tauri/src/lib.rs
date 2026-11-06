@@ -995,7 +995,7 @@ fn save_provider_config(
         return Err(format!("Plugin '{plugin_id}' has no configurable fields"));
     }
     if configured_providers::supports(&plugin_id) {
-        batches.begin_batch(&format!("config-{}", Uuid::new_v4()), &[plugin_id.clone()]);
+        batches.invalidate_provider(&format!("config-{}", Uuid::new_v4()), &plugin_id);
         return provider_config::save_plugin_values_with_hook(&plugin_id, &fields, values,
             || local_http_api::cache::replace_account_projection(&plugin_id, None));
     }
@@ -1017,7 +1017,7 @@ fn delete_provider_config_field(
     let batches = Arc::clone(&state.lock().map_err(|_| "应用状态暂不可用。")?.latest_probe_batches);
     let fields = plugin_config_fields(state, &plugin_id)?;
     if configured_providers::supports(&plugin_id) {
-        batches.begin_batch(&format!("config-{}", Uuid::new_v4()), &[plugin_id.clone()]);
+        batches.invalidate_provider(&format!("config-{}", Uuid::new_v4()), &plugin_id);
         return provider_config::delete_plugin_field_with_hook(&plugin_id, &fields, &field_id,
             || local_http_api::cache::replace_account_projection(&plugin_id, None));
     }

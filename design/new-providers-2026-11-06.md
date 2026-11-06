@@ -52,7 +52,7 @@
 | Expired | 显示重新连接入口，保留上次有效数据并标旧时间，不当成无账号。 |
 | Error | 原有错误区显示友好原因；诊断只含脱敏类别和引用编号，未知数据不补零。 |
 
-所有按钮和输入可用键盘操作，有 label、aria-live 状态；焦点可见。浅/深色和320/400px检查无横向溢出。减弱动效时不旋转等待图标，保留等待文字。
+所有按钮和输入可用键盘操作，有 label、aria-live 状态；焦点可见。授权状态变化会播报，剩余时间使用独立 timer 且关闭每秒自动播报；视觉保持原样。浅/深色和320/400px检查无横向溢出。减弱动效时不旋转等待图标，保留等待文字。
 
 ## 原型与验收
 
@@ -70,5 +70,16 @@
 - `start_muse_login()` 返回 `loginId`、`userCode`、`verificationUri`、待授权会话的 `expiresAt`（毫秒）和 `intervalSeconds`。原生校验授权网址为 Meta 的 HTTPS 域。
 - `poll_muse_login({ loginId })` 返回 `pending`、`slowDown` 或 `succeeded`，可带新的 `intervalSeconds`；拒绝、过期、取消、配置变更由固定友好错误表示。
 - `cancel_muse_login({ loginId })` 取消当前待完成会话；离页和新会话均使旧回调失效。
-- 成功后先发布本 provider 配置变更事件以废弃旧用量/检查，再通过 `onSaved('muse')` 检查额度并重新读取脱敏配置。`getProviderConfig('muse').values.accessToken.configured` 仅表示已保存连接。`tokenExpiresAt` 为可选 ISO8601 UTC 文本，和待授权会话的毫秒过期值分开处理。
+- 成功保存后由原生端发布 `provider:connection-committed`（`providerId`、保存前最后真实 `previousBatchId`）事件；全局监听使用本 UI 会话单调批次顺序，仅清旧用量和旧检查。连接页取消或关闭不丢失通知，迟到事件不清新结果或中断新请求。页内成功仍通过 `onSaved('muse')` 检查额度并重新读取脱敏配置。`getProviderConfig('muse').values.accessToken.configured` 仅表示已保存连接。`tokenExpiresAt` 为可选 ISO8601 UTC 文本，和待授权会话的毫秒过期值分开处理。
 - Muse 不显示任何手动 token 输入；设备码、access token、邮箱和模型 API Key 不进入 IPC。
+
+审查收口：等待授权文案使用 status，倒计时单独使用 timer 避免逐秒播报；取消命令后台等待保存锁。授权和设备码会话的最早截止时间贯穿最终落盘，失效后不替换已有凭据。LiteLLM 明确配置私有 HTTP 网关的支持保留；接入文档说明该传输会明文发送 Key，建议跨设备采用 HTTPS。
+
+
+## Muse Review Timing Follow-Up
+
+授权完成的通知由原生保存操作发出，根级检查监听器始终处理；连接页的取消、离页或旧轮询回调不再决定是否清除旧账号数据。每个 UI 检查使用会话前缀与单调序号，原生返回保存前最后一个真实检查 ID 作为边界；连续授权提交不把内部占位 ID 当作真实检查。前端仅中断边界之前的检查、清除边界之前的数据。新的成功结果即使后续又有 pending / failed 检查，也不会被旧通知清掉。旧检查也不能经新检查启动失败后的回退重新成为 owner。
+
+Mounted 连接页只重读当前脱敏连接状态，不因通知自行启动用量检查、不改变另一待授权会话的阶段；读请求有独立序号，旧读取成功或失败都不能覆盖新结果。当前有效的成功授权页仍发起一次用量检查。倒计时使用独立 timer 且 aria-live 关闭，状态文案只在授权状态变化时播报，视觉结构不变。
+
+新增两张 review-followup 截图与收据位于 `design/evidence/new-providers/`。轻量浏览器验收只覆盖 pending/timer、slowDown、成功单次检查及取消后已提交连接的 presence；全局时序由 hook/组件回归证明。原有 131 场景没有重跑，截图不代表真实账号或安装后验收。

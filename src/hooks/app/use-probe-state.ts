@@ -35,12 +35,15 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
   // A saved replacement credential must never inherit another account's quota.
   useEffect(() => {
     const changed = (event: Event) => {
-      const id: unknown = (event as CustomEvent).detail
+      const detail: unknown = (event as CustomEvent).detail
+      const targeted = typeof detail === "object" && detail !== null && "providerId" in detail && detail.providerId === "muse" && "preserveLoading" in detail && typeof detail.preserveLoading === "boolean" ? detail : null
+      if (targeted && "clearData" in targeted && targeted.clearData === false) return
+      const id = targeted ? "muse" : detail
       if (typeof id !== "string" || !ISOLATED_CONFIG_PROVIDERS.has(id)) return
       updatePluginStates((previous) => {
         const existing = previous[id]
         if (!existing) return previous
-        return { ...previous, [id]: { ...existing, data: null, loading: false, lastUpdatedAt: null, lastManualRefreshAt: null } }
+        return { ...previous, [id]: { ...existing, data: null, loading: targeted?.preserveLoading ? existing.loading : false, lastUpdatedAt: null, lastManualRefreshAt: null } }
       })
     }
     window.addEventListener(PROVIDER_CONFIG_CHANGED, changed)

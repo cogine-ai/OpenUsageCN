@@ -4,6 +4,7 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 #[cfg(target_os = "windows")]
 use std::time::Duration;
+use std::time::Instant;
 
 #[cfg(target_os = "windows")]
 const WINDOWS_RETRY_DELAYS: [Duration; 3] = [
@@ -21,17 +22,42 @@ pub fn write_text_if_unchanged(
     content: &str,
     expected_sha256: &str,
 ) -> Result<bool, String> {
-    write_bytes_inner(path, content.as_bytes(), Some(expected_sha256))
+    write_bytes_inner(path, content.as_bytes(), Some(expected_sha256), None)
+}
+
+pub(crate) fn write_text_if_unchanged_before(
+    path: &Path,
+    content: &str,
+    expected_sha256: &str,
+    deadline: Instant,
+) -> Result<bool, String> {
+    write_bytes_inner(
+        path,
+        content.as_bytes(),
+        Some(expected_sha256),
+        Some(deadline),
+    )
+}
+fn check_deadline(deadline: Option<Instant>) -> io::Result<()> {
+    if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
+        Err(io::Error::new(
+            io::ErrorKind::TimedOut,
+            "save deadline elapsed",
+        ))
+    } else {
+        Ok(())
+    }
 }
 
 pub fn write_bytes(path: &Path, content: &[u8]) -> Result<(), String> {
-    write_bytes_inner(path, content, None).map(|_| ())
+    write_bytes_inner(path, content, None, None).map(|_| ())
 }
 
 fn write_bytes_inner(
     path: &Path,
     content: &[u8],
     expected_sha256: Option<&str>,
+    deadline: Option<Instant>,
 ) -> Result<bool, String> {
     let destination = resolve_write_destination(path)?;
     if let Some(parent) = destination
@@ -61,7 +87,7 @@ fn write_bytes_inner(
         file.sync_all()
             .map_err(|error| format!("failed to sync temporary file: {error}"))?;
         drop(file);
-        replace_with_retry(&temp, &destination, expected_sha256)
+        replace_with_retry(&temp, &destination, expected_sha256, deadline)
             .map_err(|error| format!("failed to replace destination file: {error}"))
     })();
 
@@ -130,12 +156,14 @@ fn replace_with_retry(
     source: &Path,
     destination: &Path,
     expected_sha256: Option<&str>,
+    deadline: Option<Instant>,
 ) -> io::Result<bool> {
     if let Some(expected_sha256) = expected_sha256 {
         if !destination_matches(destination, expected_sha256)? {
             return Ok(false);
         }
     }
+    check_deadline(deadline)?;
     std::fs::rename(source, destination).map(|_| true)
 }
 
@@ -144,8 +172,9 @@ fn replace_with_retry(
     source: &Path,
     destination: &Path,
     expected_sha256: Option<&str>,
+    deadline: Option<Instant>,
 ) -> io::Result<bool> {
-    let mut result = replace_windows_guarded(source, destination, expected_sha256);
+    let mut result = replace_windows_guarded(source, destination, expected_sha256, deadline);
     for delay in WINDOWS_RETRY_DELAYS {
         let should_retry = result
             .as_ref()
@@ -155,7 +184,7 @@ fn replace_with_retry(
             break;
         }
         std::thread::sleep(delay);
-        result = replace_windows_guarded(source, destination, expected_sha256);
+        result = replace_windows_guarded(source, destination, expected_sha256, deadline);
     }
     result
 }
@@ -170,11 +199,13 @@ fn replace_windows_guarded(
     source: &Path,
     destination: &Path,
     expected_sha256: Option<&str>,
+    deadline: Option<Instant>,
 ) -> io::Result<bool> {
     use std::io::Read;
     use std::os::windows::fs::OpenOptionsExt;
     use windows_sys::Win32::Storage::FileSystem::{FILE_SHARE_DELETE, FILE_SHARE_READ};
 
+    check_deadline(deadline)?;
     let _destination_guard = if let Some(expected_sha256) = expected_sha256 {
         let mut file = match OpenOptions::new()
             .read(true)
@@ -195,6 +226,7 @@ fn replace_windows_guarded(
         None
     };
 
+    check_deadline(deadline)?;
     if expected_sha256.is_some() {
         // MoveFileExW rejects the still-open digest guard. ReplaceFileW can replace
         // the guarded path and also carries its metadata onto the temporary file.
@@ -234,7 +266,7 @@ fn replace_windows_preserving_destination(source: &Path, destination: &Path) -> 
 fn replace_windows(source: &Path, destination: &Path) -> io::Result<()> {
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Storage::FileSystem::{
-        MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH, MoveFileExW,
+        MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
     };
 
     let mut source_wide: Vec<u16> = source.as_os_str().encode_wide().collect();
@@ -311,19 +343,30 @@ mod tests {
         symlink("auth-target.json", &link).unwrap();
 
         let original_digest = sha256_hex(b"old");
-        assert!(
-            write_text_if_unchanged(&link, "new", &original_digest)
-                .expect("conditional write through symlink")
-        );
+        assert!(write_text_if_unchanged(&link, "new", &original_digest)
+            .expect("conditional write through symlink"));
         write_text(&link, "newer").expect("write through symlink");
 
-        assert!(
-            std::fs::symlink_metadata(&link)
-                .unwrap()
-                .file_type()
-                .is_symlink()
-        );
+        assert!(std::fs::symlink_metadata(&link)
+            .unwrap()
+            .file_type()
+            .is_symlink());
         assert_eq!(std::fs::read_to_string(&target).unwrap(), "newer");
         let _ = std::fs::remove_dir_all(dir);
+    }
+    #[test]
+    fn expired_conditional_save_never_replaces_credentials_and_removes_staging_file() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("providers.json");
+        std::fs::write(&path, b"original-credentials").unwrap();
+        assert!(write_text_if_unchanged_before(
+            &path,
+            "new-credentials",
+            &sha256_hex(b"original-credentials"),
+            Instant::now()
+        )
+        .is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), b"original-credentials");
+        assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 1);
     }
 }

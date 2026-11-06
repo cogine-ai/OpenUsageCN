@@ -41,7 +41,7 @@ fn authorization_is_verified_before_saving_and_model_keys_never_leave_response()
     let c = Controller::default();
     let id = begin(&c);
     let mut saved = None;
-    let response=c.poll(&id,&fake(&[r#"{"access_token":"dca:synthetic-authorized","expires_in":3600}"#, r#"{"user_email":"synthetic@example.invalid","is_subs_active":false,"api_key":"private-model-key"}"#]), |_,values|{saved=Some(values);Ok(())}).unwrap();
+    let response=c.poll(&id,&fake(&[r#"{"access_token":"dca:synthetic-authorized","expires_in":3600}"#, r#"{"user_email":"synthetic@example.invalid","is_subs_active":false,"api_key":"private-model-key"}"#]), |_,values,_|{saved=Some(values);Ok(())}).unwrap();
     assert_eq!(response.state, "succeeded");
     let saved = saved.unwrap();
     assert_eq!(saved.len(), 2);
@@ -58,12 +58,12 @@ fn pending_and_slow_down_do_not_save_or_busy_poll() {
     let id = begin(&c);
     let http = fake(&[r#"{"error":"slow_down"}"#]);
     let r = c
-        .poll(&id, &http, |_, _| panic!("pending must not save"))
+        .poll(&id, &http, |_, _, _| panic!("pending must not save"))
         .unwrap();
     assert_eq!(r.state, "slowDown");
     assert_eq!(r.interval_seconds, 10);
     assert_eq!(
-        c.poll(&id, &http, |_, _| panic!()).unwrap().state,
+        c.poll(&id, &http, |_, _, _| panic!()).unwrap().state,
         "pending"
     );
 }
@@ -81,7 +81,7 @@ fn denied_expired_and_invalid_identity_preserve_previous_credentials() {
         let c = Controller::default();
         let id = begin(&c);
         assert!(c
-            .poll(&id, &fake(&replies), |_, _| panic!(
+            .poll(&id, &fake(&replies), |_, _, _| panic!(
                 "failed grant must not save"
             ))
             .is_err());
@@ -141,7 +141,7 @@ fn a_replaced_or_cancelled_session_cannot_commit_a_late_grant() {
                 resume: Mutex::new(resume_rx),
                 count: Mutex::new(0),
             },
-            |_, _| {
+            |_, _, _| {
                 worker_saved.store(true, Ordering::SeqCst);
                 Ok(())
             },
@@ -166,7 +166,7 @@ fn changed_configuration_rejects_an_otherwise_valid_grant() {
                 r#"{"access_token":"dca:valid"}"#,
                 r#"{"user_email":"valid@example.invalid","is_subs_active":true}"#
             ]),
-            |_, _| Err("connection changed".into())
+            |_, _, _| Err("connection changed".into())
         )
         .is_err());
     assert!(c.session.lock().unwrap().is_none());
@@ -207,7 +207,7 @@ fn token_expiry_starts_at_receipt_and_expired_verification_never_saves() {
         let result = c.poll_with_clock(
             &id,
             &http,
-            |_, values| {
+            |_, values, _| {
                 credentials = values;
                 Ok(())
             },
@@ -274,5 +274,65 @@ fn failed_start_does_not_clear_a_newer_session() {
     assert_eq!(
         session.as_ref().unwrap().device_code,
         "synthetic-device-secret"
+    );
+}
+
+#[test]
+fn save_receives_the_earliest_grant_or_device_session_deadline() {
+    for seconds in [None, Some(30), Some(300)] {
+        let c = Controller::default();
+        let id = begin(&c);
+        let received = Instant::now();
+        let session_deadline = received + Duration::from_secs(100);
+        c.session.lock().unwrap().as_mut().unwrap().deadline = session_deadline;
+        let mut grant = json!({"access_token":"dca:synthetic-bounded-grant"});
+        if let Some(seconds) = seconds {
+            grant["expires_in"] = json!(seconds);
+        }
+        let http = fake(&[
+            &grant.to_string(),
+            r#"{"user_email":"synthetic@example.invalid","is_subs_active":true}"#,
+        ]);
+        let mut observed = None;
+        c.poll_with_clock(
+            &id,
+            &http,
+            |_, _, deadline| {
+                observed = Some(deadline);
+                Ok(())
+            },
+            || (received, time::OffsetDateTime::now_utc()),
+        )
+        .unwrap();
+        assert_eq!(
+            observed,
+            Some(
+                seconds
+                    .map(|seconds| received + Duration::from_secs(seconds))
+                    .unwrap_or(session_deadline)
+                    .min(session_deadline)
+            )
+        );
+    }
+}
+
+#[test]
+fn cancellation_waiting_for_atomic_save_keeps_the_async_task_responsive() {
+    // Lock contention stands in for the atomic save's file-lock/cache work; no UI or credentials.
+    let guard = controller().session.lock().unwrap();
+    let (progress_tx, progress_rx) = mpsc::channel();
+    let task = tauri::async_runtime::spawn(async move {
+        let (cancelled, ()) = tokio::join!(biased;
+            cancel_muse_login("synthetic-unmatched-login-id".into()),
+            async move { progress_tx.send(()).unwrap(); }
+        );
+        cancelled
+    });
+    let responsive = progress_rx.recv_timeout(Duration::from_secs(1));
+    drop(guard);
+    assert!(tauri::async_runtime::block_on(task).unwrap().is_ok());
+    assert!(
+        responsive.is_ok(),
+        "lock contention must not block the async executor"
     );
 }

@@ -2,19 +2,57 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 #[derive(Default)]
+struct Owners {
+    latest_by_provider: HashMap<String, String>,
+    last_probe_by_provider: HashMap<String, String>,
+}
+
+#[derive(Default)]
 pub(crate) struct LatestProbeBatches {
-    latest_by_provider: Mutex<HashMap<String, String>>,
+    owners: Mutex<Owners>,
 }
 
 impl LatestProbeBatches {
     pub(crate) fn begin_batch(&self, batch_id: &str, provider_ids: &[String]) {
-        let mut latest_by_provider = self
-            .latest_by_provider
-            .lock()
-            .expect("latest probe batches poisoned");
+        let mut owners = self.owners.lock().expect("latest probe batches poisoned");
         for provider_id in provider_ids {
-            latest_by_provider.insert(provider_id.clone(), batch_id.to_string());
+            owners
+                .latest_by_provider
+                .insert(provider_id.clone(), batch_id.to_string());
+            owners
+                .last_probe_by_provider
+                .insert(provider_id.clone(), batch_id.to_string());
         }
+    }
+
+    /// A configuration barrier is not a frontend probe and must not erase its causal ID.
+    pub(crate) fn invalidate_provider(&self, batch_id: &str, provider_id: &str) {
+        self.owners
+            .lock()
+            .expect("latest probe batches poisoned")
+            .latest_by_provider
+            .insert(provider_id.to_owned(), batch_id.to_owned());
+    }
+
+    /// No probe can begin or publish between credential commit and its invalidation event.
+    pub(crate) fn with_connection_commit<R>(
+        &self,
+        provider_id: &str,
+        barrier_id: &str,
+        save: impl FnOnce() -> Result<R, String>,
+        notify: impl FnOnce(Option<String>),
+    ) -> Result<R, String> {
+        let mut owners = self
+            .owners
+            .lock()
+            .map_err(|_| "连接状态暂不可用，请重试。")?;
+        let previous = owners.last_probe_by_provider.get(provider_id).cloned();
+        let result = save()?;
+        owners
+            .latest_by_provider
+            .insert(provider_id.to_owned(), barrier_id.to_owned());
+        notify(previous);
+        Ok(result)
     }
 
     /// Keeps the ownership lock through `commit` so a newer batch cannot start
@@ -25,11 +63,13 @@ impl LatestProbeBatches {
         provider_id: &str,
         commit: impl FnOnce() -> R,
     ) -> Option<R> {
-        let latest_by_provider = self
+        let owners = self.owners.lock().expect("latest probe batches poisoned");
+        if owners
             .latest_by_provider
-            .lock()
-            .expect("latest probe batches poisoned");
-        if latest_by_provider.get(provider_id).map(String::as_str) == Some(batch_id) {
+            .get(provider_id)
+            .map(String::as_str)
+            == Some(batch_id)
+        {
             Some(commit())
         } else {
             None
@@ -41,7 +81,7 @@ impl LatestProbeBatches {
 mod tests {
     use super::LatestProbeBatches;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::{Arc, mpsc};
+    use std::sync::{mpsc, Arc};
     use std::time::Duration;
 
     #[test]
@@ -125,5 +165,80 @@ mod tests {
         begin_thread.join().unwrap();
 
         assert!(!began_during_commit);
+    }
+    #[test]
+    fn repeated_connection_commits_keep_the_last_real_probe_and_failed_saves_keep_ownership() {
+        let batches = LatestProbeBatches::default();
+        batches.begin_batch("old-probe", &["muse".into(), "codex".into()]);
+        for id in ["login-a", "login-b"] {
+            batches
+                .with_connection_commit(
+                    "muse",
+                    id,
+                    || Ok(()),
+                    |previous| assert_eq!(previous.as_deref(), Some("old-probe")),
+                )
+                .unwrap();
+        }
+        assert_eq!(batches.commit_if_latest("old-probe", "muse", || ()), None);
+        assert_eq!(
+            batches.commit_if_latest("old-probe", "codex", || ()),
+            Some(())
+        );
+        assert!(batches
+            .with_connection_commit::<()>(
+                "muse",
+                "failed",
+                || Err("save failed".into()),
+                |_| panic!("failed saves must not notify")
+            )
+            .is_err());
+        assert_eq!(batches.commit_if_latest("login-b", "muse", || ()), Some(()));
+        batches.invalidate_provider("config-change", "muse");
+        batches
+            .with_connection_commit(
+                "muse",
+                "login-c",
+                || Ok(()),
+                |previous| assert_eq!(previous.as_deref(), Some("old-probe")),
+            )
+            .unwrap();
+    }
+    #[test]
+    fn a_new_probe_waits_for_connection_save_and_notification_then_becomes_current() {
+        let batches = Arc::new(LatestProbeBatches::default());
+        batches.begin_batch("old", &["muse".into()]);
+        let (saving_tx, saving_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let (notified_tx, notified_rx) = mpsc::channel();
+        let owner = batches.clone();
+        let saving = std::thread::spawn(move || {
+            owner.with_connection_commit(
+                "muse",
+                "login",
+                || {
+                    saving_tx.send(()).unwrap();
+                    release_rx.recv().unwrap();
+                    Ok(())
+                },
+                |previous| {
+                    assert_eq!(previous.as_deref(), Some("old"));
+                    notified_tx.send(()).unwrap();
+                },
+            )
+        });
+        saving_rx.recv().unwrap();
+        let (started_tx, started_rx) = mpsc::channel();
+        let newer = batches.clone();
+        let thread = std::thread::spawn(move || {
+            newer.begin_batch("new", &["muse".into()]);
+            started_tx.send(()).unwrap();
+        });
+        assert!(started_rx.recv_timeout(Duration::from_millis(30)).is_err());
+        release_tx.send(()).unwrap();
+        saving.join().unwrap().unwrap();
+        notified_rx.recv().unwrap();
+        thread.join().unwrap();
+        assert_eq!(batches.commit_if_latest("new", "muse", || ()), Some(()));
     }
 }
