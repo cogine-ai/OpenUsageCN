@@ -4,6 +4,30 @@
 
 暂无。
 
+## v0.6.52
+
+### Bug Fixes
+
+- Ollama 账号刷新失败时，有旧读数显示「未更新」并保留读数和时间，没有旧读数则显示「更新失败」。([#273](https://github.com/cogine-ai/OpenUsageCN/pull/273)) by @lc708
+
+### Chores
+
+- 补齐首页及账号详情的回归测试、前后截图和使用文档。([#273](https://github.com/cogine-ai/OpenUsageCN/pull/273)) by @lc708
+
+### 下载说明
+
+Windows 安装包未做 Authenticode 签名，可能触发 SmartScreen 警告，也可能被企业策略或 Smart App Control 阻止运行。请使用同一 Release 提供的 SHA-256 文件校验安装包。
+缺少 WebView2 Runtime 的电脑需要联网完成安装。
+
+### Changelog
+
+**Full Changelog**: [v0.6.51...v0.6.52](https://github.com/cogine-ai/OpenUsageCN/compare/v0.6.51...v0.6.52)
+
+- `cf5e160` 简化 Ollama 账号刷新失败提示 by @lc708
+- `9fda705` 补齐账号详情的失败状态测试 by @lc708
+- `b188a39` 补充账号列表和测试导航说明 by @lc708
+- `67f682d` 合并 PR #273 by @lc708
+
 ## v0.6.51
 
 ### Bug Fixes
