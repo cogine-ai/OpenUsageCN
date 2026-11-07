@@ -49,6 +49,7 @@ function page() {
   return <OverviewPage plugins={[plugin]} displayMode="used" resetTimerDisplayMode="relative" />
 }
 
+/** Follows the shared navigation state so account clicks exercise the real detail page. */
 function Routes() {
   const activeView = useAppUiStore((state) => state.activeView)
   return activeView === "ollama" ? (
