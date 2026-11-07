@@ -19,7 +19,7 @@
 
 ### 下载说明
 
-Windows 安装包未做 Authenticode 签名，提供 SHA-256 校验文件。
+Windows 安装包未做 Authenticode 签名，可能触发 SmartScreen 警告。企业策略或 Smart App Control 也可能阻止运行。请用同一 Release 提供的 SHA-256 校验文件核对安装包。
 缺少 WebView2 Runtime 的电脑需要联网完成安装。
 
 ---
