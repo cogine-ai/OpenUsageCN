@@ -68,6 +68,27 @@ it("shows both named account quotas when the original primary has no credential"
   expect(screen.getAllByRole("heading", { name: "Ollama Cloud", exact: true })).toHaveLength(1)
 })
 
+it("shows a short refresh status with or without a previous reading", async () => {
+  const view = accounts()
+  const error = { code: "error", message: "暂时无法读取此账号，请稍后重试；原连接未被替换。" }
+  view.connections[0].error = error
+  view.connections[1] = {
+    ...view.connections[1],
+    error,
+    snapshot: undefined,
+    lastUpdatedAt: undefined,
+  }
+  tauri.invoke.mockResolvedValue(view)
+  render(page())
+
+  const cached = within(await screen.findByRole("article", { name: "个人账号用量" }))
+  expect(cached.getByRole("alert").textContent).toBe("未更新")
+  expect(cached.getByText("$20.00")).toBeVisible()
+  const empty = within(screen.getByRole("article", { name: "工作账号用量" }))
+  expect(empty.getByRole("alert").textContent).toBe("更新失败")
+  expect(empty.queryByRole("region", { name: "账户额度" })).not.toBeInTheDocument()
+})
+
 it("includes configured legacy usage beside named accounts independently of primary", async () => {
   tauri.invoke.mockResolvedValue({
     ...accounts(true),

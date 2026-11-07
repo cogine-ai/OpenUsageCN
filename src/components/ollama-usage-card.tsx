@@ -31,12 +31,20 @@ export function OllamaQuota({
   snapshot,
   lastUpdatedAt,
   error,
+  namedConnection = false,
   refreshing = false,
   displayMode = "used",
   resetTimerDisplayMode = "relative",
   timeFormatMode = "auto",
   onResetTimerDisplayModeToggle,
-}: OllamaUsageData & OllamaDisplayPreferences & { refreshing?: boolean }) {
+}: OllamaUsageData & OllamaDisplayPreferences & { refreshing?: boolean; namedConnection?: boolean }) {
+  const refreshFailed = namedConnection && error?.code === "error"
+  let errorMessage = error?.message
+  if (refreshFailed) {
+    errorMessage = snapshot ? "未更新" : "更新失败"
+  } else if (namedConnection && error?.code === "identityChanged") {
+    errorMessage = "账号身份已变化，请重新验证 Key。"
+  }
   const now = useNowTicker({
     enabled: Boolean(snapshot?.lines.some((line) => line.type === "progress" && line.resetsAt)),
     intervalMs: 30_000,
@@ -45,8 +53,8 @@ export function OllamaQuota({
     <>
       {error ? (
         <div role="alert" className="space-y-1 text-xs text-destructive">
-          <p>{error.message}</p>
-          {snapshot ? (
+          <p>{errorMessage}</p>
+          {snapshot && !refreshFailed ? (
             <p className="text-muted-foreground">本次未更新，下方保留上次成功读取的数据。</p>
           ) : null}
         </div>
@@ -68,9 +76,9 @@ export function OllamaQuota({
             />
           ))}
         </section>
-      ) : (
+      ) : !refreshFailed ? (
         <p className="text-xs text-muted-foreground">尚未读取到额度，请刷新此账号。</p>
-      )}
+      ) : null}
       {lastUpdatedAt ? (
         <p className="text-xs text-muted-foreground">
           额度更新于{" "}
@@ -96,6 +104,7 @@ export function OllamaUsageCard({
     plan?: string
     primary: boolean
     refreshing?: boolean
+    namedConnection?: boolean
     onSelect: () => void
   }) {
   return (
