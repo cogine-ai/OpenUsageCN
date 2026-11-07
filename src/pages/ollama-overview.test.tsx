@@ -8,6 +8,7 @@ const tauri = vi.hoisted(() => ({ invoke: vi.fn(), listen: vi.fn() }))
 vi.mock("@tauri-apps/api/core", () => ({ invoke: tauri.invoke }))
 vi.mock("@tauri-apps/api/event", () => ({ listen: tauri.listen }))
 import { OverviewPage } from "./overview"
+import { ProviderDetailPage } from "./provider-detail"
 
 function accounts(configured = false): OllamaAccountsView {
   const snapshot = (value: string) => ({
@@ -48,6 +49,16 @@ function page() {
   return <OverviewPage plugins={[plugin]} displayMode="used" resetTimerDisplayMode="relative" />
 }
 
+/** Follows the shared navigation state so account clicks exercise the real detail page. */
+function Routes() {
+  const activeView = useAppUiStore((state) => state.activeView)
+  return activeView === "ollama" ? (
+    <ProviderDetailPage plugin={plugin} displayMode="used" resetTimerDisplayMode="relative" />
+  ) : (
+    page()
+  )
+}
+
 beforeEach(() => {
   useAppUiStore.getState().resetState()
   tauri.invoke.mockReset().mockResolvedValue(accounts())
@@ -68,6 +79,38 @@ it("shows both named account quotas when the original primary has no credential"
   expect(screen.getAllByRole("heading", { name: "Ollama Cloud", exact: true })).toHaveLength(1)
 })
 
+it("shows a short refresh status on overview and detail with or without a previous reading", async () => {
+  const view = accounts()
+  const error = { code: "error", message: "暂时无法读取此账号，请稍后重试；原连接未被替换。" }
+  view.connections[0].error = error
+  view.connections[1] = {
+    ...view.connections[1],
+    error,
+    snapshot: undefined,
+    lastUpdatedAt: undefined,
+  }
+  tauri.invoke.mockResolvedValue(view)
+  render(<Routes />)
+
+  const cached = within(await screen.findByRole("article", { name: "个人账号用量" }))
+  expect(cached.getByRole("alert").textContent).toBe("未更新")
+  expect(cached.getByText("$20.00")).toBeVisible()
+  const empty = within(screen.getByRole("article", { name: "工作账号用量" }))
+  expect(empty.getByRole("alert").textContent).toBe("更新失败")
+  expect(empty.queryByRole("region", { name: "账户额度" })).not.toBeInTheDocument()
+
+  fireEvent.click(cached.getByRole("button", { name: "查看个人账号用量" }))
+  await screen.findByRole("heading", { name: "个人账号", exact: true })
+  expect((await screen.findByRole("alert")).textContent).toBe("未更新")
+  expect(screen.getByText("$20.00")).toBeVisible()
+
+  fireEvent.click(screen.getByRole("button", { name: "返回" }))
+  fireEvent.click(await screen.findByRole("button", { name: "查看工作账号用量" }))
+  await screen.findByRole("heading", { name: "工作账号", exact: true })
+  expect((await screen.findByRole("alert")).textContent).toBe("更新失败")
+  expect(screen.queryByRole("region", { name: "账户额度" })).not.toBeInTheDocument()
+})
+
 it("includes configured legacy usage beside named accounts independently of primary", async () => {
   tauri.invoke.mockResolvedValue({
     ...accounts(true),
@@ -81,15 +124,6 @@ it("includes configured legacy usage beside named accounts independently of prim
 })
 
 it("opens the exact account detail without changing the primary", async () => {
-  const { ProviderDetailPage } = await import("./provider-detail")
-  function Routes() {
-    const activeView = useAppUiStore((state) => state.activeView)
-    return activeView === "ollama" ? (
-      <ProviderDetailPage plugin={plugin} displayMode="used" resetTimerDisplayMode="relative" />
-    ) : (
-      page()
-    )
-  }
   render(<Routes />)
   fireEvent.click(await screen.findByRole("button", { name: "查看工作账号用量" }))
   expect(await screen.findByRole("heading", { name: "工作账号", exact: true })).toBeVisible()

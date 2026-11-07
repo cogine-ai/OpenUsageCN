@@ -45,6 +45,8 @@ Each connection has its own last successful quota and update time. A temporary n
 rate limit or permission error is shown separately and does not replace that connection's
 successful data with zero or another account's quota. Changing a key or account invalidates
 results still loading with the previous credential.
+For a named connection, a generic refresh failure shows **未更新** beside the previous reading
+or **更新失败** when there is no reading yet.
 If a refresh worker crashes, the app keeps the last successful quota while the account
 configuration remains readable. An unreadable account configuration clears the old quota.
 Refreshes waiting to run check the connection again before sending requests. Removing or

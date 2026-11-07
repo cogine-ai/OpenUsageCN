@@ -29,6 +29,7 @@ export function OllamaConnectionStatus({ connection }: { connection: OllamaConne
   )
 }
 
+/** Shows quota cards in the usage view and connection controls in account management. */
 export function OllamaAccountList({
   view,
   busy,
@@ -84,6 +85,7 @@ export function OllamaAccountList({
               {...connection}
               {...preferences}
               identity={`${identity} · API Key`}
+              namedConnection
               primary={primary}
               refreshing={refreshing}
               onSelect={() => onSelect(connection.connectionId)}

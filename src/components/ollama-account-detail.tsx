@@ -83,7 +83,7 @@ export function OllamaAccountDetail({
           {named ? "更新 Key" : "更新连接"}
         </Button>
       ) : null}
-      <OllamaQuota {...data} {...preferences} refreshing={refreshing} />
+      <OllamaQuota {...data} {...preferences} refreshing={refreshing} namedConnection={Boolean(named)} />
       {legacy?.source === "cookie" ? (
         <p className="text-xs text-muted-foreground">
           Cookie 连接不提供模型报告；可在连接设置中选择 API Key。
