@@ -4,6 +4,35 @@
 
 暂无。
 
+## v0.6.51
+
+### Bug Fixes
+
+- Cursor 用量页分组展示调用、扣减记录和标价估算，保留独立金额口径及不完整标记。 ([#271](https://github.com/cogine-ai/OpenUsageCN/pull/271)) by @lc708
+- 账号列表统一自动跟随与固定账号单选，修复异步切换后的键盘焦点恢复。 ([#271](https://github.com/cogine-ai/OpenUsageCN/pull/271)) by @lc708
+- Codex 历史统一官方统计与本机估算入口，区分未报告日期和真实零用量。 ([#271](https://github.com/cogine-ai/OpenUsageCN/pull/271)) by @lc708
+- Ollama 首页精简常驻说明，管理页明确默认账号，修复连续切换时的旧提示残留。 ([#271](https://github.com/cogine-ai/OpenUsageCN/pull/271)) by @lc708
+
+### Chores
+
+- 补齐回归测试、使用文档、界面设计和前后截图。 ([#271](https://github.com/cogine-ai/OpenUsageCN/pull/271)) by @lc708
+
+### 下载说明
+
+Windows 安装包未做 Authenticode 签名，可能触发 SmartScreen 警告。企业策略或 Smart App Control 也可能阻止运行。请用同一 Release 提供的 SHA-256 校验文件核对安装包。
+缺少 WebView2 Runtime 的电脑需要联网完成安装。
+
+---
+
+### Changelog
+
+**Full Changelog**: [v0.6.50...v0.6.51](https://github.com/cogine-ai/OpenUsageCN/compare/v0.6.50...v0.6.51)
+
+- [646d706](https://github.com/cogine-ai/OpenUsageCN/commit/646d7067e7733bf7324b3ec007947a9ee551b9b1) fix(ui): make usage and account relationships visible by @lc708
+- [ce546b2](https://github.com/cogine-ai/OpenUsageCN/commit/ce546b259d6ba77fd18c64681e559bfb6e658feb) fix(ui): restore account focus and refresh default notices by @lc708
+- [1aebe62](https://github.com/cogine-ai/OpenUsageCN/commit/1aebe62ee93cdac88540af8cdb3ebbb9bd2b96b4) fix(ollama): clear prior confirmations before default switches by @lc708
+- [daaa006](https://github.com/cogine-ai/OpenUsageCN/commit/daaa0063aa2e4f76a4d8831381de3c4bea6d2a28) Merge pull request #271 by @lc708
+
 ## v0.6.50
 
 ### New Features
