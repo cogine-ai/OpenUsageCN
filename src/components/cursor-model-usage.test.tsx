@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const tauri = vi.hoisted(() => ({
@@ -10,6 +10,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 }))
 
 import { CursorModelUsage } from "@/components/cursor-model-usage"
+import type { CompleteHistory } from "@/lib/cursor-history"
 
 function snapshot() {
   return {
@@ -79,12 +80,18 @@ describe("CursorModelUsage", () => {
     render(<CursorModelUsage providerId="cursor" accountId="account-1" />)
 
     expect(await screen.findByRole("heading", { name: "Model Usage" })).toBeInTheDocument()
-    expect(screen.getByText("Session-Visible Usage")).toBeInTheDocument()
-    expect(screen.getByText("2 Requests · 1,550 Tokens")).toBeInTheDocument()
-    expect(screen.getByText("List-Price Equivalent")).toBeInTheDocument()
-    expect(screen.getByText("$1.25")).toBeInTheDocument()
-    expect(screen.getByText("Metered Usage")).toBeInTheDocument()
-    expect(screen.getByText("$0.90")).toBeInTheDocument()
+    expect(screen.getByText("会话记录")).toBeVisible()
+    expect(screen.getByText("非账单")).toBeVisible()
+    const calls = screen.getByRole("region", { name: "调用" })
+    const charges = screen.getByRole("region", { name: "扣减记录" })
+    const estimate = screen.getByRole("region", { name: "标价估算" })
+    expect(within(calls).getByText("2 Requests · 1,550 Tokens")).toBeVisible()
+    expect(within(estimate).getByText("List-Price Equivalent")).toBeVisible()
+    expect(within(estimate).getByText("$1.25")).toBeVisible()
+    expect(within(charges).getByText("Metered Usage")).toBeVisible()
+    expect(within(charges).getByText("$0.90")).toBeVisible()
+    expect(within(charges).queryByText("$1.25")).not.toBeInTheDocument()
+    expect(within(estimate).queryByText("$0.90")).not.toBeInTheDocument()
     expect(screen.getByText("composer-1.5")).toBeInTheDocument()
     expect(screen.getByText("Input 1,000")).toBeInTheDocument()
     expect(screen.getByText("Output 200")).toBeInTheDocument()
@@ -175,14 +182,53 @@ describe("CursorModelUsage", () => {
 
     render(<CursorModelUsage providerId="cursor" accountId="account-1" />)
 
-    expect(await screen.findByText("Partial Cost")).toBeInTheDocument()
-    expect(
-      screen.getByRole("heading", { name: "Partial List-Price Coverage" })
-    ).toBeInTheDocument()
+    const estimate = await screen.findByRole("region", { name: "标价估算" })
+    expect(within(estimate).getByText("Incomplete")).toBeVisible()
+    expect(within(screen.getByRole("heading", { name: "composer-1.5" }).closest("summary")!).getByText("Incomplete")).toBeVisible()
+    expect(screen.queryByText("Partial Cost")).not.toBeInTheDocument()
     expect(
       screen.getByText("List-Price Equivalent includes only usage with a known model price.")
     ).toBeInTheDocument()
     expect(screen.getByText("$0.90 · Incomplete")).toBeInTheDocument()
+  })
+
+  it.each([
+    { amount: 0, expected: "$0.00", incomplete: false },
+    { amount: null, expected: "Unavailable", incomplete: true },
+  ])("keeps a $expected list-price estimate distinct from other amounts", async ({ amount, expected, incomplete }) => {
+    const complete: CompleteHistory = snapshot()
+    complete.buckets[0].knownListCostUsd = amount
+    tauri.invoke
+      .mockResolvedValueOnce(complete)
+      .mockResolvedValueOnce({ snapshot: complete, stale: false })
+
+    render(<CursorModelUsage providerId="cursor" accountId="account-1" />)
+
+    const estimate = await screen.findByRole("region", { name: "标价估算" })
+    expect(within(estimate).getByText(expected)).toBeVisible()
+    expect(Boolean(within(estimate).queryByText("Incomplete"))).toBe(incomplete)
+    expect(within(screen.getByRole("region", { name: "扣减记录" })).getByText("$0.90")).toBeVisible()
+  })
+
+  it("keeps provenance details available on demand without another fetch", async () => {
+    const complete = snapshot()
+    tauri.invoke
+      .mockResolvedValueOnce(complete)
+      .mockResolvedValueOnce({ snapshot: complete, stale: false })
+
+    render(<CursorModelUsage providerId="cursor" accountId="account-1" />)
+    await screen.findByRole("region", { name: "调用" })
+    await waitFor(() => expect(screen.queryByText("Refreshing")).not.toBeInTheDocument())
+    const summary = screen.getByText("数据来源")
+    expect(summary.closest("details")).not.toHaveAttribute("open")
+    expect(screen.getByText("Usage Events")).not.toBeVisible()
+    expect(screen.queryByText("金额来自会话可见记录，不是账单。")).not.toBeInTheDocument()
+    const calls = tauri.invoke.mock.calls.length
+    fireEvent.click(summary)
+    await waitFor(() => expect(screen.getByText("Usage Events")).toBeVisible())
+    expect(screen.getByText(/分页完整仅表示/)).toBeVisible()
+    expect(screen.getByText(/仅缓存最近一次成功结果/)).toBeVisible()
+    expect(tauri.invoke.mock.calls.length).toBe(calls)
   })
 
   it("keeps cached model usage visible when refresh returns it as stale", async () => {

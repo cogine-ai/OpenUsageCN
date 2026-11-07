@@ -74,7 +74,7 @@ describe("ProviderAccountControls quota refresh", () => {
     tauri.invoke.mockResolvedValueOnce(initialView).mockResolvedValueOnce(receipt(autoView))
     const onAccountChangeRefresh = vi.fn()
     testingRender(<ProviderAccountControls standalone providerId={providerId} onAccountChangeRefresh={onAccountChangeRefresh} />)
-    const followLocal = await screen.findByRole("switch", { name: "跟随本机" })
+    const followLocal = await screen.findByRole("radio", { name: "跟随本机" })
     expect(followLocal).toBeEnabled()
     expect(followLocal).not.toBeChecked()
     await userEvent.setup().click(followLocal)
@@ -82,16 +82,16 @@ describe("ProviderAccountControls quota refresh", () => {
       providerId, operation: { kind: "followDefaultConnection" },
     })
     await waitFor(() => expect(followLocal).toBeChecked())
-    expect(screen.getByRole("radio", { name: /Personal/i })).toBeChecked()
+    expect(screen.getByRole("radio", { name: /Personal/i })).not.toBeChecked()
     expect(onAccountChangeRefresh).toHaveBeenCalledOnce()
   })
 
-  it("cannot pin an empty local default", async () => {
+  it("keeps an empty automatic selection without performing an operation", async () => {
     tauri.invoke.mockResolvedValue({ ...baseView(), selection: { mode: "auto" }, activeAccountId: null, accounts: [] })
     testingRender(<ProviderAccountControls standalone providerId="cursor" />)
-    const followLocal = await screen.findByRole("switch", { name: "跟随本机" })
+    const followLocal = await screen.findByRole("radio", { name: "跟随本机" })
     expect(followLocal).toBeChecked()
-    expect(followLocal).toBeDisabled()
+    expect(followLocal).toBeEnabled()
     await userEvent.setup().click(followLocal)
     expect(tauri.invoke).not.toHaveBeenCalledWith("perform_provider_account_operation", expect.anything())
   })
@@ -124,7 +124,7 @@ describe("ProviderAccountControls quota refresh", () => {
     await user.click(await screen.findByRole("radio", { name: /Personal/i }))
     await waitFor(() => expect(onAccountChangeRefresh).toHaveBeenCalledTimes(1))
 
-    await user.click(screen.getByRole("switch", { name: "跟随本机" }))
+    await user.click(screen.getByRole("radio", { name: "跟随本机" }))
     await waitFor(() => expect(onAccountChangeRefresh).toHaveBeenCalledTimes(2))
   })
 

@@ -117,9 +117,11 @@ OpenUsageCN ignores redeemed and expired resets, then shows the nearest valid ex
 
 ## Local History
 
-On macOS, choose **Load Local History** in Codex details to read `今日`, `昨日`, `近31天`, model
-shares, and `用量趋势`. Use **Refresh Local History** to read them again. Opening the page or
-refreshing quota does not launch the local history tool.
+On macOS, open **用量历史 → 本机估算** in Codex details and choose **加载本机估算** to read
+`今日`, `昨日`, `近31天`, model shares, and `用量趋势`. Use the refresh icon to read them again.
+Opening the page, switching sources, or refreshing quota does not launch the local history tool.
+Switching to **官方统计** clears the displayed estimate; returning requires a new explicit load.
+Refreshing quota while viewing an estimate leaves it visible.
 
 History reads the current `CODEX_HOME` logs, or the default Codex directory, through `ccusage`.
 The window includes today and the preceding 30 calendar days. Costs are estimates at API prices;
@@ -204,12 +206,15 @@ Response returns new `access_token`, and optionally new `refresh_token` and `id_
 
 ## Server Reports
 
-Open Codex details and choose **Load Reports** to read the latest 30 UTC calendar days,
-including today. This is separate from **Local History** and does not run ccusage or estimate API costs.
+Open **用量历史 → 官方统计** in Codex details and choose **加载官方统计** to read the latest
+30 UTC calendar days, including today. This source is selected initially and is separate from
+**本机估算**; it does not run ccusage or estimate API costs. Windows offers only official statistics.
+Switching sources cancels pending official reports and clears their display. Returning requires
+a new explicit load. **数据来源** provides the source details on demand.
 Tokens, turns and charged credits keep their own units. Credits are never converted to dollars.
 
 Refreshing the main quota clears loaded reports and cancels pending reports, so an old login's
-report cannot remain beside newly refreshed quota. Load Reports is disabled during that refresh;
+report cannot remain beside newly refreshed quota. Loading official statistics is disabled during that refresh;
 load reports again after it finishes, including after a failed quota refresh.
 
 Reports use the current local ChatGPT login and its workspace. API keys and logins without a
@@ -225,8 +230,10 @@ If the login expires, refresh Codex usage through the existing control, then loa
 No report data is added to the quota bars or the local cost estimate.
 
 Token and turn reports show only dates and measures the server reports. An absent date is not zero;
-an explicitly reported zero remains visible. The coverage note shows the number of unreported days. Daily charts
-use UTC. Available model attribution is shown separately and may cover fewer turns or tokens than
+an explicitly reported zero remains visible. The coverage note shows the number of unreported days.
+Daily charts keep a slot for every date in their report range: striped slots mean unreported data,
+while a reported zero remains a short solid bar. Hover or focus shows the date and its value or
+**未报告**. Daily charts use UTC. Available model attribution is shown separately and may cover fewer turns or tokens than
 the daily total. Each report shows at most 100 models, sorted by name; a larger model breakdown
 is marked **Partial**. This limit affects optional model rows only: all reported daily totals,
 coverage dates and signed credit adjustments are retained.

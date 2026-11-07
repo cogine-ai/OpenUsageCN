@@ -1,5 +1,6 @@
 import { RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { UsageSparkline } from "@/components/usage-sparkline"
 import { usePlatformCapabilities } from "@/hooks/app/use-platform-capabilities"
@@ -9,19 +10,21 @@ type LocalUsageHistoryProps = {
   providerId: string
   accountId?: string | null
   disabled?: boolean
+  embedded?: boolean
 }
 
-export function LocalUsageHistory({ providerId, accountId = null, disabled = false }: LocalUsageHistoryProps) {
+export function LocalUsageHistory({ providerId, accountId = null, disabled = false, embedded = false }: LocalUsageHistoryProps) {
   const capabilities = usePlatformCapabilities()
   const { snapshot, loading, error, load } = useLocalHistory(providerId, accountId)
   if (!capabilities || capabilities.platform === "windows") return null
 
   return (
-    <section className="mt-4 space-y-3 rounded-lg border border-border bg-background p-3">
+    <section aria-label={embedded ? "本机估算" : "Local History"} className={embedded ? "space-y-3" : "mt-4 space-y-3 rounded-lg border border-border bg-background p-3"}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="flex items-center gap-2 whitespace-nowrap text-sm font-semibold">
+        {embedded ? <span className="text-xs text-muted-foreground">最近 31 天</span> : <h3 className="flex items-center gap-2 whitespace-nowrap text-sm font-semibold">
           Local History
-        </h3>
+          <Badge variant="outline">估算</Badge>
+        </h3>}
         <Tooltip>
           <TooltipTrigger
             render={
@@ -34,22 +37,20 @@ export function LocalUsageHistory({ providerId, accountId = null, disabled = fal
                 onClick={() => { void load() }}
               >
                 <RefreshCw className={loading ? "size-4 animate-spin" : "size-4"} />
-                {!snapshot ? (loading ? "Loading…" : "Load Local History") : null}
+                {!snapshot ? (loading ? "Loading…" : embedded ? "加载本机估算" : "Load Local History") : null}
               </Button>
             }
           />
           <TooltipContent>{snapshot ? "Refresh Local History" : "Load Local History"}</TooltipContent>
         </Tooltip>
       </div>
-      <p className="text-xs text-muted-foreground">
-        本地日志按 API 价格估算，可能包含多个会话；不代表账号账单。
-      </p>
+      <details className="text-xs text-muted-foreground">
+        <summary className="cursor-pointer rounded-sm focus-visible:outline focus-visible:outline-ring">数据来源</summary>
+        <p className="mt-2">本地日志按 API 价格估算，可能包含多个会话；不代表账号账单。</p>
+      </details>
 
       {error ? <p role="alert" className="text-xs text-destructive">{error}</p> : null}
-      {!snapshot && !loading && !error ? (
-        <p className="text-xs text-muted-foreground">按需读取最近 31 个日历日的本地用量，独立于额度刷新。</p>
-      ) : null}
-      {loading ? <p role="status" className="text-xs text-muted-foreground">正在读取本地历史，额度仍可正常刷新…</p> : null}
+      {loading ? <p role="status" className="text-xs text-muted-foreground">正在读取本机估算…</p> : null}
 
       {snapshot ? (
         <>

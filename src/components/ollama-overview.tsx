@@ -73,12 +73,6 @@ export function OllamaOverview({
           onLegacyPrimary={manage}
         />
       ) : null}
-      {count ? (
-        <p className="text-xs leading-relaxed text-muted-foreground">
-          各连接显示其可读取的账户用量，不计算总额。同一用户的多个 Key 可能共享额度。
-        </p>
-      ) : null}
-      <p className="text-xs text-muted-foreground">主账号用于菜单栏和本地 API，不影响首页展示。</p>
       {showSeparator ? <div className="border-b border-border pt-1" /> : null}
     </section>
   )

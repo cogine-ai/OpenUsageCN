@@ -1,7 +1,7 @@
 import { useAppUiStore } from "@/stores/app-ui-store"
 import { ProviderAccountControls } from "@/components/provider-account-controls"
 import { ProviderCard } from "@/components/provider-card"
-import { LocalUsageHistory } from "@/components/local-usage-history"
+import { CodexUsageHistory } from "@/components/codex-usage-history"
 import { ServerUsageReports } from "@/components/server-usage-reports"
 import { ProviderConfigFields } from "@/components/provider-config-fields"
 import { OllamaAccountsPage } from "@/pages/ollama-accounts"
@@ -72,8 +72,10 @@ export function ProviderDetailPage({
         timeFormatMode={timeFormatMode}
         onResetTimerDisplayModeToggle={onResetTimerDisplayModeToggle}
       />
-      {plugin.meta.id === "codex" ? <LocalUsageHistory providerId="codex" /> : null}
-      {["codex", "openrouter"].includes(plugin.meta.id) ? <ServerUsageReports
+      {plugin.meta.id === "codex" ? <CodexUsageHistory
+        sourceRefreshing={plugin.loading} lastUpdatedAt={plugin.lastUpdatedAt}
+      /> : null}
+      {plugin.meta.id === "openrouter" ? <ServerUsageReports
         key={`${plugin.meta.id}:${plugin.loading}:${plugin.lastUpdatedAt}`}
         providerId={plugin.meta.id}
         sourceRefreshing={plugin.loading}

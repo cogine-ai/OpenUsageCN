@@ -62,11 +62,15 @@ export function OllamaKeyForm({
 
   return (
     <div className="space-y-4">
-      <p className="text-xs leading-relaxed text-muted-foreground">
-        {connection
-          ? "新 Key 验证成功并确认后才替换原连接。留空可只修改名称。"
-          : "为不同账号添加 Key，分别查看各自用量。添加不会改变原有连接或主账号。"}
-      </p>
+      {connection ? <p className="text-xs leading-relaxed text-muted-foreground">
+        新 Key 验证成功并确认后才替换原连接。留空可只修改名称。
+      </p> : null}
+      {!connection ? (
+        <details className="text-xs text-muted-foreground">
+          <summary className="cursor-pointer rounded-sm focus-visible:outline-2 focus-visible:outline-ring">额度说明</summary>
+          <p className="mt-2 leading-relaxed">同一账号的多个 Key 可能共享额度。各连接分别展示，不计算合计。</p>
+        </details>
+      ) : null}
       <label className="block space-y-2">
         <span className="text-sm font-medium">名称</span>
         <input

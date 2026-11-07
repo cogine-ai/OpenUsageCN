@@ -93,9 +93,7 @@ function CursorModelUsageAccount({
       ? "Unavailable"
       : stale
         ? "Stale"
-        : totals?.partialListPrice
-          ? "Partial Cost"
-          : null
+        : null
 
   return (
     <section className="mt-4 space-y-3 rounded-lg border border-border bg-background p-3">
@@ -139,32 +137,50 @@ function CursorModelUsageAccount({
       {snapshot && totals ? (
         <>
           <CursorHistoryControls providerId={providerId} accountId={accountId} snapshot={snapshot} refreshing={refreshing} />
-          <dl className="space-y-2 text-sm tabular-nums">
-            <div className="space-y-1">
-              <dt className="text-xs text-muted-foreground">Session-Visible Usage</dt>
-              <dd>{formatCountNumber(totals.requests)} Requests · {formatCountNumber(totals.tokens)} Tokens</dd>
-            </div>
-            <div className="flex items-baseline justify-between gap-3">
-              <dt className="text-xs text-muted-foreground">List-Price Equivalent</dt>
-              <dd>{totals.knownListPriceBuckets > 0 ? USD_FORMAT.format(totals.listPrice) : "Unavailable"}</dd>
-            </div>
-            <div className="flex items-baseline justify-between gap-3">
-              <dt className="text-xs text-muted-foreground">Metered Usage</dt>
-              <dd>{snapshot.totals.meteredChargedUsd === null ? "Unavailable" : USD_FORMAT.format(snapshot.totals.meteredChargedUsd)}{snapshot.totals.meteredCoverage === "incomplete" ? " · Incomplete" : ""}</dd>
-            </div>
-            <div className="flex items-baseline justify-between gap-3">
-              <dt className="text-xs text-muted-foreground">{snapshot.totals.billing?.onDemandCoverage === "incomplete" ? "Known On-Demand Charges" : "On-Demand Charges"}</dt>
-              <dd>{snapshot.totals.billing ? USD_FORMAT.format(snapshot.totals.billing.knownOnDemandChargedUsd) : "Unavailable"}{snapshot.totals.billing?.onDemandCoverage === "incomplete" ? " · Incomplete" : ""}</dd>
-            </div>
-            <div className="flex items-baseline justify-between gap-3">
-              <dt className="text-xs text-muted-foreground">Usage Events</dt>
-              <dd>{snapshot.totals.billing ? formatCountNumber(snapshot.totals.billing.usageEventCount) : "Unavailable"}</dd>
-            </div>
-          </dl>
-          <p className="text-xs text-muted-foreground">金额来自会话可见记录，不是账单。</p>
+          <div className="flex flex-wrap gap-1.5">
+            <Badge variant="outline">会话记录</Badge>
+            <Badge variant="outline">非账单</Badge>
+          </div>
+          <div className="divide-y divide-border rounded-md border border-border px-3">
+            <section aria-label="调用" className="space-y-2 py-3">
+              <h4 className="text-xs font-medium text-muted-foreground">调用</h4>
+              <p className="text-sm tabular-nums">{formatCountNumber(totals.requests)} Requests · {formatCountNumber(totals.tokens)} Tokens</p>
+            </section>
+            <section aria-label="扣减记录" className="space-y-2 py-3">
+              <h4 className="text-xs font-medium text-muted-foreground">扣减记录</h4>
+              <dl className="space-y-2 text-sm tabular-nums">
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-xs text-muted-foreground">Metered Usage</dt>
+                  <dd>{snapshot.totals.meteredChargedUsd === null ? "Unavailable" : USD_FORMAT.format(snapshot.totals.meteredChargedUsd)}{snapshot.totals.meteredCoverage === "incomplete" ? " · Incomplete" : ""}</dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-xs text-muted-foreground">{snapshot.totals.billing?.onDemandCoverage === "incomplete" ? "Known On-Demand Charges" : "On-Demand Charges"}</dt>
+                  <dd>{snapshot.totals.billing ? USD_FORMAT.format(snapshot.totals.billing.knownOnDemandChargedUsd) : "Unavailable"}{snapshot.totals.billing?.onDemandCoverage === "incomplete" ? " · Incomplete" : ""}</dd>
+                </div>
+              </dl>
+            </section>
+            <section aria-label="标价估算" className="space-y-2 py-3">
+              <h4 className="text-xs font-medium text-muted-foreground">标价估算</h4>
+              <dl className="text-sm tabular-nums">
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-xs text-muted-foreground">List-Price Equivalent</dt>
+                  <dd className="flex flex-wrap items-baseline justify-end gap-1.5">
+                    {totals.knownListPriceBuckets > 0 ? USD_FORMAT.format(totals.listPrice) : "Unavailable"}
+                    {totals.partialListPrice ? <Badge variant="outline">Incomplete</Badge> : null}
+                  </dd>
+                </div>
+              </dl>
+            </section>
+          </div>
           <details className="text-xs text-muted-foreground">
-            <summary className="cursor-pointer rounded-sm focus-visible:outline focus-visible:outline-ring">数据说明</summary>
+            <summary className="cursor-pointer rounded-sm focus-visible:outline focus-visible:outline-ring">数据来源</summary>
             <div className="mt-2 space-y-2">
+              <dl>
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt>Usage Events</dt>
+                  <dd className="tabular-nums">{snapshot.totals.billing ? formatCountNumber(snapshot.totals.billing.usageEventCount) : "Unavailable"}</dd>
+                </div>
+              </dl>
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
                 <span>
                   Coverage {historyDateTime(snapshot.coverage.fromMs, snapshot.coverage.timeZone, true)} –{" "}
@@ -179,6 +195,7 @@ function CursorModelUsageAccount({
               <p className="text-xs text-muted-foreground">分页完整仅表示已取回所示窗口的数据，不代表完整账期；金额来自 Cursor 会话可见记录，不是账单。</p>
               <p className="text-xs text-muted-foreground">仅缓存最近一次成功结果；刷新替换缓存，不累计历史用量。</p>
               <p className="text-xs text-muted-foreground">Metered Usage 包含套餐内扣减；On-Demand Charges 仅汇总明确标记为按量收费的记录。Usage Events 包括没有 tokens 的有效事件，Requests 保持原有定义。</p>
+              {totals.partialListPrice ? <p>List-Price Equivalent includes only usage with a known model price.</p> : null}
               {snapshot.totals.billing?.unclassifiedEventCount ? <p className="text-xs text-muted-foreground">{formatCountNumber(snapshot.totals.billing.unclassifiedEventCount)} 条事件无法确认收费分类或金额，已知按量扣费不代表完整总额。</p> : null}
               {!snapshot.totals.billing ? <p className="text-xs text-muted-foreground">此缓存尚无收费分类，请刷新后查看新指标。</p> : null}
             </div>
@@ -190,16 +207,6 @@ function CursorModelUsageAccount({
               <AlertTitle>Model Usage Stale</AlertTitle>
               <AlertDescription>
                 {error?.message ?? "Showing the last complete Model Usage snapshot."}
-              </AlertDescription>
-            </Alert>
-          ) : null}
-
-          {totals.partialListPrice ? (
-            <Alert>
-              <AlertTriangle className="size-4" />
-              <AlertTitle>Partial List-Price Coverage</AlertTitle>
-              <AlertDescription>
-                List-Price Equivalent includes only usage with a known model price.
               </AlertDescription>
             </Alert>
           ) : null}
@@ -235,7 +242,10 @@ function CursorModelUsageAccount({
                       <ChevronDown className="mt-0.5 size-4 shrink-0 text-muted-foreground group-open:rotate-180" />
                     </div>
                     <div className="mt-1 text-xs text-muted-foreground tabular-nums">Total Tokens {formatCountNumber(totalTokens)} · {formatCountNumber(model.requestCount)} Requests</div>
-                    <div className="text-xs text-muted-foreground tabular-nums">List Price {model.knownListCostUsd === null ? "Unavailable" : USD_FORMAT.format(model.knownListCostUsd)}</div>
+                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground tabular-nums">
+                      <span>List Price {model.knownListCostUsd === null ? "Unavailable" : USD_FORMAT.format(model.knownListCostUsd)}</span>
+                      {model.listCostCoverage !== "complete" ? <Badge variant="outline">Incomplete</Badge> : null}
+                    </div>
                   </summary>
                   <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
                     <span>Input {formatCountNumber(model.inputTokens)}</span>
