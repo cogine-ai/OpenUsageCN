@@ -12,7 +12,7 @@ The plugin reads `AIAssistantQuotaManager2.xml` from JetBrains IDE config direct
 - Linux: `~/.config/JetBrains`
 - Windows: `~/AppData/Roaming/JetBrains`
 
-For each base directory, the plugin lists real IDE directories on disk (WebStorm, IntelliJ IDEA, PyCharm, etc.), then picks the valid entry with the latest quota window.
+For each base directory, the plugin lists real IDE directories on disk (WebStorm, IntelliJ IDEA, PyCharm, etc.), then picks the valid entry with the latest quota window (`nextRefill.next` when present, otherwise `quota.until`). When two files share the same window, the higher used ratio wins.
 
 ## Parsed Fields
 
