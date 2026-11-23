@@ -1,14 +1,11 @@
 use super::ProviderAccounts;
-use super::identity;
 use super::keychain::InstallationKeyError;
 use super::model::{
     AccountSelection, OperationStatus, ProviderAccountView, ProviderOperation,
-    ProviderOperationError, ProviderOperationReceipt, SourceOutcome, SourceStatus,
+    ProviderOperationError, ProviderOperationReceipt,
 };
-use super::state::{
-    AccountRecord, ConnectionRecord, ProviderState, empty_view, mark_connections_unavailable,
-    view_from_state,
-};
+use super::refresh::LocalRefresh;
+use super::state::{ProviderState, empty_view, view_from_state};
 
 impl ProviderAccounts {
     /// Reads account state and live display identity without discovering or changing credentials.
@@ -41,7 +38,10 @@ impl ProviderAccounts {
         operation: ProviderOperation,
     ) -> ProviderOperationReceipt {
         let operation_id = uuid::Uuid::new_v4().to_string();
-        let is_refresh = matches!(&operation, ProviderOperation::RefreshActive);
+        let is_refresh = matches!(
+            &operation,
+            ProviderOperation::RefreshActive | ProviderOperation::RefreshCursorDesktop
+        );
         let operation_lock = match self.operation_locks.lock() {
             Ok(mut locks) => locks
                 .entry(provider_id.to_string())
@@ -84,14 +84,27 @@ impl ProviderAccounts {
                 );
             }
             match operation {
-                ProviderOperation::RefreshActive => self.refresh_active(provider_id, false),
-                ProviderOperation::ReconnectLocal => self.refresh_active(provider_id, true),
+                ProviderOperation::RefreshActive => {
+                    self.refresh_local(provider_id, LocalRefresh::Active)
+                }
+                ProviderOperation::RefreshCursorDesktop if provider_id == "cursor" => {
+                    self.refresh_local(provider_id, LocalRefresh::CursorDesktop)
+                }
+                ProviderOperation::RefreshCursorDesktop => {
+                    Err("Desktop authorization is only supported for Cursor.".into())
+                }
+                ProviderOperation::ReconnectLocal => {
+                    self.refresh_local(provider_id, LocalRefresh::Reconnect)
+                }
                 ProviderOperation::RemoveAccount { account_id } => self
                     .remove_account(provider_id, &account_id)
                     .map(|_| (OperationStatus::Succeeded, Vec::new())),
                 ProviderOperation::SelectActive { account_id } => self
                     .select_active(provider_id, &account_id)
                     .map(|_| (OperationStatus::Succeeded, Vec::new())),
+                ProviderOperation::FollowDefaultConnection if provider_id == "cursor" => {
+                    self.refresh_local(provider_id, LocalRefresh::FollowDefault)
+                }
                 ProviderOperation::FollowDefaultConnection => self
                     .follow_default(provider_id)
                     .map(|_| (OperationStatus::Succeeded, Vec::new())),
@@ -150,122 +163,6 @@ impl ProviderAccounts {
     fn fallback_view(&self, provider_id: &str) -> ProviderAccountView {
         self.view(provider_id)
             .unwrap_or_else(|_| empty_view(provider_id, self.current_persistence_warning()))
-    }
-
-    /// Reconciles local identities, honoring prior removals unless explicit reconnection was requested.
-    fn refresh_active(
-        &self,
-        provider_id: &str,
-        reconnect: bool,
-    ) -> Result<(OperationStatus, Vec<SourceOutcome>), String> {
-        let adapter = self
-            .adapters
-            .lock()
-            .map_err(|_| "provider account adapters are unavailable".to_string())?
-            .get(provider_id)
-            .cloned()
-            .ok_or_else(|| format!("provider '{provider_id}' does not support accounts"))?;
-        let report = adapter.discover_default()?;
-        if report.observations.is_empty() {
-            self.mark_source_outcomes(provider_id, &report.source_outcomes)?;
-            return Ok((OperationStatus::Failed, report.source_outcomes));
-        }
-
-        for observed in &report.observations {
-            if observed.identity_namespace.trim().is_empty()
-                || observed.normalized_identity.trim().is_empty()
-                || observed.connection_key.trim().is_empty()
-            {
-                return Err("provider returned an invalid account observation".to_string());
-            }
-        }
-        let installation_key = self.resolve_installation_key()?;
-        let mut provider = self
-            .providers
-            .lock()
-            .map_err(|_| "provider account state is unavailable".to_string())?
-            .get(provider_id)
-            .cloned()
-            .unwrap_or_default();
-        mark_connections_unavailable(&mut provider, &report.source_outcomes);
-        let mut default_account_id = None;
-        let mut last_observed_account_id = None;
-        for observed in report.observations {
-            let fingerprint = identity::fingerprint(
-                &installation_key,
-                provider_id,
-                &observed.identity_namespace,
-                &observed.normalized_identity,
-            );
-            if provider
-                .identity_revisions
-                .get(&fingerprint)
-                .is_some_and(|revision| revision % 2 == 1)
-            {
-                if !reconnect {
-                    continue;
-                }
-                let revision = provider.identity_revisions.get_mut(&fingerprint).unwrap();
-                *revision = revision
-                    .checked_add(1)
-                    .ok_or("identity revision is exhausted")?;
-            }
-            let account_index = provider
-                .accounts
-                .iter()
-                .position(|account| account.identity_fingerprint == fingerprint)
-                .unwrap_or_else(|| {
-                    let account_number = provider.accounts.len() + 1;
-                    provider.accounts.push(AccountRecord {
-                        account_id: uuid::Uuid::new_v4().to_string(),
-                        label: format!("Account {account_number}"),
-                        label_revision: 0,
-                        identity_namespace: observed.identity_namespace.clone(),
-                        identity_fingerprint: fingerprint,
-                        connections: Vec::new(),
-                    });
-                    provider.accounts.len() - 1
-                });
-            let account = &mut provider.accounts[account_index];
-            if let Some(connection) = account.connections.iter_mut().find(|connection| {
-                connection.kind == observed.connection_kind
-                    && connection.connection_key == observed.connection_key
-            }) {
-                connection.attached = true;
-                connection.available = true;
-            } else {
-                account.connections.push(ConnectionRecord {
-                    connection_id: uuid::Uuid::new_v4().to_string(),
-                    connection_key: observed.connection_key.clone(),
-                    kind: observed.connection_kind,
-                    attached: true,
-                    attachment_revision: 0,
-                    available: true,
-                    session_ref: None,
-                });
-            }
-            if report.default_connection_key.as_deref() == Some(&observed.connection_key) {
-                default_account_id = Some(account.account_id.clone());
-            }
-            last_observed_account_id = Some(account.account_id.clone());
-        }
-        let observed_account_id = default_account_id.or(last_observed_account_id);
-        provider.default_account_id = observed_account_id.clone();
-        if provider.selection == AccountSelection::Auto {
-            provider.active_account_id = observed_account_id;
-        }
-        let status = if report
-            .source_outcomes
-            .iter()
-            .any(|outcome| outcome.status == SourceStatus::Unavailable)
-        {
-            OperationStatus::Partial
-        } else {
-            OperationStatus::Succeeded
-        };
-        let persisted = self.persist_provider(provider_id, &provider)?;
-        self.replace_provider_state(provider_id, persisted)?;
-        Ok((status, report.source_outcomes))
     }
 
     /// Pins an existing account without rediscovery and publishes the persisted selection.
@@ -360,26 +257,6 @@ impl ProviderAccounts {
             Some(store) => store.save_provider(provider_id, provider),
             None => Ok(provider.clone()),
         }
-    }
-
-    /// Persists unavailable connections after a discovery report yields no usable observations.
-    fn mark_source_outcomes(
-        &self,
-        provider_id: &str,
-        outcomes: &[SourceOutcome],
-    ) -> Result<(), String> {
-        let mut provider = self
-            .providers
-            .lock()
-            .map_err(|_| "provider account state is unavailable".to_string())?
-            .get(provider_id)
-            .cloned();
-        let Some(mut provider) = provider.take() else {
-            return Ok(());
-        };
-        mark_connections_unavailable(&mut provider, outcomes);
-        let persisted = self.persist_provider(provider_id, &provider)?;
-        self.replace_provider_state(provider_id, persisted)
     }
 
     /// Publishes the accepted provider snapshot to runtime state after persistence succeeds.

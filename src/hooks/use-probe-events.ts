@@ -38,6 +38,7 @@ export type ProbeResultContext = {
 
 export type StartBatchOptions = {
   manual?: boolean
+  authorizeCursorDesktop?: boolean
   invalidatePreviousOnFailure?: boolean
   onResult?: (output: PluginOutput) => void
   onInterrupted?: (error: Error) => void
@@ -284,6 +285,7 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
       const result = await invoke<ProbeBatchStarted>("start_probe_batch", {
         batchId,
         pluginIds,
+        ...(options.authorizeCursorDesktop ? { authorizeCursorDesktop: true } : {}),
       })
       if (options.onInterrupted && pluginIds.some((id) => !result.pluginIds.includes(id))) {
         options.onInterrupted(new Error("服务商不可用，无法检查连接。"))
@@ -335,7 +337,7 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
   }, [])
 
   /** Await one manual connection check, rejecting interruption, start failure, or an overall timeout. */
-  const verifyPlugin = useCallback((pluginId: string) => new Promise<PluginOutput>((resolve, reject) => {
+  const verifyPlugin = useCallback((pluginId: string, authorizeCursorDesktop = false) => new Promise<PluginOutput>((resolve, reject) => {
     // A native probe has a 30-second limit. Allow time for the four-worker queue.
     const timer = setTimeout(() => {
       console.error("Provider connection check timed out:", pluginId)
@@ -345,7 +347,7 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
     const finish = (output: PluginOutput) => { clearTimeout(timer); resolve(output) }
     /** Release the verification timer before propagating cancellation or native failure. */
     const interrupt = (error: Error) => { clearTimeout(timer); reject(error) }
-    void startBatch([pluginId], { manual: true, onResult: finish, onInterrupted: interrupt }).catch(interrupt)
+    void startBatch([pluginId], { manual: true, authorizeCursorDesktop, onResult: finish, onInterrupted: interrupt }).catch(interrupt)
   }), [startBatch])
 
   return { startBatch, verifyPlugin }

@@ -72,6 +72,61 @@ impl ProviderAccountAdapter for ProbeRecordingAdapter {
 }
 
 #[test]
+fn explicit_cursor_desktop_refresh_pins_and_probes_the_desktop_identity() {
+    let probed_connection = Arc::new(Mutex::new(None));
+    let accounts = ProviderAccounts::in_memory([32_u8; 32]);
+    accounts.register_adapter(
+        "cursor",
+        Box::new(ProbeRecordingAdapter {
+            probed_connection: Arc::clone(&probed_connection),
+        }),
+    );
+    let refreshed = accounts.perform("cursor", ProviderOperation::RefreshActive);
+    let cli_account_id = refreshed
+        .view
+        .accounts
+        .iter()
+        .find(|account| account.connection_kinds == [ConnectionKind::Cli])
+        .unwrap()
+        .account_id
+        .clone();
+    accounts.perform(
+        "cursor",
+        ProviderOperation::SelectActive {
+            account_id: cli_account_id,
+        },
+    );
+
+    let desktop = accounts.perform("cursor", ProviderOperation::RefreshCursorDesktop);
+    assert_eq!(desktop.status, OperationStatus::Succeeded);
+    assert_eq!(
+        desktop.source_outcomes,
+        [SourceOutcome::new(
+            "cursor-desktop",
+            SourceStatus::Available
+        )]
+    );
+    let active = desktop
+        .view
+        .accounts
+        .iter()
+        .find(|account| account.selected)
+        .unwrap();
+    assert_eq!(active.connection_kinds, [ConnectionKind::Desktop]);
+    assert_eq!(
+        desktop.view.selection,
+        super::AccountSelection::Pinned(active.account_id.clone())
+    );
+
+    let probe = accounts.prepare_cursor_desktop_probe().unwrap();
+    accounts.publish_active_probe(probe, |_, _| {}).unwrap();
+    assert_eq!(
+        probed_connection.lock().unwrap().as_deref(),
+        Some("cursor-desktop")
+    );
+}
+
+#[test]
 fn pinned_account_probe_uses_only_that_accounts_connection() {
     let probed_connection = Arc::new(Mutex::new(None));
     let accounts = ProviderAccounts::in_memory([33_u8; 32]);

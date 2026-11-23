@@ -89,6 +89,11 @@ pub(crate) fn read_password(
         result
     })
 }
+
+#[cfg(target_os = "macos")]
+pub(super) fn read_cursor_app_password(account: &str, interactive: bool) -> ReadResult {
+    preflight::read_for_app("Cursor Safe Storage", account, interactive)
+}
 fn denied() -> &'static Mutex<HashSet<Key>> {
     static STATE: OnceLock<Mutex<HashSet<Key>>> = OnceLock::new();
     STATE.get_or_init(Default::default)

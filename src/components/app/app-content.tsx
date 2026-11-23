@@ -33,7 +33,7 @@ export type AppContentActionProps = {
   onAccountChangeRefreshPlugin: (id: string) => void
   onReorder: (orderedIds: string[]) => void
   onToggle: (id: string) => void
-  onProviderConfigSaved: (id: string) => Promise<void>
+  onProviderConfigSaved: (id: string, authorizeCursorDesktop?: boolean) => Promise<void>
   onAutoUpdateIntervalChange: (value: AutoUpdateIntervalMinutes) => void
   onThemeModeChange: (mode: ThemeMode) => void
   onDisplayModeChange: (mode: DisplayMode) => void
@@ -108,7 +108,14 @@ export function AppContent({
   )
 
   if (connection) {
-    return <ProviderConnectionPage plugin={settingsPlugins.find((plugin) => plugin.id === connection.providerId) ?? null} error={displayPlugins.find((plugin) => plugin.meta.id === connection.providerId)?.error} onCheck={onProviderConfigSaved} onAccountChangeRefresh={onAccountChangeRefreshPlugin} />
+    return <ProviderConnectionPage
+      plugin={settingsPlugins.find((plugin) => plugin.id === connection.providerId) ?? null}
+      error={displayPlugins.find((plugin) => plugin.meta.id === connection.providerId)?.error}
+      onCheck={onProviderConfigSaved}
+      onAccountChangeRefresh={onAccountChangeRefreshPlugin}
+      onAuthorizeCursorDesktop={platformCapabilities?.platform === "macos"
+        ? () => onProviderConfigSaved("cursor", true) : undefined}
+    />
   }
 
   if (activeView === "home") {

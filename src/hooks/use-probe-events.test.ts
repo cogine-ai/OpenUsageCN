@@ -57,6 +57,19 @@ describe("useProbeEvents", () => {
     expect(ids).toEqual(["a", "b"])
   })
 
+  it("requests Cursor Keychain interaction only for an explicit authorization batch", async () => {
+    invokeMock.mockImplementation(async (_cmd: string, args: { batchId: string; pluginIds: string[] }) => args)
+    const { result } = renderHook(() => useProbeEvents({ onResult: vi.fn(), onBatchComplete: vi.fn() }))
+
+    await act(() => result.current.startBatch(["cursor"]))
+    expect(invokeMock.mock.lastCall?.[1]).not.toHaveProperty("authorizeCursorDesktop")
+
+    await act(() => result.current.startBatch(["cursor"], { manual: true, authorizeCursorDesktop: true }))
+    expect(invokeMock).toHaveBeenLastCalledWith("start_probe_batch", {
+      batchId: expect.any(String), pluginIds: ["cursor"], authorizeCursorDesktop: true,
+    })
+  })
+
   it("uses fallback id when crypto is unavailable", async () => {
     const originalCrypto = globalThis.crypto
     // @ts-expect-error test fallback path

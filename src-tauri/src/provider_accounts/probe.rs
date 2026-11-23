@@ -70,6 +70,18 @@ impl ProviderAccounts {
         &self,
         provider_id: &str,
     ) -> Result<ActiveAccountProbe, String> {
+        self.prepare_probe(provider_id, None)
+    }
+
+    pub(crate) fn prepare_cursor_desktop_probe(&self) -> Result<ActiveAccountProbe, String> {
+        self.prepare_probe("cursor", Some(ConnectionKind::Desktop))
+    }
+
+    fn prepare_probe(
+        &self,
+        provider_id: &str,
+        connection_kind: Option<ConnectionKind>,
+    ) -> Result<ActiveAccountProbe, String> {
         let started_at = time::OffsetDateTime::now_utc();
         let adapter = self
             .adapters
@@ -98,7 +110,10 @@ impl ProviderAccounts {
             let connection = account
                 .connections
                 .iter()
-                .filter(|connection| connection_can_probe(connection))
+                .filter(|connection| {
+                    connection_can_probe(connection)
+                        && connection_kind.is_none_or(|kind| connection.kind == kind)
+                })
                 .min_by_key(|connection| connection.kind)
                 .ok_or_else(|| "The selected account has no available connection.".to_string())?;
             (

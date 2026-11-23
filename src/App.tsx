@@ -212,10 +212,10 @@ function App() {
   })
 
   /** Verify saved credentials explicitly and report failure without treating cancellation as a provider error. */
-  const handleProviderConfigSaved = useCallback(async (pluginId: string) => {
+  const handleProviderConfigSaved = useCallback(async (pluginId: string, authorizeCursorDesktop = false) => {
     setLoadingForPlugins([pluginId])
     try {
-      const output = await verifyPlugin(pluginId)
+      const output = await verifyPlugin(pluginId, authorizeCursorDesktop)
       const error = probeFailure(output)
       if (error) throw new Error(error)
     } catch (error) {

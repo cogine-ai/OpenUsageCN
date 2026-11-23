@@ -187,6 +187,115 @@ fn attaching_a_browser_connection_to_an_existing_identity_preserves_selection() 
     );
 }
 
+struct UnavailableLocalAdapter;
+
+impl ProviderAccountAdapter for UnavailableLocalAdapter {
+    fn discover_default(&self) -> Result<DiscoveryReport, String> {
+        Err("Cursor desktop credentials could not be read".into())
+    }
+}
+
+#[test]
+fn pinned_chrome_refresh_reaches_the_saved_profile_without_local_discovery() {
+    let directory = tempfile::tempdir().unwrap();
+    let accounts = ProviderAccounts::with_store([46_u8; 32], directory.path()).unwrap();
+    let browser = broker("auth0|original-account");
+    accounts.set_browser_broker(Arc::clone(&browser));
+    let attached = accounts.perform(
+        "cursor",
+        ProviderOperation::AttachBrowserCandidate {
+            candidate_id: candidate_id(&browser),
+        },
+    );
+    let account_id = attached.view.active_account_id.expect("attached account");
+    drop(accounts);
+
+    let accounts = ProviderAccounts::with_store([46_u8; 32], directory.path()).unwrap();
+    accounts.register_adapter("cursor", Box::new(UnavailableLocalAdapter));
+    accounts.set_browser_broker(broker("auth0|different-account"));
+    let refresh = accounts.perform("cursor", ProviderOperation::RefreshActive);
+
+    assert_eq!(refresh.status, OperationStatus::Succeeded);
+    assert_eq!(refresh.view.active_account_id.as_ref(), Some(&account_id));
+    assert_eq!(refresh.view.selection, AccountSelection::Pinned(account_id));
+    assert_eq!(refresh.view.accounts.len(), 1);
+    assert_eq!(
+        refresh.view.accounts[0].connections[0]
+            .profile_key
+            .as_deref(),
+        Some("Profile 2")
+    );
+    // The selected Chrome profile is reacquired after restart and its identity
+    // is checked before the browser probe can make a quota request.
+    let error = accounts.prepare_active_probe("cursor").err().unwrap();
+    assert_eq!(
+        error,
+        "The selected Cursor browser profile is signed in to another account."
+    );
+}
+
+struct DifferentCliAdapter;
+
+impl ProviderAccountAdapter for DifferentCliAdapter {
+    fn discover_default(&self) -> Result<DiscoveryReport, String> {
+        Ok(DiscoveryReport {
+            observations: vec![ObservedConnection {
+                identity_namespace: "cursor-sub-v1".into(),
+                normalized_identity: "auth0|different-cli-account".into(),
+                connection_key: "cursor-cli".into(),
+                connection_kind: ConnectionKind::Cli,
+            }],
+            source_outcomes: vec![
+                SourceOutcome::new("cursor-desktop", SourceStatus::Unavailable),
+                SourceOutcome::new("cursor-cli", SourceStatus::Available),
+            ],
+            default_connection_key: Some("cursor-cli".into()),
+        })
+    }
+}
+
+#[test]
+fn cursor_uses_the_same_accounts_browser_if_desktop_discovery_fails() {
+    let accounts = ProviderAccounts::in_memory([48_u8; 32]);
+    accounts.register_adapter("cursor", Box::new(SharedLocalAdapter));
+    let initial = accounts.perform("cursor", ProviderOperation::RefreshActive);
+    let account_id = initial.view.active_account_id.expect("desktop account");
+    let browser = broker("auth0|shared-subject");
+    accounts.set_browser_broker(Arc::clone(&browser));
+    accounts.perform(
+        "cursor",
+        ProviderOperation::AttachBrowserCandidate {
+            candidate_id: candidate_id(&browser),
+        },
+    );
+
+    accounts.register_adapter("cursor", Box::new(DifferentCliAdapter));
+    let refresh = accounts.perform("cursor", ProviderOperation::RefreshActive);
+
+    assert_eq!(refresh.status, OperationStatus::Partial);
+    assert_eq!(refresh.view.selection, AccountSelection::Auto);
+    assert_eq!(refresh.view.active_account_id.as_ref(), Some(&account_id));
+    assert_eq!(refresh.view.accounts.len(), 2);
+    let account = refresh
+        .view
+        .accounts
+        .iter()
+        .find(|item| item.selected)
+        .unwrap();
+    assert!(
+        account
+            .connections
+            .iter()
+            .any(|connection| connection.kind == ConnectionKind::Desktop && !connection.available)
+    );
+    assert!(
+        account
+            .connections
+            .iter()
+            .any(|connection| connection.kind == ConnectionKind::Chrome && connection.available)
+    );
+}
+
 #[test]
 fn failed_cursor_attachment_releases_the_claimed_browser_session() {
     let directory = std::env::temp_dir().join(format!(

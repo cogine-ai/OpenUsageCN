@@ -153,9 +153,16 @@
   }
 
   function discoverConnections(ctx) {
-    const desktop = loadDesktopAuth(ctx)
-    const sqliteAccessToken = desktop.accessToken
-    const sqliteRefreshToken = desktop.refreshToken
+    let desktop
+    let desktopUnavailable = false
+    try {
+      desktop = loadDesktopAuth(ctx)
+    } catch {
+      desktopUnavailable = true
+      ctx.host.log.warn("Cursor desktop credential could not be read.")
+    }
+    const sqliteAccessToken = desktop?.accessToken
+    const sqliteRefreshToken = desktop?.refreshToken
     const sqliteMembershipTypeRaw = readStateValue(ctx, "cursorAuth/stripeMembershipType")
     const sqliteMembershipType = typeof sqliteMembershipTypeRaw === "string"
       ? sqliteMembershipTypeRaw.trim().toLowerCase()
@@ -191,7 +198,7 @@
       "cursor-desktop",
       "desktop",
       sqliteSubject,
-      !!sqliteAccessToken || !!sqliteRefreshToken
+      desktopUnavailable || !!sqliteAccessToken || !!sqliteRefreshToken
     )
     addLocalSource(
       "cursor-cli",

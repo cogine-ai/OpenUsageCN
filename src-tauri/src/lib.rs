@@ -556,7 +556,14 @@ async fn start_probe_batch(
     state: tauri::State<'_, Mutex<AppState>>,
     batch_id: Option<String>,
     plugin_ids: Option<Vec<String>>,
+    authorize_cursor_desktop: Option<bool>,
 ) -> Result<ProbeBatchStarted, String> {
+    let authorize_cursor_desktop = authorize_cursor_desktop.unwrap_or(false);
+    if authorize_cursor_desktop
+        && !matches!(plugin_ids.as_deref(), Some([id]) if id == "cursor")
+    {
+        return Err("钥匙串授权仅适用于 Cursor 桌面连接。".into());
+    }
     let batch_id = batch_id
         .and_then(|id| {
             let trimmed = id.trim().to_string();
@@ -675,6 +682,10 @@ async fn start_probe_batch(
                     .account_support
                     .as_ref()
                     .is_some_and(|support| support.local_discovery);
+                // "Allow Once" covers discovery, probing and publication revalidation.
+                // Read before starting any QuickJS or HTTP deadlines.
+                let mut desktop_authorization = None;
+                let mut desktop_account_changed = false;
                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     if plugin_id == "ollama" {
                         let deadline =
@@ -706,11 +717,45 @@ async fn start_probe_batch(
                         };
                     }
                     let accounts = handle.state::<Arc<provider_accounts::ProviderAccounts>>();
-                    let receipt = accounts.perform(
-                        &plugin_id,
-                        provider_accounts::ProviderOperation::RefreshActive,
-                    );
-                    if let Some(event) = accounts.changed_event(&plugin_id, &receipt) {
+                    let operation = if authorize_cursor_desktop {
+                        match plugin_engine::cursor_credentials::authorize_desktop() {
+                            Ok(grant) => desktop_authorization = Some(grant),
+                            Err(message) => return PendingProbe::Unscoped {
+                                output: plugin_engine::runtime::provider_account_probe_error(
+                                    &plugin, message,
+                                ),
+                                started_at: probe_started_at,
+                            },
+                        }
+                        provider_accounts::ProviderOperation::RefreshCursorDesktop
+                    } else {
+                        provider_accounts::ProviderOperation::RefreshActive
+                    };
+                    let receipt = if authorize_cursor_desktop {
+                        // A system prompt can stay open while a new refresh starts.
+                        // Reconcile the desktop selection only while this batch still owns it.
+                        let Some(receipt) = latest_batches.commit_if_latest(&bid, &plugin_id, || {
+                            let previous_account = accounts.view(&plugin_id).ok()
+                                .and_then(|view| view.active_account_id);
+                            let receipt = accounts.perform(&plugin_id, operation);
+                            desktop_account_changed = receipt.status != provider_accounts::OperationStatus::Failed
+                                && receipt.view.active_account_id != previous_account;
+                            receipt
+                        }) else {
+                            return PendingProbe::Unscoped {
+                                output: plugin_engine::runtime::provider_account_probe_error(
+                                    &plugin, "Cursor 桌面刷新已被新的检查取代。",
+                                ),
+                                started_at: probe_started_at,
+                            };
+                        };
+                        receipt
+                    } else {
+                        accounts.perform(&plugin_id, operation)
+                    };
+                    if !desktop_account_changed
+                        && let Some(event) = accounts.changed_event(&plugin_id, &receipt)
+                    {
                         if let Err(error) = handle.emit("provider-account-view-changed", event) {
                             log::error!(
                                 "provider account revision event failed: provider={}, operation_id={}, error={}",
@@ -721,11 +766,13 @@ async fn start_probe_batch(
                         }
                     }
                     if receipt.status == provider_accounts::OperationStatus::Failed {
-                        let message = receipt
-                            .error
-                            .as_ref()
-                            .map(|error| error.message.as_str())
-                            .unwrap_or("Account refresh failed. Try again.");
+                        let message = if authorize_cursor_desktop {
+                            "无法连接 Cursor 桌面账号。请确认已在 Cursor 桌面版登录，然后重试。"
+                        } else {
+                            receipt.error.as_ref()
+                                .map(|error| error.message.as_str())
+                                .unwrap_or("Account refresh failed. Try again.")
+                        };
                         return PendingProbe::Unscoped {
                             output: plugin_engine::runtime::provider_account_probe_error(
                                 &plugin, message,
@@ -741,7 +788,12 @@ async fn start_probe_batch(
                             plugin_engine::host_api::redact_log_message(&error)
                         );
                     }
-                    match accounts.prepare_active_probe(&plugin_id) {
+                    let probe = if authorize_cursor_desktop {
+                        accounts.prepare_cursor_desktop_probe()
+                    } else {
+                        accounts.prepare_active_probe(&plugin_id)
+                    };
+                    match probe {
                         Ok(probe) => PendingProbe::Account(probe),
                         Err(message) => PendingProbe::Unscoped {
                             output: plugin_engine::runtime::provider_account_probe_error(
@@ -764,7 +816,9 @@ async fn start_probe_batch(
                             }
                         }
                         Ok(PendingProbe::Unscoped { output, started_at }) => {
-                            publish_probe_output(&handle, &bid, &plugin_id, output, started_at);
+                            publish_probe_output_with_invalidation(
+                                &handle, &bid, &plugin_id, output, started_at, desktop_account_changed,
+                            );
                         }
                         Ok(PendingProbe::Ollama {
                             output,
@@ -802,23 +856,24 @@ async fn start_probe_batch(
                             match accounts.publish_active_probe(
                                 probe,
                                 |output, started_at| {
-                                    publish_probe_output(
+                                    publish_probe_output_with_invalidation(
                                         &handle,
                                         &bid,
                                         &plugin_id,
                                         output.clone(),
                                         started_at,
+                                        desktop_account_changed,
                                     );
                                 },
                             ) {
-                                Ok(_) if plugin_id == "claude" => {
+                                Ok(_) if matches!(plugin_id.as_str(), "claude" | "cursor")
+                                    && !desktop_account_changed => {
                                     if let Err(error) = handle.emit(
                                         "provider-account-view-changed",
                                         accounts.view_changed_event(&plugin_id),
                                     ) {
                                         log::error!(
-                                            "Claude Team verification event failed: {}",
-                                            error
+                                            "provider account probe event failed: provider={plugin_id}, error={error}"
                                         );
                                     }
                                 }
@@ -831,7 +886,7 @@ async fn start_probe_batch(
                                         plugin_id,
                                         redacted
                                     );
-                                    publish_probe_output(
+                                    publish_probe_output_with_invalidation(
                                         &handle,
                                         &bid,
                                         &plugin_id,
@@ -840,13 +895,18 @@ async fn start_probe_batch(
                                             &redacted,
                                         ),
                                         probe_started_at,
+                                        desktop_account_changed,
                                     );
                                 }
                             }
                         }
                         Err(_) => {
                             log::error!("probe {} panicked", plugin_id);
-                            let invalidate_cached_data = panic_probe_invalidates_cached_data(&plugin_id);
+                            let invalidate_cached_data = if desktop_account_changed {
+                                Some(true)
+                            } else {
+                                panic_probe_invalidates_cached_data(&plugin_id)
+                            };
                             let output = plugin_engine::runtime::panic_probe_output(&plugin);
                             local_http_api::record_probe_error(
                                 &plugin_id,
@@ -869,6 +929,16 @@ async fn start_probe_batch(
                             }
                         }
                     });
+                drop(desktop_authorization);
+                if committed.is_some() && desktop_account_changed {
+                    let accounts = handle.state::<Arc<provider_accounts::ProviderAccounts>>();
+                    if let Err(error) = handle.emit(
+                        "provider-account-view-changed",
+                        accounts.view_changed_event(&plugin_id),
+                    ) {
+                        log::error!("Cursor desktop selection event failed: {error}");
+                    }
+                }
                 if committed.is_none() {
                     log::debug!(
                         "probe {} result from superseded batch {} ignored",

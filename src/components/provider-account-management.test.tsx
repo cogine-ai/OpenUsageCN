@@ -23,6 +23,32 @@ describe("Account Management", () => {
     expect(screen.getByRole("radio", { name: "Work" })).toBeVisible()
     expect(screen.getByRole("radio", { name: "Work" })).toHaveAttribute("aria-checked", "false")
   })
+  it("refreshes usage for the already selected Chrome profile without authorizing Desktop", async () => {
+    const selected = { ...view, selection: { mode: "pinned" as const, accountId: "a" } }
+    tauri.invoke.mockResolvedValueOnce(selected)
+    const refresh = vi.fn().mockResolvedValue(undefined)
+    const authorize = vi.fn()
+    const user = userEvent.setup()
+    render(<ProviderAccountControls providerId="cursor" standalone
+      onRefreshCursor={refresh} onAuthorizeCursorDesktop={authorize} />)
+    await screen.findByRole("radio", { name: "Work" })
+    await user.click(screen.getByRole("button", { name: "刷新账号" }))
+    await waitFor(() => expect(refresh).toHaveBeenCalledOnce())
+    expect(authorize).not.toHaveBeenCalled()
+  })
+  it("can retry the explicit Desktop authorization after cancellation", async () => {
+    tauri.invoke.mockResolvedValue(view)
+    const authorize = vi.fn().mockRejectedValueOnce(new Error("钥匙串授权未完成。")).mockResolvedValueOnce(undefined)
+    const user = userEvent.setup()
+    render(<ProviderAccountControls providerId="cursor" standalone onAuthorizeCursorDesktop={authorize} />)
+    const button = await screen.findByRole("button", { name: "授权并刷新" })
+    expect(authorize).not.toHaveBeenCalled()
+    await user.click(button)
+    expect(await screen.findByRole("alert")).toHaveTextContent("钥匙串授权未完成。")
+    await user.click(button)
+    expect(await screen.findByRole("status")).toHaveTextContent("Cursor 桌面用量已刷新。")
+    expect(authorize).toHaveBeenCalledTimes(2)
+  })
   it("shows stale and unavailable states while collapsed", async () => {
     tauri.invoke.mockResolvedValue({ ...view, accounts: [{ ...view.accounts[0], stale: true, connections: [{ ...view.accounts[0].connections[0], available: false }] }] })
     render(<ProviderAccountControls providerId="cursor" />)

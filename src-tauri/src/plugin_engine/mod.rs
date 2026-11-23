@@ -1,5 +1,5 @@
 pub(crate) mod account_runtime;
-mod cursor_credentials;
+pub(crate) mod cursor_credentials;
 pub(crate) mod endpoint_url;
 pub mod host_api;
 pub(crate) mod keychain_control;
