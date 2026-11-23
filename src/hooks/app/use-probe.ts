@@ -28,6 +28,7 @@ export function useProbe({
     pluginStatesRef,
     setLoadingForPlugins: markLoading,
     setAccountTransitionForPlugins: markAccountTransition,
+    clearAccountUsage,
     setErrorForPlugins,
     handleProbeResult,
     syncOllamaProjection,
@@ -58,6 +59,7 @@ export function useProbe({
   const { startBatch, verifyPlugin } = useProbeEvents({
     onResult: receiveProbeResult,
     onBatchComplete: handleBatchComplete,
+    onAccountSwitch: clearAccountUsage,
   })
 
   /** Read the latest pending state so scheduled checks do not duplicate an in-flight refresh. */

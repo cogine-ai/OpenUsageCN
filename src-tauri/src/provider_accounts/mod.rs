@@ -19,6 +19,7 @@ mod operations;
 mod plugin_adapter;
 mod probe;
 mod projection;
+mod refresh;
 mod registry_store;
 mod removal;
 mod snapshot_store;

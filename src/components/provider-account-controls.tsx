@@ -3,6 +3,7 @@ import { AlertTriangle, Check, ChevronDown, ChevronRight, Pencil, Plus, RefreshC
 
 import { RemoveAccountButton } from "@/components/remove-account-button"
 import { BrowserAccountManager } from "@/components/browser-account-manager"
+import { CursorDesktopAuthorization } from "@/components/cursor-desktop-authorization"
 import { CursorModelUsage } from "@/components/cursor-model-usage"
 import { LocalUsageHistory } from "@/components/local-usage-history"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -31,6 +32,8 @@ type ProviderAccountControlsProps = {
   standalone?: boolean
   onOpenConnections?: () => void
   onOpenLocalLogin?: () => void
+  onAuthorizeCursorDesktop?: () => Promise<void>
+  onRefreshCursor?: () => Promise<void>
 }
 
 /** Checks whether a successful account operation changed the active selection. */
@@ -54,6 +57,8 @@ export function ProviderAccountControls({
   standalone = false,
   onOpenConnections,
   onOpenLocalLogin,
+  onAuthorizeCursorDesktop,
+  onRefreshCursor,
 }: ProviderAccountControlsProps) {
   const [expanded, setExpanded] = useState(standalone)
   const [browserFlow, setBrowserFlow] = useState(false)
@@ -61,11 +66,14 @@ export function ProviderAccountControls({
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null)
   const [draftLabel, setDraftLabel] = useState("")
   const [cleanupRetry, setCleanupRetry] = useState<{ accountId: string; label: string } | null>(null)
+  const [authorizingDesktop, setAuthorizingDesktop] = useState(false)
+  const [refreshingCursor, setRefreshingCursor] = useState(false)
+  const [cursorRefreshError, setCursorRefreshError] = useState<string | null>(null)
   const pendingFocus = useRef<HTMLButtonElement | null>(null)
   const {
     view,
     loading,
-    busy,
+    busy: busyAccount,
     error,
     receipt,
     accountRevision,
@@ -78,6 +86,7 @@ export function ProviderAccountControls({
     removeAccount,
     reconnectLocal,
   } = useProviderAccounts(providerId)
+  const busy = busyAccount || authorizingDesktop || refreshingCursor
   useLayoutEffect(() => {
     if (busy) return
     const target = pendingFocus.current
@@ -168,7 +177,19 @@ export function ProviderAccountControls({
                     size="icon-sm"
                     variant="outline"
                     disabled={loading || busy}
-                    onClick={() => {
+                    onClick={async () => {
+                      if (providerId === "cursor" && onRefreshCursor) {
+                        setRefreshingCursor(true)
+                        setCursorRefreshError(null)
+                        try {
+                          await onRefreshCursor()
+                        } catch (cause) {
+                          setCursorRefreshError(cause instanceof Error ? cause.message : "无法刷新 Cursor 用量，请重试。")
+                        } finally {
+                          setRefreshingCursor(false)
+                        }
+                        return
+                      }
                       const previousAccountId = view?.activeAccountId ?? null
                       void refreshActive().then((nextReceipt) => {
                         if (activeAccountChanged(previousAccountId, nextReceipt)) {
@@ -184,6 +205,7 @@ export function ProviderAccountControls({
               <TooltipContent>刷新账号</TooltipContent>
             </Tooltip>
           </div>
+          {cursorRefreshError ? <p role="alert" className="text-sm text-destructive">{cursorRefreshError}</p> : null}
 
           {loading ? <p className="text-sm text-muted-foreground">正在读取账号…</p> : null}
           {!loading && error ? <p className="text-sm text-destructive">{error}</p> : null}
@@ -396,6 +418,13 @@ export function ProviderAccountControls({
                   if (activeAccountChanged(previousAccountId, nextReceipt)) onAccountChangeRefresh?.()
                 })
               }}>重新添加本机账号</Button>
+              {providerId === "cursor" && onAuthorizeCursorDesktop ? (
+                <CursorDesktopAuthorization busy={busy} pending={authorizingDesktop}
+                  authorize={onAuthorizeCursorDesktop} onPendingChange={(pending) => {
+                    setAuthorizingDesktop(pending)
+                    if (pending) setCursorRefreshError(null)
+                  }} />
+              ) : null}
               {(providerId === "cursor" || providerId === "claude") && browserBinding ? (
                 providerId === "claude" && !activeAccount?.connections.some((connection) => connection.kind === "cli" && connection.available)
                   ? <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => onOpenLocalLogin ? onOpenLocalLogin() : void reconnectLocal()}>连接本机账号</Button>

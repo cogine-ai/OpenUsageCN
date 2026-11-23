@@ -60,7 +60,7 @@ macOS 发布还需要：
 1. 在各自架构的 macOS runner 上分别运行 `bun run build:cookie-helper -- aarch64-apple-darwin` 和 `bun run build:cookie-helper -- x86_64-apple-darwin`，再运行对应的 `bun run verify:cookie-helper-build -- <target>`。构建脚本会拒绝跨架构编译，并固定 Bun 1.3.6 的 `d530ed993` 修订；验证会检查架构、macOS 13 deployment target、执行权限和协议启动。
 2. 发布 workflow 必须通过 `Verify Signed And Notarized Cookie Helper`。它会从 updater archive 重新解包，检查 helper 与应用的 Developer ID、两者都只有 `allow-jit`、macOS 13、第三方通知、stapling、Gatekeeper 和实际协议启动。Tauri 当前把同一个 entitlement 文件应用到主程序和 external binary，因此主程序也获得了只供 Bun helper 使用的 JIT 权限；这是当前发布链路的残余权限风险。如果 Tauri 支持逐可执行文件配置，应改成只授予 helper。
 3. 用两个不同的 Cursor 身份验证 Desktop SQLite、CLI Keychain、账号切换和当前账期 Model Usage；切换时不能短暂显示另一个账号的数据。
-4. 先用旧版本创建 Provider Accounts 数据和安装密钥，再升级并刷新同一个身份；账号 ID 必须保持不变，也不能出现新增的 Keychain 授权或异常提示。
+4. 先用旧版本创建 Provider Accounts 数据和安装密钥，再升级并刷新同一个身份。确认账号 ID 保持不变，普通刷新无钥匙串弹窗。
 5. 切换系统 IANA 时区，并用跨夏令时边界的数据验证 Model Usage 的当前窗口和本地日期分组；一次刷新必须使用同一个当前时间。
 6. 用 Claude OAuth 账号和匹配的浏览器 profile 验证 Team 席位；不匹配或无法验证时必须保持通用 `Team`。
 7. 运行 `bun run build:release` 或 `bun run build:release -- --skip-stapling`。

@@ -118,6 +118,10 @@ subjects stay in memory; persisted account data contains random IDs, an identity
 chosen profile locator, and local labels. A saved browser connection is reacquired from that exact
 profile after restart and can be detached at any time.
 
+An already selected browser account can refresh when Cursor Desktop's Keychain
+item is unavailable. OpenUsageCN verifies the account in the saved profile
+before showing its quota.
+
 Local account-scoped probes verify `GET https://cursor.com/api/auth/me` before requesting quota.
 The actual access token must still carry the selected account's complete JWT subject. The server
 may return that complete subject, or its exact user component when the token has one unambiguous
@@ -356,10 +360,12 @@ sqlite3 ~/Library/Application\ Support/Cursor/User/globalStorage/state.vscdb \
 | `cursorAuth/stripeSubscriptionStatus` | Subscription status |
 
 Cursor 3.27+ may encrypt both token values with `cursor-safe-storage:v1:`.
-OpenUsageCN decrypts these in the macOS backend using the **Cursor Safe Storage**
-Keychain item, checking account **Cursor Key** and then **Cursor** only when the first item
-is absent. The Safe Storage password is never passed to plugins or written to logs.
-Unavailable or denied access is reported rather than silently selecting a different account.
+In **Cursor → Accounts → Cursor Desktop Connection**, choose **Authorize and Refresh**
+(**授权并刷新**). macOS asks for permission to let OpenUsageCN read the
+**Cursor Safe Storage** item. Allow Once covers the current refresh. Always Allow
+also lets later refreshes use the item. After approval, OpenUsageCN selects the
+desktop account and checks its quota. Background refreshes run without prompting.
+If you cancel or deny access, use the same button to retry.
 
 Encrypted Desktop credentials remain read-only. Refreshed tokens stay in memory;
 OpenUsageCN never replaces Cursor's encrypted values with plaintext. Account identity and

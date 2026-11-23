@@ -62,6 +62,8 @@ pub(crate) struct DiscoveryReport {
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub(crate) enum ProviderOperation {
     RefreshActive,
+    #[serde(skip)]
+    RefreshCursorDesktop,
     ReconnectLocal,
     RemoveAccount {
         #[serde(rename = "accountId")]

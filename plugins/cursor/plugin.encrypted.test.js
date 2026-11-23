@@ -157,10 +157,23 @@ describe("Cursor encrypted Desktop credentials", () => {
     expect(ctx.host.sqlite.exec).not.toHaveBeenCalled()
   })
 
-  it("reports decryption denial instead of silently choosing another account", async () => {
+  it("reports Desktop decryption denial and still discovers the independent CLI login", async () => {
     const { ctx, plugin } = await setup()
     ctx.host.cursor.decryptToken.mockImplementation(() => { throw new Error("denied: Cursor credential access") })
-    expect(() => plugin.discoverConnections(ctx)).toThrow("denied:")
+    ctx.host.keychain.readGenericPassword.mockImplementation((service) =>
+      service === "cursor-access-token" ? jwt("auth0|cli-user") : null)
+
+    const report = plugin.discoverConnections(ctx)
+
+    expect(report.observations).toEqual([
+      { identityNamespace: "cursor-sub-v1", normalizedIdentity: "auth0|cli-user", connectionKey: "cursor-cli", connectionKind: "cli" },
+    ])
+    expect(report.sourceOutcomes).toEqual([
+      { sourceKey: "cursor-desktop", status: "unavailable" },
+      { sourceKey: "cursor-cli", status: "available" },
+    ])
+    expect(report.defaultConnectionKey).toBe("cursor-cli")
+    expect(ctx.host.log.warn).toHaveBeenCalledWith("Cursor desktop credential could not be read.")
     expect(ctx.host.http.request).not.toHaveBeenCalled()
   })
 

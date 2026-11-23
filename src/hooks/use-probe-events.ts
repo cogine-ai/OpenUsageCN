@@ -20,6 +20,16 @@ type ProbeBatchStarted = {
   pluginIds: string[]
 }
 
+type ConnectionCommit =
+  | { providerId: "muse"; previousBatchId: string | null }
+  | { providerId: "cursor"; batchId: string }
+
+function batchOrdinal(batchId: string | null, prefix: string | null, latest: number) {
+  const suffix = prefix && batchId?.startsWith(prefix + ":") ? batchId.slice(prefix.length + 1) : ""
+  const ordinal = /^\d+$/.test(suffix) ? Number(suffix) : 0
+  return Number.isSafeInteger(ordinal) && ordinal <= latest ? ordinal : 0
+}
+
 type ProbeBatchMeta = {
   batchId: string
   ordinal: number
@@ -38,6 +48,7 @@ export type ProbeResultContext = {
 
 export type StartBatchOptions = {
   manual?: boolean
+  authorizeCursorDesktop?: boolean
   invalidatePreviousOnFailure?: boolean
   onResult?: (output: PluginOutput) => void
   onInterrupted?: (error: Error) => void
@@ -74,10 +85,13 @@ export function getProbeBatchStartFailedPluginIds(
 type UseProbeEventsOptions = {
   onResult: (output: PluginOutput, context: ProbeResultContext) => void
   onBatchComplete: () => void
+  onAccountSwitch?: (providerId: string) => void
 }
 
 /** Deliver only each provider's latest check and cancel verification when its ownership changes. */
-export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOptions) {
+export function useProbeEvents({ onResult, onBatchComplete, onAccountSwitch }: UseProbeEventsOptions) {
+  const accountSwitchHandler = useRef(onAccountSwitch)
+  accountSwitchHandler.current = onAccountSwitch
   const batchPrefix = useRef<string | null>(null)
   const nextOrdinal = useRef(0)
   const lastSuccessfulOrdinal = useRef(new Map<string, number>())
@@ -110,14 +124,24 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
   useEffect(() => {
     let cancelled = false
     let unlisten: UnlistenFn | undefined
-    connectionListenerReady.current = listen<{ providerId: string; previousBatchId: string | null }>(
+    connectionListenerReady.current = listen<ConnectionCommit>(
       "provider:connection-committed", ({ payload }) => {
-        if (payload.providerId !== "muse") return
         const prefix = batchPrefix.current
-        const suffix = prefix && payload.previousBatchId?.startsWith(prefix + ":")
-          ? payload.previousBatchId.slice(prefix.length + 1) : ""
-        const ordinal = /^\d+$/.test(suffix) ? Number(suffix) : 0
-        const boundary = Number.isSafeInteger(ordinal) && ordinal <= nextOrdinal.current ? ordinal : 0
+        const latest = nextOrdinal.current
+        if (payload.providerId === "cursor") {
+          // The switch batch can publish new account data. Invalidate checks
+          // and snapshots that precede its selection even if it was superseded.
+          const ordinal = batchOrdinal(payload.batchId, prefix, latest)
+          const cutoff = Math.max(invalidatedThroughOrdinal.current.get("cursor") ?? 0, ordinal - 1)
+          invalidatedThroughOrdinal.current.set("cursor", cutoff)
+          if ((lastSuccessfulOrdinal.current.get("cursor") ?? 0) <= cutoff) {
+            lastSuccessfulOrdinal.current.delete("cursor")
+            accountSwitchHandler.current?.("cursor")
+          }
+          return
+        }
+        if (payload.providerId !== "muse") return
+        const boundary = batchOrdinal(payload.previousBatchId, prefix, latest)
         const cutoff = Math.max(invalidatedThroughOrdinal.current.get("muse") ?? 0, boundary)
         invalidatedThroughOrdinal.current.set("muse", cutoff)
         const current = latestBatchByProvider.current.get("muse")
@@ -284,6 +308,7 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
       const result = await invoke<ProbeBatchStarted>("start_probe_batch", {
         batchId,
         pluginIds,
+        ...(options.authorizeCursorDesktop ? { authorizeCursorDesktop: true } : {}),
       })
       if (options.onInterrupted && pluginIds.some((id) => !result.pluginIds.includes(id))) {
         options.onInterrupted(new Error("服务商不可用，无法检查连接。"))
@@ -335,9 +360,10 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
   }, [])
 
   /** Await one manual connection check, rejecting interruption, start failure, or an overall timeout. */
-  const verifyPlugin = useCallback((pluginId: string) => new Promise<PluginOutput>((resolve, reject) => {
-    // A native probe has a 30-second limit. Allow time for the four-worker queue.
-    const timer = setTimeout(() => {
+  const verifyPlugin = useCallback((pluginId: string, authorizeCursorDesktop = false) => new Promise<PluginOutput>((resolve, reject) => {
+    // The macOS consent sheet is user-paced. Probe deadlines begin after the
+    // user responds, so the UI should keep waiting for that explicit request.
+    const timer = authorizeCursorDesktop ? undefined : setTimeout(() => {
       console.error("Provider connection check timed out:", pluginId)
       reject(new Error("连接检查超时，请重试。"))
     }, 120_000)
@@ -345,7 +371,7 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
     const finish = (output: PluginOutput) => { clearTimeout(timer); resolve(output) }
     /** Release the verification timer before propagating cancellation or native failure. */
     const interrupt = (error: Error) => { clearTimeout(timer); reject(error) }
-    void startBatch([pluginId], { manual: true, onResult: finish, onInterrupted: interrupt }).catch(interrupt)
+    void startBatch([pluginId], { manual: true, authorizeCursorDesktop, onResult: finish, onInterrupted: interrupt }).catch(interrupt)
   }), [startBatch])
 
   return { startBatch, verifyPlugin }

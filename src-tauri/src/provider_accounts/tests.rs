@@ -166,31 +166,17 @@ fn following_default_selects_the_latest_default_connection() {
 
     *observed.lock().unwrap() =
         single_connection_report("auth0|cli-user", "cursor-cli", ConnectionKind::Cli);
-    assert_eq!(
-        accounts
-            .perform("cursor", ProviderOperation::RefreshActive)
-            .status,
-        OperationStatus::Succeeded
-    );
-    let cli_account_id = accounts
-        .view("cursor")
-        .unwrap()
+    let followed = accounts.perform("cursor", ProviderOperation::FollowDefaultConnection);
+    assert_eq!(followed.status, OperationStatus::Succeeded);
+    assert_eq!(followed.view.selection, AccountSelection::Auto);
+    let cli_account_id = followed
+        .view
         .accounts
         .into_iter()
         .find(|account| account.connection_kinds == vec![ConnectionKind::Cli])
-        .expect("CLI account is retained")
+        .expect("newly discovered CLI account is returned")
         .account_id;
-
-    assert_eq!(
-        accounts
-            .perform("cursor", ProviderOperation::FollowDefaultConnection)
-            .status,
-        OperationStatus::Succeeded
-    );
-
-    let view = accounts.view("cursor").unwrap();
-    assert_eq!(view.selection, AccountSelection::Auto);
-    assert_eq!(view.active_account_id, Some(cli_account_id));
+    assert_eq!(followed.view.active_account_id, Some(cli_account_id));
 }
 
 struct DesktopAndCliAdapter;
@@ -361,6 +347,94 @@ fn failed_refresh_retains_nonsecret_requested_source_outcomes() {
     assert_eq!(receipt.source_outcomes[0].status, SourceStatus::Absent);
     assert_eq!(receipt.source_outcomes[1].status, SourceStatus::Unavailable);
     assert_eq!(receipt.error.as_ref().unwrap().code, "refreshFailed");
+}
+
+#[test]
+fn following_cursor_default_restores_the_saved_account_when_discovery_is_incomplete() {
+    let cases: [(Box<dyn ProviderAccountAdapter>, SourceStatus); 2] = [
+        (Box::new(MissingLocalSourcesAdapter), SourceStatus::Absent),
+        (Box::new(UnavailableAdapter), SourceStatus::Unavailable),
+    ];
+    for (unavailable_adapter, desktop_status) in cases {
+        let directory = tempfile::tempdir().unwrap();
+        let accounts = ProviderAccounts::with_store([22_u8; 32], directory.path()).unwrap();
+        accounts.register_adapter("cursor", Box::new(OneAccountAdapter));
+        let desktop = accounts
+            .perform("cursor", ProviderOperation::RefreshActive)
+            .view
+            .active_account_id
+            .unwrap();
+        accounts.register_adapter(
+            "cursor",
+            Box::new(MutableAccountAdapter {
+                observed: Arc::new(Mutex::new(single_connection_report(
+                    "auth0|saved-cli-user",
+                    "cursor-cli",
+                    ConnectionKind::Cli,
+                ))),
+            }),
+        );
+        let default_account_id = accounts
+            .perform("cursor", ProviderOperation::RefreshActive)
+            .view
+            .active_account_id
+            .unwrap();
+        let pinned = accounts.perform(
+            "cursor",
+            ProviderOperation::SelectActive {
+                account_id: desktop.clone(),
+            },
+        );
+        assert_eq!(pinned.view.selection, AccountSelection::Pinned(desktop));
+
+        accounts.register_adapter("cursor", unavailable_adapter);
+        let followed = accounts.perform("cursor", ProviderOperation::FollowDefaultConnection);
+
+        assert_eq!(followed.status, OperationStatus::Partial);
+        assert_eq!(followed.view.selection, AccountSelection::Auto);
+        assert_eq!(
+            followed.view.active_account_id.as_ref(),
+            Some(&default_account_id)
+        );
+        assert_eq!(
+            followed.source_outcomes,
+            [
+                SourceOutcome::new("cursor-desktop", desktop_status),
+                SourceOutcome::new("cursor-cli", SourceStatus::Unavailable),
+            ]
+        );
+        let active = followed
+            .view
+            .accounts
+            .iter()
+            .find(|account| account.selected)
+            .unwrap();
+        assert!(active.stale);
+        assert!(followed.error.is_none());
+
+        let reopened = ProviderAccounts::with_store([22_u8; 32], directory.path()).unwrap();
+        let persisted = reopened.view("cursor").unwrap();
+        assert_eq!(persisted.selection, AccountSelection::Auto);
+        assert_eq!(persisted.active_account_id, Some(default_account_id));
+    }
+}
+
+#[test]
+fn following_cursor_default_without_a_new_or_saved_default_fails_with_source_outcomes() {
+    let accounts = ProviderAccounts::in_memory([23_u8; 32]);
+    accounts.register_adapter("cursor", Box::new(MissingLocalSourcesAdapter));
+
+    let followed = accounts.perform("cursor", ProviderOperation::FollowDefaultConnection);
+
+    assert_eq!(followed.status, OperationStatus::Failed);
+    assert_eq!(followed.view.active_account_id, None);
+    assert_eq!(
+        followed.source_outcomes,
+        [
+            SourceOutcome::new("cursor-desktop", SourceStatus::Absent),
+            SourceOutcome::new("cursor-cli", SourceStatus::Unavailable),
+        ]
+    );
 }
 
 #[test]

@@ -57,6 +57,75 @@ describe("useProbeEvents", () => {
     expect(ids).toEqual(["a", "b"])
   })
 
+  it("requests Cursor Keychain interaction only for an explicit authorization batch", async () => {
+    invokeMock.mockImplementation(async (_cmd: string, args: { batchId: string; pluginIds: string[] }) => args)
+    const { result } = renderHook(() => useProbeEvents({ onResult: vi.fn(), onBatchComplete: vi.fn() }))
+
+    await act(() => result.current.startBatch(["cursor"]))
+    expect(invokeMock.mock.lastCall?.[1]).not.toHaveProperty("authorizeCursorDesktop")
+
+    await act(() => result.current.startBatch(["cursor"], { manual: true, authorizeCursorDesktop: true }))
+    expect(invokeMock).toHaveBeenLastCalledWith("start_probe_batch", {
+      batchId: expect.any(String), pluginIds: ["cursor"], authorizeCursorDesktop: true,
+    })
+  })
+
+  it("clears previous Cursor usage for a committed switch even when a newer check fails", async () => {
+    invokeMock.mockImplementation(async (_cmd: string, args: { batchId: string; pluginIds: string[] }) => args)
+    const onResult = vi.fn()
+    const onBatchComplete = vi.fn()
+    const onAccountSwitch = vi.fn()
+    const { result } = renderHook(() => useProbeEvents({ onResult, onBatchComplete, onAccountSwitch }))
+    const output = { providerId: "cursor", displayName: "Cursor", lines: [], iconUrl: "" } satisfies PluginOutput
+    const error = { ...output, lines: [{ type: "badge", label: "Error", text: "Access cancelled" }] } satisfies PluginOutput
+
+    const start = async (authorizeCursorDesktop = false) => {
+      await act(() => result.current.startBatch(["cursor"], { authorizeCursorDesktop }))
+      return invokeMock.mock.lastCall![1].batchId as string
+    }
+    const old = await start()
+    listeners.get("probe:result")?.({ payload: { batchId: old, output } })
+    const switching = await start(true)
+    const newer = await start()
+    listeners.get("probe:result")?.({ payload: { batchId: newer, output: error } })
+    const notifySwitch = () => listeners.get("provider:connection-committed")?.({
+      payload: { providerId: "cursor", batchId: switching },
+    })
+    notifySwitch()
+    expect(onResult).toHaveBeenLastCalledWith(error, { manual: false })
+    expect(onAccountSwitch).toHaveBeenCalledExactlyOnceWith("cursor")
+
+    const current = await start()
+    listeners.get("probe:result")?.({ payload: { batchId: current, output } })
+    notifySwitch()
+    expect(onAccountSwitch).toHaveBeenCalledTimes(1)
+  })
+
+  it("waits for the user to respond to the Cursor Keychain prompt", async () => {
+    vi.useFakeTimers()
+    try {
+      invokeMock.mockImplementation(async (_cmd: string, args: { batchId: string; pluginIds: string[] }) => args)
+      const onResult = vi.fn()
+      const onBatchComplete = vi.fn()
+      const { result } = renderHook(() => useProbeEvents({ onResult, onBatchComplete }))
+      const finished = vi.fn()
+      let verification!: Promise<PluginOutput>
+      await act(async () => {
+        verification = result.current.verifyPlugin("cursor", true)
+        void verification.then(finished, finished)
+      })
+      await vi.advanceTimersByTimeAsync(121_000)
+      expect(finished).not.toHaveBeenCalled()
+
+      const batchId = invokeMock.mock.lastCall![1].batchId
+      const output = { providerId: "cursor", displayName: "Cursor", lines: [], iconUrl: "" } satisfies PluginOutput
+      listeners.get("probe:result")?.({ payload: { batchId, output } })
+      await expect(verification).resolves.toEqual(output)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it("uses fallback id when crypto is unavailable", async () => {
     const originalCrypto = globalThis.crypto
     // @ts-expect-error test fallback path

@@ -123,11 +123,7 @@ fn encrypted_desktop_login_and_live_usage_remain_read_only() {
     let temporary = tempfile::tempdir().unwrap();
     let app_data = temporary.path().to_path_buf();
     let result = (|| -> Result<(), String> {
-        let mut password = super::keychain_control::read_password(
-            "Cursor Safe Storage",
-            Some("Cursor Key"),
-            host_api::ProbeDeadline::at(Instant::now() + Duration::from_secs(10)),
-        )?;
+        let mut password = super::keychain_control::read_cursor_app_password("Cursor Key", false)?;
         unsafe {
             password.as_bytes_mut().fill(0);
         }
