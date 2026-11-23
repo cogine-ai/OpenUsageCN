@@ -38,9 +38,12 @@ impl ProviderAccounts {
             .ok_or_else(|| format!("provider '{provider_id}' does not support accounts"))?;
         let mut report = match adapter.discover_default() {
             Ok(report) => report,
-            Err(error) if use_saved_cursor_connections && self.active_cursor_has_browser()? => {
+            Err(error)
+                if request == LocalRefresh::FollowDefault
+                    || (use_saved_cursor_connections && self.active_cursor_has_browser()?) =>
+            {
                 log::warn!(
-                    "Cursor local discovery failed during browser refresh: {}",
+                    "Cursor local account discovery failed: {}",
                     crate::plugin_engine::host_api::redact_log_message(&error)
                 );
                 DiscoveryReport {
@@ -65,8 +68,14 @@ impl ProviderAccounts {
             report.default_connection_key = Some(CURSOR_DESKTOP.into());
         }
         if report.observations.is_empty() {
-            self.mark_source_outcomes(provider_id, &report.source_outcomes)?;
-            let status = if use_saved_cursor_connections && self.active_cursor_has_browser()? {
+            let followed_saved = self.record_empty_discovery(
+                provider_id,
+                &report.source_outcomes,
+                request == LocalRefresh::FollowDefault,
+            )?;
+            let status = if followed_saved
+                || (use_saved_cursor_connections && self.active_cursor_has_browser()?)
+            {
                 OperationStatus::Partial
             } else {
                 OperationStatus::Failed
@@ -167,34 +176,40 @@ impl ProviderAccounts {
             last_observed_account_id = Some(account.account_id.clone());
         }
         let observed_account_id = default_account_id.or(last_observed_account_id);
-        if matches!(
-            request,
-            LocalRefresh::CursorDesktop | LocalRefresh::FollowDefault
-        ) {
-            let Some(account_id) = observed_account_id else {
-                return Ok((OperationStatus::Failed, report.source_outcomes));
-            };
-            provider.selection_revision = provider
-                .selection_revision
-                .checked_add(1)
-                .ok_or("account selection revision is exhausted")?;
-            provider.selection = if request == LocalRefresh::CursorDesktop {
-                AccountSelection::Pinned(account_id.clone())
-            } else {
-                provider.default_account_id = Some(account_id.clone());
-                AccountSelection::Auto
-            };
-            provider.active_account_id = Some(account_id);
-        } else {
-            provider.default_account_id = observed_account_id.clone();
-            if provider.selection == AccountSelection::Auto && !preserve_browser {
-                provider.active_account_id = observed_account_id;
+        let followed_saved =
+            request == LocalRefresh::FollowDefault && observed_account_id.is_none();
+        match request {
+            LocalRefresh::CursorDesktop => {
+                let Some(account_id) = observed_account_id else {
+                    return Ok((OperationStatus::Failed, report.source_outcomes));
+                };
+                provider.selection_revision = provider
+                    .selection_revision
+                    .checked_add(1)
+                    .ok_or("account selection revision is exhausted")?;
+                provider.selection = AccountSelection::Pinned(account_id.clone());
+                provider.active_account_id = Some(account_id);
+            }
+            LocalRefresh::FollowDefault => {
+                if observed_account_id.is_some() {
+                    provider.default_account_id = observed_account_id;
+                }
+                if !follow_saved_default(&mut provider)? {
+                    return Ok((OperationStatus::Failed, report.source_outcomes));
+                }
+            }
+            LocalRefresh::Active | LocalRefresh::Reconnect => {
+                provider.default_account_id = observed_account_id.clone();
+                if provider.selection == AccountSelection::Auto && !preserve_browser {
+                    provider.active_account_id = observed_account_id;
+                }
             }
         }
-        let status = if report
-            .source_outcomes
-            .iter()
-            .any(|outcome| outcome.status == SourceStatus::Unavailable)
+        let status = if followed_saved
+            || report
+                .source_outcomes
+                .iter()
+                .any(|outcome| outcome.status == SourceStatus::Unavailable)
         {
             OperationStatus::Partial
         } else {
@@ -237,25 +252,47 @@ impl ProviderAccounts {
             }))
     }
 
-    /// Persists unavailable connections after a discovery report yields no usable observations.
-    fn mark_source_outcomes(
+    /// Saves source availability and any explicit choice to follow a saved default together.
+    fn record_empty_discovery(
         &self,
         provider_id: &str,
         outcomes: &[SourceOutcome],
-    ) -> Result<(), String> {
-        let mut provider = self
+        follow_default: bool,
+    ) -> Result<bool, String> {
+        let provider = self
             .providers
             .lock()
             .map_err(|_| "provider account state is unavailable".to_string())?
             .get(provider_id)
             .cloned();
-        let Some(mut provider) = provider.take() else {
-            return Ok(());
+        let Some(mut provider) = provider else {
+            return Ok(false);
         };
         mark_connections_unavailable(&mut provider, outcomes);
+        let followed_saved = follow_default && follow_saved_default(&mut provider)?;
         let persisted = self.persist_provider(provider_id, &provider)?;
-        self.replace_provider_state(provider_id, persisted)
+        self.replace_provider_state(provider_id, persisted)?;
+        Ok(followed_saved)
     }
+}
+
+/// Restores automatic selection when the default account is still in the registry.
+fn follow_saved_default(provider: &mut ProviderState) -> Result<bool, String> {
+    let Some(account_id) = provider.default_account_id.as_ref().filter(|id| {
+        provider
+            .accounts
+            .iter()
+            .any(|account| &account.account_id == *id)
+    }) else {
+        return Ok(false);
+    };
+    provider.selection_revision = provider
+        .selection_revision
+        .checked_add(1)
+        .ok_or("account selection revision is exhausted")?;
+    provider.selection = AccountSelection::Auto;
+    provider.active_account_id = Some(account_id.clone());
+    Ok(true)
 }
 
 fn active_account(provider: &ProviderState) -> Option<&AccountRecord> {

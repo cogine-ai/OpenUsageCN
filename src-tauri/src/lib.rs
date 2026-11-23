@@ -373,6 +373,13 @@ pub struct ProbeResult {
     pub invalidate_cached_data: Option<bool>,
 }
 
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProbeAccountSwitched<'a> {
+    batch_id: &'a str,
+    provider_id: &'a str,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProbeBatchComplete {
@@ -740,6 +747,14 @@ async fn start_probe_batch(
                             let receipt = accounts.perform(&plugin_id, operation);
                             desktop_account_changed = receipt.status != provider_accounts::OperationStatus::Failed
                                 && receipt.view.active_account_id != previous_account;
+                            if desktop_account_changed
+                                && let Err(error) = handle.emit(
+                                    "provider:connection-committed",
+                                    ProbeAccountSwitched { batch_id: &bid, provider_id: &plugin_id },
+                                )
+                            {
+                                log::error!("Cursor desktop quota invalidation event failed: {error}");
+                            }
                             receipt
                         }) else {
                             return PendingProbe::Unscoped {
@@ -753,9 +768,7 @@ async fn start_probe_batch(
                     } else {
                         accounts.perform(&plugin_id, operation)
                     };
-                    if !desktop_account_changed
-                        && let Some(event) = accounts.changed_event(&plugin_id, &receipt)
-                    {
+                    if let Some(event) = accounts.changed_event(&plugin_id, &receipt) {
                         if let Err(error) = handle.emit("provider-account-view-changed", event) {
                             log::error!(
                                 "provider account revision event failed: provider={}, operation_id={}, error={}",
@@ -866,8 +879,7 @@ async fn start_probe_batch(
                                     );
                                 },
                             ) {
-                                Ok(_) if matches!(plugin_id.as_str(), "claude" | "cursor")
-                                    && !desktop_account_changed => {
+                                Ok(_) if matches!(plugin_id.as_str(), "claude" | "cursor") => {
                                     if let Err(error) = handle.emit(
                                         "provider-account-view-changed",
                                         accounts.view_changed_event(&plugin_id),
@@ -930,15 +942,6 @@ async fn start_probe_batch(
                         }
                     });
                 drop(desktop_authorization);
-                if committed.is_some() && desktop_account_changed {
-                    let accounts = handle.state::<Arc<provider_accounts::ProviderAccounts>>();
-                    if let Err(error) = handle.emit(
-                        "provider-account-view-changed",
-                        accounts.view_changed_event(&plugin_id),
-                    ) {
-                        log::error!("Cursor desktop selection event failed: {error}");
-                    }
-                }
                 if committed.is_none() {
                     log::debug!(
                         "probe {} result from superseded batch {} ignored",

@@ -50,6 +50,16 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
     return () => window.removeEventListener(PROVIDER_CONFIG_CHANGED, changed)
   }, [updatePluginStates])
 
+  /** Drop the previous account's data when the backend commits a selection. */
+  const clearAccountUsage = useCallback((id: string) => {
+    updatePluginStates((previous) => {
+      const existing = previous[id]
+      if (!existing) return previous
+      return { ...previous, [id]: { ...existing, data: null, lastUpdatedAt: null, lastManualRefreshAt: null } }
+    })
+    onProbeResult?.()
+  }, [onProbeResult, updatePluginStates])
+
   /** Mark refreshes pending without discarding the existing quota or its success timestamp. */
   const setLoadingForPlugins = useCallback((ids: string[]) => {
     updatePluginStates((prev) => {
@@ -165,6 +175,7 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
     pluginStatesRef,
     setLoadingForPlugins,
     setAccountTransitionForPlugins,
+    clearAccountUsage,
     setErrorForPlugins,
     handleProbeResult,
     syncOllamaProjection,
