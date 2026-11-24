@@ -13,8 +13,6 @@ import { usePlatformCapabilities } from "@/hooks/app/use-platform-capabilities"
 
 const windowsCapabilities = {
   platform: "windows",
-  localHttpApi: true,
-  autostart: true,
   cli: false,
   paceNotifications: false,
   globalShortcuts: false,
