@@ -4,6 +4,35 @@
 
 暂无。
 
+## v0.6.53
+
+### New Features
+
+- macOS 的 Cursor 账号页新增「授权并刷新」，支持使用钥匙串的「允许一次」完成当次桌面账号刷新。([#279](https://github.com/cogine-ai/OpenUsageCN/pull/279)) by @lc708
+
+### Bug Fixes
+
+- Cursor 桌面凭据读取失败时，已经连接的 Chrome 或 Arc 账号仍可刷新用量。([#279](https://github.com/cogine-ai/OpenUsageCN/pull/279)) by @lc708
+- 切换到 Cursor 桌面账号时清理上一账号的用量显示，避免混淆账号。([#279](https://github.com/cogine-ai/OpenUsageCN/pull/279)) by @lc708
+
+### Chores
+
+- 更新 Cursor 账号连接与 macOS 授权说明，补充前后截图。([#279](https://github.com/cogine-ai/OpenUsageCN/pull/279)) by @lc708
+
+### 下载说明
+
+Windows 安装包未做 Authenticode 签名，可能触发 SmartScreen 警告，也可能被企业策略或 Smart App Control 阻止运行。请使用同一 Release 提供的 SHA-256 文件校验安装包。
+缺少 WebView2 Runtime 的电脑需要联网完成安装。
+
+### Changelog
+
+**Full Changelog**: [v0.6.52...v0.6.53](https://github.com/cogine-ai/OpenUsageCN/compare/v0.6.52...v0.6.53)
+
+- [7edd9bb](https://github.com/cogine-ai/OpenUsageCN/commit/7edd9bb215cb5d5585b40d41ffceac6c488854d5) 修复浏览器账号独立刷新并增加桌面授权 by @lc708
+- [8c8cd93](https://github.com/cogine-ai/OpenUsageCN/commit/8c8cd931799a86c8f28449623fa99e4b882a2df5) 补充浏览器连接与桌面授权说明 by @lc708
+- [4440caa](https://github.com/cogine-ai/OpenUsageCN/commit/4440caa8af4f0493f0714ed8db979f711b5d00dd) 保留授权及账号发现过程中的账号状态 by @lc708
+- [deac83f](https://github.com/cogine-ai/OpenUsageCN/commit/deac83f3a15f14ff326b5303f00b10b03a41cfa3) 合并 Cursor 修复 PR #279 by @lc708
+
 ## v0.6.52
 
 ### Bug Fixes
