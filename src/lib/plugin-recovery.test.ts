@@ -1,5 +1,20 @@
 import { describe, expect, it } from "vitest"
-import { getPluginRecovery } from "@/lib/plugin-recovery"
+import { getPluginRecovery, isKiroCliLoginError } from "@/lib/plugin-recovery"
+
+describe("isKiroCliLoginError", () => {
+  it.each([
+    "Run kiro-cli login, then refresh Kiro usage.",
+    "Kiro CLI session expired. Run kiro-cli login again.",
+    "Kiro CLI sign-in data is invalid. Run kiro-cli login again.",
+  ])("recognizes the Kiro CLI login repair message: %s", (message) => {
+    expect(isKiroCliLoginError(message)).toBe(true)
+  })
+
+  it("does not treat arbitrary Kiro failures as CLI login errors", () => {
+    expect(isKiroCliLoginError("Token expired.")).toBe(false)
+    expect(isKiroCliLoginError("Usage request failed (HTTP 403).")).toBe(false)
+  })
+})
 
 describe("getPluginRecovery", () => {
   it.each([
@@ -47,6 +62,16 @@ describe("getPluginRecovery", () => {
     expect(recovery.advice).toContain('`cli_auth_credentials_store = "file"`')
     expect(recovery.advice).toContain("`codex login`")
     expect(recovery.diagnostic).toBe(message)
+  })
+
+  it("routes Kiro CLI login errors to local recovery with kiro-cli guidance", () => {
+    const recovery = getPluginRecovery(
+      "Run kiro-cli login, then refresh Kiro usage.",
+      "kiro",
+    )
+    expect(recovery.kind).toBe("login")
+    expect(recovery.action).toBe("local")
+    expect(recovery.advice).toContain("`kiro-cli login`")
   })
 
   it("directs Keychain credential renewal to Claude Code", () => {
